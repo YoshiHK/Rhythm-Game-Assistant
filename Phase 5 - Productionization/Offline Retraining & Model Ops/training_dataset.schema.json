@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5TrainingDataset",
+  "type": "object",
+  "required": ["dataset_id", "source", "created_at", "records"],
+  "properties": {
+    "dataset_id": { "type": "string" },
+    "source": { "type": "string", "enum": ["feedback", "curator_gold", "mixed"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["provenance_id", "label_type", "label_value"],
+        "properties": {
+          "provenance_id": { "type": "string" },
+          "label_type": { "type": "string" },
+          "label_value": {}
+        }
+      }
+    }
+  }
+}

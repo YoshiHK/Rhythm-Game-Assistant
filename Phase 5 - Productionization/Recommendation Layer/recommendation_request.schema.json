@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SongRecommendationRequest",
+  "type": "object",
+  "required": ["player_id", "game_id"],
+  "properties": {
+    "player_id": { "type": "string" },
+    "game_id": { "type": "string" },
+    "difficulty_filter": { "type": "array", "items": { "type": "string" } },
+    "limit": { "type": "integer", "minimum": 1, "maximum": 50 }
+  }
+}
