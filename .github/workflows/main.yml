@@ -30,13 +30,13 @@ jobs:
 
       - name: Scrape CI SUMMARY artifacts
         run: |
-          python scripts/observability/scrape_ci_summaries.py \
-            --log CI/Phase_4_5/logs/localization.log \
+          python scripts/observability/scrape_ci_summaries.py |
+            --log CI/Phase_4_5/logs/localization.log |
             --out CI/Phase_4_5/artifacts
 
       - name: CI SUMMARY alert gate
         run: |
-          python scripts/observability/alert_ci_summary.py \
+          python scripts/observability/alert_ci_summary.py |
             --aggregate CI/Phase_4_5/artifacts/ci_summary_aggregate.json
 
       - name: Upload CI artifacts
