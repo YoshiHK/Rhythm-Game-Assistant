@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rhythm-ingestion/schema/recommendation_input_schema.json",
+  "title": "RecommendationInput",
+  "description": "Input contract for generating song recommendations based on player state and difficulty profiles.",
+  "type": "object",
+
+  "required": [
+    "schema_version",
+    "player_context",
+    "difficulty_profile",
+    "song_context"
+  ],
+
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of the recommendation input contract.",
+      "examples": ["v1"]
+    },
+
+    "player_context": {
+      "type": "object",
+      "description": "Snapshot of player skill and recent performance.",
+      "required": ["game_id"],
+      "properties": {
+        "game_id": {
+          "type": "string",
+          "description": "Target game for recommendation."
+        },
+
+        "recent_clear_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Recent average clear rate across played charts."
+        },
+
+        "difficulty_history": {
+          "type": "array",
+          "description": "Recent difficulty levels the player has attempted.",
+          "items": {
+            "type": "string"
+          }
+        },
+
+        "self_reported_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Optional self‑reported confidence level."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "difficulty_profile": {
+      "$ref": "difficulty_profile.schema.json",
+      "description": "Aggregated semantic difficulty profile for a chart group."
+    },
+
+    "song_context": {
+      "type": "object",
+      "description": "Metadata about the song or chart group being evaluated.",
+      "required": ["song_id"],
+      "properties": {
+        "song_id": {
+          "type": "string",
+          "description": "Canonical song identifier."
+        },
+
+        "difficulty_label": {
+          "type": "string",
+          "description": "Difficulty label (e.g. Expert, Master, Append)."
+        },
+
+        "game_specific_level": {
+          "type": ["string", "number"],
+          "description": "Game‑specific difficulty number or label."
+        },
+
+        "has_tips": {
+          "type": "boolean",
+          "description": "Whether gameplay tips are available for this chart."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "recommendation_constraints": {
+      "type": "object",
+      "description": "Optional constraints applied at recommendation time.",
+      "properties": {
+        "exclude_previously_recommended": {
+          "type": "boolean",
+          "default": true
+        },
+
+        "prefer_new_songs": {
+          "type": "boolean"
+        },
+
+        "max_difficulty_jump": {
+          "type": "number",
+          "description": "Maximum allowed difficulty increase relative to recent history."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "additionalProperties": false
+}

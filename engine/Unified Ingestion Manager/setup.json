@@ -1,0 +1,14 @@
+[
+["metadata"],
+"license = MIT",
+"license_files = LICENSE",
+"description-file = README.md",
+
+["options"],
+"package_dir=",
+    "=src",
+"packages=find:",
+
+["options.packages.find"],
+"where=src"
+]

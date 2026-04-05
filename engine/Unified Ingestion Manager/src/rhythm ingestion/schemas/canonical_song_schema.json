@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CanonicalSongRow",
+  "type": "object",
+  "properties": {
+    "game": { "type": "string" },
+    "song_id": { "type": "string" },
+    "name": { "type": ["string", "null"] },
+    "tier": { "type": ["string", "null"] },
+    "level": { "type": ["integer", "null"] },
+    "difficulty_code": { "type": ["integer", "null"] },
+    "difficulty_label": { "type": ["string", "null"] },
+    "note_total_chart": { "type": "integer" },
+    "note_total_db": { "type": ["integer", "null"] },
+    "note_delta": { "type": ["integer", "null"] },
+    "duration_ms": { "type": "integer" },
+    "bpm": { "type": ["number", "null"] }
+  },
+  "required": ["game", "song_id", "note_total_chart", "duration_ms"]
+}
