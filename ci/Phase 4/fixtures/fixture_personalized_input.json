@@ -1,0 +1,66 @@
+{
+  "case_id": "fixture_personalized_v1",
+  "engine_mode": "personalized",
+  "difficulty": "expert",
+  "locale": "en-US",
+  "feature_flags": {
+    "phase4_enabled": true
+  },
+  "opt_in": true,
+  "canonical_row": {
+    "game_id": "proseka",
+    "song_id": "SAMPLE_SONG",
+    "difficulty_label": "expert"
+  },
+  "canonical_payload": {
+    "diagnostics": {
+      "avg_nps": 6.2
+    },
+    "sections": [],
+    "detected_tags": [
+      "hold",
+      "flick"
+    ]
+  },
+  "selected_elements": [
+    {
+      "element_id": "element_hold",
+      "title": "Hold notes",
+      "severity_label": "medium",
+      "score": 0.55,
+      "training_items": [
+        "hold_release"
+      ],
+      "matched_tags": [
+        "hold"
+      ],
+      "guidance": "Don't release holds early; keep pressure stable."
+    },
+    {
+      "element_id": "element_flick",
+      "title": "Flick direction",
+      "severity_label": "low",
+      "score": 0.3,
+      "training_items": [
+        "flick_direction"
+      ],
+      "matched_tags": [
+        "flick"
+      ],
+      "guidance": "Confirm flick direction before committing the motion."
+    },
+    {
+      "element_id": "element_density",
+      "title": "Note density",
+      "severity_label": "low",
+      "score": 0.25,
+      "training_items": [
+        "density_focus"
+      ],
+      "matched_tags": [
+        "density"
+      ],
+      "guidance": "Keep accuracy during dense sections by simplifying motion."
+    }
+  ]
+}
