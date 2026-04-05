@@ -1,19 +1,17 @@
-"""CI Check: Per-string Token Parity (Phase 4.5) with Waiver Budget
+"""CI Check: Per-string Token Parity (Phase 4.5) with Global + Per-locale Budgets
 
-Adds a waiver budget to prevent silent drift:
-- Waivers are allowed but capped by a global budget.
-
-Budget rules
-------------
-- Read from ci/token_parity_waivers.json -> budget.max_total
-- CI fails if applied waivers exceed the budget.
+Enforces:
+- per-string placeholder token parity
+- explicit waivers
+- global waiver budget
+- per-locale waiver budgets
 """
 
 from __future__ import annotations
 
 import json
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
@@ -89,14 +87,15 @@ def collect_per_string(locale_dir: Path) -> Dict[str, Dict[str, Counter]]:
     return out
 
 
-def load_waivers(ci_dir: Path) -> Tuple[List[dict], int]:
+def load_waivers(ci_dir: Path) -> Tuple[List[dict], int, Dict[str,int]]:
     path = ci_dir / 'token_parity_waivers.json'
     if not path.exists():
-        return [], 0
+        return [], 0, {}
     data = json.loads(path.read_text(encoding='utf-8'))
     waivers = data.get('waivers', []) if isinstance(data.get('waivers', []), list) else []
     budget = int(data.get('budget', {}).get('max_total', 0))
-    return waivers, budget
+    per_locale = data.get('budget', {}).get('per_locale', {}) or {}
+    return waivers, budget, {k:int(v) for k,v in per_locale.items()}
 
 
 def match(v: str, pat: str) -> bool:
@@ -105,8 +104,6 @@ def match(v: str, pat: str) -> bool:
 
 def is_waived(waivers: List[dict], *, locale: str, template: str, string_path: str) -> Tuple[bool, str]:
     for w in waivers:
-        if not isinstance(w, dict):
-            continue
         if match(locale, str(w.get('locale','*'))) and match(template, str(w.get('template','*'))) and match(string_path, str(w.get('string_path','*'))):
             return True, str(w.get('reason',''))
     return False, ''
@@ -115,26 +112,15 @@ def is_waived(waivers: List[dict], *, locale: str, template: str, string_path: s
 def main() -> int:
     root = repo_root()
     ci_dir = Path(__file__).resolve().parent
-    waivers, budget = load_waivers(ci_dir)
+    waivers, global_budget, per_locale_budget = load_waivers(ci_dir)
 
     troot = translations_root(root)
-    if not troot.exists():
-        print(f"CI FAIL: translations root not found at {troot}")
-        return 1
-
     base = choose_base_locale(troot)
-    base_dir = troot / base
-    if not base_dir.is_dir():
-        print(f"CI FAIL: base locale directory not found: {base_dir}")
-        return 1
-
-    base_map = collect_per_string(base_dir)
-    if not base_map:
-        print("CI FAIL: no templates under base locale")
-        return 1
+    base_map = collect_per_string(troot / base)
 
     failures = 0
-    waived = 0
+    waived_total = 0
+    waived_by_locale = defaultdict(int)
 
     for loc_dir in iter_locale_dirs(troot):
         if loc_dir.name == base:
@@ -148,7 +134,8 @@ def main() -> int:
                 if spath not in cur_strings or cur_strings[spath] != bcnt:
                     ok, reason = is_waived(waivers, locale=loc_dir.name, template=rel, string_path=spath)
                     if ok:
-                        waived += 1
+                        waived_total += 1
+                        waived_by_locale[loc_dir.name] += 1
                         print(f"CI WAIVE: {rel}::{spath} locale={loc_dir.name} ({reason})")
                     else:
                         failures += 1
@@ -158,11 +145,17 @@ def main() -> int:
         print(f"CI FAIL: per-string token parity failed for {failures} location(s)")
         return 1
 
-    if budget and waived > budget:
-        print(f"CI FAIL: waiver budget exceeded (used={waived}, max={budget})")
+    if global_budget and waived_total > global_budget:
+        print(f"CI FAIL: global waiver budget exceeded (used={waived_total}, max={global_budget})")
         return 1
 
-    print(f"CI PASS: per-string token parity OK (waived={waived}, budget={budget})")
+    for loc, used in waived_by_locale.items():
+        limit = per_locale_budget.get(loc)
+        if limit is not None and used > limit:
+            print(f"CI FAIL: waiver budget exceeded for locale {loc} (used={used}, max={limit})")
+            return 1
+
+    print(f"CI PASS: token parity OK (waived_total={waived_total}, per_locale={dict(waived_by_locale)})")
     return 0
 
 

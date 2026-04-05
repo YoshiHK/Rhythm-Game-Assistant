@@ -1,19 +1,19 @@
 {
-  "version": 2,
-  "description": "Waivers for Phase 4.5 per-string token parity check. Use sparingly and keep under budget.",
+  "version": 3,
+  "description": "Waivers for Phase 4.5 per-string token parity check with global and per-locale budgets.",
   "budget": {
-    "max_total": 5
-  },
-  "match_rules": {
-    "wildcards": "Use '*' to match any locale/template/string_path.",
-    "paths": "template and string_path match CI output (template_relpath::string_path)."
+    "max_total": 5,
+    "per_locale": {
+      "ja-JP": 2,
+      "zh-Hant-HK": 1
+    }
   },
   "waivers": [
     {
       "locale": "ja-JP",
       "template": "templates/narrative_v3/difficulty/example.json",
       "string_path": "strings.default",
-      "reason": "Example waiver: grammar requires duplicated placeholder."
+      "reason": "Japanese grammar requires duplicated placeholder."
     }
   ]
 }
