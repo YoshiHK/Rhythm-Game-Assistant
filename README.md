@@ -128,7 +128,7 @@ The backend API **never** runs Phase 1–3 logic.
 | Phase 4.5 | Localization (presentation‑only) |
 | Phase 5 | Productionization & learning loops |
 | Phase 6 | Platform hardening & security |
-| Phase 7 | Game‑level recommendations (future) |
+| Phase 7 | Game‑level recommendations |
 
 Completed phases must not be modified.
 
