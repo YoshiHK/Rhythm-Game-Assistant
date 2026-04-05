@@ -1,0 +1,22 @@
+- name: Run Phase 4.5 localization checks
+  run: |
+    mkdir -p CI/logs CI/artifacts
+    python CI/Phase_4_5/run_all_localization_checks.py | tee CI/logs/localization.log
+
+- name: Scrape CI SUMMARY artifacts
+  run: |
+    python scripts/observability/scrape_ci_summaries.py \
+      --log CI/logs/localization.log \
+      --out CI/artifacts
+
+- name: CI SUMMARY alert gate
+  run: |
+    python scripts/observability/alert_ci_summary.py \
+      --aggregate CI/artifacts/ci_summary_aggregate.json
+
+- name: Upload CI artifacts
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: ci-summary-artifacts
+    path: CI/artifacts/
