@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rhythm-ingestion/schema/orchestrator_run_report.schema.json",
+  "title": "Orchestrator RunReport",
+  "type": "object",
+  "required": [
+    "run_key",
+    "game_id",
+    "chart_id",
+    "mode",
+    "stage_results",
+    "degraded_mode"
+  ],
+  "properties": {
+    "run_key": {
+      "type": "string",
+      "description": "Deterministic identifier for this run (idempotency key)."
+    },
+    "game_id": {
+      "type": "string",
+      "description": "Game identifier resolved by the orchestrator."
+    },
+    "chart_id": {
+      "type": "string",
+      "description": "Chart identifier or source reference."
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "ingest",
+        "tips",
+        "personalized",
+        "full"
+      ],
+      "description": "Run mode."
+    },
+    "stage_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/stage_result"
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/gate_result"
+      },
+      "default": []
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "degraded_mode": {
+      "type": "boolean",
+      "description": "True if execution continued in reduced fidelity mode."
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Additive, non-semantic debug metadata."
+    }
+  },
+  "$defs": {
+    "stage_result": {
+      "type": "object",
+      "required": [
+        "stage",
+        "status"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "INGEST",
+            "VALIDATE",
+            "APPROACHABILITY",
+            "PHASE1",
+            "PHASE2",
+            "PHASE4"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "STOP",
+            "FAIL",
+            "SKIP"
+          ]
+        },
+        "ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gate": {
+          "$ref": "#/$defs/gate_result"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "STOP"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "gate"
+            ]
+          }
+        }
+      ]
+    },
+    "gate_result": {
+      "type": "object",
+      "required": [
+        "decision",
+        "stage",
+        "reason_code"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "ALLOW",
+            "STOP",
+            "DEGRADED"
+          ]
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "INGEST",
+            "VALIDATE",
+            "APPROACHABILITY",
+            "PHASE1",
+            "PHASE2",
+            "PHASE4"
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "description": "Stable reason code (see ORCHESTRATOR_EXTENSION_SPEC.md §9)."
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
