@@ -94,7 +94,6 @@ CI/**/artifacts/*
 # Keep directory structure
 !CI/**/logs/.gitkeep
 !CI/**/artifacts/.gitkeep
-``
 
 # -------------------------------------------------
 # Temporary / scratch
