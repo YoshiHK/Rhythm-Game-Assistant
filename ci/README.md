@@ -137,8 +137,7 @@ These artifacts are derived from CI logs and are used for:
 - Budget and invariant enforcement
 
 An alert rule is provided:
-
-scripts/observability/scrape_ci_summaries.py
+scripts/observability/alert_ci_summary.py
 
 This rule fails CI when:
 - `latest.status == FAIL`
