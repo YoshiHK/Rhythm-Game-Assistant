@@ -121,20 +121,41 @@ These tests are intentionally strict.
 
 CI provides **Phase‑6‑style observability** without modifying Phase 4.5 semantics.
 
-### CI SUMMARY scraper
+### CI artifacts and alert gating
 
+Some CI checks emit machine‑consumed summaries that are scraped into structured
+artifacts under:
+
+CI/artifacts/
+├─ ci_summary_events.jsonl
+└─ ci_summary_aggregate.json
+
+These artifacts are derived from CI logs and are used for:
+
+- Observability and trend inspection
+- CI gating via alert rules
+- Budget and invariant enforcement
+
+An alert rule is provided:
 
 scripts/observability/scrape_ci_summaries.py
 
-Scrapes `CI SUMMARY:` lines from logs and emits structured artifacts:
+This rule fails CI when:
+- `latest.status == FAIL`
+- Waiver budget is nearly exhausted (configurable thresholds)
 
+This gate operates **only on log‑level contracts** (CI SUMMARY v1) and does not
+introduce new gameplay or localization semantics.
+
+### CI SUMMARY scraper
+
+Scrapes `CI SUMMARY:` lines from logs and emits structured artifacts:
 
 CI/artifacts/
 ├─ ci_summary_events.jsonl
 └─ ci_summary_aggregate.json
 
 ### Alert rule (CI gate)
-
 
 scripts/observability/alert_ci_summary.py
 
