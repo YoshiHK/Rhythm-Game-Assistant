@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PHASE_4_TEMPLATE_REGISTRY.schema.json",
+  "title": "Phase 4 Narrative Template Registry",
+  "type": "object",
+  "description": "Registry of allowed narrative templates and variants for Phase 4. Used by TemplateSelector and BanditPolicy. Constrains personalization to safe, pre-approved options.",
+  "required": [
+    "registry_version",
+    "templates_by_difficulty"
+  ],
+  "properties": {
+    "registry_version": {
+      "type": "string",
+      "description": "Version of this registry (semantic or date-based)."
+    },
+    "default_locale": {
+      "type": "string",
+      "description": "Default locale to use when none is provided."
+    },
+    "templates_by_difficulty": {
+      "type": "object",
+      "description": "Allow-list of templates per difficulty and optional locale.",
+      "properties": {
+        "expert": {
+          "$ref": "#/definitions/difficulty_block"
+        },
+        "master": {
+          "$ref": "#/definitions/difficulty_block"
+        },
+        "append": {
+          "$ref": "#/definitions/difficulty_block"
+        },
+        "normal": {
+          "$ref": "#/definitions/difficulty_block"
+        },
+        "hard": {
+          "$ref": "#/definitions/difficulty_block"
+        },
+        "easy": {
+          "$ref": "#/definitions/difficulty_block"
+        }
+      },
+      "additionalProperties": false
+    },
+    "variants_by_template": {
+      "type": "object",
+      "description": "Allow-list of variants for each template ID.",
+      "additionalProperties": {
+        "$ref": "#/definitions/variant_block"
+      }
+    }
+  },
+  "definitions": {
+    "difficulty_block": {
+      "type": "object",
+      "description": "Templates permitted for a difficulty, optionally per locale.",
+      "properties": {
+        "default": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "locales": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        }
+      },
+      "required": [
+        "default"
+      ],
+      "additionalProperties": false
+    },
+    "variant_block": {
+      "type": "object",
+      "description": "Variants for a given template.",
+      "required": [
+        "variants"
+      ],
+      "properties": {
+        "variants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/variant_item"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "variant_item": {
+      "type": "object",
+      "required": [
+        "variant_id",
+        "status"
+      ],
+      "properties": {
+        "variant_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "disabled",
+            "experimental"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

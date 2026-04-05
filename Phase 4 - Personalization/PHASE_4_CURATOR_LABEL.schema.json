@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PHASE_4_CURATOR_LABEL.schema.json",
+  "title": "Phase 4 Curator Label Schema",
+  "type": "object",
+  "description": "Schema for curator triage and gold-label decisions in Phase 4. Used for QA, auditing, and offline model retraining. Curator actions do not affect live outputs.",
+  "required": [
+    "label_id",
+    "curator_id",
+    "label_timestamp",
+    "target",
+    "decision"
+  ],
+  "properties": {
+    "label_id": {
+      "type": "string",
+      "description": "Unique identifier for this curator label (UUID or equivalent)."
+    },
+    "curator_id": {
+      "type": "string",
+      "description": "Opaque identifier for curator (no PII)."
+    },
+    "label_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the curator decision was made."
+    },
+    "target": {
+      "type": "object",
+      "description": "Reference to the Phase 4 artifact being reviewed.",
+      "required": [
+        "request_id",
+        "payload_hash"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string"
+        },
+        "payload_hash": {
+          "type": "string",
+          "description": "Hash of canonical payload / deterministic baseline."
+        },
+        "event_id": {
+          "type": "string",
+          "description": "Optional event log ID associated with this review."
+        }
+      },
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "description": "Curator judgment on personalization and presentation quality.",
+      "required": [
+        "verdict"
+      ],
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "acceptable",
+            "needs_revision",
+            "misleading",
+            "unsafe",
+            "excellent"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "description": "Impact severity if issues are present."
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "OVER_PERSONALIZED",
+              "UNDER_PERSONALIZED",
+              "TONE_MISMATCH",
+              "TEMPLATE_MISMATCH",
+              "ORDERING_ISSUE",
+              "CONFUSING_EXPLANATION",
+              "MISSING_CONTEXT",
+              "SAFETY_CONCERN"
+            ]
+          }
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Optional free-text note for training and QA review."
+        }
+      },
+      "additionalProperties": false
+    },
+    "review_metadata": {
+      "type": "object",
+      "description": "Optional metadata for audit and training pipelines.",
+      "properties": {
+        "review_type": {
+          "type": "string",
+          "enum": [
+            "routine",
+            "flagged",
+            "high_impact"
+          ]
+        },
+        "used_for_training": {
+          "type": "boolean",
+          "description": "Whether this label is approved for offline model training."
+        },
+        "related_model_id": {
+          "type": "string",
+          "description": "Model identifier under review (if applicable)."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

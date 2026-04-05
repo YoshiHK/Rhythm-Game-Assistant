@@ -1,0 +1,70 @@
+{
+  "registry_version": "v1",
+  "default_locale": "en-US",
+  "templates_by_difficulty": {
+    "expert": {
+      "default": [
+        "template_expert_v3_A",
+        "template_expert_v3_B"
+      ],
+      "locales": {
+        "ja-JP": [
+          "template_expert_v3_A_jp",
+          "template_expert_v3_B_jp"
+        ]
+      }
+    },
+    "master": {
+      "default": [
+        "template_master_v3_A"
+      ],
+      "locales": {
+        "ja-JP": [
+          "template_master_v3_A_jp"
+        ]
+      }
+    },
+    "append": {
+      "default": [
+        "template_append_v3_A"
+      ],
+      "locales": {
+        "ja-JP": [
+          "template_append_v3_A_jp"
+        ]
+      }
+    }
+  },
+  "variants_by_template": {
+    "template_expert_v3_A": {
+      "variants": [
+        {
+          "variant_id": "variant_A",
+          "status": "active",
+          "notes": "Default phrasing."
+        },
+        {
+          "variant_id": "variant_B",
+          "status": "experimental",
+          "notes": "Shorter breakdown variant."
+        }
+      ]
+    },
+    "template_master_v3_A": {
+      "variants": [
+        {
+          "variant_id": "variant_A",
+          "status": "active"
+        }
+      ]
+    },
+    "template_append_v3_A": {
+      "variants": [
+        {
+          "variant_id": "variant_A",
+          "status": "active"
+        }
+      ]
+    }
+  }
+}

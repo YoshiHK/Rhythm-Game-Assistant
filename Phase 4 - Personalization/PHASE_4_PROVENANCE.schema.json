@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PHASE_4_PROVENANCE.schema.json",
+  "title": "Phase 4 Personalization Provenance",
+  "type": "object",
+  "description": "Audit and explainability record for Phase 4 personalization decisions. Does not modify analytical truth.",
+  "required": [
+    "engine_mode",
+    "decision_timestamp",
+    "gates",
+    "decision_source"
+  ],
+  "properties": {
+    "engine_mode": {
+      "type": "string",
+      "enum": [
+        "deterministic",
+        "personalized",
+        "debug"
+      ]
+    },
+    "decision_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "gates": {
+      "type": "object",
+      "required": [
+        "personalization_allowed"
+      ],
+      "properties": {
+        "personalization_allowed": {
+          "type": "boolean"
+        },
+        "gate_fail_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "decision_source": {
+      "type": "string",
+      "enum": [
+        "rule",
+        "model",
+        "hybrid"
+      ]
+    },
+    "model_metadata": {
+      "type": "object",
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "model_version": {
+          "type": "string"
+        },
+        "model_role": {
+          "type": "string",
+          "enum": [
+            "ranking",
+            "template_selection",
+            "variant_selection"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "adjustments": {
+      "type": "object",
+      "properties": {
+        "element_ordering": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ranking_weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "narrative_template_id": {
+          "type": "string"
+        },
+        "variant_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "explainability": {
+      "type": "object",
+      "properties": {
+        "why_personalized": {
+          "type": "string"
+        },
+        "why_template": {
+          "type": "string"
+        },
+        "why_variant": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
