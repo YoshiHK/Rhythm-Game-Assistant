@@ -17,6 +17,7 @@ CHECKS = [
     "check_localization.py",
     "check_template_parity.py",
     "check_placeholder_integrity.py",
+    "check_token_parity_per_string.py",
     "check_token_counts.py",
     "check_word_budget.py",
 ]
