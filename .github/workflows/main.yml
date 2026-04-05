@@ -1,8 +1,7 @@
 - name: Run Phase 4.5 localization checks
   run: |
     mkdir -p CI/logs CI/artifacts
-    python CI/Phase_4_5/run_all_localization_checks.py |
-    tee CI/logs/localization.log
+    python CI/Phase_4_5/run_all_localization_checks.py | tee CI/logs/localization.log
 
 - name: Scrape CI SUMMARY artifacts
   run: |
