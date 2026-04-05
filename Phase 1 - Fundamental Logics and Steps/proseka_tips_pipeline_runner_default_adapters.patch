@@ -1,0 +1,67 @@
+diff --git a/proseka_tips_pipeline_runner.py b/proseka_tips_pipeline_runner.py
+index 0000000..1111111 100644
+--- a/proseka_tips_pipeline_runner.py
++++ b/proseka_tips_pipeline_runner.py
+@@
+-# -----------------------------
+-# Adapters (swap with real implementations)
+-# -----------------------------
++# -----------------------------
++# Default adapters (production-wired)
++# -----------------------------
++
++try:
++    from proseka_pipeline_adapters_production_wired import (
++        ProductionChartScanner as DefaultChartScanner,
++        ProductionTagToElementMapper as DefaultTagToElementMapper,
++        ProductionElementAnalyser as DefaultElementAnalyser,
++        ProductionTipsGenerator as DefaultTipsGenerator,
++    )
++except Exception:  # pragma: no cover
++    DefaultChartScanner = None
++    DefaultTagToElementMapper = None
++    DefaultElementAnalyser = None
++    DefaultTipsGenerator = None
++
++
++# -----------------------------
++# Adapters (swap with real implementations)
++# -----------------------------
+@@
+-def run_batch( 
+-    *, 
+-    batch_id: Optional[str], 
+-    difficulty: Difficulty, 
+-    charts: List[ChartInput], 
+-    scanner: ChartScanner, 
+-    mapper: TagToElementMapper, 
+-    analyser: ElementAnalyser, 
+-    tips_generator: TipsGenerator, 
+-    cfg: Optional[RunnerConfig] = None 
+-) -> BatchResult: 
+-    """Full pipeline runner for a difficulty-ordered batch.""" 
++def run_batch( 
++    *, 
++    batch_id: Optional[str], 
++    difficulty: Difficulty, 
++    charts: List[ChartInput], 
++    scanner: Optional[Any] = None, 
++    mapper: Optional[Any] = None, 
++    analyser: Optional[Any] = None, 
++    tips_generator: Optional[Any] = None, 
++    cfg: Optional[RunnerConfig] = None 
++) -> BatchResult: 
++    """Full pipeline runner for a difficulty-ordered batch.
+
+    If scanner/mapper/analyser/tips_generator are not provided, this function
+    uses the production-wired defaults.
+    """ 
++    # Instantiate defaults lazily
++    if scanner is None:
++        scanner = DefaultChartScanner() if DefaultChartScanner else ChartScanner()
++    if mapper is None:
++        mapper = DefaultTagToElementMapper() if DefaultTagToElementMapper else TagToElementMapper()
++    if analyser is None:
++        analyser = DefaultElementAnalyser() if DefaultElementAnalyser else ElementAnalyser()
++    if tips_generator is None:
++        tips_generator = DefaultTipsGenerator() if DefaultTipsGenerator else TipsGenerator()

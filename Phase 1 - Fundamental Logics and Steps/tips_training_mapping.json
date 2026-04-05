@@ -1,0 +1,250 @@
+{
+  "長時間": {
+    "tags": [
+      "duration=>02:30",
+      "fake_end"
+    ],
+    "training_items": [
+      "physical strength",
+      "awareness"
+    ]
+  },
+  "ハネリズム": {
+    "tags": [
+      "jump",
+      "wide_jump"
+    ],
+    "training_items": [
+      "timing",
+      "precision"
+    ]
+  },
+  "変拍子": {
+    "tags": [
+      "time_signiture_shift"
+    ],
+    "training_items": [
+      "timing",
+      "precision"
+    ]
+  },
+  "速度変化": {
+    "tags": [
+      "bpm_shift",
+      "sudden_speedup",
+      "sudden_slowdown"
+    ],
+    "training_items": [
+      "timing"
+    ]
+  },
+  "譜面停止": {
+    "tags": [
+      "chart_stop",
+      "fake_end"
+    ],
+    "training_items": [
+      "timing",
+      "awareness"
+    ]
+  },
+  "物量": {
+    "tags": [
+      "low_bpm_high_density",
+      "endurance_focus"
+    ],
+    "training_items": [
+      "physical strength"
+    ]
+  },
+  "局所難": {
+    "tags": [
+      "burst",
+      "burst.start",
+      "burst.end",
+      "post_climax_spike"
+    ],
+    "training_items": [
+      "physical strength",
+      "awareness"
+    ]
+  },
+  "視認難": {
+    "tags": [
+      "low_visibility",
+      "stacked_chords"
+    ],
+    "training_items": [
+      "chart readibility",
+      "awareness"
+    ]
+  },
+  "認識難": {
+    "tags": [
+      "tight_spacing",
+      "long_short_taps_mix"
+    ],
+    "training_items": [
+      "chart readibility"
+    ]
+  },
+  "スライド難": {
+    "tags": [
+      "notes_within_slide",
+      "zig-zag",
+      "slide_no_endpoint"
+    ],
+    "training_items": [
+      "chart readibility",
+      "hand movement"
+    ]
+  },
+  "フリック難": {
+    "tags": [
+      "consecutive_flicks",
+      "trace_flick",
+      "difficult_directional_flick"
+    ],
+    "training_items": [
+      "awareness"
+    ]
+  },
+  "トレース難": {
+    "tags": [
+      "trace_flick",
+      "low_visibility_trace"
+    ],
+    "training_items": [
+      "chart readibility"
+    ]
+  },
+  "リズム難": {
+    "tags": [
+      "difficult_rhythm",
+      "syncopated"
+    ],
+    "training_items": [
+      "timing",
+      "precision",
+      "awareness"
+    ]
+  },
+  "極小ノーツ": {
+    "tags": [
+      "tiny_notes"
+    ],
+    "training_items": [
+      "precision"
+    ]
+  },
+  "トリル": {
+    "tags": [
+      "trill_vertical",
+      "trill_alternating",
+      "trill_hybrid"
+    ],
+    "training_items": [
+      "timing",
+      "coordination"
+    ]
+  },
+  "乱打": {
+    "tags": [
+      "stream"
+    ],
+    "training_items": [
+      "physical strength",
+      "coordination",
+      "chart readibility",
+      "chart analysis"
+    ]
+  },
+  "階段": {
+    "tags": [
+      "stair_single",
+      "stairway_left",
+      "stairway_right",
+      "spiral_stairway"
+    ],
+    "training_items": [
+      "coordination",
+      "chart analysis (optional)"
+    ]
+  },
+  "縦連": {
+    "tags": [
+      "trill_vertical",
+      "trill_alternating",
+      "trill_non-alternating"
+    ],
+    "training_items": [
+      "coordination"
+    ]
+  },
+  "微縦連": {
+    "tags": [
+      "tiny_notes",
+      "trill_vertical",
+      "trill_alternating",
+      "trill_non-alternating"
+    ],
+    "training_items": [
+      "precision",
+      "coordination"
+    ]
+  },
+  "くの字": {
+    "tags": [
+      "stair_double"
+    ],
+    "training_items": [
+      "coordination",
+      "chart analysis (optional)"
+    ]
+  },
+  "左右振り": {
+    "tags": [
+      "swing_rhythm"
+    ],
+    "training_items": [
+      "physical strength",
+      "mirror mode"
+    ]
+  },
+  "持ち替え・交差": {
+    "tags": [
+      "cross_hand",
+      "forced_hand_swap"
+    ],
+    "training_items": [
+      "chart analysis",
+      "hand movement"
+    ]
+  },
+  "多点押し": {
+    "tags": [
+      "stacked_chords"
+    ],
+    "training_items": [
+      "hand movement"
+    ]
+  },
+  "5k": {
+    "tags": [
+      "stacked_chords",
+      "multi_keys"
+    ],
+    "training_items": [
+      "hand movement"
+    ]
+  },
+  "6k": {
+    "tags": [
+      "stacked_chords",
+      "multi_keys"
+    ],
+    "training_items": [
+      "hand movement"
+    ]
+  }
+}
