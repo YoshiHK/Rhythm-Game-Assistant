@@ -1,0 +1,15 @@
+STEP 7 — Canonical Summary Builder Specification
+
+Inputs:
+- elements_skeleton: list of dicts
+- selected_elements: list of dicts
+- chart_id: optional
+- song_id: optional
+
+Outputs:
+A dict with keys:
+  chart_id, song_id, element_count, element_frequency,
+  severity_distribution, avg_score, avg_section_coverage,
+  max_score, dominant_elements, dominant_selected_flags
+
+Computation rules as described.

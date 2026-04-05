@@ -1,0 +1,227 @@
+{
+  "tips_generation_spec": {
+    "version": "1.0.1",
+    "scope": "Project SEKAI chart tips (player-facing)",
+    "core_principles": {
+      "analysis_completeness": "Internal chart analysis must be exhaustive",
+      "tips_selectivity": "Tips intentionally surface only dominant elements",
+      "actionability_only": true,
+      "no_player_variance_labels": true
+    },
+    "element_selection": {
+      "target_count": {
+        "expert": 3,
+        "master": 3,
+        "append": 4
+      },
+      "eligibility_rules": {
+        "min_severity": "moderate",
+        "score_ratio_threshold": 0.8,
+        "allow_chart_defining_override": true
+      },
+      "chart_defining_elements": [
+        "多点押し",
+        "fake_end",
+        "chart_stop"
+      ],
+      "sorting_priority": [
+        "score_desc",
+        "severity_desc",
+        "section_coverage_desc"
+      ],
+      "hard_constraints": {
+        "no_padding": true,
+        "assert_exact_count": true,
+        "no_severity_downgrade": true
+      }
+    },
+    "layout_and_structure": {
+      "paragraph_count": 2,
+      "structure": [
+        "elements_summary",
+        "breakdown_plus_guidance"
+      ],
+      "headings": false,
+      "bullet_points": false
+    },
+    "word_count_limits": {
+      "total": {
+        "expert": {
+          "target": [
+            70,
+            90
+          ],
+          "hard_max": 95
+        },
+        "master": {
+          "target": [
+            80,
+            100
+          ],
+          "hard_max": 105
+        },
+        "append": {
+          "target": [
+            95,
+            120
+          ],
+          "hard_max": 125
+        }
+      },
+      "paragraph_1": {
+        "expert_master": {
+          "target": [
+            20,
+            30
+          ],
+          "hard_max": 35
+        },
+        "append": {
+          "target": [
+            25,
+            35
+          ],
+          "hard_max": 40
+        }
+      },
+      "paragraph_2": {
+        "expert": {
+          "target": [
+            50,
+            60
+          ],
+          "hard_max": 65
+        },
+        "master": {
+          "target": [
+            55,
+            70
+          ],
+          "hard_max": 75
+        },
+        "append": {
+          "target": [
+            65,
+            85
+          ],
+          "hard_max": 90
+        }
+      },
+      "sentence_rules": {
+        "max_words_per_sentence": 30,
+        "recommended_range": [
+          18,
+          25
+        ]
+      }
+    },
+    "language_and_tone": {
+      "language": "English",
+      "tone": [
+        "advisory",
+        "practical",
+        "supportive"
+      ],
+      "guidance_style": {
+        "imperatives_allowed": false,
+        "preferred_voice": "suggestive",
+        "preferred_leads": [
+          "Focus on",
+          "It helps to",
+          "Aim to",
+          "You may want to"
+        ]
+      },
+      "avoid": [
+        "vague terms",
+        "negative judgement",
+        "informal language",
+        "encouragement clichés",
+        "player-dependent concepts (個人差)",
+        "meta commentary or statistics"
+      ]
+    },
+    "difficulty_focus": {
+      "expert": {
+        "emphasis": [
+          "pattern recognition",
+          "stability",
+          "basic execution control"
+        ]
+      },
+      "master": {
+        "emphasis": [
+          "technical execution",
+          "timing consistency",
+          "hand coordination"
+        ]
+      },
+      "append": {
+        "emphasis": [
+          "planning",
+          "hand assignment",
+          "endurance and risk management"
+        ]
+      }
+    },
+    "text_script": {
+      "paragraph_1": {
+        "role": "elements_summary",
+        "rules": {
+          "sentence_count": 1,
+          "mention_all_selected_elements": true,
+          "no_guidance": true,
+          "severity_expression": "implicit_only"
+        },
+        "template": "This chart features {{element_list}}, which {{focus_description}}."
+      },
+      "paragraph_2": {
+        "role": "breakdown_plus_guidance",
+        "rules": {
+          "sentence_count": [
+            2,
+            3
+          ],
+          "action_required": true,
+          "structure_order": [
+            "difficulty_cause",
+            "chart_breakdown",
+            "player_guidance"
+          ]
+        },
+        "templates": {
+          "difficulty_cause": "The difficulty comes from {{dominant_cause}}, where {{mechanical_interaction}} increases execution pressure.",
+          "chart_breakdown": "This manifests as {{chart_breakdown}}.",
+          "player_guidance": "It helps to focus on {{primary_focus}}, prioritise {{secondary_focus}} over precision, and plan {{strategy}} early to stay consistent through {{target_section}}."
+        }
+      }
+    },
+    "severity_language_mapping": {
+      "moderate": [
+        "requires attention",
+        "benefits from deliberate control"
+      ],
+      "dense": [
+        "sustained",
+        "continuous pressure"
+      ],
+      "complex": [
+        "combined",
+        "layered interaction"
+      ],
+      "demanding": [
+        "primary failure point",
+        "decisive section"
+      ]
+    },
+    "explicit_exclusions": {
+      "concepts": [
+        "個人差",
+        "player preference labels",
+        "emotional difficulty descriptors",
+        "non-mechanical commentary"
+      ],
+      "rule": "Only chart-intrinsic, actionable mechanics may appear in tips"
+    }
+  }
+}
