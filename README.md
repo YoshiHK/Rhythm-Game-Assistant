@@ -156,6 +156,30 @@ Completed phases must not be modified.
 
 ---
 
+## 9.5 CI and system invariants
+
+This repository uses a **Continuous Invariants (CI)** system to ensure that
+completed phases remain **semantically immutable** as the platform evolves.
+
+CI is responsible for enforcing:
+
+- Phase boundaries (no upstream semantic access)
+- Deterministic behavior guarantees
+- Personalization and localization safety
+- Versioned, machine‑consumed log‑level contracts
+- Operational observability and alert gating (Phase 6 wiring)
+
+CI does **not** judge gameplay quality, retrain models, or generate content.
+
+All CI rules, contracts, and observability hooks are documented in:
+
+CI/README.md
+
+This separation ensures that system guarantees are explicit, testable, and
+independent of application features or UI behavior.
+
+---
+
 ## 10. License & usage
 
 This project is currently under active development.  
