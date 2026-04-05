@@ -6,13 +6,7 @@ Enforces:
 - global + per-locale waiver budgets
 - waiver decay via per-waiver `review_by` date
 - auto-suggestion for `review_by` fixes in CI output
-
-Waiver decay rule
------------------
-Each waiver may include a `review_by` date (YYYY-MM-DD).
-- If decay.require_review_by is true: missing review_by is CI FAIL.
-- If decay.fail_on_expired is true: CI FAIL when today > review_by.
-- If within decay.warn_before_days: CI WARN.
+- single summary line at end
 
 Auto-suggestion
 ---------------
@@ -159,7 +153,8 @@ def is_waived(waivers: List[dict], *, locale: str, template: str, string_path: s
     return False, '', ''
 
 
-def enforce_decay(waivers: List[dict], policy: DecayPolicy) -> None:
+def enforce_decay(waivers: List[dict], policy: DecayPolicy) -> str:
+    """Validate waiver review_by dates. Returns suggested review_by string."""
     today = date.today()
     suggested = (today + timedelta(days=30)).isoformat()
 
@@ -193,17 +188,20 @@ def enforce_decay(waivers: List[dict], policy: DecayPolicy) -> None:
     if failures:
         raise SystemExit(1)
 
+    return suggested
+
 
 def main() -> int:
     root = repo_root()
     ci_dir = Path(__file__).resolve().parent
 
     waivers, global_budget, per_locale_budget, decay_policy = load_waiver_config(ci_dir)
-    enforce_decay(waivers, decay_policy)
+    suggested_review_by = enforce_decay(waivers, decay_policy)
 
     troot = translations_root(root)
     if not troot.exists():
         print(f"CI FAIL: translations root not found at {troot}")
+        print(f"CI SUMMARY: status=FAIL reason=missing_translations_root suggested_review_by={suggested_review_by}")
         return 1
 
     base = choose_base_locale(troot)
@@ -211,6 +209,7 @@ def main() -> int:
     base_map = collect_per_string(base_dir)
     if not base_map:
         print("CI FAIL: no templates under base locale")
+        print(f"CI SUMMARY: status=FAIL reason=no_base_templates base={base} suggested_review_by={suggested_review_by}")
         return 1
 
     failures = 0
@@ -237,22 +236,37 @@ def main() -> int:
                         failures += 1
                         print(f"CI FAIL: token parity mismatch at {rel}::{spath} locale={loc_dir.name}")
 
+    status = 'PASS'
+    reason = 'ok'
+
     if failures:
-        print(f"CI FAIL: per-string token parity failed for {failures} location(s)")
-        return 1
+        status = 'FAIL'
+        reason = f'token_mismatch_count={failures}'
+    elif global_budget and waived_total > global_budget:
+        status = 'FAIL'
+        reason = f'global_budget_exceeded used={waived_total} max={global_budget}'
+    else:
+        for loc, used in waived_by_locale.items():
+            limit = per_locale_budget.get(loc)
+            if limit is not None and used > limit:
+                status = 'FAIL'
+                reason = f'per_locale_budget_exceeded locale={loc} used={used} max={limit}'
+                break
 
-    if global_budget and waived_total > global_budget:
-        print(f"CI FAIL: global waiver budget exceeded (used={waived_total}, max={global_budget})")
-        return 1
+    # Single summary line (always printed)
+    print(
+        "CI SUMMARY: "
+        f"status={status} "
+        f"base={base} "
+        f"waived_total={waived_total}/{global_budget or 0} "
+        f"waived_by_locale={dict(waived_by_locale)} "
+        f"per_locale_budget={per_locale_budget} "
+        f"decay=require_review_by:{decay_policy.require_review_by},warn_before_days:{decay_policy.warn_before_days},fail_on_expired:{decay_policy.fail_on_expired} "
+        f"suggested_review_by={suggested_review_by} "
+        f"reason={reason}"
+    )
 
-    for loc, used in waived_by_locale.items():
-        limit = per_locale_budget.get(loc)
-        if limit is not None and used > limit:
-            print(f"CI FAIL: waiver budget exceeded for locale {loc} (used={used}, max={limit})")
-            return 1
-
-    print(f"CI PASS: token parity OK (waived_total={waived_total}, per_locale={dict(waived_by_locale)})")
-    return 0
+    return 0 if status == 'PASS' else 1
 
 
 if __name__ == '__main__':
