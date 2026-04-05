@@ -1,0 +1,10 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "总体来说，这张谱面更偏向于稳定发挥和对节奏型的理解。",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "difficulty_overview",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "该难度同时考验你的节奏把控与稳定性。",
+      "placeholders": []
+    }
+  }
+}

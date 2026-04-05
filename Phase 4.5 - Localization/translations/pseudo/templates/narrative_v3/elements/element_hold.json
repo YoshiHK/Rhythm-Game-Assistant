@@ -1,0 +1,10 @@
+{
+  "template_id": "element_hold",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ W̃ãt̃c̃h̃ ỹõũr̃ h̃õl̃d̃ ñõt̃ẽs̃ c̃ãr̃ẽf̃ũl̃l̃ỹ — r̃ẽl̃ẽãs̃ĩñg̃ ẽãr̃l̃ỹ c̃ãñ b̃r̃ẽãk̃ ỹõũr̃ c̃õm̃b̃õ. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

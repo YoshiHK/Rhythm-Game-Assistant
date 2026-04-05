@@ -1,0 +1,10 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "快速交替的音符需要穩定的節奏感與精準的操作。",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "locale": "pseudo",
+  "language": "Pseudo Localization",
+  "direction": "LTR",
+  "source": "generated",
+  "fallback": "en-US",
+  "ci_only": true
+}

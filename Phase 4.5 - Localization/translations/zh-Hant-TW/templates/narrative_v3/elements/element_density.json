@@ -1,0 +1,10 @@
+{
+  "template_id": "element_density",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "音符密度偏高，請專注於維持準確度。",
+      "placeholders": []
+    }
+  }
+}

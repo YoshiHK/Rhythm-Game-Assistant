@@ -1,0 +1,28 @@
+{
+  "aliases": {
+    "en": "en-US",
+    "en-us": "en-US",
+    "en-gb": "en-GB",
+
+    "zh": "zh-Hans",
+    "zh-cn": "zh-Hans",
+    "zh-sg": "zh-Hans",
+    "zh-hans": "zh-Hans",
+
+    "zh-hk": "zh-Hant-HK",
+    "zh-hant-hk": "zh-Hant-HK",
+
+    "zh-tw": "zh-Hant-TW",
+    "zh-hant-tw": "zh-Hant-TW",
+
+    "zh-mo": "zh-Hant-HK",
+    "zh-hant": "zh-Hant-TW",
+
+    "ja": "ja-JP",
+    "ja-jp": "ja-JP",
+
+    "ko": "ko-KR",
+    "ko-kr": "ko-KR"
+  },
+  "notes": "Alias table used by Phase 4.5 locale normalization. Keys are lowercased before lookup. Values must be canonical locales present in locales.json."
+}

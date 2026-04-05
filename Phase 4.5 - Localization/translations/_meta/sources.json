@@ -1,0 +1,8 @@
+{
+  "allowed_sources": [
+    "curated",
+    "approved_machine",
+    "pseudo"
+  ],
+  "default_source": "curated"
+}

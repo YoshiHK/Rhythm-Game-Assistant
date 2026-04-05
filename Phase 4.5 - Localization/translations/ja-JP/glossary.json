@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "description": "日本語ローカライズ用の基本用語集。",
+    "scope": "Presentation-only.",
+    "phase": "Phase 4.5",
+    "base_locale": "ja-JP"
+  },
+  "terms": {
+    "hold_note": {
+      "display": "ホールドノーツ"
+    },
+    "flick": {
+      "display": "フリック"
+    },
+    "trill": {
+      "display": "トリル"
+    },
+    "density": {
+      "display": "ノーツ密度"
+    },
+    "combo": {
+      "display": "コンボ"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "전반적으로 이 채보는 안정적인 플레이와 패턴 이해가 중요합니다.",
+      "placeholders": []
+    }
+  }
+}

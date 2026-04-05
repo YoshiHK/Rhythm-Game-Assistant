@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flick",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "플릭 방향을 잘 확인하여 입력 실수를 줄이세요.",
+      "placeholders": []
+    }
+  }
+}

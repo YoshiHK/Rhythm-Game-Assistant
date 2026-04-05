@@ -1,0 +1,10 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "Fast alternating notes require steady rhythm and precise control.",
+      "placeholders": []
+    }
+  }
+}

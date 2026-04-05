@@ -1,0 +1,22 @@
+{
+  "base_locale": "en-US",
+  "supported_locales": [
+    "en-US",
+    "en-GB",
+    "zh-Hans",
+    "zh-Hant-HK",
+    "zh-Hant-TW",
+    "ja-JP",
+    "ko-KR",
+    "pseudo"
+  ],
+  "fallbacks": {
+    "en-GB": ["en-US"],
+    "zh-Hans": ["en-US"],
+    "zh-Hant-HK": ["zh-Hant-TW", "en-US"],
+    "zh-Hant-TW": ["en-US"],
+    "ja-JP": ["en-US"],
+    "ko-KR": ["en-US"],
+    "pseudo": ["en-US"]
+  }
+}

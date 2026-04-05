@@ -1,0 +1,10 @@
+{
+  "template_id": "element_density",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "High note density can be overwhelming \u2014 focus on maintaining accuracy.",
+      "placeholders": []
+    }
+  }
+}

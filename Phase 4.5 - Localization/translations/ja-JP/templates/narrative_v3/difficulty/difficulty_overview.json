@@ -1,0 +1,10 @@
+{
+  "template_id": "difficulty_overview",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "この難易度では、タイミングと安定感の両方が試されます。",
+      "placeholders": []
+    }
+  }
+}

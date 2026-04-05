@@ -1,0 +1,10 @@
+{
+  "template_id": "element_hold",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "请牢牢按住长按音符直到结束，过早松开会导致连击中断。",
+      "placeholders": []
+    }
+  }
+}

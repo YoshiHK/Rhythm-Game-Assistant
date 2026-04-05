@@ -1,0 +1,10 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "Overall, this chart rewards controlled play and strong pattern awareness.",
+      "placeholders": []
+    }
+  }
+}

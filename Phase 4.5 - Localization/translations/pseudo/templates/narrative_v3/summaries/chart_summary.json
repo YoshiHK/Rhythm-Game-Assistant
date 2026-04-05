@@ -1,0 +1,10 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ Õṽẽr̃ãl̃l̃, t̃h̃ĩs̃ c̃h̃ãr̃t̃ r̃ẽw̃ãr̃d̃s̃ c̃õñt̃r̃õl̃l̃ẽd̃ p̃l̃ãỹ ãñd̃ p̃ãt̃t̃ẽr̃ñ ãw̃ãr̃ẽñẽs̃s̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

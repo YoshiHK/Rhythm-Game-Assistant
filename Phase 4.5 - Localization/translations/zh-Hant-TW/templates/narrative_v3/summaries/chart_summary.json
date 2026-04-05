@@ -1,0 +1,10 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "整體來說，這張譜面著重於穩定表現與節奏型的理解。",
+      "placeholders": []
+    }
+  }
+}

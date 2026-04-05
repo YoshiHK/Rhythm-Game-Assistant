@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "description": "Traditional Chinese (Hong Kong) 本地化用基礎術語表。",
+    "scope": "Presentation-only.",
+    "phase": "Phase 4.5",
+    "base_locale": "zh-Hant-HK"
+  },
+  "terms": {
+    "hold_note": {
+      "display": "長按音符"
+    },
+    "flick": {
+      "display": "滑鍵"
+    },
+    "trill": {
+      "display": "交替音符"
+    },
+    "density": {
+      "display": "音符密度"
+    },
+    "combo": {
+      "display": "連擊"
+    }
+  }
+}

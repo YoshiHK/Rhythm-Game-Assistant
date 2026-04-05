@@ -1,0 +1,10 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "交互に続くノーツは、安定したリズム感と操作精度が求められます。",
+      "placeholders": []
+    }
+  }
+}

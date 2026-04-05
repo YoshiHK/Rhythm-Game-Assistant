@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flick",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "注意滑键的方向，避免出现输入失误。",
+      "placeholders": []
+    }
+  }
+}
