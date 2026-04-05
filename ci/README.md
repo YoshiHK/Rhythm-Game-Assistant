@@ -2,8 +2,8 @@
 
 This folder enforces **system invariants**, not model correctness.
 
-CI exists to ensure **completed phases remain immutable**, and that downstream
-systems can rely on stable contracts as the codebase evolves.
+CI exists to ensure **completed phases remain immutable**, while allowing
+safe wiring, observability, and operational enforcement as the system scales.
 
 ---
 
@@ -14,20 +14,23 @@ systems can rely on stable contracts as the codebase evolves.
   - No cross‑phase leakage
 
 - **Deterministic contracts**
-  - Personalization output structure
-  - Localization invariants
-  - Token and placeholder safety
+  - Personalization output structure (Phase 4)
+  - Localization and presentation invariants (Phase 4.5)
 
 - **Localization safety (Phase 4.5)**
   - Per‑string token parity
-  - Waiver budgets (global + per‑locale)
+  - Placeholder integrity
+  - Word and token budgets
+  - Waiver governance (global + per‑locale)
   - Waiver decay (`review_by`)
-  - Stable CI summary output
 
-- **API surface stability**
-  - Softr integration
-  - Client‑side parsers
-  - CI log consumers
+- **Log‑level contracts**
+  - Stable, machine‑consumed CI output
+  - Versioned summary lines
+
+- **Operational readiness (Phase 6 wiring)**
+  - Observability hooks
+  - Alertable CI artifacts
 
 ---
 
@@ -36,7 +39,7 @@ systems can rely on stable contracts as the codebase evolves.
 - Run chart ingestion
 - Execute Phase 1–3 pipelines
 - Train or evaluate models
-- Judge recommendation quality
+- Judge recommendation quality or gameplay semantics
 
 CI is **non‑semantic by design**.
 
@@ -44,38 +47,35 @@ CI is **non‑semantic by design**.
 
 ## CI SUMMARY contract (log‑level invariant)
 
-Some CI checks (notably localization/token parity) emit a **single summary line**
-at the end of execution:
+Some CI checks (notably localization / token parity) emit a **single summary line**
+at the end of execution.
 
-CI SUMMARY: status=... base=... waived_total=... per_locale_budget=... suggested_review_by=... reason=...
+This line is treated as a **machine‑consumed contract**, not a human‑only log.
 
-### Why this matters
+CI SUMMARY: status=... base=... waived_total=... waived_by_locale=... per_locale_budget=... decay=... suggested_review_by=... reason=...
 
-- Downstream CI parsers rely on a **single‑line, key=value format**
-- Dashboards and alerts depend on **stable field names**
-- Accidental formatting changes must fail CI immediately
+### Contract version
+
+- **CI SUMMARY — v1**
+
+This version is explicitly marked in code and protected by CI self‑tests.
 
 ---
 
 ## Log‑level contracts (versioned)
 
-Some CI outputs are treated as **machine‑consumed contracts**, not human‑only logs.
-These contracts are versioned and protected by CI self‑tests.
-
-Breaking a log‑level contract is considered a **CI failure**, even if program behavior
-is otherwise correct.
-
 ### Contract: CI SUMMARY — v1
 
 **Applies to**
-- Localization / token parity checks (Phase 4.5)
+- Phase 4.5 localization checks
 
-**Emitted as**
-- Exactly **one physical log line**
-- Prefix: `CI SUMMARY:`
-- Space‑separated `key=value` pairs
+**Guarantees**
+- Exactly **one physical line**
+- Always emitted (PASS or FAIL)
+- Space‑separated `key=value` tokens
+- Stable field names and ordering within the version
 
-**Current required fields**
+**Required fields**
 - `status` — `PASS | FAIL`
 - `base` — resolved base locale
 - `waived_total` — `<used>/<global_budget>`
@@ -89,53 +89,60 @@ is otherwise correct.
 
 CI SUMMARY: status=PASS base=en-US waived_total=1/5 waived_by_locale={'ja-JP': 1} per_locale_budget={'ja-JP': 2} decay=require_review_by:True,warn_before_days:7,fail_on_expired:True suggested_review_by=2026-05-05 reason=ok
 
-### Stability guarantees
-
-- The summary is always emitted (PASS or FAIL)
-- The summary is always **one line**
-- Field names are stable within a contract version
-- Ordering is stable within a version
+### Stability rules
 
 Any change to this format **must**:
 1. Introduce a new contract version (e.g. `CI SUMMARY — v2`)
 2. Update downstream consumers
-3. Update CI self‑tests accordingly
+3. Update CI self‑tests
+
+Breaking this contract is treated as a **CI failure**.
 
 ---
 
 ## Contract enforcement via CI tests
 
-The following tests lock the CI SUMMARY contract:
+The following test locks the CI SUMMARY contract:
 
 
-CI/tests/test_token_parity_summary_ci.py
+CI/Phase_4_5/tests/test_token_parity_summary_ci.py
 
-These tests enforce:
-- Presence of required fields
+It enforces:
+- Required fields and value shapes
 - Exactly one summary line
 - No embedded or escaped newlines
-- Basic value shape validation (e.g. date formats)
+- No duplicated fragments
 
-They are intentionally strict to prevent silent downstream breakage.
+These tests are intentionally strict.
+
 ---
 
-## Summary contract self‑tests
+## Observability hooks (Phase 6 wiring)
 
-The following self‑tests **lock the CI SUMMARY format**:
+CI provides **Phase‑6‑style observability** without modifying Phase 4.5 semantics.
+
+### CI SUMMARY scraper
 
 
-CI/tests/test_token_parity_summary_ci.py
+scripts/observability/scrape_ci_summaries.py
 
-These tests assert:
+Scrapes `CI SUMMARY:` lines from logs and emits structured artifacts:
 
-1. Exactly **one** `CI SUMMARY:` line is emitted
-2. Required `key=value` fields are present
-3. The summary is a **single physical line**
-   - No embedded newlines
-   - No duplicated fragments
 
-These tests are **intentionally strict** and should only change if
-downstream consumers are updated in lockstep.
+CI/artifacts/
+├─ ci_summary_events.jsonl
+└─ ci_summary_aggregate.json
+
+### Alert rule (CI gate)
+
+
+scripts/observability/alert_ci_summary.py
+
+Fails CI when:
+- `latest.status == FAIL`
+- Waiver budget is nearly exhausted (configurable thresholds)
+
+This operates **only on log‑level contracts**, not gameplay logic.
 
 ---
 
@@ -143,8 +150,8 @@ downstream consumers are updated in lockstep.
 
 > CI protects **contracts**, not behavior.
 
-If a change breaks CI here, it means:
-- A completed phase invariant was violated, **or**
+If CI fails here, it means:
+- A completed‑phase invariant was violated, **or**
 - A downstream consumer would break silently
 
 Both are treated as failures by design.
