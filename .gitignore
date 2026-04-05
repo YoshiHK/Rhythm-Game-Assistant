@@ -84,6 +84,19 @@ build/
 *.egg-info/
 
 # -------------------------------------------------
+# CI runtime outputs (logs and observability artifacts)
+# -------------------------------------------------
+
+# Ignore runtime CI outputs
+CI/**/logs/*
+CI/**/artifacts/*
+
+# Keep directory structure
+!CI/**/logs/.gitkeep
+!CI/**/artifacts/.gitkeep
+``
+
+# -------------------------------------------------
 # Temporary / scratch
 # -------------------------------------------------
 tmp/
