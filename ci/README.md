@@ -146,24 +146,6 @@ This rule fails CI when:
 This gate operates **only on log‑level contracts** (CI SUMMARY v1) and does not
 introduce new gameplay or localization semantics.
 
-### CI SUMMARY scraper
-
-Scrapes `CI SUMMARY:` lines from logs and emits structured artifacts:
-
-CI/artifacts/
-├─ ci_summary_events.jsonl
-└─ ci_summary_aggregate.json
-
-### Alert rule (CI gate)
-
-scripts/observability/alert_ci_summary.py
-
-Fails CI when:
-- `latest.status == FAIL`
-- Waiver budget is nearly exhausted (configurable thresholds)
-
-This operates **only on log‑level contracts**, not gameplay logic.
-
 ---
 
 ## Design principle
