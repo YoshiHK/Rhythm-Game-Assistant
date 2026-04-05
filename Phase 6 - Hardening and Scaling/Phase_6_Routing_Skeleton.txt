@@ -1,0 +1,32 @@
+phase6/
+├─ README.md                      # (later) Phase 6 index, like Phase 5
+├─ PHASE_6_SPEC.md                # already created ✅
+├─ PHASE_6_ARCHITECTURE.md        # already created ✅
+│
+├─ router/
+│   ├─ __init__.py
+│   ├─ phase6_router.py           # central routing coordinator
+│   ├─ routing_context.py         # immutable context passed through layers
+│   └─ routing_policy.py          # declarative routing rules
+│
+├─ guards/
+│   ├─ __init__.py
+│   ├─ reliability_guard.py       # retries, circuit breakers, idempotency
+│   ├─ security_guard.py          # auth, PII, access control
+│   ├─ abuse_guard.py             # rate limiting, anomaly detection
+│   └─ compliance_guard.py        # logging, audit, retention
+│
+├─ lifecycle/
+│   ├─ __init__.py
+│   ├─ model_lifecycle_router.py  # promotion, rollback, version pinning
+│   └─ deployment_router.py       # env / region / stage routing
+│
+├─ observability/
+│   ├─ __init__.py
+│   ├─ slo_router.py              # SLO evaluation & escalation
+│   └─ alert_router.py            # incident & alert dispatch
+│
+└─ integration/
+    ├─ __init__.py
+    ├─ partner_gateway.py         # partner-facing boundary
+    └─ api_version_router.py      # versioning & deprecation routing
