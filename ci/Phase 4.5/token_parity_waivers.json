@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "description": "Waivers for Phase 4.5 per-string token parity check. Use sparingly.",
+  "match_rules": {
+    "wildcards": "Use '*' to match any locale/template/string_path.",
+    "paths": "template and string_path match the values printed by the CI check (template_relpath::string_path)."
+  },
+  "waivers": [
+    {
+      "locale": "ja-JP",
+      "template": "templates/narrative_v3/difficulty/example.json",
+      "string_path": "strings.default",
+      "reason": "Example waiver: translator intentionally duplicates/removes a token for this string."
+    }
+  ]
+}

@@ -5,6 +5,9 @@ It does NOT define Phase 7 semantics.
 
 Phase 4.5 checks are run via subprocess in deterministic order.
 Phase 7 checks are invoked as import-based tests after Phase 4.5 passes.
+
+Note:
+- Per-string token parity supports waivers in: ci/token_parity_waivers.json
 """
 
 from __future__ import annotations
