@@ -1,10 +1,11 @@
-"""
-CI Runner: Localization (Phase 4.5) + Downstream Contract Checks
+"""CI Runner: Localization (Phase 4.5) + Downstream Contract Checks
 
 This file owns CI orchestration only.
 It does NOT define Phase 7 semantics.
-"""
 
+Phase 4.5 checks are run via subprocess in deterministic order.
+Phase 7 checks are invoked as import-based tests after Phase 4.5 passes.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ CHECKS = [
     "check_localization.py",
     "check_template_parity.py",
     "check_placeholder_integrity.py",
+    "check_token_counts.py",
     "check_word_budget.py",
 ]
 
