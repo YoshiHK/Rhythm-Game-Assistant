@@ -24,6 +24,12 @@ Exit codes
 1 = fail
 """
 
+# CI_CONTRACT: CI SUMMARY v1
+# This script emits a single-line, machine-consumed summary at the end of execution.
+# The format is versioned, documented in CI/README.md, and locked by CI self-tests.
+
+from __future__ import annotations
+
 from __future__ import annotations
 
 import json
