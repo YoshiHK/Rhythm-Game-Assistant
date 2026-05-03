@@ -1,236 +1,242 @@
-# umi/pipeline/pattern_tags_taxonomy.py
+## umi/pipeline/pattern_tags_taxonomy.py
+
+"""pattern_tags_taxonomy.py
+Canonical pattern tag taxonomy for UMI (multi-game).
+
+This version adds **known-but-uncategorized** tags sourced from an operator guide
+("Tips Generation Guides.xlsx") in addition to the categorized allowlist from
+"pattern_signals_export_v2.json".
+
+Provided APIs (Phase-3-safe, pure):
+- normalize_tag(tag) -> str
+- category_of(tag) -> Optional[str]
+- is_known(tag) -> bool  (categorized OR known-but-uncategorized)
+- unknown_tags(tags) -> List[str]
+- uncategorized_tags() -> Set[str]
+
+Design constraints:
+- Avoid import-time heavy IO: artifacts are loaded lazily + cached.
+- Deterministic and safe for Stage 4.2 wiring utilities.
+"""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Dict, List, Set, Optional
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+import json
+import re
+
 
 @dataclass(frozen=True)
 class TagDef:
-    """
-    Universal tag definition for UMI.
+    """Universal tag definition for UMI."""
 
-    Notes:
-    - `tag` is the canonical string emitted by detectors.
-    - `category` is the taxonomy bucket used for guidance + aggregation.
-    - `aliases` supports normalization from game- or detector-specific naming.
-    """
     tag: str
-    category: str
-    description: str = ""
-    aliases: tuple[str, ...] = ()
+    category: Optional[str] = None
+    aliases: Tuple[str, ...] = ()
+
 
 class PatternTagsTaxonomy:
-    """
-    Canonical pattern tag taxonomy for UMI.
+    """Canonical pattern tag taxonomy for UMI."""
 
-    Grounded from pattern_signals_export_v2.json:
-    Top-level: pattern_and_difficulty_signals
-    Categories: flow_patterns, vertical_patterns, directional_patterns,
-                alternation_patterns, hand_interaction_tags, precision_tags,
-                rhythm_tags, pacing_tags, bpm_density_relation_tags,
-                temporal_disruption_tags, readability_tags, slide_complexity_tags,
-                duration_structure_tags, multi_lane_patterns
-    [1](https://onedrive.live.com/?id=e3024480-35b7-45f7-9d3a-4702b19f7bef&cid=d5d62a1ef303ba22&web=1)
-    """
+    DEFAULT_EXPORT_PATH = "pattern_signals_export_v2.json"
+    DEFAULT_GUIDES_XLSX_PATH = "Tips Generation Guides.xlsx"
 
-    TAXONOMY_ID = "umi.pattern_tags_taxonomy"
-    TAXONOMY_VERSION = "1.0.0"  # bump when you add/remove/rename canonical tags
+    _RE_MULTI_WS = re.compile(r"\s+")
 
-    # ------------- Canonical category list (from pattern_signals_export_v2.json) -------------
-    CATEGORIES: tuple[str, ...] = (
-        "flow_patterns",
-        "vertical_patterns",
-        "directional_patterns",
-        "alternation_patterns",
-        "hand_interaction_tags",
-        "precision_tags",
-        "rhythm_tags",
-        "pacing_tags",
-        "bpm_density_relation_tags",
-        "temporal_disruption_tags",
-        "readability_tags",
-        "slide_complexity_tags",
-        "duration_structure_tags",
-        "multi_lane_patterns",
-    )
+    # ----------------------------
+    # Normalization
+    # ----------------------------
 
-    # ------------- Canonical tags (from pattern_signals_export_v2.json) -------------
-    # [1](https://onedrive.live.com/?id=e3024480-35b7-45f7-9d3a-4702b19f7bef&cid=d5d62a1ef303ba22&web=1)
-    TAGS_BY_CATEGORY: Dict[str, List[str]] = {
-        "flow_patterns": [
-            "stream",
-            "burst",
-            "burst.start",
-            "burst.end",
-        ],
-        "vertical_patterns": [
-            "jump",
-            "wide_jump",
-            "stacked_chords",
-        ],
-        "directional_patterns": [
-            "stair_single",
-            "stairway_left",
-            "stairway_right",
-            "spiral_stairway",
-            "zig-zag_stair",
-        ],
-        "alternation_patterns": [
-            "trill_vertical",
-            "trill_alternating",
-            "trill_hybrid",
-        ],
-        "hand_interaction_tags": [
-            "cross_hand",
-            "forced_hand_swap",
-        ],
-        "precision_tags": [
-            "tiny_notes",
-            "tiny_hold",
-            "tight_spacing",
-        ],
-        "rhythm_tags": [
-            "difficult_rhythm",
-            "syncopated",
-            "swing_rhythm",
-        ],
-        "pacing_tags": [
-            "bpm_shift",
-            "sudden_speedup",
-            "sudden_slowdown",
-        ],
-        "bpm_density_relation_tags": [
-            "low_bpm_high_density",
-        ],
-        "temporal_disruption_tags": [
-            "chart_stop",
-            "fake_end",
-            "post_climax_spike",
-        ],
-        "readability_tags": [
-            "low_visibility",
-            "long_short_taps_mix",
-            "stacked_chords",  # appears here as well as vertical_patterns
-        ],
-        "slide_complexity_tags": [
-            "notes_within_slide",
-            "trace_flick",
-        ],
-        "duration_structure_tags": [
-            "duration=>02:30",
-            "endurance_focus",
-        ],
-        "multi_lane_patterns": [
-            "multi_keys",
-        ],
-    }
+    @staticmethod
+    def normalize_tag(tag: Any) -> str:
+        if tag is None:
+            return ""
+        try:
+            s = str(tag)
+        except Exception:
+            return ""
+        s = s.strip()
+        while s.startswith(","):
+            s = s[1:].lstrip()
+        s = PatternTagsTaxonomy._RE_MULTI_WS.sub(" ", s).strip()
+        return s.lower()
 
-    # ------------- Optional: richer tag definitions (descriptions + aliases) -------------
-    # Use this if you want a single normalization/validation source of truth.
-    # The tags themselves are grounded; descriptions/aliases are intentionally minimal and safe.
-    TAG_DEFS: Dict[str, TagDef] = {
-        # flow
-        "stream": TagDef("stream", "flow_patterns", "Sustained dense tapping / continuous note flow."),
-        "burst": TagDef("burst", "flow_patterns", "Short high-density segment."),
-        "burst.start": TagDef("burst.start", "flow_patterns", "Onset of a burst (ramp-in)."),
-        "burst.end": TagDef("burst.end", "flow_patterns", "Offset of a burst (release)."),
+    @staticmethod
+    def _split_tag_cell(cell: Any) -> List[str]:
+        if cell is None:
+            return []
+        try:
+            s = str(cell)
+        except Exception:
+            return []
+        parts = s.split(",")
+        out: List[str] = []
+        for p in parts:
+            nt = PatternTagsTaxonomy.normalize_tag(p)
+            if nt:
+                out.append(nt)
+        return out
 
-        # vertical
-        "jump": TagDef("jump", "vertical_patterns", "Simultaneous multi-note hit."),
-        "wide_jump": TagDef("wide_jump", "vertical_patterns", "Simultaneous hit with wide spacing."),
-        "stacked_chords": TagDef("stacked_chords", "vertical_patterns", "Frequent or complex chords."),
+    # ----------------------------
+    # Loading / indexing
+    # ----------------------------
 
-        # directional
-        "stair_single": TagDef("stair_single", "directional_patterns", "Single-lane stair / stepwise motion."),
-        "stairway_left": TagDef("stairway_left", "directional_patterns", "Stair pattern biased left."),
-        "stairway_right": TagDef("stairway_right", "directional_patterns", "Stair pattern biased right."),
-        "spiral_stairway": TagDef("spiral_stairway", "directional_patterns", "Spiral-like stair motion."),
-        "zig-zag_stair": TagDef("zig-zag_stair", "directional_patterns", "Alternating-direction stair motion."),
+    @staticmethod
+    def _extract_groups(data: Dict[str, Any]) -> Dict[str, List[str]]:
+        root = data.get("pattern_and_difficulty_signals")
+        if not isinstance(root, dict):
+            return {}
+        out: Dict[str, List[str]] = {}
+        for cat, tags in root.items():
+            if not isinstance(cat, str) or not isinstance(tags, list):
+                continue
+            norm: List[str] = []
+            for t in tags:
+                nt = PatternTagsTaxonomy.normalize_tag(t)
+                if nt:
+                    norm.append(nt)
+            out[cat] = norm
+        return out
 
-        # alternation
-        "trill_vertical": TagDef("trill_vertical", "alternation_patterns", "Alternating hits in same/near lane."),
-        "trill_alternating": TagDef("trill_alternating", "alternation_patterns", "Regular alternating trill."),
-        "trill_hybrid": TagDef("trill_hybrid", "alternation_patterns", "Mixed trill cues / hybrid alternation."),
+    @staticmethod
+    @lru_cache(maxsize=8)
+    def _load_export(path: str) -> Dict[str, Any]:
+        p = Path(path)
+        if not p.exists():
+            return {}
+        try:
+            return json.loads(p.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            return {}
 
-        # hand interaction
-        "cross_hand": TagDef("cross_hand", "hand_interaction_tags", "Hand crossing / crossover."),
-        "forced_hand_swap": TagDef("forced_hand_swap", "hand_interaction_tags", "Requires swapping hands/fingers."),
+    @staticmethod
+    @lru_cache(maxsize=4)
+    def _load_known_uncategorized_from_guides(xlsx_path: str) -> Set[str]:
+        p = Path(xlsx_path)
+        if not p.exists():
+            return set()
+        try:
+            import pandas as pd  # type: ignore
+        except Exception:
+            return set()
+        try:
+            sheets = pd.read_excel(p, sheet_name=None, engine="openpyxl")
+        except Exception:
+            return set()
 
-        # precision
-        "tiny_notes": TagDef("tiny_notes", "precision_tags", "Small hit windows / micro notes."),
-        "tiny_hold": TagDef("tiny_hold", "precision_tags", "Short holds requiring precision."),
-        "tight_spacing": TagDef("tight_spacing", "precision_tags", "Very close note spacing."),
-
-        # rhythm
-        "difficult_rhythm": TagDef("difficult_rhythm", "rhythm_tags", "Non-trivial rhythm interpretation."),
-        "syncopated": TagDef("syncopated", "rhythm_tags", "Syncopation / off-beat emphasis."),
-        "swing_rhythm": TagDef("swing_rhythm", "rhythm_tags", "Swing-like rhythmic feel."),
-
-        # pacing
-        "bpm_shift": TagDef("bpm_shift", "pacing_tags", "Tempo change / speed shift."),
-        "sudden_speedup": TagDef("sudden_speedup", "pacing_tags", "Abrupt increase in speed."),
-        "sudden_slowdown": TagDef("sudden_slowdown", "pacing_tags", "Abrupt decrease in speed."),
-
-        # bpm-density relation
-        "low_bpm_high_density": TagDef("low_bpm_high_density", "bpm_density_relation_tags", "Low BPM but dense notes."),
-
-        # temporal disruption
-        "chart_stop": TagDef("chart_stop", "temporal_disruption_tags", "Stop / pause / interruption."),
-        "fake_end": TagDef("fake_end", "temporal_disruption_tags", "Fake ending / deceptive structure."),
-        "post_climax_spike": TagDef("post_climax_spike", "temporal_disruption_tags", "Difficulty spike after climax."),
-
-        # readability
-        "low_visibility": TagDef("low_visibility", "readability_tags", "Hard to read visually."),
-        "long_short_taps_mix": TagDef("long_short_taps_mix", "readability_tags", "Mix of long/short taps affecting readability."),
-
-        # slide complexity
-        "notes_within_slide": TagDef("notes_within_slide", "slide_complexity_tags", "Notes embedded within slide paths."),
-        "trace_flick": TagDef("trace_flick", "slide_complexity_tags", "Trace or path-followed flick/gesture."),
-
-        # duration/structure
-        "duration=>02:30": TagDef("duration=>02:30", "duration_structure_tags", "Long chart duration threshold signal."),
-        "endurance_focus": TagDef("endurance_focus", "duration_structure_tags", "Endurance/physical stamina emphasis."),
-
-        # multi-lane
-        "multi_keys": TagDef("multi_keys", "multi_lane_patterns", "More lanes/keys than baseline."),
-    }
-
-    @classmethod
-    def all_tags(cls) -> Set[str]:
         tags: Set[str] = set()
-        for _, lst in cls.TAGS_BY_CATEGORY.items():
-            tags.update(lst)
+
+        def harvest_df(df) -> None:
+            if df is None:
+                return
+            cols = {str(c).strip().lower(): c for c in df.columns}
+            for key in ("tags", "lit of tags", "list of tags", "lit_of_tags"):
+                if key in cols:
+                    col = cols[key]
+                    for v in df[col].tolist():
+                        for t in PatternTagsTaxonomy._split_tag_cell(v):
+                            tags.add(t)
+
+        for df in sheets.values():
+            harvest_df(df)
+
+        # Fallback: scan all cells for tag-like strings
+        try:
+            for df in sheets.values():
+                for v in df.values.flatten().tolist():
+                    if v is None:
+                        continue
+                    s = str(v)
+                    if len(s) > 64:
+                        continue
+                    if any(ch in s for ch in ("_", ".", "=>")):
+                        for t in PatternTagsTaxonomy._split_tag_cell(s):
+                            tags.add(t)
+        except Exception:
+            pass
+
         return tags
 
     @classmethod
-    def tag_category(cls, tag: str) -> Optional[str]:
-        if tag in cls.TAG_DEFS:
-            return cls.TAG_DEFS[tag].category
-        # fallback: search map
-        for cat, lst in cls.TAGS_BY_CATEGORY.items():
-            if tag in lst:
-                return cat
-        return None
+    @lru_cache(maxsize=8)
+    def _build_indexes(cls, export_path: str, guides_xlsx_path: str) -> Tuple[Dict[str, str], Dict[str, Set[str]], Set[str]]:
+        data = cls._load_export(export_path)
+        groups = cls._extract_groups(data)
+
+        tag_to_cat: Dict[str, str] = {}
+        cat_to_tags: Dict[str, Set[str]] = {}
+        for cat, tags in groups.items():
+            cat_to_tags.setdefault(cat, set())
+            for t in tags:
+                cat_to_tags[cat].add(t)
+                if t not in tag_to_cat:
+                    tag_to_cat[t] = cat
+
+        known_uncat = cls._load_known_uncategorized_from_guides(guides_xlsx_path)
+        known_uncat = {t for t in known_uncat if t and t not in tag_to_cat}
+        return tag_to_cat, cat_to_tags, known_uncat
+
+    # ----------------------------
+    # Query API
+    # ----------------------------
 
     @classmethod
-    def validate_tags(cls, tags: List[str]) -> List[str]:
-        """
-        Return list of unknown tags (i.e., not in canonical taxonomy).
-        """
-        known = cls.all_tags()
-        return [t for t in tags if t not in known]
+    def all_tags(cls, export_path: str = None, guides_xlsx_path: str = None) -> Set[str]:
+        export_path = export_path or cls.DEFAULT_EXPORT_PATH
+        guides_xlsx_path = guides_xlsx_path or cls.DEFAULT_GUIDES_XLSX_PATH
+        tag_to_cat, _, known_uncat = cls._build_indexes(export_path, guides_xlsx_path)
+        return set(tag_to_cat.keys()) | set(known_uncat)
 
     @classmethod
-    def normalize_tag(cls, tag: str) -> str:
-        """
-        Normalize using aliases if you define them.
-        Currently minimal; extend safely without breaking canonical tags.
-        """
-        # direct canonical
-        if tag in cls.TAG_DEFS:
-            return tag
-        # alias lookup
-        for tdef in cls.TAG_DEFS.values():
-            if tag in tdef.aliases:
-                return tdef.tag
-        return tag
+    def uncategorized_tags(cls, export_path: str = None, guides_xlsx_path: str = None) -> Set[str]:
+        export_path = export_path or cls.DEFAULT_EXPORT_PATH
+        guides_xlsx_path = guides_xlsx_path or cls.DEFAULT_GUIDES_XLSX_PATH
+        _, _, known_uncat = cls._build_indexes(export_path, guides_xlsx_path)
+        return set(known_uncat)
+
+    @classmethod
+    def is_known(cls, tag: Any, export_path: str = None, guides_xlsx_path: str = None) -> bool:
+        export_path = export_path or cls.DEFAULT_EXPORT_PATH
+        guides_xlsx_path = guides_xlsx_path or cls.DEFAULT_GUIDES_XLSX_PATH
+        nt = cls.normalize_tag(tag)
+        if not nt:
+            return False
+        tag_to_cat, _, known_uncat = cls._build_indexes(export_path, guides_xlsx_path)
+        return nt in tag_to_cat or nt in known_uncat
+
+    @classmethod
+    def category_of(cls, tag: Any, export_path: str = None) -> Optional[str]:
+        export_path = export_path or cls.DEFAULT_EXPORT_PATH
+        nt = cls.normalize_tag(tag)
+        if not nt:
+            return None
+        tag_to_cat, _, _ = cls._build_indexes(export_path, cls.DEFAULT_GUIDES_XLSX_PATH)
+        return tag_to_cat.get(nt)
+
+    @classmethod
+    def unknown_tags(cls, tags: Iterable[Any], export_path: str = None, guides_xlsx_path: str = None) -> List[str]:
+        export_path = export_path or cls.DEFAULT_EXPORT_PATH
+        guides_xlsx_path = guides_xlsx_path or cls.DEFAULT_GUIDES_XLSX_PATH
+        tag_to_cat, _, known_uncat = cls._build_indexes(export_path, guides_xlsx_path)
+        out: List[str] = []
+        for t in tags or []:
+            nt = cls.normalize_tag(t)
+            if not nt:
+                continue
+            if nt not in tag_to_cat and nt not in known_uncat:
+                out.append(nt)
+        # stable unique
+        seen: Set[str] = set()
+        uniq: List[str] = []
+        for t in out:
+            if t in seen:
+                continue
+            seen.add(t)
+            uniq.append(t)
+        return uniq
+
+
+__all__ = ["TagDef", "PatternTagsTaxonomy"]
