@@ -1,0 +1,90 @@
+{
+  "schema_id": "analysis_schema.arcaea.v1",
+  "game_id": "arcaea",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Arcaea",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path",
+      "arc",
+      "arc_tap",
+      "flick"
+    ],
+    "combo_definition": "ground-lane taps/holds plus sky arcs and arc-taps on a beat-aligned timeline",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_spatial_pattern_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "past": 2,
+      "present": 3,
+      "future": 3,
+      "beyond": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "Arcaea charts combine ground lanes with spatial arc mechanics, enabling deterministic timing, spatial awareness, and hand-movement tips when processed by Phase 4."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_arcaea.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "A1",
+        "name": "adapter-validator canonical kinds alignment",
+        "source_a": "adapter_arcaea.normalize_events",
+        "source_b": "validator_arcaea",
+        "expected": "All emitted note kinds must be within schema.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "A2",
+        "name": "arcaea-native validation parity",
+        "source_a": "adapter_arcaea.validate_note_events",
+        "source_b": "validator_arcaea.validate_note_events",
+        "expected": "Canonical note_events must match Arcaea-native ground truth",
+        "severity": "error"
+      },
+      {
+        "check_id": "A3",
+        "name": "per-section combo validation parity",
+        "source_a": "adapter_arcaea.validate_note_events_by_sections",
+        "source_b": "validator_arcaea.validate_note_events_by_sections",
+        "expected": "Per-section combo counts must align when sections are present",
+        "severity": "error"
+      },
+      {
+        "check_id": "A4",
+        "name": "tips enablement gate",
+        "source_a": "schema.tips.enabled",
+        "source_b": "validator_arcaea",
+        "expected": "Tips generation must respect Phase 4 gating",
+        "severity": "warning"
+      }
+    ],
+    "notes": "Arcaea consistency checks emphasize adapter/validator parity with Arcaea-native logic and enforce Phase-3 structural scope and Phase-4 gating per the Bandori anchor."
+  }
+}

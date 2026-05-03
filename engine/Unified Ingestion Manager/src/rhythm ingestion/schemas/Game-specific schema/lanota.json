@@ -1,0 +1,78 @@
+{
+  "schema_id": "analysis_schema.lanota.v1",
+  "game_id": "lanota",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Lanota",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path",
+      "slide"
+    ],
+    "combo_definition": "circular-lane judged hit objects (time-based with angular position)",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": false,
+    "min_sections_for_analysis": 0
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "geometry_and_density_based",
+    "supports_section_coverage": false,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "whisper": 2,
+      "acoustic": 3,
+      "ultra": 3
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "Lanota charts are geometry-native with a stable circular lane and explicit angular timing, enabling precise, deterministic movement and rhythm tips once mapped to element taxonomy."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_lanota.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "L1",
+        "name": "adapter-validator canonical kinds alignment",
+        "source_a": "adapter_lanota.py",
+        "source_b": "validator_lanota.py",
+        "expected": "All emitted note kinds must be within schema.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "L2",
+        "name": "geometry-native scope enforcement",
+        "source_a": "adapter_lanota.build_canonical_payload",
+        "source_b": "schema.severity_model.type",
+        "expected": "No gameplay difficulty inference; geometry/timing only",
+        "severity": "error"
+      },
+      {
+        "check_id": "L3",
+        "name": "tips enablement gate",
+        "source_a": "schema.tips.enabled",
+        "source_b": "validator_lanota",
+        "expected": "Tips generation must respect Phase 4 gating",
+        "severity": "warning"
+      }
+    ],
+    "notes": "Lanota consistency checks follow the Bandori anchor: enforce scope, geometry-first semantics, and Phase 4 gating rather than raw-type or DB parity."
+  }
+}

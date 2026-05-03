@@ -1,0 +1,83 @@
+{
+  "schema_id": "analysis_schema.dynamix.v1",
+  "game_id": "dynamix",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Dynamix",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "slide",
+      "hold_path"
+    ],
+    "combo_definition": "three-lane (LEFT/FRONT/RIGHT) hit objects on bar-based timeline",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1,
+    "time_unit": "bars"
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_lane_distribution_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "casual": 2,
+      "normal": 3,
+      "hard": 3,
+      "mega": 3,
+      "giga": 4,
+      "tera": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "Dynamix provides a stable three-lane structure with bar-based timing, enabling deterministic lane-distribution and rhythm density tips once mapped to the element taxonomy."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_dynamix.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "D1",
+        "name": "adapter-validator canonical kinds alignment",
+        "source_a": "adapter_dynamix._kind_for_note_type",
+        "source_b": "validator_dynamix._ALLOWED_KINDS",
+        "expected": "All emitted kinds must be within allowed canonical kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "D2",
+        "name": "three-lane structural invariant",
+        "source_a": "adapter_dynamix.parse_dynamix_xml",
+        "source_b": "validator_dynamix",
+        "expected": "Notes must belong to LEFT/FRONT/RIGHT regions with continuous positions",
+        "severity": "error"
+      },
+      {
+        "check_id": "D3",
+        "name": "tips enablement gate",
+        "source_a": "schema.tips.enabled",
+        "source_b": "validator_dynamix",
+        "expected": "Tips generation must respect Phase 4 gating",
+        "severity": "warning"
+      }
+    ],
+    "notes": "Dynamix consistency checks follow the Bandori anchor: enforce structural scope, lane-based geometry, and Phase 4 gating rather than raw-type or DB parity."
+  }
+}

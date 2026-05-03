@@ -1,0 +1,81 @@
+{
+  "schema_id": "analysis_schema.ユメステ.v1",
+  "game_id": "ユメステ",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for ユメステ",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path",
+      "slide",
+      "flick"
+    ],
+    "combo_definition": "stage-lane judged hit objects with directional flicks",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_lane_pattern_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "easy": 2,
+      "normal": 3,
+      "hard": 3,
+      "expert": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "ユメステ charts feature stable stage lanes, clear directional flick mechanics, and rhythm-dense idol patterns, enabling deterministic timing and hand-movement tips when consumed by Phase 4."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_ユメステ.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "Y1",
+        "name": "adapter-validator canonical kinds alignment",
+        "source_a": "adapter_ユメステ.py",
+        "source_b": "validator_ユメステ.py",
+        "expected": "All emitted note kinds must be within schema.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "Y2",
+        "name": "stage-lane structural invariant",
+        "source_a": "adapter_ユメステ",
+        "source_b": "validator_ユメステ",
+        "expected": "Notes must map to valid stage lanes with monotonic timing",
+        "severity": "error"
+      },
+      {
+        "check_id": "Y3",
+        "name": "tips enablement gate",
+        "source_a": "schema.tips.enabled",
+        "source_b": "validator_ユメステ",
+        "expected": "Tips generation must respect Phase 4 gating",
+        "severity": "warning"
+      }
+    ],
+    "notes": "ユメステ consistency checks follow the Bandori anchor: enforce structural scope, lane-pattern geometry, and Phase 4 gating rather than gameplay semantics or DB parity."
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schema_id": "analysis_schema.D4DJ.v1",
+  "game_id": "D4DJ",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for D4DJ Groovy Mix",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path",
+      "slide",
+      "scratch"
+    ],
+    "combo_definition": "lane-based hit objects with scratch gestures on beat-aligned timeline",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_lane_pattern_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "easy": 2,
+      "normal": 3,
+      "hard": 3,
+      "expert": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "D4DJ charts provide clear lane structure and distinctive scratch mechanics, enabling deterministic timing, lane control, and scratch-handling tips when processed by Phase 4."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_D4DJ.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "D4DJ-1",
+        "name": "adapter-validator canonical kinds alignment",
+        "source_a": "adapter_D4DJ._kind_for_type",
+        "source_b": "validator_D4DJ._ALLOWED_KINDS",
+        "expected": "All emitted note kinds must be within schema.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "D4DJ-2",
+        "name": "lane-based structural invariants",
+        "source_a": "adapter_D4DJ._lane_from_lane_id",
+        "source_b": "validator_D4DJ",
+        "expected": "Lane ids must map to positive canonical lanes with monotonic timing",
+        "severity": "error"
+      },
+      {
+        "check_id": "D4DJ-3",
+        "name": "tips enablement gate",
+        "source_a": "schema.tips.enabled",
+        "source_b": "validator_D4DJ",
+        "expected": "Tips generation must respect Phase 4 gating",
+        "severity": "warning"
+      }
+    ],
+    "notes": "D4DJ consistency checks follow the Bandori anchor: enforce Phase-3 structural scope, lane-pattern geometry, and Phase-4 gating rather than gameplay semantics or DB parity."
+  }
+}

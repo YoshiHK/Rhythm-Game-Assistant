@@ -1,0 +1,77 @@
+{
+  "schema_id": "analysis_schema.phigros.v1",
+  "game_id": "phigros",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Phigros",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path"
+    ],
+    "combo_definition": "judge-line based hit objects (time_beats, positionX, holdTime)",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": false,
+    "min_sections_for_analysis": 0
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "geometry_and_density_based",
+    "supports_section_coverage": false,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "normal": 2,
+      "hard": 3,
+      "insane": 3
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "Phigros provides geometry-native judge-line data with precise timing and spatial information, enabling high-quality, deterministic movement and timing tips once mapped to element taxonomy."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_phigros.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "P1",
+        "name": "adapter-validator canonical kinds alignment",
+        "source_a": "adapter_phigros._map_note_type_to_kind",
+        "source_b": "validator_phigros._ALLOWED_KINDS",
+        "expected": "All emitted kinds must be within allowed canonical kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "P2",
+        "name": "geometry-native scope enforcement",
+        "source_a": "adapter_phigros.build_canonical_payload_phigros",
+        "source_b": "schema.severity_model.type",
+        "expected": "No gameplay difficulty inference; geometry/timing only",
+        "severity": "error"
+      },
+      {
+        "check_id": "P3",
+        "name": "tips enablement gate",
+        "source_a": "schema.tips.enabled",
+        "source_b": "validator_phigros",
+        "expected": "Tips generation must respect Phase 4 gating and taxonomy availability",
+        "severity": "warning"
+      }
+    ],
+    "notes": "Phigros consistency checks emphasize geometry-native correctness and scope safety rather than BPM or DB parity."
+  }
+}

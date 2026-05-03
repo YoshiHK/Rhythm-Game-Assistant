@@ -1,0 +1,116 @@
+{
+  "schema_id": "analysis_schema.proseka.v1",
+  "game_id": "proseka",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Proseka",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "critical_tap",
+      "flick",
+      "flick_arrow",
+      "hold_body_or_start",
+      "hold_path",
+      "critical_hold_path"
+    ],
+    "combo_raw_types": [
+      "tap",
+      "tap_critical",
+      "hold_start",
+      "hold_start_critical",
+      "hold_end",
+      "hold_end_critical",
+      "hold_tick",
+      "hold_tick_critical",
+      "trace_tick",
+      "trace_tick_critical",
+      "flick",
+      "flick_critical",
+      "trace_flick",
+      "trace_flick_critical"
+    ],
+    "strict_combo_consistency": true,
+    "max_db_note_delta": 0
+  },
+  "sections": {
+    "builder": "SectionMetrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "section_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "expert": 3,
+      "master": 3,
+      "append": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "track_c_guidance": "guidance_engine_v2",
+    "track_d_narrative": "narrative_module_v2",
+    "enabled": true
+  },
+  "calibration": {
+    "track": "A",
+    "enabled": true,
+    "best_effort": true,
+    "module": "proseka_score_calibration",
+    "config_default": "score_calibration_config_v0.2.1.json",
+    "preserve_severity_default": true
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping.json",
+    "analysis_schema_default": "proseka_internal_analysis_schema_v1.4.0.json"
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "C1",
+        "name": "canonical_kinds parity",
+        "source_a": "adapter_proseka._CANONICAL_KINDS",
+        "source_b": "validator_proseka.CANONICAL_KINDS",
+        "expected": "Sets must match exactly",
+        "keys": [
+          "notes.canonical_kinds"
+        ],
+        "severity": "error"
+      },
+      {
+        "check_id": "C2",
+        "name": "combo_raw_types parity",
+        "source_a": "adapter_proseka._COMBO_RAW_TYPES",
+        "source_b": "validator_proseka.COMBO_RAW_TYPES",
+        "expected": "Sets must match exactly",
+        "keys": [
+          "notes.combo_raw_types"
+        ],
+        "severity": "error"
+      },
+      {
+        "check_id": "C3",
+        "name": "strict DB-backed combo delta",
+        "source_a": "validator_proseka.MAX_DB_NOTE_DELTA",
+        "source_b": "schema.notes.max_db_note_delta",
+        "expected": "Both are 0",
+        "keys": [
+          "notes.max_db_note_delta"
+        ],
+        "severity": "error"
+      }
+    ],
+    "notes": "This table defines what should be validated by QA/CI: schema values must remain aligned with adapter/validator constants."
+  }
+}

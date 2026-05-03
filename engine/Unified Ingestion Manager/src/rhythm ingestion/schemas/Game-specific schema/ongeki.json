@@ -1,0 +1,30 @@
+{
+  "schema_id": "analysis_schema.ongeki.v1",
+  "game_id": "ongeki",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for ONGEKI",
+  "gating": {
+    "phase4": {
+      "timing_surface": {
+        "required": true,
+        "min_sections": 1,
+        "acceptable_forms": [
+          "timing_surface_only"
+        ],
+        "requirements": {
+          "tick_ge_resolution_ratio_threshold": 0.05,
+          "tick_ge_resolution_ratio_notes": "Warn when (tick >= resolution) / tick_total >= threshold. Used to detect incorrect resolution inference or malformed measure/tick positions.",
+          "tick_grid_warning_cap": 50,
+          "tick_grid_warning_cap_notes": "Maximum number of O_TICK_GRID_INCONSISTENT warnings emitted per validation run to avoid spam.",
+          "time_beats_monotonic_epsilon": 1e-09,
+          "time_beats_monotonic_epsilon_notes": "Epsilon used for time_beats monotonicity check: warn only if next_time_beats + epsilon < prev_time_beats.",
+          "timing_surface_only_requires_bpm": true,
+          "timing_surface_only_requires_bpm_notes": "When timing_surface_only, a positive bpm must be present.",
+          "forbid_density_fields_when_timing_surface_only": true,
+          "forbid_density_fields_when_timing_surface_only_notes": "When timing_surface_only, sections must not include density/coverage fields such as npb/nps/coverage."
+        },
+        "notes": "Phase 4 gating: timing surface (Ongeki)."
+      }
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "schema_id": "analysis_schema.maimai.v1",
+  "game_id": "maimai",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for maimai",
+  "notes": {
+    "canonical_kinds": [
+      "maimai_tap",
+      "maimai_hold",
+      "maimai_slide",
+      "maimai_touch",
+      "bpm_change",
+      "measure_change"
+    ],
+    "combo_definition": "ring-lane hit objects with segmented slides and touch groups",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1,
+    "time_unit": "beats"
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_ring_distribution_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "basic": 2,
+      "advanced": 3,
+      "expert": 3,
+      "master": 4,
+      "remaster": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "maimai charts expose precise ring-based timing, segmented slides, and touch groups, enabling deterministic movement, hand-positioning, and rhythm density tips once mapped to the element taxonomy."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_maimai.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "M1",
+        "name": "adapter-validator canonical kinds alignment",
+        "source_a": "adapter_maimai.build_canonical_payload_maimai",
+        "source_b": "validator_maimai",
+        "expected": "note_events kinds must start with 'maimai_' or be bpm/measure change events",
+        "severity": "error"
+      },
+      {
+        "check_id": "M2",
+        "name": "time monotonicity invariant",
+        "source_a": "adapter_maimai._attach_time_ms",
+        "source_b": "validator_maimai",
+        "expected": "time_ms must be non-decreasing across note_events",
+        "severity": "error"
+      },
+      {
+        "check_id": "M3",
+        "name": "tips enablement gate",
+        "source_a": "schema.tips.enabled",
+        "source_b": "validator_maimai",
+        "expected": "Tips generation must respect Phase 4 gating",
+        "severity": "warning"
+      }
+    ],
+    "notes": "maimai consistency checks follow the Bandori anchor: enforce structural scope, ring-lane geometry, timing invariants, and Phase 4 gating rather than gameplay semantics or DB parity."
+  }
+}

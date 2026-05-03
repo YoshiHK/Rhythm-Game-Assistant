@@ -1,0 +1,73 @@
+{
+  "schema_id": "analysis_schema.chunithm.v1",
+  "game_id": "chunithm",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for CHUNITHM",
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold",
+      "slide",
+      "air",
+      "air_hold"
+    ],
+    "combo_definition": "judged hit objects including air interactions",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_hand_movement_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "expert": 3,
+      "master": 3,
+      "ultima": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+  "tips": {
+    "enabled": true,
+    "rationale": "CHUNITHM charts feature explicit lane width, air-note mechanics, and hand-movement patterns that support precise, high-signal gameplay tips."
+  },
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_chunithm.json",
+    "analysis_schema_default": null
+  },
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "C1",
+        "name": "adapter-validator scope alignment",
+        "source_a": "adapter_chunithm.py",
+        "source_b": "validator_chunithm.py",
+        "expected": "Both remain structural-only with no gameplay inference",
+        "severity": "error"
+      },
+      {
+        "check_id": "C2",
+        "name": "tips enablement gate",
+        "source_a": "validator_chunithm.compute_phase4_gate_state",
+        "source_b": "schema.tips.enabled",
+        "expected": "Tips enabled only when Phase 4 gate allows",
+        "severity": "warning"
+      }
+    ],
+    "notes": "CHUNITHM consistency checks emphasize scope control and Phase 4 gating rather than raw-type parity."
+  }
+}
