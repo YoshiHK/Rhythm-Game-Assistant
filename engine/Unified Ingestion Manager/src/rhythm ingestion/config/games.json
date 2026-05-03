@@ -1,113 +1,261 @@
 {
   "_meta": {
-    "description": "Authoritative list of supported rhythm games.",
-    "notes": "This file is the single source of truth. Adapters and validators must NOT hardcode games."
+    "description": "Single source of truth for game-specific capability panel.",
+    "version": "v3",
+    "status_priority": [
+      "rulebook",
+      "anchor",
+      "enabled",
+      "disabled",
+      "future"
+    ],
+    "notes": "All listed games passed multi-game audit (soft pass). Tips generation may be degraded at runtime.",
+    "game_id_aliases": [
+      {
+        "canonical": "ユメステ",
+        "aliases": ["yumesute", "Yumesute"]
+      }
+    ]
   },
   "games": [
     {
+      "game_id": "bandori",
+      "display_name": "BanG Dream!",
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".json"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "enabled",
+        "localization": "enabled",
+        "game_recommendation": "anchor"
+      },
+      "overall_status": "anchor"
+    },
+    {
       "game_id": "proseka",
       "display_name": "Project SEKAI",
-      "status": "enabled"
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".html", ".htm"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "enabled",
+        "localization": "enabled",
+        "game_recommendation": "anchor"
+      },
+      "overall_status": "anchor"
     },
     {
       "game_id": "arcaea",
       "display_name": "Arcaea",
-      "status": "enabled"
-    },
-    {
-      "game_id": "bandori",
-      "display_name": "BanG Dream!",
-      "status": "enabled"
-    },
-    {
-      "game_id": "yumesute",
-      "display_name": "夢のステラリウム",
-      "status": "enabled"
-    },
-    {
-      "game_id": "phigros",
-      "display_name": "Phigros",
-      "status": "enabled"
-    },
-    {
-      "game_id": "lanota",
-      "display_name": "Lanota",
-      "status": "enabled"
-    },
-    {
-      "game_id": "chunithm",
-      "display_name": "CHUNITHM",
-      "status": "enabled"
-    },
-    {
-      "game_id": "d4dj",
-      "display_name": "D4DJ Groovy Mix",
-      "status": "enabled"
-    },
-    {
-      "game_id": "dynamix",
-      "display_name": "Dynamix",
-      "status": "enabled"
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".aff"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "disabled",
+        "localization": "disabled",
+        "game_recommendation": "anchor"
+      },
+      "overall_status": "anchor"
     },
     {
       "game_id": "maimai",
       "display_name": "maimai",
-      "status": "ingestion_only"
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".maidata.txt"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "disabled",
+        "localization": "disabled",
+        "game_recommendation": "anchor"
+      },
+      "overall_status": "anchor"
+    },
+    {
+      "game_id": "dynamix",
+      "display_name": "Dynamix",
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".xml"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "disabled",
+        "localization": "disabled",
+        "game_recommendation": "enabled"
+      },
+      "overall_status": "enabled"
+    },
+    {
+      "game_id": "chunithm",
+      "display_name": "CHUNITHM",
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".c2s"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "disabled",
+        "localization": "disabled",
+        "game_recommendation": "enabled"
+      },
+      "overall_status": "enabled"
+    },
+    {
+      "game_id": "d4dj",
+      "display_name": "D4DJ Groovy Mix",
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".txt"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "enabled",
+        "localization": "enabled",
+        "game_recommendation": "enabled"
+      },
+      "overall_status": "enabled"
+    },
+    {
+      "game_id": "ユメステ",
+      "display_name": "夢のステラリウム",
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".sus"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "ready",
+        "localization": "future",
+        "game_recommendation": "enabled"
+      },
+      "overall_status": "enabled"
+    },
+    {
+      "game_id": "phigros",
+      "display_name": "Phigros",
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".json"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "disabled",
+        "localization": "disabled",
+        "game_recommendation": "enabled"
+      },
+      "overall_status": "enabled"
+    },
+    {
+      "game_id": "lanota",
+      "display_name": "Lanota",
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".json"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "disabled",
+        "localization": "disabled",
+        "game_recommendation": "disabled"
+      },
+      "overall_status": "enabled"
     },
     {
       "game_id": "ongeki",
       "display_name": "オンゲキ",
-      "status": "ingestion_only"
+      "supported_extensions": {
+        "schema": [".json"],
+        "adapter": [".html", ".htm", ".ogkr"]
+      },
+      "capabilities": {
+        "adapter": "enabled",
+        "validator": "enabled",
+        "schema": "enabled",
+        "personalization": "future",
+        "localization": "future",
+        "game_recommendation": "enabled"
+      },
+      "overall_status": "enabled"
     },
     {
       "game_id": "our_notes",
       "display_name": "Our Notes",
-      "status": "future"
-    },
-    {
-      "game_id": "ensemblestars",
-      "display_name": "Ensemble Stars",
-      "status": "future"
-    },
-    {
-      "game_id": "idolmaster",
-      "display_name": "THE iDOLM@STER Series",
-      "status": "future"
+      "capabilities": {
+        "adapter": "future",
+        "validator": "future",
+        "schema": "future",
+        "personalization": "future",
+        "localization": "future",
+        "game_recommendation": "future"
+      },
+      "overall_status": "future"
     },
     {
       "game_id": "sound_voltex",
       "display_name": "SOUND VOLTEX",
-      "status": "future"
+      "capabilities": {
+        "adapter": "future",
+        "validator": "future",
+        "schema": "future",
+        "personalization": "future",
+        "localization": "future",
+        "game_recommendation": "future"
+      },
+      "overall_status": "future"
     },
     {
-      "game_id": "cytus",
-      "display_name": "Cytus Series",
-      "status": "future"
-    },
-    {
-      "game_id": "voez",
-      "display_name": "VOEZ",
-      "status": "future"
-    },
-    {
-      "game_id": "kalpa",
-      "display_name": "KALPA",
-      "status": "future"
-    },
-    {
-      "game_id": "deemo",
-      "display_name": "DEEMO",
-      "status": "future"
+      "game_id": "cytus_ii",
+      "display_name": "Cytus II",
+      "capabilities": {
+        "adapter": "future",
+        "validator": "future",
+        "schema": "future",
+        "personalization": "future",
+        "localization": "future",
+        "game_recommendation": "future"
+      },
+      "overall_status": "future"
     },
     {
       "game_id": "groove_coaster",
       "display_name": "Groove Coaster",
-      "status": "future"
-    },
-    {
-      "game_id": "osu",
-      "display_name": "osu!",
-      "status": "future"
+      "capabilities": {
+        "adapter": "future",
+        "validator": "future",
+        "schema": "future",
+        "personalization": "future",
+        "localization": "future",
+        "game_recommendation": "future"
+      },
+      "overall_status": "future"
     }
   ]
 }
