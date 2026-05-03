@@ -1,44 +1,54 @@
 #!/usr/bin/env python3
 """adapter_ユメステ.py
-
 UMI Phase 3 adapter for ユメステ (夢のステラリウム / World Dai Star).
 
-This version explicitly wires the shared SUS -> canonical extractor:
-  extract_yumesute_note_events_from_sus()
-
-Grounding (from repo file "canonical note_events.py"):
-- ticks_per_beat is assumed to be 480 and tick->beats is tick/480.
-- score.taps yields tap notes where t.type: 1 normal, 2 critical, 3 flick.
-- score.slides yields holds/slides; extractor emits hold start/body/end events.
-- chart_meta includes bpm, max_time_beats, optional bpm_changes.
-
-Scope (Phase 3 / ADAPTER_V2_SPEC):
-- Structural normalization only.
+Goals (Phase 3 / ADAPTER_V2_SPEC wiring only):
+- Structural normalization into a stable canonical payload.
 - No gameplay semantics inference.
-- Preserve raw tokens/fields in extra.
+- Preserve raw tokens/fields in `extra`.
+- Naming consistency: game_id is the Japanese string "ユメステ" everywhere.
 
-Canonical payload ordering follows the project ordering convention.
+Source format:
+- SUS chart files (.sus)
+
+Timing assumptions:
+- ticks_per_beat is assumed 480, tick->beats is tick/480.
+
+This adapter wires a shared SUS -> canonical extractor when available:
+- extract_yumesute_note_events_from_sus()
+If not importable, it falls back to a minimal local extractor stub that requires
+an installed `sus` parser module.
+
+NOTE:
+- Content-side wiring only; does not modify completed UMI phases.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 from .base_adapter import BaseAdapter
 
+# ---------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------
 
-# ----------------------------
-# Shared extractor (wired)
-# ----------------------------
+GAME_ID = "ユメステ"  # Must remain Japanese across schema/adapter/validator.
+_SUS_EXTS = {".sus"}
+
+# Canonical note kinds (must be a subset of schema.notes.canonical_kinds)
+CANONICAL_KINDS = {"tap", "hold_path", "slide", "flick"}
+
+# ---------------------------------------------------------------------
+# Shared extractor (preferred) + fallback wiring
+# ---------------------------------------------------------------------
 
 try:
-    # Prefer the canonical extractor module name if present.
     # If your repo keeps it under a different filename, adjust import path accordingly.
     from .yumesute_sus_extract import extract_yumesute_note_events_from_sus  # type: ignore
 except Exception:
-    # Fallback: local implementation copied from "canonical note_events.py" is embedded below.
     extract_yumesute_note_events_from_sus = None  # type: ignore
 
 
@@ -46,115 +56,100 @@ def _tick_to_beats(tick: int) -> float:
     return float(tick) / 480.0
 
 
-def _bpm_changes(score) -> list[dict]:
-    out = []
-    for tick, bpm in (getattr(score, 'bpms', None) or []):
-        out.append({'time_beats': _tick_to_beats(int(tick)), 'bpm': float(bpm)})
+def _bpm_changes(score: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for tick, bpm in (getattr(score, "bpms", None) or []):
+        out.append({"time_beats": _tick_to_beats(int(tick)), "bpm": float(bpm)})
     return out
 
 
-def _base_bpm(score) -> float:
-    bpms = getattr(score, 'bpms', None) or []
+def _base_bpm(score: Any) -> float:
+    """Return the first BPM value from score.bpms."""
+    bpms = getattr(score, "bpms", None) or []
     if not bpms:
         return 0.0
     return float(bpms[0][1])
 
 
-def _extract_local(sus_text: str, *, lane_offset: int = 2) -> dict:
-    """Local fallback extractor (from canonical note_events.py)"""
-    import sus  # type: ignore
+def _extract_local(sus_text: str, *, lane_offset: int = 2) -> Dict[str, Any]:
+    """Local fallback extractor.
 
-    score = sus.loads(sus_text)
-    note_events: list[dict] = []
+    Requires a `sus` parsing module. Kept intentionally minimal.
+    """
+    try:
+        import sus  # type: ignore
+    except Exception as e:
+        raise ImportError(
+            "Local SUS extractor requires a `sus` module. Install/enable it or provide "
+            ".yumesute_sus_extract.extract_yumesute_note_events_from_sus."
+        ) from e
 
-    # TAP / CRITICAL / FLICK
-    for t in getattr(score, 'taps', []) or []:
-        tick = int(t.tick)
-        lane = int(t.lane) - lane_offset + 1
-        width = int(getattr(t, 'width', 1) or 1)
-        kind = 'tap'
-        raw_type = 'tap'
-        if int(getattr(t, 'type', 1) or 1) == 2:
-            kind = 'critical_tap'
-            raw_type = 'tap_critical'
-        elif int(getattr(t, 'type', 1) or 1) == 3:
-            kind = 'flick_arrow'
-            raw_type = 'flick'
-        note_events.append({
-            'time_beats': _tick_to_beats(tick),
-            'lane': lane,
-            'kind': kind,
-            'extra': {
-                'raw_type': raw_type,
-                'width_lanes': width,
-                'tick': tick,
-            }
-        })
+    score = sus.loads(sus_text) if hasattr(sus, "loads") else sus.load(sus_text)  # type: ignore
 
-    # HOLDS / SLIDES
-    slides = getattr(score, 'slides', None) or []
-    for hold in sorted(slides, key=lambda s: s[0].tick):
-        start = hold[0]
-        end = hold[-1]
-        start_tick = int(start.tick)
-        end_tick = int(end.tick)
-        lane = int(start.lane) - lane_offset + 1
-        width = int(getattr(start, 'width', 1) or 1)
-        start_beats = _tick_to_beats(start_tick)
-        end_beats = _tick_to_beats(end_tick)
+    note_events: List[Dict[str, Any]] = []
 
-        note_events.append({
-            'time_beats': start_beats,
-            'lane': lane,
-            'kind': 'hold_body_or_start',
-            'extra': {'raw_type': 'hold_start', 'width_lanes': width, 'tick': start_tick},
-        })
-        note_events.append({
-            'time_beats': start_beats,
-            'lane': lane,
-            'kind': 'hold_path',
-            'extra': {
-                'raw_type': 'hold_body',
-                'width_lanes': width,
-                'tick': start_tick,
-                'rect_height': max(0.0, end_beats - start_beats),
-                'shape': 'hold',
-            },
-        })
-        note_events.append({
-            'time_beats': end_beats,
-            'lane': lane,
-            'kind': 'hold_body_or_start',
-            'extra': {'raw_type': 'hold_end', 'width_lanes': width, 'tick': end_tick},
-        })
+    # taps: type 1 normal, 2 critical, 3 flick
+    for t in (getattr(score, "taps", None) or []):
+        try:
+            time_beats = _tick_to_beats(int(getattr(t, "tick", 0)))
+            lane = int(getattr(t, "lane", 0)) + int(lane_offset)
+            t_type = int(getattr(t, "type", 1))
+            kind = "flick" if t_type == 3 else "tap"
+            note_events.append(
+                {
+                    "kind": kind,
+                    "time_beats": time_beats,
+                    "lane": lane,
+                    "extra": {
+                        "raw_kind": "tap",
+                        "raw_type": t_type,
+                        "tick": int(getattr(t, "tick", 0)),
+                        "lane_offset": int(lane_offset),
+                    },
+                }
+            )
+        except Exception:
+            continue
 
-    note_events.sort(key=lambda e: (float(e['time_beats']), int(e['lane']), str(e['kind'])))
+    # slides/holds (conservative): represent as hold_path anchored at start
+    for s in (getattr(score, "slides", None) or []):
+        try:
+            start_tick = int(getattr(s, "start_tick", getattr(s, "tick", 0)))
+            time_beats = _tick_to_beats(start_tick)
+            lane = int(getattr(s, "lane", 0)) + int(lane_offset)
+            note_events.append(
+                {
+                    "kind": "hold_path",
+                    "time_beats": time_beats,
+                    "lane": lane,
+                    "extra": {
+                        "raw_kind": "slide",
+                        "tick": start_tick,
+                        "lane_offset": int(lane_offset),
+                    },
+                }
+            )
+        except Exception:
+            continue
 
-    max_tick = 0
-    for ev in note_events:
-        max_tick = max(max_tick, int(ev.get('extra', {}).get('tick', 0)))
-
-    chart_meta = {
-        'bpm': _base_bpm(score),
-        'max_time_beats': _tick_to_beats(max_tick),
+    chart_meta: Dict[str, Any] = {
+        "bpm": _base_bpm(score),
+        "bpm_changes": _bpm_changes(score),
     }
-    bpm_changes = _bpm_changes(score)
-    if bpm_changes:
-        chart_meta['bpm_changes'] = bpm_changes
 
-    return {'chart_meta': chart_meta, 'note_events': note_events}
+    return {"note_events": note_events, "chart_meta": chart_meta}
 
 
-def extract_yumesute_note_events_from_sus_wired(sus_text: str, *, lane_offset: int = 2) -> dict:
-    """Unified entrypoint. Uses shared extractor if importable, otherwise local fallback."""
+def extract_yumesute_note_events_from_sus_wired(sus_text: str, *, lane_offset: int = 2) -> Dict[str, Any]:
+    """Unified extractor entrypoint."""
     if extract_yumesute_note_events_from_sus is not None:
-        return extract_yumesute_note_events_from_sus(sus_text, lane_offset=lane_offset)
+        return extract_yumesute_note_events_from_sus(sus_text, lane_offset=lane_offset)  # type: ignore
     return _extract_local(sus_text, lane_offset=lane_offset)
 
 
-# ----------------------------
+# ---------------------------------------------------------------------
 # Raw ingestion model
-# ----------------------------
+# ---------------------------------------------------------------------
 
 @dataclass
 class ユメステIngestRaw:
@@ -164,126 +159,138 @@ class ユメステIngestRaw:
 
 
 def _infer_song_id_and_difficulty(path: Path) -> Tuple[str, str]:
+    """Infer (song_id, difficulty_name) from filename.
+
+    Convention: "Song Title [DIFF].sus" (DIFF optional).
+    """
     stem = path.stem
-    diff = 'UNKNOWN'
+    diff = "UNKNOWN"
     song = stem
-    if '[' in stem and ']' in stem:
+    if "[" in stem and "]" in stem:
         try:
-            l = stem.rfind('[')
-            r = stem.rfind(']')
+            l = stem.rfind("[")
+            r = stem.rfind("]")
             if 0 <= l < r:
-                diff = stem[l+1:r].strip() or diff
-                song = stem[:l].strip() or stem
+                diff = (stem[l + 1 : r].strip() or diff)
+                song = (stem[:l].strip() or stem)
         except Exception:
             pass
     return song, diff
 
 
-# ----------------------------
+# ---------------------------------------------------------------------
 # Payload builder
-# ----------------------------
+# ---------------------------------------------------------------------
 
 
 def build_canonical_payload_yumesute(source_ref: str, *, lane_offset: int = 2) -> Dict[str, Any]:
+    """Convert a ユメステ SUS chart file into a Phase-3 canonical payload."""
     path = Path(source_ref)
-    sus_text = path.read_text(encoding='utf-8', errors='ignore')
+    sus_text = path.read_text(encoding="utf-8", errors="ignore")
 
     extracted = extract_yumesute_note_events_from_sus_wired(sus_text, lane_offset=lane_offset)
-    note_events = list(extracted.get('note_events') or [])
-    chart_meta = dict(extracted.get('chart_meta') or {})
+    note_events = list(extracted.get("note_events") or [])
+    chart_meta = dict(extracted.get("chart_meta") or {})
 
-    # Ensure max_time_beats exists.
-    if 'max_time_beats' not in chart_meta:
+    # --- NEW: provide lane_count for validator auto-lane detection ---
+    # Prefer explicit if extractor already provides; otherwise infer from observed lanes.
+    if "lane_count" not in chart_meta:
+        lanes: List[int] = []
+        for ev in note_events:
+            if not isinstance(ev, dict):
+                continue
+            try:
+                lanes.append(int(ev.get("lane")))
+            except Exception:
+                continue
+        if lanes:
+            lane_min = min(lanes)
+            lane_max = max(lanes)
+            chart_meta["lane_count"] = int(lane_max - lane_min + 1)
+            chart_meta.setdefault("lane_min", int(lane_min))
+            chart_meta.setdefault("lane_max", int(lane_max))
+
+    # Ensure max_time_beats exists (helps downstream section builders).
+    if "max_time_beats" not in chart_meta:
         mt = 0.0
         for ev in note_events:
             try:
-                mt = max(mt, float(ev.get('time_beats', 0.0)))
+                mt = max(mt, float(ev.get("time_beats", 0.0)))
             except Exception:
                 pass
-        chart_meta['max_time_beats'] = mt
+        chart_meta["max_time_beats"] = mt
 
     song_id, diff = _infer_song_id_and_difficulty(path)
 
     adapter_metadata: Dict[str, Any] = {
-        'adapter_id': 'adapter_yumesute',
-        'adapter_version': '1.0.0',
-        'source_format': 'sus',
-        'source_path': str(path),
-        'notes': 'YMST adapter wiring extract_yumesute_note_events_from_sus() into Phase 3 canonical payload.',
+        "adapter_id": "adapter_ユメステ",
+        "adapter_version": "1.0.1",
+        "source_format": "sus",
+        "source_path": str(path),
+        "notes": "YMST adapter wiring extract_yumesute_note_events_from_sus() into Phase 3 canonical payload.",
     }
 
     diagnostics: Dict[str, Any] = {
-        'note_events_count': len(note_events),
-        'bpm_changes_count': len(chart_meta.get('bpm_changes') or []),
-        'lane_offset': lane_offset,
+        "note_events_count": len(note_events),
+        "bpm_changes_count": len(chart_meta.get("bpm_changes") or []),
+        "lane_offset": lane_offset,
+        "lane_count": chart_meta.get("lane_count"),
     }
 
     internal_metadata: Dict[str, Any] = {
-        'adapter_id': adapter_metadata.get('adapter_id'),
-        'adapter_version': adapter_metadata.get('adapter_version'),
-        'sections_source': None,
+        "adapter_id": adapter_metadata.get("adapter_id"),
+        "adapter_version": adapter_metadata.get("adapter_version"),
+        "sections_source": None,
     }
 
     return {
-        'game_id': 'yumesute',
-        'chart_id': str(path),
-        'difficulty': diff,
-        'note_events': note_events,
-        'chart_meta': chart_meta,
-        'adapter_metadata': adapter_metadata,
-        'diagnostics': diagnostics,
-        'internal_metadata': internal_metadata,
+        "game_id": GAME_ID,
+        "source_ref": str(path),
+        "song_id": song_id,
+        "difficulty_name": diff,
+        "note_events": note_events,
+        "chart_meta": chart_meta,
+        "sections": [],
+        "adapter_metadata": adapter_metadata,
+        "diagnostics": diagnostics,
+        "internal_metadata": internal_metadata,
+        "extra": {"sus_text_encoding": "utf-8"},
     }
 
 
-# ----------------------------
+# ---------------------------------------------------------------------
 # Adapter implementation
-# ----------------------------
+# ---------------------------------------------------------------------
 
 
 class ユメステAdapter(BaseAdapter):
-    game_id = 'yumesute'
+    """UMI Phase 3 adapter for ユメステ."""
 
-    def accepts_file(self, path: Path) -> bool:
-        return path.suffix.lower() in {'.sus', '.txt'}
+    game_id = GAME_ID
 
-    def load(self, path: Path) -> ユメステIngestRaw:
-        song_id, diff = _infer_song_id_and_difficulty(path)
-        return ユメステIngestRaw(chart_path=path, song_id=song_id, difficulty_name=diff)
+    def accepts_file(self, file_path: str) -> bool:
+        return Path(file_path).suffix.lower() in _SUS_EXTS
 
-    def to_canonical_payload(self, source_ref: str) -> Dict[str, Any]:
-        return build_canonical_payload_yumesute(source_ref)
-
-    def to_canonical_row(self, raw: ユメステIngestRaw) -> Dict[str, Any]:
-        payload = self.to_canonical_payload(str(raw.chart_path))
-        note_events = payload.get('note_events') or []
-        note_total_chart = len(note_events) if isinstance(note_events, list) else 0
-        chart_meta = payload.get('chart_meta') or {}
-
+    def load(self, file_path: str) -> Dict[str, Any]:
+        p = Path(file_path)
+        payload = build_canonical_payload_yumesute(str(p))
         return {
-            'game': self.game_id,
-            'song_id': raw.song_id,
-            'difficulty_label': payload.get('difficulty') or raw.difficulty_name or 'UNKNOWN',
-            'note_total_chart': int(note_total_chart),
-            'duration_ms': None,
-            'bpm': chart_meta.get('bpm'),
-            'chart_path': str(raw.chart_path),
-            'max_time_beats': chart_meta.get('max_time_beats'),
+            "game_id": GAME_ID,
+            "source_ref": str(p),
+            "song_id": payload.get("song_id") or p.stem,
+            "difficulty_name": payload.get("difficulty_name") or "UNKNOWN",
+            "canonical_payload": payload,
         }
 
-    def capabilities(self) -> dict:
-        return {
-            'note_model': 'lane_based',
-            'supports_sections': False,
-            'supports_variable_bpm': True,
-            'emits_canonical_payload': True,
-            'source_format': 'sus',
-        }
+    def to_canonical_row(self, source_ref: str) -> Dict[str, Any]:
+        return self.load(source_ref)
 
 
 __all__ = [
-    'ユメステAdapter',
-    'ユメステIngestRaw',
-    'build_canonical_payload_yumesute',
-    'extract_yumesute_note_events_from_sus_wired',
+    "ユメステAdapter",
+    "ユメステIngestRaw",
+    "build_canonical_payload_yumesute",
+    "extract_yumesute_note_events_from_sus_wired",
+    "GAME_ID",
+    "CANONICAL_KINDS",
 ]
