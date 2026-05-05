@@ -60,18 +60,59 @@ rhythm-game-assistant/
 │  ├─ app.py
 │  ├─ auth.py
 │  └─ routes/
-│     └─ proseka.py
-├─ docs/                # System bundle (authoritative specs)
-│  ├─ README.md
-│  ├─ SPEC.md
-│  ├─ ARCHITECTURE.md
-│  └─ USAGE.md
+│     └─ recommend.py
+├─ doc/                 # System documentation (authoritative specs)
+│  ├─ ARCHITECTURE_CLOSEOUT.md
+│  ├─ PLATFORM_OVERVIEW.md
+│  ├─ MANIFEST.md
+│  ├─ LIMITATIONS.md
+│  └─ [Phase-specific specs and designs]
+├─ Phase 5 - Productionization/
+│  └─ README.md
+├─ Phase 6 - Hardening and Scaling/
+│  └─ README.md
 └─ README.md            # (this file)
 ```
 
 ---
 
-## 4. Backend API (Softr integration)
+## 4. Documentation guide
+
+### Quick Start
+- **For external audiences:** Start with [`doc/PLATFORM_OVERVIEW.md`](doc/PLATFORM_OVERVIEW.md)
+  - High-level capabilities and guarantees
+  - What the platform does and does not do
+  - Safe integration model
+
+### Architecture & Design
+- **System design authority:** [`doc/ARCHITECTURE_CLOSEOUT.md`](doc/ARCHITECTURE_CLOSEOUT.md)
+  - Completed architectural audits (Phases 1–7)
+  - Sealed guarantees and immutability rules
+  - Prohibited anti-patterns
+  - Safe extension framework
+
+- **Limitations & constraints:** [`doc/LIMITATIONS.md`](doc/LIMITATIONS.md)
+  - Hard prohibitions across all phases
+  - Non-goals and intentional boundaries
+
+- **Document manifest:** [`doc/MANIFEST.md`](doc/MANIFEST.md)
+  - Source waves and phase evolution
+  - Referenced specs and implementations
+
+### Phase-specific documentation
+
+| Phase | Purpose | Documentation |
+|-------|---------|---|
+| **Phase 1–3** | Tips generation & UMI | Architecture Closeout (Audits 1–10) |
+| **Phase 4** | Personalization | Architecture Closeout (Audit 11) |
+| **Phase 4.5** | Localization | Architecture Closeout (Audit 12) |
+| **Phase 5** | Productionization & learning loops | [`Phase 5 - Productionization/README.md`](Phase%205%20-%20Productionization/README.md) + Audit 13 |
+| **Phase 6** | Platform hardening & scale | [`Phase 6 - Hardening and Scaling/README.md`](Phase%206%20-%20Hardening%20and%20Scaling/README.md) + Audit 14 |
+| **Phase 7** | Game recommendations | Architecture Closeout (Audits 15–16) |
+
+---
+
+## 5. Backend API (Softr integration)
 
 This repository exposes a **thin HTTP API** intended for UI consumption only.
 
@@ -94,9 +135,11 @@ POST /api/v1/proseka/recommend
 - Tips generation
 - Model training
 
+**See also:** [`api/routes/recommend.py`](api/routes/recommend.py) for implementation details.
+
 ---
 
-## 5. Authentication model
+## 6. Authentication model
 
 Softr authenticates using a **service-to-service API key**.
 
@@ -113,7 +156,7 @@ Authorization: Bearer <API_KEY>
 
 ---
 
-## 6. Tip generation workflow (offline)
+## 7. Tip generation workflow (offline)
 
 Tip generation is fully automated and runs **outside** this API:
 
@@ -126,7 +169,7 @@ The backend API **never** runs Phase 1–3 logic.
 
 ---
 
-## 7. System phases (overview)
+## 8. System phases (overview)
 
 | Phase | Purpose |
 |-------|---------|
@@ -141,9 +184,11 @@ The backend API **never** runs Phase 1–3 logic.
 
 **Completed phases must not be modified.**
 
+Each phase has an immutability guarantee and clear responsibility boundaries. See [`doc/ARCHITECTURE_CLOSEOUT.md`](doc/ARCHITECTURE_CLOSEOUT.md) for sealed audits.
+
 ---
 
-## 8. Development principles
+## 9. Development principles
 
 - Deterministic outputs
 - Semantic immutability
@@ -154,18 +199,18 @@ The backend API **never** runs Phase 1–3 logic.
 
 ---
 
-## 9. Status
+## 10. Status
 
 - ✅ Tip generation system complete (Phase 1–3)
 - ✅ Personalization & localization defined (Phase 4 / 4.5)
 - ✅ Platform hardening rules defined (Phase 6)
+- ✅ Games recommendation system complete (Phase 7)
 - 🚧 Backend API wiring in progress
 - 🚧 Softr integration in progress
-- ✅ Games recommendation system complete (Phase 7)
 
 ---
 
-## 9.5 CI and system invariants
+## 10.5 CI and system invariants
 
 This repository uses a **Continuous Invariants (CI)** system to ensure that completed phases remain **semantically immutable** as the platform evolves.
 
@@ -188,7 +233,69 @@ This separation ensures that system guarantees are explicit, testable, and indep
 
 ---
 
-## 10. License & usage
+## 11. Key governance rules
+
+### Semantic immutability
+Completed phases (1–6) MUST NOT be retroactively modified. Any behavioral change must be introduced via:
+- New phases, or
+- Control-plane wiring only
+
+### Phase boundary rule
+**Phase 3 provides signals. Phase 4 makes presentation decisions.**
+
+No exceptions.
+
+### Allowed extensions
+- New games (via adapters + config)
+- New run modes (via orchestrator extension)
+- Localization wiring (Phase 4.5)
+- Personalization models (Phase 4)
+- Recommendation orchestration (Phase 7)
+- Observability, metrics, CI enforcement
+
+### Prohibited anti-patterns
+- ❌ Semantic fixes inside orchestration
+- ❌ Game-specific branching in core orchestrator
+- ❌ Silent fallback or silent retries
+- ❌ QA metrics used as execution gates
+- ❌ Presentation metadata influencing gameplay logic
+- ❌ "Just for one game" exceptions
+
+For full details, see [`doc/LIMITATIONS.md`](doc/LIMITATIONS.md).
+
+---
+
+## 12. For different audiences
+
+### Product partners & evaluators
+Start with [`doc/PLATFORM_OVERVIEW.md`](doc/PLATFORM_OVERVIEW.md) for a high-level introduction and safe integration practices.
+
+### System designers & architects
+See [`doc/ARCHITECTURE_CLOSEOUT.md`](doc/ARCHITECTURE_CLOSEOUT.md) for the authoritative architectural contract and sealed guarantees.
+
+### Engineers implementing Phase 5 or Phase 7
+Refer to the phase-specific READMEs and implementation audits in the Architecture Closeout document.
+
+### CI/CD & platform operations
+Review [`doc/ARCHITECTURE_CLOSEOUT.md`](doc/ARCHITECTURE_CLOSEOUT.md) Section 16 (Audit 16 — CI Governance) for observability contracts and enforcement rules.
+
+---
+
+## 13. License & usage
 
 This project is currently under active development.
 Internal specifications and system logic are not intended for redistribution without authorization.
+
+---
+
+## Document authorship & governance
+
+| Document | Purpose | Authority |
+|----------|---------|-----------|
+| `ARCHITECTURE_CLOSEOUT.md` | Sealed design contracts and audits | System Governance |
+| `PLATFORM_OVERVIEW.md` | External communication | Product / Partnerships |
+| `LIMITATIONS.md` | Hard constraints and non-goals | Architecture |
+| `MANIFEST.md` | Source artifacts and evolution | Documentation |
+| Phase README files | Phase-specific design | Phase owners |
+
+All documents are **append-only** where immutability is required. Completed audits cannot be retroactively modified.
