@@ -60,13 +60,18 @@ rhythm-game-assistant/
 │  ├─ app.py
 │  ├─ auth.py
 │  └─ routes/
+│     ├─ proseka.py
 │     └─ recommend.py
-├─ doc/                 # System documentation (authoritative specs)
+├─ docs/                # System bundle (authoritative specs)
+│  ├─ README.md
+│  ├─ SPEC.md
+│  ├─ ARCHITECTURE.md
+│  └─ USAGE.md
+├─ doc/                 # Extended documentation (governance & audits)
 │  ├─ ARCHITECTURE_CLOSEOUT.md
 │  ├─ PLATFORM_OVERVIEW.md
 │  ├─ MANIFEST.md
-│  ├─ LIMITATIONS.md
-│  └─ [Phase-specific specs and designs]
+│  └─ LIMITATIONS.md
 ├─ Phase 5 - Productionization/
 │  └─ README.md
 ├─ Phase 6 - Hardening and Scaling/
@@ -76,7 +81,160 @@ rhythm-game-assistant/
 
 ---
 
-## 4. Documentation guide
+## 4. Backend API (Softr integration)
+
+This repository exposes a **thin HTTP API** intended for UI consumption only.
+
+### Example endpoint (current v1)
+
+```
+POST /api/v1/proseka/recommend
+```
+
+**Responsibilities:**
+- Authenticate Softr via Bearer token
+- Accept player performance signals
+- Fetch precomputed tips
+- Apply Phase 4 (personalization) and Phase 4.5 (localization)
+- Return recommendations and tips
+
+**Non-responsibilities:**
+- Chart ingestion
+- Gameplay analysis
+- Tips generation
+- Model training
+
+**See also:** [`api/routes/recommend.py`](api/routes/recommend.py) for implementation details.
+
+---
+
+## 5. Authentication model
+
+Softr authenticates using a **service-to-service API key**.
+
+**Header format:**
+
+```
+Authorization: Bearer <API_KEY>
+```
+
+**Details:**
+- API key is validated by the backend
+- This key authenticates Softr as a **client**, not individual players
+- Follows Phase 6 (Platform Hardening) principles
+
+---
+
+## 6. Tip generation workflow (offline)
+
+Tip generation is fully automated and runs **outside** this API:
+
+- Charts live in a OneDrive folder
+- A scheduled job runs UMI daily
+- Tips and summaries are generated deterministically
+- Only generated outputs are persisted
+
+The backend API **never** runs Phase 1–3 logic.
+
+---
+
+## 7. System phases (overview)
+
+| Phase | Purpose |
+|-------|---------|
+| Phase 1 | Visual detection, tagging, base analysis |
+| Phase 2 | Enhanced scoring, selection, narrative rendering |
+| Phase 3 | Unified Ingestion Manager (batch orchestration) |
+| Phase 4 | Personalization (non-destructive) |
+| Phase 4.5 | Localization (presentation-only) |
+| Phase 5 | Productionization & learning loops |
+| Phase 6 | Platform hardening & security |
+| Phase 7 | Game-level recommendations |
+
+**Completed phases must not be modified.**
+
+Each phase has an immutability guarantee and clear responsibility boundaries. See [`doc/ARCHITECTURE_CLOSEOUT.md`](doc/ARCHITECTURE_CLOSEOUT.md) for sealed audits.
+
+---
+
+## 8. Development principles
+
+- Deterministic outputs
+- Semantic immutability
+- Clear phase boundaries
+- Offline learning only
+- UI as a consumption surface
+- Automation over manual content creation
+
+---
+
+## 9. Status
+
+- ✅ Tip generation system complete (Phase 1–3)
+- ✅ Personalization & localization defined (Phase 4 / 4.5)
+- ✅ Platform hardening rules defined (Phase 6)
+- ✅ Games recommendation system complete (Phase 7)
+- 🚧 Backend API wiring in progress
+- 🚧 Softr integration in progress
+
+---
+
+## 9.5 CI and system invariants
+
+This repository uses a **Continuous Invariants (CI)** system to ensure that completed phases remain **semantically immutable** as the platform evolves.
+
+**CI is responsible for enforcing:**
+
+- Phase boundaries (no upstream semantic access)
+- Deterministic behavior guarantees
+- Personalization and localization safety
+- Versioned, machine-consumed log-level contracts
+- Operational observability and alert gating (Phase 6 wiring)
+
+**CI does not:**
+- Judge gameplay quality
+- Retrain models
+- Generate content
+
+All CI rules, contracts, and observability hooks are documented in: `CI/README.md`
+
+This separation ensures that system guarantees are explicit, testable, and independent of application features or UI behavior.
+
+---
+
+## 10. Key governance rules
+
+### Semantic immutability
+Completed phases (1–6) MUST NOT be retroactively modified. Any behavioral change must be introduced via:
+- New phases, or
+- Control-plane wiring only
+
+### Phase boundary rule
+**Phase 3 provides signals. Phase 4 makes presentation decisions.**
+
+No exceptions.
+
+### Allowed extensions
+- New games (via adapters + config)
+- New run modes (via orchestrator extension)
+- Localization wiring (Phase 4.5)
+- Personalization models (Phase 4)
+- Recommendation orchestration (Phase 7)
+- Observability, metrics, CI enforcement
+
+### Prohibited anti-patterns
+- ❌ Semantic fixes inside orchestration
+- ❌ Game-specific branching in core orchestrator
+- ❌ Silent fallback or silent retries
+- ❌ QA metrics used as execution gates
+- ❌ Presentation metadata influencing gameplay logic
+- ❌ "Just for one game" exceptions
+
+For full details, see [`doc/LIMITATIONS.md`](doc/LIMITATIONS.md).
+
+---
+
+## 11. Documentation guide
 
 ### Quick Start
 - **For external audiences:** Start with [`doc/PLATFORM_OVERVIEW.md`](doc/PLATFORM_OVERVIEW.md)
@@ -112,159 +270,6 @@ rhythm-game-assistant/
 
 ---
 
-## 5. Backend API (Softr integration)
-
-This repository exposes a **thin HTTP API** intended for UI consumption only.
-
-### Example endpoint (current v1)
-
-```
-POST /api/v1/proseka/recommend
-```
-
-**Responsibilities:**
-- Authenticate Softr via Bearer token
-- Accept player performance signals
-- Fetch precomputed tips
-- Apply Phase 4 (personalization) and Phase 4.5 (localization)
-- Return recommendations and tips
-
-**Non-responsibilities:**
-- Chart ingestion
-- Gameplay analysis
-- Tips generation
-- Model training
-
-**See also:** [`api/routes/recommend.py`](api/routes/recommend.py) for implementation details.
-
----
-
-## 6. Authentication model
-
-Softr authenticates using a **service-to-service API key**.
-
-**Header format:**
-
-```
-Authorization: Bearer <API_KEY>
-```
-
-**Details:**
-- API key is validated by the backend
-- This key authenticates Softr as a **client**, not individual players
-- Follows Phase 6 (Platform Hardening) principles
-
----
-
-## 7. Tip generation workflow (offline)
-
-Tip generation is fully automated and runs **outside** this API:
-
-- Charts live in a OneDrive folder
-- A scheduled job runs UMI daily
-- Tips and summaries are generated deterministically
-- Only generated outputs are persisted
-
-The backend API **never** runs Phase 1–3 logic.
-
----
-
-## 8. System phases (overview)
-
-| Phase | Purpose |
-|-------|---------|
-| Phase 1 | Visual detection, tagging, base analysis |
-| Phase 2 | Enhanced scoring, selection, narrative rendering |
-| Phase 3 | Unified Ingestion Manager (batch orchestration) |
-| Phase 4 | Personalization (non-destructive) |
-| Phase 4.5 | Localization (presentation-only) |
-| Phase 5 | Productionization & learning loops |
-| Phase 6 | Platform hardening & security |
-| Phase 7 | Game-level recommendations |
-
-**Completed phases must not be modified.**
-
-Each phase has an immutability guarantee and clear responsibility boundaries. See [`doc/ARCHITECTURE_CLOSEOUT.md`](doc/ARCHITECTURE_CLOSEOUT.md) for sealed audits.
-
----
-
-## 9. Development principles
-
-- Deterministic outputs
-- Semantic immutability
-- Clear phase boundaries
-- Offline learning only
-- UI as a consumption surface
-- Automation over manual content creation
-
----
-
-## 10. Status
-
-- ✅ Tip generation system complete (Phase 1–3)
-- ✅ Personalization & localization defined (Phase 4 / 4.5)
-- ✅ Platform hardening rules defined (Phase 6)
-- ✅ Games recommendation system complete (Phase 7)
-- 🚧 Backend API wiring in progress
-- 🚧 Softr integration in progress
-
----
-
-## 10.5 CI and system invariants
-
-This repository uses a **Continuous Invariants (CI)** system to ensure that completed phases remain **semantically immutable** as the platform evolves.
-
-**CI is responsible for enforcing:**
-
-- Phase boundaries (no upstream semantic access)
-- Deterministic behavior guarantees
-- Personalization and localization safety
-- Versioned, machine-consumed log-level contracts
-- Operational observability and alert gating (Phase 6 wiring)
-
-**CI does not:**
-- Judge gameplay quality
-- Retrain models
-- Generate content
-
-All CI rules, contracts, and observability hooks are documented in: `CI/README.md`
-
-This separation ensures that system guarantees are explicit, testable, and independent of application features or UI behavior.
-
----
-
-## 11. Key governance rules
-
-### Semantic immutability
-Completed phases (1–6) MUST NOT be retroactively modified. Any behavioral change must be introduced via:
-- New phases, or
-- Control-plane wiring only
-
-### Phase boundary rule
-**Phase 3 provides signals. Phase 4 makes presentation decisions.**
-
-No exceptions.
-
-### Allowed extensions
-- New games (via adapters + config)
-- New run modes (via orchestrator extension)
-- Localization wiring (Phase 4.5)
-- Personalization models (Phase 4)
-- Recommendation orchestration (Phase 7)
-- Observability, metrics, CI enforcement
-
-### Prohibited anti-patterns
-- ❌ Semantic fixes inside orchestration
-- ❌ Game-specific branching in core orchestrator
-- ❌ Silent fallback or silent retries
-- ❌ QA metrics used as execution gates
-- ❌ Presentation metadata influencing gameplay logic
-- ❌ "Just for one game" exceptions
-
-For full details, see [`doc/LIMITATIONS.md`](doc/LIMITATIONS.md).
-
----
-
 ## 12. For different audiences
 
 ### Product partners & evaluators
@@ -281,21 +286,22 @@ Review [`doc/ARCHITECTURE_CLOSEOUT.md`](doc/ARCHITECTURE_CLOSEOUT.md) Section 16
 
 ---
 
-## 13. License & usage
-
-This project is currently under active development.
-Internal specifications and system logic are not intended for redistribution without authorization.
-
----
-
-## Document authorship & governance
+## 13. Document authorship & governance
 
 | Document | Purpose | Authority |
 |----------|---------|-----------|
-| `ARCHITECTURE_CLOSEOUT.md` | Sealed design contracts and audits | System Governance |
-| `PLATFORM_OVERVIEW.md` | External communication | Product / Partnerships |
-| `LIMITATIONS.md` | Hard constraints and non-goals | Architecture |
-| `MANIFEST.md` | Source artifacts and evolution | Documentation |
+| `docs/SPEC.md`, `docs/ARCHITECTURE.md`, `docs/USAGE.md` | Phase implementation specs | Phase teams |
+| `doc/ARCHITECTURE_CLOSEOUT.md` | Sealed design contracts and audits | System Governance |
+| `doc/PLATFORM_OVERVIEW.md` | External communication | Product / Partnerships |
+| `doc/LIMITATIONS.md` | Hard constraints and non-goals | Architecture |
+| `doc/MANIFEST.md` | Source artifacts and evolution | Documentation |
 | Phase README files | Phase-specific design | Phase owners |
 
-All documents are **append-only** where immutability is required. Completed audits cannot be retroactively modified.
+All documents in `doc/` are **append-only** where immutability is required. Completed audits cannot be retroactively modified.
+
+---
+
+## 14. License & usage
+
+This project is currently under active development.
+Internal specifications and system logic are not intended for redistribution without authorization.
