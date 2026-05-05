@@ -125,7 +125,47 @@ Phase 6 MUST NOT change:
 - resource throttling
 - cost observability and control
 
----
+### 4.8 Execution Triggering, File Scanning, and Must‑Scan Governance
+
+Phase 6 governs **how execution is permitted**, not when it is initiated.
+
+#### 4.8.1 Trigger Normalization
+All execution attempts entering Phase 6 MUST be normalized into a
+canonical trigger type:
+
+- scheduled — automated, recurring platform execution
+- manual — explicit operator‑initiated execution
+- external — partner, SDK, CI, or API‑initiated execution
+
+Trigger normalization is handled by the Trigger Router.
+Phase 6 components consume trigger type but do not define scheduling.
+
+#### 4.8.2 File Scanning as a Control‑Plane Primitive
+File scanning is a filesystem‑level discovery operation.
+
+- “scanned” means “discovered as a candidate file”
+- scanning does not imply ingestion success or tips generation
+
+Scan‑state artifacts represent the authoritative view of discovered inputs
+and are immutable, versioned, and auditable.
+
+#### 4.8.3 Must‑Scan Rule (Normative)
+If, relative to the latest committed scan‑state, new or changed candidate
+files exist within the execution scope:
+
+- ingestion MUST NOT proceed against a stale scan‑state
+
+The must‑scan rule:
+- is enforced as a guard
+- does not schedule scans
+- does not block manual scan execution
+- does not interpret file contents
+
+#### 4.8.4 Scheduling Separation
+Scheduling (e.g. daily automation) exists outside Phase 6 semantics.
+
+Phase 6 MAY define expectations and observability for scan frequency,
+but MUST NOT embed time‑based logic into routing, guards, or policies.
 
 ## 5. What Phase 6 Is NOT
 

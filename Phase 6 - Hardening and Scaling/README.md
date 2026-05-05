@@ -26,6 +26,27 @@ Phase 6 MUST NOT:
 
 Completed phases are immutable. Wiring between phases is flexible.
 
+### Operational Scanning and Input Governance
+
+Phase 6 formalizes **file discovery and input observability** as an operational concern.
+
+- File scanning is treated as a **control-plane operation**, not a semantic decision.
+- The system distinguishes between:
+  - **scheduled scans** (e.g. daily automation),
+  - **manual scans** (operator-initiated),
+  - and **ingestion execution** (Phase 3 orchestration).
+
+Phase 6 introduces a **must-scan guardrail**:
+- If new or changed candidate files are detected relative to the latest committed scan-state,
+  any ingestion attempt MUST be preceded by a completed scan.
+- The must-scan rule governs **whether ingestion may proceed**; it does not schedule scans
+  and does not block manual inspection or manual scan commits.
+
+This ensures:
+- filesystem changes are never silently ignored,
+- operational visibility is preserved,
+- and ingestion behavior remains deterministic and auditable.
+
 ---
 
 ## What Phase 6 Does

@@ -56,7 +56,23 @@ Responsibilities:
 
 This layer integrates with the **Orchestrator Extension**, not the core orchestrator.
 
----
+### 4.1 Execution and Routing Control Flow
+
+Execution control in Phase 6 follows a strict, non‑semantic pipeline:
+
+1. Execution intent is normalized by Trigger Router.
+2. Immutable RoutingContext is constructed.
+3. Guards evaluate allow/deny conditions (e.g. must‑scan, security, abuse).
+4. Routing Policy applies final execution rules.
+5. Lifecycle routers evaluate model and deployment state.
+6. Observability records signals and metrics.
+7. Integration layer forwards execution to downstream systems.
+
+At no point does Phase 6:
+- perform file scanning,
+- schedule execution,
+- or interpret gameplay semantics.
+
 
 ## 5. Security & Compliance Layer
 

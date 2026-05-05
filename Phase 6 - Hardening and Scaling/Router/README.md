@@ -1,13 +1,24 @@
-# Phase 6 – Router Package
+## Phase 6 — Router Layer
 
-This package defines the **routing skeleton** for Phase 6 (Platform Hardening and Scale).
+The Router Layer is the **coordination spine** of Phase 6.
 
-Purpose:
-- Provide a centralized, non-semantic routing layer
-- Coordinate guards, lifecycle enforcement, observability, and integration boundaries
-- Wrap Phase 5 artifacts and orchestrator execution safely
+It:
+- sequences guard evaluation,
+- applies routing policy,
+- invokes lifecycle routing,
+- and forwards execution context.
 
-Non-negotiable rules:
-- Downstream-only (must not affect Phase 1–5 behavior)
-- No semantic interpretation or mutation
-- Routing is operational, not analytical
+The Router Layer MUST NOT:
+- contain guard logic,
+- contain lifecycle logic,
+- interpret execution payloads,
+- or make semantic decisions.
+
+All decisions are delegated to:
+- guards,
+- policies,
+- routers,
+- and observers.
+
+The router only orchestrates.
+``

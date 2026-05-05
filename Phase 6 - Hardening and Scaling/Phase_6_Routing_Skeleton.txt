@@ -1,32 +1,44 @@
 phase6/
-├─ README.md                      # (later) Phase 6 index, like Phase 5
-├─ PHASE_6_SPEC.md                # already created ✅
-├─ PHASE_6_ARCHITECTURE.md        # already created ✅
+├─ README.md
+├─ PHASE_6_SPEC.md
+├─ PHASE_6_ARCHITECTURE.md
 │
 ├─ router/
-│   ├─ __init__.py
-│   ├─ phase6_router.py           # central routing coordinator
-│   ├─ routing_context.py         # immutable context passed through layers
-│   └─ routing_policy.py          # declarative routing rules
+│  ├─ __init__.py
+│  ├─ phase6_router.py
+│  ├─ routing_context.py
+│  ├─ routing_policy.py
+│  └─ trigger_router.py
 │
 ├─ guards/
-│   ├─ __init__.py
-│   ├─ reliability_guard.py       # retries, circuit breakers, idempotency
-│   ├─ security_guard.py          # auth, PII, access control
-│   ├─ abuse_guard.py             # rate limiting, anomaly detection
-│   └─ compliance_guard.py        # logging, audit, retention
+│  ├─ README.md
+│  ├─ must_scan_guard.py
+│  ├─ reliability_guard.py
+│  ├─ security_guard.py
+│  ├─ abuse_guard.py
+│  └─ compliance_guard.py
 │
 ├─ lifecycle/
-│   ├─ __init__.py
-│   ├─ model_lifecycle_router.py  # promotion, rollback, version pinning
-│   └─ deployment_router.py       # env / region / stage routing
+│  ├─ README.md
+│  ├─ version_policy.py
+│  ├─ model_lifecycle_router.py
+│  └─ deployment_router.py
 │
 ├─ observability/
-│   ├─ __init__.py
-│   ├─ slo_router.py              # SLO evaluation & escalation
-│   └─ alert_router.py            # incident & alert dispatch
+│  ├─ README.md
+│  ├─ health_metrics.py
+│  ├─ scan_observer.py
+│  ├─ slo_router.py
+│  └─ alert_router.py
+│
+├─ cost_capacity/
+│  ├─ README.md
+│  ├─ cost_monitor.py
+│  ├─ budget_policy.py
+│  └─ capacity_router.py
 │
 └─ integration/
-    ├─ __init__.py
-    ├─ partner_gateway.py         # partner-facing boundary
-    └─ api_version_router.py      # versioning & deprecation routing
+   ├─ README.md
+   ├─ api_version_router.py
+   ├─ partner_gateway.py
+   └─ sdk_boundary.py

@@ -1,14 +1,40 @@
 """
-Deployment Router
+Deployment Router (Phase 6)
 
-Responsibilities:
-- Route execution across environments (dev / staging / canary / prod)
-- Enforce environment-level constraints
-- Support gradual rollout strategies
+Evaluates whether execution may proceed based on deployment context.
 
-No semantic behavior is allowed here.
+This router:
+- Enforces environment and stage constraints.
+- Does NOT provision infrastructure.
+- Does NOT reschedule execution.
 """
 
+from typing import Protocol
+
+
+class DeploymentContext(Protocol):
+    """
+    Expected context attributes:
+    - environment: str    # dev | staging | prod
+    - stage: str          # canary | stable | rollback
+    - trigger_type: str   # scheduled | manual | external
+    """
+
+
 class DeploymentRouter:
-    def route(self, context):
+    """
+    Routing gate for deployment constraints.
+    """
+
+    def allow(self, context: DeploymentContext) -> bool:
+        """
+        Return True if execution is allowed in the given deployment context.
+
+        Default behavior (skeleton):
+        - All environments allowed.
+        - Rollback stage always allowed.
+        """
+        if context.stage == "rollback":
+            return True
+
         return True

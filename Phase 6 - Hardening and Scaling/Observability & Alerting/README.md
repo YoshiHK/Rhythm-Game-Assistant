@@ -1,13 +1,50 @@
-# Phase 6 – Observability & Alerting Package
+# Phase 6 Observability
 
-This package defines the **Observability & Alerting layer** for Phase 6 (Platform Hardening and Scale).
+Observability in Phase 6 is **strictly non-semantic**.
 
-Purpose:
-- Provide system-level visibility into reliability, health, and performance
-- Enforce Service Level Objectives (SLOs)
-- Detect incidents and route alerts predictably and audibly
+It exists to:
+- measure system health,
+- detect anomalies,
+- and surface operational risk.
 
-Non-negotiable rules:
-- Downstream-only (must not affect Phase 1–5 behavior)
-- No semantic interpretation of gameplay, tips, or recommendations
-- Observability observes and escalates; it does not decide or mutate
+It does NOT:
+- alter execution,
+- block routing,
+- or reinterpret analysis results.
+
+---
+
+## Observability Flow
+
+1. **Observers**
+   - Read system artifacts (e.g. scan_state)
+   - Produce HealthMetrics
+
+2. **SLO Router**
+   - Evaluates HealthMetrics against declared objectives
+   - Produces SLOResult
+
+3. **Alert Router**
+   - Routes alerts based on SLOResult
+   - Does not deliver notifications directly
+
+---
+
+## Components
+
+- **scan_observer.py**
+  Observes scan-state freshness and coverage.
+
+- **health_metrics.py**
+  Canonical schema for health signals.
+
+- **slo_router.py**
+  Evaluates SLO compliance.
+
+- **alert_router.py**
+  Determines alert escalation.
+
+---
+
+Observability observes and escalates.
+It never decides semantics.

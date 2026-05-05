@@ -1,12 +1,34 @@
 """
-API Version Router
+API Version Router (Phase 6)
 
-Responsibilities:
-- Route requests based on API version
-- Enforce backward compatibility guarantees
-- Support deprecation and sunset policies
+Evaluates API version compatibility for external execution.
 """
 
+from typing import Protocol
+
+
+class APIVersionContext(Protocol):
+    """
+    Expected context attributes:
+    - api_version: str
+    - deprecated: bool
+    - trigger_type: str  # scheduled | manual | external
+    """
+
+
 class APIVersionRouter:
-    def route(self, context, payload):
-        return payload
+    """
+    Routing gate for API version compatibility.
+    """
+
+    def allow(self, context: APIVersionContext) -> bool:
+        """
+        Return True if the API version is allowed.
+
+        Default behavior:
+        - Deprecated versions are blocked.
+        """
+        if context.deprecated:
+            return False
+
+        return True

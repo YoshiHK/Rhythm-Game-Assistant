@@ -1,32 +1,68 @@
 """
 Phase 6 Router
 
-Central coordinator for Phase 6 routing.
-This module MUST NOT contain business logic, learning logic, or gameplay semantics.
+Central non-semantic coordinator for Phase 6 execution.
+
+Responsibilities:
+- Orchestrate guard evaluation order.
+- Invoke lifecycle and integration routing gates.
+- Forward immutable routing context.
+- Trigger observability hooks.
+
+This module MUST NOT:
+- contain business logic,
+- interpret gameplay semantics,
+- or modify payload contents.
 """
-from typing import Any
+
+from typing import Iterable, Any
+
 
 class Phase6Router:
-    def __init__(self, *, guards: Any, lifecycle: Any, observability: Any, integration: Any):
-        self.guards = guards
-        self.lifecycle = lifecycle
+    """
+    Phase 6 routing coordinator.
+    """
+
+    def __init__(
+        self,
+        *,
+        guards: Iterable[Any],
+        routing_policy: Any,
+        lifecycle_routers: Iterable[Any],
+        observability: Any,
+        integration: Any,
+    ):
+        self.guards = list(guards)
+        self.routing_policy = routing_policy
+        self.lifecycle_routers = list(lifecycle_routers)
         self.observability = observability
         self.integration = integration
 
     def route(self, context: Any) -> Any:
-        # Pre-execution guards
-        self.guards.security.check(context)
-        self.guards.abuse.check(context)
-        self.guards.reliability.prepare(context)
+        """
+        Route execution through Phase 6.
 
-        # Lifecycle enforcement (no semantics)
-        self.lifecycle.enforce(context)
+        Returns:
+        - forwarded execution payload or handle
+        """
 
-        # Pass-through payload
-        result = context.payload
+        # 1. Evaluate guards (block or allow)
+        for guard in self.guards:
+            if not guard.allow(context):
+                raise RuntimeError(f"Execution blocked by {guard.__class__.__name__}")
 
-        # Observability
-        self.observability.record(context, result)
+        # 2. Routing policy (final allow/deny)
+        if not self.routing_policy.allow(context):
+            raise RuntimeError("Execution blocked by routing policy")
 
-        # Integration boundary routing
-        return self.integration.route(context, result)
+        # 3. Lifecycle routing gates
+        for router in self.lifecycle_routers:
+            if not router.allow(context):
+                raise RuntimeError(f"Execution blocked by {router.__class__.__name__}")
+
+        # 4. Observability (side-effect free)
+        if self.observability:
+            self.observability.observe(context)
+
+        # 5. Integration boundary routing
+        return self.integration.forward(context)
