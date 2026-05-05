@@ -1,67 +1,57 @@
-# PHASE_5_SPEC.md
+## PHASE_5_SPEC.md
+### Phase 5 — Productionization & Learning Loop
 
-## Phase 5 — Productionization & Learning Loop
-
-**Status:** Draft (Design-Locked, Not Implemented)  
-**Upstream Dependencies:**  
-- Phase 1 — Foundation & Workflow ✅  
-- Phase 2 — Enhancement ✅  
-- Phase 3 — Unified Ingestion Manager ✅  
-- Phase 4 — Personalization ✅  
-- Phase 4.5 — Localization ✅  
-
-**Non‑Negotiable Rule:** *Do not modify anything in Completed Phases.*
+**Status:** Design‑Locked (Not Implemented)  
+**Non‑Negotiable Rule:** _Do not modify anything in Completed Phases._
 
 ---
 
 ## 0. Positioning
 
-Phase 5 defines the **productionization layer** of the Rhythm Game Assistant.
+Phase 5 defines the **productionization and learning loop**
+of the Rhythm Game Assistant.
 
-It exists to **close the loop** between:
+It closes the loop between:
 - explainable tips (Phase 4),
 - localized presentation (Phase 4.5),
 - and measurable player outcomes.
 
-Phase 5 **does not reinterpret gameplay semantics**.  
-It improves *how the system learns and recommends*, not *what tips mean*.
+Phase 5 improves **how the system learns and delivers recommendations**,  
+not **what gameplay advice means**.
 
 ---
 
 ## 1. Purpose
 
 Phase 5 exists to:
-
-- turn personalized tips into a **measurable learning system**,
-- enable **offline improvement** via curator-backed feedback,
-- productionize **song recommendations** as a stable contract,
-- prepare the system for scale, experimentation, and trust.
-
-It answers:
-
-> “Given correct and explainable advice, how do we improve outcomes over time?”
+- convert feedback into curator‑backed learning signals,
+- improve models safely via offline retraining,
+- productionize song‑level recommendations as stable contracts,
+- enable guided practice, experimentation, and monetization,
+- prepare the system for governance and scale.
 
 ---
 
 ## 2. Phase Boundary
 
-### Inputs (from Phase 4 / 4.5 only)
-- rendered tips text
-- selected elements and summaries
+### Inputs (from Phases 4 / 4.5 only)
+- rendered tips and summaries
+- selected elements
 - personalization provenance
 - locale metadata
-- player interaction signals (implicit or explicit)
+- player interaction signals
 
 ### Outputs
-- recommendation artifacts (song-level)
 - feedback datasets
-- offline-trained models
+- gold labels
+- trained model artifacts
+- recommendation responses
 - metrics and observability signals
 
 Phase 5 MUST NOT:
-- modify element selection
-- modify severity, score, or guidance
-- alter Phase‑4 outputs at runtime
+- modify element selection or severity
+- perform live or online learning
+- deploy or activate models
 
 ---
 
@@ -72,52 +62,58 @@ Phase 5 MUST NOT change:
 - gameplay advice meaning
 - element definitions
 - severity labels
-- personalization decisions
+- personalization outcomes
 
 ### 3.2 Offline Learning Only
-- All learning occurs **offline**
-- No live or online learning is permitted
-- Promotion requires validation and rollback safety
+- All learning occurs offline
+- All promotions require Phase 6 lifecycle approval
 
 ### 3.3 Explainability Preservation
-- Recommendations MUST carry rationale metadata
-- Feedback MUST be linkable to provenance IDs
+- Recommendations MUST carry rationale
+- All signals MUST link to provenance IDs
 
 ---
 
 ## 4. Core Responsibilities
 
 ### 4.1 Feedback Aggregation
-- capture tip outcomes (used / ignored / failed)
-- capture recommendation outcomes (played / skipped)
-- surface signals for curator review
+- capture player and system outcomes
+- normalize feedback signals
+- prepare curator review inputs
 
 ### 4.2 Curator Gold & Labeling
-- scale curator review queues
-- produce gold labels for retraining
-- track disagreement and uncertainty
+- scale human review
+- generate gold labels
+- track disagreement and confidence
 
-### 4.3 Offline Retraining & Model Ops
+### 4.3 Offline Retrain & Model Ops
 - build training datasets
-- validate candidate models
-- promote models via gated rollout
+- train and validate candidate models
+- register artifacts for promotion
 
 ### 4.4 Recommendation Productionization
-- define song recommendation contracts
-- expose read-only recommendation APIs
-- attach rationale and provenance metadata
+- define song‑level recommendation contracts
+- expose read‑only APIs with rationale
 
-Recommendation Productionization defines contracts and learning signals; it does not implement UI‑level recommendation logic.
-
-### 4.5 Practice & In‑Session Integration (Optional)
+### 4.5 Practice Integration (Optional)
 - map tips to drills
 - enable opt‑in in‑session hints
-- record session telemetry (non‑intrusive)
+- record practice telemetry
 
-### 4.6 Measurement & Experimentation
-- define success metrics
-- run A/B tests (presentation-only)
-- enforce feature flags and safety bounds
+### 4.6 Observability & Experimentation
+- define metrics
+- run presentation‑only experiments
+- enforce feature flag safety
+
+### 4.7 Marketplace Layer
+- define creator participation
+- manage content catalogs
+- emit monetization telemetry
+
+### 4.8 Safety / Legal / Anti‑Cheat
+- define unacceptable behaviors
+- record safety signals
+- escalate evidence to Phase 6
 
 ---
 
@@ -126,15 +122,14 @@ Recommendation Productionization defines contracts and learning signals; it does
 Phase 5 is NOT:
 - a gameplay analysis phase
 - a personalization rewrite
-- a localization phase
-- a game recommendation phase
-- a platform hardening phase
+- a live‑learning system
+- a platform enforcement layer
 
 ---
 
 ## 6. Relationship to Later Phases
 
-- Phase 6 hardens what Phase 5 proves
+- Phase 6 hardens and governs Phase 5 outputs
 - Phase 7 expands recommendations from songs → games
 
 Phase 5 MUST remain stable and explainable before Phase 7 begins.
@@ -144,16 +139,13 @@ Phase 5 MUST remain stable and explainable before Phase 7 begins.
 ## 7. Contract Closure
 
 Phase 5 is:
-✅ downstream-only  
-✅ non-semantic  
+✅ downstream‑only  
+✅ non‑semantic  
 ✅ explainable  
-✅ offline-learning-only  
+✅ offline‑learning‑only  
 ✅ safe by default  
 
 Phase 5 is NOT:
-❌ a live-learning system  
 ❌ a judgment authority  
-
----
 
 **End of PHASE_5_SPEC.md**

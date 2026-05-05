@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5SafetyEvent",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "source_layer"
+  ],
+  "properties": {
+    "event_id": { "type": "string" },
+
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "acceptable_use_violation",
+        "anti_cheat_signal",
+        "legal_risk_flag",
+        "escalation_created"
+      ]
+    },
+
+    "source_layer": {
+      "type": "string",
+      "description": "Originating Phase 5 layer"
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "metadata": {
+      "type": "object",
+      "description": "Non-judgmental supporting context",
+      "additionalProperties": true
+    }
+  }
+}

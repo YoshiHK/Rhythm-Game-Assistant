@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5PracticeTelemetryEvent",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "provenance_id",
+    "practice_context"
+  ],
+  "properties": {
+    "event_id": { "type": "string" },
+
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "hint_shown",
+        "hint_dismissed",
+        "practice_retry",
+        "section_replayed"
+      ]
+    },
+
+    "practice_context": {
+      "type": "string",
+      "description": "Identifier for practice session or mode"
+    },
+
+    "provenance_id": {
+      "type": "string",
+      "description": "Phase 4 provenance identifier"
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "metadata": {
+      "type": "object",
+      "description": "Non-judgmental practice context",
+      "additionalProperties": true
+    }
+  }
+}

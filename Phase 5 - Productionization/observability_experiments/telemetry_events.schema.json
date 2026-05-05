@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5TelemetryEvent",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "provenance_id",
+    "event_scope"
+  ],
+  "properties": {
+    "event_id": { "type": "string" },
+
+    "event_type": {
+      "type": "string",
+      "description": "Non-semantic telemetry event type"
+    },
+
+    "event_scope": {
+      "type": "string",
+      "enum": [
+        "presentation",
+        "interaction",
+        "navigation"
+      ],
+      "description": "Telemetry scope; must not encode judgment"
+    },
+
+    "provenance_id": {
+      "type": "string",
+      "description": "Phase 4 provenance identifier"
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "metadata": {
+      "type": "object",
+      "description": "Auxiliary, non-judgmental context",
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5RecommendationRequest",
+  "type": "object",
+  "required": [
+    "request_id",
+    "player_id",
+    "provenance_id",
+    "timestamp"
+  ],
+  "properties": {
+    "request_id": { "type": "string" },
+
+    "player_id": {
+      "type": "string",
+      "description": "Identifier for the requesting player"
+    },
+
+    "provenance_id": {
+      "type": "string",
+      "description": "Phase 4 provenance identifier"
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "context": {
+      "type": "object",
+      "description": "Non-semantic request context",
+      "additionalProperties": true
+    }
+  }
+}

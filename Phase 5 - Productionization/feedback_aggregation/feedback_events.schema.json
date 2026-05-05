@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5FeedbackEvent",
+  "type": "object",
+  "required": [
+    "event_id",
+    "provenance_id",
+    "event_type",
+    "source_type",
+    "timestamp"
+  ],
+  "properties": {
+    "event_id": { "type": "string" },
+
+    "provenance_id": {
+      "type": "string",
+      "description": "Phase 4 provenance identifier this feedback refers to"
+    },
+
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "player_reaction",
+        "player_completion",
+        "player_dismissal",
+        "system_observation"
+      ]
+    },
+
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "player",
+        "system"
+      ]
+    },
+
+    "payload": {
+      "type": "object",
+      "description": "Raw, uninterpreted feedback payload"
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

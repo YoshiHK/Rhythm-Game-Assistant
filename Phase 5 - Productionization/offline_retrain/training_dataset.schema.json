@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5TrainingDataset",
+  "type": "object",
+  "required": [
+    "dataset_id",
+    "created_at",
+    "source_range",
+    "label_schema_version",
+    "samples"
+  ],
+  "properties": {
+    "dataset_id": { "type": "string" },
+
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "source_range": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "format": "date-time" },
+        "to": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "label_schema_version": {
+      "type": "string",
+      "description": "Version of curator_label.schema.json"
+    },
+
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "provenance_id",
+          "features",
+          "gold_labels"
+        ],
+        "properties": {
+          "provenance_id": { "type": "string" },
+
+          "features": {
+            "type": "object",
+            "description": "Derived, offline-only features"
+          },
+
+          "gold_labels": {
+            "type": "array",
+            "items": { "type": "object" }
+          }
+        }
+      }
+    }
+  }
+}

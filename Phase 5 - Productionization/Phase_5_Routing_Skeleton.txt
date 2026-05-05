@@ -1,0 +1,70 @@
+phase5/
+├─ README.md
+├─ PHASE_5_SPEC.md
+├─ PHASE_5_ARCHITECTURE.md
+│
+├─ routing/
+│  ├─ README.md
+│  │   # Phase 5 routing overview:
+│  │   # defines dataflow order between learning-facing layers
+│  │   # NOT a runtime decision engine
+│  │
+│  └─ learning_flow.md
+│      # Declarative description of Phase 5 learning pipeline:
+│      # feedback → curator → retrain → recommendation → practice → marketplace → safety
+│
+├─ feedback_aggregation/
+│  ├─ README.md
+│  ├─ feedback_events.schema.json
+│  ├─ feedback_collector.md
+│  └─ curator_queue.md
+│
+├─ curator_gold/
+│  ├─ README.md
+│  ├─ curator_label.schema.json
+│  ├─ labeling_guidelines.md
+│  └─ review_workflow.md
+│
+├─ offline_retrain/
+│  ├─ README.md
+│  ├─ training_dataset.schema.json
+│  ├─ model_registry.md
+│  ├─ model_validation.md
+│  └─ promotion_and_rollback.md
+│
+├─ observability_experiments/
+│  ├─ README.md
+│  ├─ telemetry_events.schema.json
+│  ├─ metrics_catalog.md
+│  ├─ experiment_design.md
+│  └─ feature_flags.md
+│
+├─ practice_integration/
+│  ├─ README.md
+│  ├─ in_session_hints.md
+│  ├─ practice_mapping.md
+│  ├─ practice_telemetry.schema.json
+│  └─ user_controls.md
+│
+├─ recommendation/
+│  ├─ README.md
+│  ├─ recommendation_request.schema.json
+│  ├─ recommendation_response.schema.json
+│  ├─ rationale_mapping.md
+│  └─ api_contract.md
+│
+├─ marketplace/
+│  ├─ README.md
+│  ├─ creator_program.md
+│  ├─ content_catalog.md
+│  ├─ monetization_rules.md
+│  ├─ partner_constraints.md
+│  └─ marketplace_events.schema.json
+│
+└─ safety/
+   ├─ README.md
+   ├─ acceptable_use.md
+   ├─ anti_cheat_signals.md
+   ├─ legal_compliance.md
+   ├─ escalation_policy.md
+   └─ safety_events.schema.json
