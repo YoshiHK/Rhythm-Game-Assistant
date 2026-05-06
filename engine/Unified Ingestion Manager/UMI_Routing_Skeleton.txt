@@ -1,0 +1,131 @@
+UMI/
+├─ src/
+│  └─ rhythm_ingestion/
+│     ├─ adapters/ # Phase 3 routing boundary (per-game)
+│     │  ├─ game_specific_adapters/
+│     │  │  ├─ adapter_bandori.py
+│     │  │  ├─ adapter_proseka.py
+│     │  │  ├─ adapter_arcaea.py
+│     │  │  ├─ adapter_maimai.py
+│     │  │  ├─ adapter_dynamix.py
+│     │  │  ├─ adapter_chunithm.py
+│     │  │  ├─ adapter_d4dj.py
+│     │  │  ├─ adapter_ユメステ.py
+│     │  │  ├─ adapter_phigros.py
+│     │  │  ├─ adapter_lanota.py
+│     │  │  ├─ adapter_ongeki.py
+│     │  │  ├─ adapter_our_notes.py
+│     │  │  ├─ adapter_sound_voltex.py
+│     │  │  ├─ adapter_cytus_ii.py
+│     │  │  └─ adapter_groove_coaster.py
+│     │  ├─ base_adapter.py
+│     │  ├─ base_adapter_v2.py
+│     │  ├─ common_adapter_utils.py
+│     │  ├─ payload_utils_for_adapter.py
+│     │  ├─ ADAPTER_v2_SPEC.md
+│     │  └─ __init__.py
+│     ├─ validators/ # Phase 3 validation only (non-semantic)
+│     │  ├─ game_specific_validators/
+│     │  │  ├─ validator_bandori.py
+│     │  │  ├─ validator_proseka.py
+│     │  │  ├─ validator_arcaea.py
+│     │  │  ├─ validator_maimai.py
+│     │  │  ├─ validator_dynamix.py
+│     │  │  ├─ validator_chunithm.py
+│     │  │  ├─ validator_d4dj.py
+│     │  │  ├─ validator_ユメステ.py
+│     │  │  ├─ validator_phigros.py
+│     │  │  ├─ validator_lanota.py
+│     │  │  ├─ validator_ongeki.py
+│     │  │  ├─ validator_our_notes.py
+│     │  │  ├─ validator_sound_voltex.py
+│     │  │  ├─ validator_cytus_ii.py
+│     │  │  └─ validator_groove_coaster.py
+│     │  ├─ base_validator.py
+│     │  ├─ base_validator_v2.py
+│     │  ├─ batch_validate_for_validator.py
+│     │  ├─ common_validator_utils.py
+│     │  ├─ VALIDATOR_v2_SPEC.md
+│     │  └─ __init__.py
+│     ├─ schemas/ # Canonical contracts
+│     │  ├─ canonical_chart_payload.schema.json
+│     │  ├─ canonical_song.schema.json
+│     │  ├─ difficulty_profile.schema.json
+│     │  ├─ recommendation_input.schema.json
+│     │  ├─ recommendation_output.schema.json
+│     │  └─ game_specific_schemas/
+│     │     ├─ bandori.json
+│     │     ├─ proseka.json
+│     │     ├─ arcaea.json
+│     │     ├─ maimai.json
+│     │     ├─ dynamix.json
+│     │     ├─ chunithm.json
+│     │     ├─ d4dj.json
+│     │     ├─ ユメステ.json
+│     │     ├─ phigros.json
+│     │     ├─ lanota.json
+│     │     ├─ ongeki.json
+│     │     ├─ our_notes.json
+│     │     ├─ sound_voltex.json
+│     │     ├─ cytus_ii.json
+│     │     └─ groove_coaster.json
+│     ├─ config/ # Declarative routing config
+│     │  ├─ games.json
+│     │  ├─ games_loader.py
+│     │  ├─ useGameBadges.py
+│     │  └─ __init__.py
+│     ├─ batch/ # Multi-game batch orchestration
+│     │  ├─ multi_game_ingest.py
+│     │  ├─ multi_game_batch_qa.py
+│     │  └─ __init__.py
+│     ├─ pipeline/ # Phase 1–2 execution (already sealed)
+│     │  ├─ pattern_tags/
+│     │  ├─ section_metrics/
+│     │  ├─ tips/
+│     │  └─ __init__.py
+│     ├─ writers/ # Persistence only
+│     │  ├─ excel_writer.py
+│     │  └─ __init__.py
+│     ├─ utils/ # Observational / QA utilities
+│     │  ├─ file_scan.py
+│     │  ├─ file_scan_paired_runid.py
+│     │  ├─ paired_integrity.py
+│     │  ├─ qa_reporter.py
+│     │  ├─ logger.py
+│     │  ├─ proseka_song_db.py # optional, reference-only
+│     │  ├─ file_scan_state_template_runid.json
+│     │  ├─ umi_run_report_template_runid.json
+│     │  └─ __init__.py
+│     ├─ orchestrator_ext/ # Phase 3 extension surface (safe)
+│     │  ├─ schemas/
+│     │  │  ├─ orchestrator_cli_result.schema.json
+│     │  │  └─ orchestrator_run_report.schema.json
+│     │  ├─ bridge.py
+│     │  ├─ config.py
+│     │  ├─ feature_flags.py
+│     │  ├─ interfaces.py
+│     │  ├─ reason_codes.py
+│     │  ├─ reporting.py
+│     │  ├─ run_plan.py
+│     │  ├─ schema_validator.py
+│     │  ├─ stabilizer.py
+│     │  ├─ types.py
+│     │  ├─ README.md
+│     │  ├─ OCHESTRATOR_EXTENSION_SPEC.md
+│     │  ├─ OCHESTRATOR_EXTENSION_ARCHITECTURE.md
+│     │  ├─ OCHESTRATOR_EXTENSION_CHECKLIST.md
+│     │  └─ __init__.py
+│     ├─ presentation/ # Phase 4 inputs only
+│     │  ├─ badges.py
+│     │  ├─ game_panels.py
+│     │  └─ __init__.py
+│     ├─ recommender/ # Phase 7 inputs only (no API wiring)
+│     │  ├─ rule_based_v1.py
+│     │  ├─ explain.py
+│     │  └─ __init__.py
+│     ├─ orchestrator.py # Phase 3 control-plane spine
+│     └─ __init__.py
+│
+├─ pyproject.toml
+├─ setup.json
+└─ README.md
