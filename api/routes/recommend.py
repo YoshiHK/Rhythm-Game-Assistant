@@ -12,9 +12,14 @@ Phase-safe recommendation endpoint (Song-level) with Phase 5/6 wiring.
 
 - Phase 5 (Productionization): This endpoint returns a **read-only recommendation response**.
   - Includes rationale metadata per item.
-  - Includes provenance_id to anchor feedback, telemetry, and curator flows.
+  - Includes provenance_id and locale to anchor feedback/telemetry and presentation.
   - Does NOT perform live/online learning.
   - Does NOT modify Phase 1–4.5 semantics.
+
+## Song Catalog interface contract (Phase 3 → API)
+This API MUST NOT read the raw Song Database (e.g., Excel) at runtime.
+It consumes a versioned, immutable catalog artefact produced by Phase 3 (UMI)
+via a read-only SongCatalog interface.
 
 ## Client Event Taxonomy (Phase 5 Feedback / Telemetry)
 This module defines the *client-side* event taxonomy for recommendation flows.
@@ -29,7 +34,7 @@ Event types (client):
 
 Notes:
 - This file provides contract definitions and a lightweight event ingestion stub.
-- The ingestion stub is intentionally side-effect-free by default.
+- The ingestion stub intentionally ACKs only (no persistence/enforcement here).
 """
 
 from typing import Any, Dict, Optional, Literal, List
@@ -65,11 +70,53 @@ def _phase6_trigger_envelope(*, source: str = "softr") -> Dict[str, Any]:
     }
 
 
-def _client_event_taxonomy() -> Dict[str, Any]:
-    """Return the canonical client-side event taxonomy for recommendations.
+# -----------------------------
+# Song Catalog Interface (contract)
+# -----------------------------
 
-    This is a contract the client can follow when emitting feedback/telemetry.
+class SongCatalog:
+    """Read-only interface for canonical song metadata.
+
+    Contract:
+    - Backed by Phase 3 (UMI) canonicalized artefacts
+    - Immutable, versioned, deterministic
+    - No runtime mutation
+    - No semantic or ranking logic
+
+    Implementations may read from:
+    - JSON / Parquet artefact
+    - SQLite snapshot
+    - Cached in-memory map
+
+    The API MUST NOT read raw Excel song DB directly.
     """
+
+    def get(self, song_id: str) -> Dict[str, Any]:
+        """Return canonical metadata for song_id (empty dict if unknown)."""
+        raise NotImplementedError
+
+
+class InMemorySongCatalog(SongCatalog):
+    """Minimal implementation loading a prebuilt catalog dict."""
+
+    def __init__(self, catalog: Dict[str, Dict[str, Any]]):
+        self._catalog = catalog
+
+    def get(self, song_id: str) -> Dict[str, Any]:
+        return self._catalog.get(song_id, {})
+
+
+# Placeholder wiring (Phase-safe). Replace with Phase-3-produced artefact loader.
+SONG_CATALOG: SongCatalog = InMemorySongCatalog(catalog={})
+
+
+# -----------------------------
+# Client Event Taxonomy (contract)
+# -----------------------------
+
+def _client_event_taxonomy() -> Dict[str, Any]:
+    """Canonical client-side event taxonomy for recommendation flows."""
+
     common_required = [
         "event_id",
         "event_type",
@@ -83,8 +130,8 @@ def _client_event_taxonomy() -> Dict[str, Any]:
         "version": "v1",
         "principles": [
             "Observational only (no judgment)",
-            "Append-only", 
-            "Linkable to provenance_id", 
+            "Append-only",
+            "Linkable to provenance_id",
             "Deduplicate per response_id where specified",
         ],
         "events": {
@@ -92,7 +139,7 @@ def _client_event_taxonomy() -> Dict[str, Any]:
                 "source_type": "client",
                 "description": "Recommendation list rendered on screen (first exposure).",
                 "emit_when": "After /recommend response is received AND list is first rendered.",
-                "dedupe_key": "response_id",  # emit once per response
+                "dedupe_key": "response_id",
                 "required_fields": common_required + ["visible_song_ids"],
                 "optional_fields": ["ui_surface", "client_version"],
             },
@@ -140,16 +187,16 @@ def _build_viewed_event_template(
     game_id: str,
     visible_song_ids: List[str],
 ) -> Dict[str, Any]:
-    """Build a ready-to-emit recommendation_viewed event template for clients."""
+    """Ready-to-emit recommendation_viewed template."""
     return {
         "event_id": "<uuid>",
         "event_type": "recommendation_viewed",
         "source_type": "client",
         "timestamp": "<iso-utc>",
         "provenance_id": provenance_id,
+        "request_id": request_id,
+        "response_id": response_id,
         "payload": {
-            "request_id": request_id,
-            "response_id": response_id,
             "game_id": game_id,
             "visible_song_ids": visible_song_ids,
             "ui_surface": "recommendation_list",
@@ -211,11 +258,7 @@ ClientEventType = Literal[
 
 
 class RecommendClientEventV1(BaseModel):
-    """Client-side telemetry/feedback event for Phase 5 aggregation.
-
-    This is a lightweight ingestion model. The server handler is intentionally
-    side-effect free by default.
-    """
+    """Client-side telemetry/feedback event for Phase 5 aggregation."""
 
     event_id: str = Field(..., description="Client-generated UUID")
     event_type: ClientEventType = Field(..., description="Recommendation client event type")
@@ -225,9 +268,7 @@ class RecommendClientEventV1(BaseModel):
     request_id: str = Field(..., description="/recommend request_id")
     response_id: str = Field(..., description="/recommend response_id")
 
-    # Optional per-item events
     song_id: Optional[str] = Field(None, description="Song id for item-specific events")
-
     payload: dict = Field(default_factory=dict, description="Non-judgmental event payload")
 
     model_config = {"extra": "allow"}
@@ -239,12 +280,7 @@ class RecommendClientEventV1(BaseModel):
 
 @router.post("/recommend")
 def recommend(req: RecommendV1Request, authorization: Optional[str] = Depends(auth_header)) -> Dict[str, Any]:
-    """Return a deterministic, read-only recommendation response.
-
-    - Enforces Phase 6 boundary auth.
-    - Returns Phase 5-compatible response with provenance_id and rationale.
-    - Includes client event taxonomy & a ready-to-emit template for recommendation_viewed.
-    """
+    """Return a deterministic, read-only recommendation response."""
 
     require_softr_bearer(authorization)
 
@@ -254,44 +290,30 @@ def recommend(req: RecommendV1Request, authorization: Optional[str] = Depends(au
     response_id = str(uuid4())
 
     # Deterministic placeholder recommendations (no Phase 1–3 triggers)
-    recommended_songs = [
-        {
-            "song_id": "PLACEHOLDER_SONG_1",
-            "song_name": "PLACEHOLDER SONG 1",
-            "producer": "PLACEHOLDER PRODUCER",
-            "difficulty_level": "Expert",
-            "difficulty_scale": 26,
-            "recommendation_type": "AP",
-            "rationale": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
-            "reason": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
-            "tips": "PLACEHOLDER: tips_text will be fetched from Tips DB (precomputed by UMI).",
-            "rotation_order": 1,
-        },
-        {
-            "song_id": "PLACEHOLDER_SONG_2",
-            "song_name": "PLACEHOLDER SONG 2",
-            "producer": "PLACEHOLDER PRODUCER",
-            "difficulty_level": "Expert",
-            "difficulty_scale": 27,
-            "recommendation_type": "FC",
-            "rationale": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
-            "reason": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
-            "tips": "PLACEHOLDER: tips_text will be fetched from Tips DB (precomputed by UMI).",
-            "rotation_order": 2,
-        },
-        {
-            "song_id": "PLACEHOLDER_SONG_3",
-            "song_name": "PLACEHOLDER SONG 3",
-            "producer": "PLACEHOLDER PRODUCER",
-            "difficulty_level": "Expert",
-            "difficulty_scale": 28,
-            "recommendation_type": "Clear",
-            "rationale": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
-            "reason": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
-            "tips": "PLACEHOLDER: tips_text will be fetched from Tips DB (precomputed by UMI).",
-            "rotation_order": 3,
-        },
+    base = [
+        ("PLACEHOLDER_SONG_1", 26, "AP", 1),
+        ("PLACEHOLDER_SONG_2", 27, "FC", 2),
+        ("PLACEHOLDER_SONG_3", 28, "Clear", 3),
     ]
+
+    recommended_songs: List[Dict[str, Any]] = []
+    for song_id, scale, rec_type, order in base:
+        meta = SONG_CATALOG.get(song_id)
+        recommended_songs.append(
+            {
+                "song_id": song_id,
+                "song_name": meta.get("song_name") or meta.get("title") or f"{song_id}",
+                "producer": meta.get("producer") or meta.get("artist") or "UNKNOWN",
+                "difficulty_level": "Expert",
+                "difficulty_scale": scale,
+                "recommendation_type": rec_type,
+                "rationale": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
+                # Backward-compatible alias
+                "reason": "PLACEHOLDER: rationale will be produced by Phase 5 recommendation contracts.",
+                "tips": "PLACEHOLDER: tips_text will be fetched from Tips DB (precomputed by UMI).",
+                "rotation_order": order,
+            }
+        )
 
     visible_song_ids = [s["song_id"] for s in recommended_songs]
 
@@ -311,7 +333,6 @@ def recommend(req: RecommendV1Request, authorization: Optional[str] = Depends(au
             "evidence": req.evidence,
             "submission": req.submission,
         },
-        # Phase 5 wiring: client event taxonomy + template
         "client_event_taxonomy": _client_event_taxonomy(),
         "client_event_templates": {
             "recommendation_viewed": _build_viewed_event_template(
@@ -330,16 +351,9 @@ def ingest_recommend_client_event(
     evt: RecommendClientEventV1,
     authorization: Optional[str] = Depends(auth_header),
 ) -> Dict[str, Any]:
-    """Ingest a client-side recommendation telemetry event (Phase 5).
+    """ACK-only ingestion of client-side recommendation events (Phase 5).
 
-    This is a first-pass wiring endpoint.
-
-    - Requires Softr bearer (Phase 6 external boundary).
-    - Returns ack only.
-    - Intentionally does NOT persist or enforce in this module.
-
-    Downstream systems (Phase 5 feedback aggregation) may consume these events
-    from a proper append-only store in future wiring.
+    Intentionally no persistence/enforcement in this module.
     """
 
     require_softr_bearer(authorization)
