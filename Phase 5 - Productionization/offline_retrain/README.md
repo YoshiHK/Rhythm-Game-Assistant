@@ -56,4 +56,3 @@ Offline learning informs the future; it never controls the present.
 
 Phase 5 Offline Retrain exists to **earn the right to change the model**,
 not to exercise it.
-``
