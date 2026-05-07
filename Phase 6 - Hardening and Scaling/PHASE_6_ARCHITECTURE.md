@@ -22,14 +22,19 @@ It does not participate in analytical reasoning.
 
 ## 2. High‑Level Placement
 
-[ Phase 1–4.5 (Analysis & Presentation) ]  ← Locked
-│
-[ Phase 5 (Learning & Contracts) ]         ← Locked
-│
-─────────────────┼─────────────────
-▼
-[ Phase 6 (Hardening & Scale) ]
-│
+[ Phase 1–4.5 ]
+(Analysis & Presentation)
+        │
+        ▼
+[ Phase 5 ]
+(Learning & Contracts)
+        │
+        ▼
+────────────────────────────────
+[ Phase 6 ]
+(Hardening & Scale)
+        │
+        ▼
 [ UI / Softr / Partners ]
 
 ---
