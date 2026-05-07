@@ -29,7 +29,7 @@ Phase 4 does **not** participate in gameplay analysis.
 
 ### 2.1 End‑to‑End Runtime Flow (Normative)
 
-[Phase 3 Outputs]
+[ Phase 3 Outputs ]
   ├─ canonical payload
   ├─ canonical rows
   ├─ elements skeleton
