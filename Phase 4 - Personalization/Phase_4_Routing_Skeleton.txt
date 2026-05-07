@@ -1,0 +1,71 @@
+Phase 4 - Personalization/
+├─ README.md
+├─ PHASE_4_SPEC.md
+├─ PHASE_4_ARCHITECTURE.md
+│
+├─ interfaces/                # Hard contracts only
+│  ├─ personalization_decision.interface.md
+│  ├─ safe_adjustment.interface.md
+│  └─ model_inference.interface.md
+│
+├─ schemas/                   # CI-enforced schemas
+│  ├─ provenance.schema.json
+│  ├─ event_log.schema.json
+│  ├─ curator_label.schema.json
+│  └─ feedback_capture.schema.json
+│
+├─ registry/                  # Declarative (allow-list only)
+│  ├─ __init__.py
+│  ├─ template_registry.schema.json
+│  ├─ template_registry.seed.json
+│  └─ template_registry_loader.py
+│
+├─ runtime/                   # Deterministic execution spine
+│  ├─ __init__.py
+│  ├─ personalization_core.py
+│  ├─ decision_router.py
+│  ├─ inference_router.py
+│  ├─ adjustment_router.py
+│  └─ runtime_wrapper.py
+│
+├─ decision/                  # Presentation-only decisions
+│  ├─ __init__.py
+│  ├─ decision_engine.py
+│  └─ decision_rules.py
+│
+├─ inference/                 # Model inference boundary (advisory)
+│  ├─ __init__.py
+│  ├─ model_gateway.py
+│  └─ inference_types.py
+│
+├─ safe_adjustment/           # Non-destructive only
+│  ├─ __init__.py
+│  ├─ apply_adjustment.py
+│  └─ adjustment_constraints.py
+│
+├─ narrative/                 # Narrative v3 selection (not i18n)
+│  ├─ __init__.py
+│  └─ narrative_v3_bridge.py
+│
+├─ events/                    # Observational only
+│  ├─ __init__.py
+│  ├─ event_logger.py
+│  └─ feedback_capture.py
+│
+├─ curator/                   # Offline human loop
+│  ├─ __init__.py
+│  ├─ triage_queue.py
+│  ├─ label_ingest.py
+│  ├─ offline_retrain.py
+│  └─ model_promotion.py
+│
+├─ ci/                        # Phase 4 CI rules
+│  ├─ __init__.py
+│  ├─ determinism_checks.py
+│  ├─ safety_checks.py
+│  └─ explainability_checks.py
+│
+└─ utils/
+   ├─ __init__.py
+   ├─ provenance_builder.py
+   └─ debug_helpers.py

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PHASE_4_TEMPLATE_REGISTRY.schema.json",
+  "title": "Phase 4 Narrative Template Registry",
+  "description": "Allow-list registry of narrative templates and variants for Phase 4 personalization. This registry constrains presentation choices and contains no narrative content.",
+  "type": "object",
+  "required": ["registry_version", "templates_by_difficulty"],
+  "properties": {
+    "registry_version": {
+      "type": "string",
+      "description": "Version identifier for this registry."
+    },
+    "default_locale": {
+      "type": "string",
+      "description": "Default locale hint for template selection. Localization is handled in Phase 4.5."
+    },
+    "templates_by_difficulty": {
+      "type": "object",
+      "description": "Allow-list of template IDs per difficulty, with optional locale overrides.",
+      "properties": {
+        "easy": { "$ref": "#/definitions/difficulty_block" },
+        "normal": { "$ref": "#/definitions/difficulty_block" },
+        "hard": { "$ref": "#/definitions/difficulty_block" },
+        "expert": { "$ref": "#/definitions/difficulty_block" },
+        "master": { "$ref": "#/definitions/difficulty_block" },
+        "append": { "$ref": "#/definitions/difficulty_block" }
+      },
+      "additionalProperties": false
+    },
+    "variants_by_template": {
+      "type": "object",
+      "description": "Allow-list of variants for each template ID.",
+      "additionalProperties": {
+        "$ref": "#/definitions/variant_block"
+      }
+    }
+  },
+  "definitions": {
+    "difficulty_block": {
+      "type": "object",
+      "required": ["default"],
+      "properties": {
+        "default": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "locales": {
+          "type": "object",
+          "description": "Optional locale-specific template overrides.",
+          "additionalProperties": {
+            "type": "array",

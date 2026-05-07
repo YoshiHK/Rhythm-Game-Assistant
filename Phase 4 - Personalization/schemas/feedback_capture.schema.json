@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PHASE_4_FEEDBACK_CAPTURE.schema.json",
+  "title": "Phase 4 Feedback Capture Schema",
+  "description": "Append-only user feedback capture for Phase 4. Feedback is observational and offline-only.",
+  "type": "object",
+  "required": [
+    "feedback_id",
+    "feedback_timestamp",
+    "target",
+    "signal",
+    "engine_mode"
+  ],
+  "properties": {
+    "feedback_id": { "type": "string" },
+    "feedback_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "engine_mode": {
+      "type": "string",
+      "enum": ["deterministic", "personalized", "debug"]
+    },
+    "target": {
+      "type": "object",
+      "required": ["request_id", "payload_hash"],
+      "properties": {
+        "request_id": { "type": "string" },
+        "payload_hash": { "type": "string" },
+        "event_id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "signal": {
+      "type": "object",
+      "required": ["helpful"],
+      "properties": {
+        "helpful": { "type": "boolean" },
+        "flagged": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "reason": {
+      "type": "object",
+      "properties": {
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "NOT_HELPFUL",
+            "CONFUSING",
+            "TOO_GENERIC",
+            "TOO_ADVANCED",
+            "TOO_BASIC",
+            "TONE_ISSUE",
+            "IRRELEVANT",
+            "INCORRECT",
+            "SAFETY_CONCERN"
+          ]
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

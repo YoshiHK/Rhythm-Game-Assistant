@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PHASE_4_EVENT_LOG.schema.json",
+  "title": "Phase 4 Event Log Schema",
+  "description": "Append-only event log for Phase 4 personalization lifecycle. Observational only.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "event_timestamp",
+    "request_id",
+    "engine_mode"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Unique event identifier (UUID)."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "personalization_evaluated",
+        "personalization_applied",
+        "personalization_skipped",
+        "safe_adjustment_failed",
+        "deterministic_fallback"
+      ]
+    },
+    "event_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "engine_mode": {
+      "type": "string",
+      "enum": ["deterministic", "personalized", "debug"]
+    },
+    "provenance_ref": {
+      "type": "string",
+      "description": "Reference ID linking to provenance record."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "additionalProperties": false
+}
