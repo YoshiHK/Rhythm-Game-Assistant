@@ -95,4 +95,3 @@ __all__ = [
     "get_game_entry",
     "get_adapter_entry",
 ]
-``
