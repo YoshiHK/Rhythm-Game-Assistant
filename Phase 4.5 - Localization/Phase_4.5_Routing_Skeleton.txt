@@ -1,0 +1,190 @@
+Phase 4.5 - Localization/
+├─ translations/
+│  ├─ _meta/
+│  │  ├─ locale_aliases.json          # zh-Hant ↔ zh-Hant-HK/TW, pseudo, etc.
+│  │  ├─ locales.json                 # supported locales registry
+│  │  └─ sources.json                 # source-of-truth templates & versions
+│  │
+│  ├─ _shared/
+│  │  └─ placeholder.md               # shared non-locale-specific notes
+│  │
+│  ├─ en-GB/
+│  │  ├─ templates/
+│  │  │  └─ narrative_v3/
+│  │  │     ├─ difficulty/
+│  │  │     │  └─ difficulty_overview.json
+│  │  │     ├─ elements/
+│  │  │     │  ├─ element_density.json
+│  │  │     │  ├─ element_flick.json
+│  │  │     │  ├─ element_hold.json
+│  │  │     │  └─ element_trill.json
+│  │  │     └─ summaries/
+│  │  │        └─ chart_summary.json
+│  │  ├─ shared/
+│  │  │  └─ placeholder.md
+│  │  ├─ variants/
+│  │  │  ├─ casual.json
+│  │  │  ├─ debug.json
+│  │  │  └─ expert.json
+│  │  ├─ glossary/
+│  │  │  └─ glossary.json
+│  │  └─ locale_meta.json
+│  │
+│  ├─ en-US/
+│  │  ├─ templates/
+│  │  │  └─ narrative_v3/
+│  │  │     ├─ difficulty/
+│  │  │     │  └─ difficulty_overview.json
+│  │  │     ├─ elements/
+│  │  │     │  ├─ element_density.json
+│  │  │     │  ├─ element_flick.json
+│  │  │     │  ├─ element_hold.json
+│  │  │     │  └─ element_trill.json
+│  │  │     └─ summaries/
+│  │  │        └─ chart_summary.json
+│  │  ├─ variants/
+│  │  │  ├─ casual.json
+│  │  │  ├─ debug.json
+│  │  │  └─ expert.json
+│  │  ├─ glossary/
+│  │  │  └─ glossary.json
+│  │  └─ locale_meta.json
+│  │
+│  ├─ ja-JP/
+│  │  ├─ templates/
+│  │  │  └─ narrative_v3/
+│  │  │     ├─ difficulty/
+│  │  │     │  └─ difficulty_overview.json
+│  │  │     ├─ elements/
+│  │  │     │  ├─ element_density.json
+│  │  │     │  ├─ element_flick.json
+│  │  │     │  ├─ element_hold.json
+│  │  │     │  └─ element_trill.json
+│  │  │     └─ summaries/
+│  │  │        └─ chart_summary.json
+│  │  ├─ shared/
+│  │  │  └─ placeholder.md
+│  │  ├─ variants/
+│  │  │  ├─ casual.json
+│  │  │  ├─ debug.json
+│  │  │  └─ expert.json
+│  │  ├─ glossary/
+│  │  │  └─ glossary.json
+│  │  └─ locale_meta.json
+│  │
+│  ├─ ko-KR/
+│  │  ├─ templates/
+│  │  │  └─ narrative_v3/
+│  │  │     ├─ difficulty/
+│  │  │     │  └─ difficulty_overview.json
+│  │  │     ├─ elements/
+│  │  │     │  ├─ element_density.json
+│  │  │     │  ├─ element_flick.json
+│  │  │     │  ├─ element_hold.json
+│  │  │     │  └─ element_trill.json
+│  │  │     └─ summaries/
+│  │  │        └─ chart_summary.json
+│  │  ├─ shared/
+│  │  │  └─ placeholder.md
+│  │  ├─ variants/
+│  │  │  ├─ casual.json
+│  │  │  ├─ debug.json
+│  │  │  └─ expert.json
+│  │  ├─ glossary/
+│  │  │  └─ glossary.json
+│  │  └─ locale_meta.json
+│  │
+│  ├─ pseudo/
+│  │  ├─ templates/
+│  │  │  └─ narrative_v3/
+│  │  │     ├─ difficulty/
+│  │  │     │  └─ difficulty_overview.json
+│  │  │     ├─ elements/
+│  │  │     │  ├─ element_density.json
+│  │  │     │  ├─ element_flick.json
+│  │  │     │  ├─ element_hold.json
+│  │  │     │  └─ element_trill.json
+│  │  │     └─ summaries/
+│  │  │        └─ chart_summary.json
+│  │  ├─ variants/
+│  │  │  ├─ casual.json
+│  │  │  ├─ debug.json
+│  │  │  └─ expert.json
+│  │  ├─ glossary/
+│  │  │  └─ glossary.json
+│  │  └─ locale_meta.json
+│  │
+│  ├─ zh-Hans/
+│  │  ├─ templates/
+│  │  │  └─ narrative_v3/
+│  │  │     ├─ difficulty/
+│  │  │     │  └─ difficulty_overview.json
+│  │  │     ├─ elements/
+│  │  │     │  ├─ element_density.json
+│  │  │     │  ├─ element_flick.json
+│  │  │     │  ├─ element_hold.json
+│  │  │     │  └─ element_trill.json
+│  │  │     └─ summaries/
+│  │  │        └─ chart_summary.json
+│  │  ├─ shared/
+│  │  │  └─ placeholder.md
+│  │  ├─ variants/
+│  │  │  ├─ casual.json
+│  │  │  ├─ debug.json
+│  │  │  └─ expert.json
+│  │  ├─ glossary/
+│  │  │  └─ glossary.json
+│  │  └─ locale_meta.json
+│  │
+│  ├─ zh-Hant-HK/
+│  │  ├─ templates/
+│  │  │  └─ narrative_v3/
+│  │  │     ├─ difficulty/
+│  │  │     │  └─ difficulty_overview.json
+│  │  │     ├─ elements/
+│  │  │     │  ├─ element_density.json
+│  │  │     │  ├─ element_flick.json
+│  │  │     │  ├─ element_hold.json
+│  │  │     │  └─ element_trill.json
+│  │  │     └─ summaries/
+│  │  │        └─ chart_summary.json
+│  │  ├─ shared/
+│  │  │  └─ placeholder.md
+│  │  ├─ variants/
+│  │  │  ├─ casual.json
+│  │  │  ├─ debug.json
+│  │  │  └─ expert.json
+│  │  ├─ glossary/
+│  │  │  └─ glossary.json
+│  │  └─ locale_meta.json
+│  │
+│  └─ zh-Hant-TW/
+│      ├─ templates/
+│      │  └─ narrative_v3/
+│      │     ├─ difficulty/
+│      │     │  └─ difficulty_overview.json
+│      │     ├─ elements/
+│      │     │  ├─ element_density.json
+│      │     │  ├─ element_flick.json
+│      │     │  ├─ element_hold.json
+│      │     │  └─ element_trill.json
+│      │     └─ summaries/
+│      │        └─ chart_summary.json
+│      ├─ shared/
+│      │  └─ placeholder.md
+│      ├─ variants/
+│      │  ├─ casual.json
+│      │  ├─ debug.json
+│      │  └─ expert.json
+│      ├─ glossary/
+│      │  └─ glossary.json
+│      └─ locale_meta.json
+│
+├─ locale_normalizer/               # locale resolution + fallback
+│  ├─ __init__.py
+│  ├─ normalize_locale.py
+│  └─ fallback_rules.py
+│
+├─ PHASE_4.5_ARCHITECTURE.md
+├─ PHASE_4.5_SPEC.md
+└─ README.md
