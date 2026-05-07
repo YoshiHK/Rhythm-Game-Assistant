@@ -30,7 +30,6 @@ It does not participate in analytical reasoning.
 (Learning & Contracts)
         │
         ▼
-────────────────────────────────
 [ Phase 6 ]
 (Hardening & Scale)
         │
