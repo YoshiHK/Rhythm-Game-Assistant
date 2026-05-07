@@ -25,7 +25,6 @@ Phase 4 does **not** participate in gameplay analysis.
 
 ### 2.1 End‑to‑End Runtime Flow (Normative)
 
-```text
 Phase 3 Outputs
   ├─ canonical payload
   ├─ canonical rows
@@ -54,12 +53,110 @@ Phase 3 Outputs
 Failure Rule
 Any failure or invariant violation MUST result in deterministic fallback.
 
-## 3. Architectural Summary
+---
 
+## 3. Decision Layer
+Decision gates are:
+
+deterministic
+rule‑based
+fully recorded in provenance
+
+If any gate fails:
+
+personalization is skipped
+deterministic output is used
+
+---
+
+## 4. Inference Layer (Optional)
+The inference layer:
+
+is advisory only
+never emits free‑form text
+never modifies elements
+
+Possible outputs:
+
+ranking weights
+narrative template ID
+variant ID
+
+If inference is skipped, provenance MUST reflect rule‑based execution.
+
+---
+
+## 5. Safe Adjustment Layer
+This layer applies presentation‑only changes.
+Allowed:
+
+element ordering
+scalar weighting
+template / variant selection
+
+Prohibited:
+
+semantic modification
+element creation or deletion
+
+All applied adjustments MUST be recorded.
+
+---
+
+## 6. Narrative Module v3
+Narrative v3:
+
+renders template‑bound text
+enforces tone and word budgets
+attaches template / variant metadata
+
+Narrative v3 never alters gameplay meaning.
+
+---
+
+## 7. Events and Feedback
+Phase 4 emits:
+
+structured, append‑only events
+feedback capture records
+
+Events and feedback:
+
+never affect runtime behavior
+are used for audit and offline learning only.
+
+---
+
+## 8. Curator Loop
+Curators:
+
+review outputs
+provide gold labels
+trigger offline retraining
+
+Promotion is manual and reversible.
+
+---
+
+## 9. CI Enforcement
+CI enforces:
+
+determinism
+safety (non‑destructive)
+explainability
+
+Any violation blocks deployment.
+
+---
+
+## 10. Architectural Summary
 Phase 4 is:
+
 ✅ deterministic by default
 ✅ personalization‑optional
 ✅ explainable end‑to‑end
 ✅ safe and auditable
+
+---
 
 End of PHASE_4_ARCHITECTURE.md
