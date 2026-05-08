@@ -1,4 +1,4 @@
-## Phase 5 — Safety, Legal, and Anti‑Cheat
+## Phase 5 — Safety, Legal, and Anti‑Cheat Layer
 
 This layer defines **safety, legal, and integrity boundaries**
 for Phase 5 (Productionization).
