@@ -28,7 +28,6 @@ Mapping search paths support (NEW):
     3) per-game mapping under mapping_search_paths
     4) default mapping under mapping_search_paths
     5) fallback to DEFAULT_TRAINING_MAPPING_PATH
-
 """
 
 from dataclasses import dataclass
@@ -77,24 +76,10 @@ def _normalize_game_id(game_id: Any) -> str:
     return s.strip().lower()
 
 
-def _normalize_search_paths(paths: Optional[Sequence[Union[str, Path]]]) -> List[Path]:
-    """Normalize search paths into unique Path objects (deterministic order).
-
-    Supports:
-    - Path objects
-    - string paths
-    - *restricted* glob patterns in string paths
-
-    Stricter glob restrictions (to keep behavior safe + deterministic):
-    - Disallow recursive globs ('**').
-    - Disallow character classes ('[' ... ']') to avoid surprising expansions.
-    - Disallow absolute patterns (starting with '/', '~', or containing a drive prefix like 'C:').
-    - Disallow parent traversal '..'.
-    - Cap total matches per glob to a small maximum.
-    - Keep directories only.
-
-    If a pattern violates restrictions, it is treated as a literal path (no expansion).
-    """
+def _normalize_search_paths(
+    paths: Optional[Sequence[Union[str, Path]]],
+) -> List[Path]:
+    """Normalize search paths into unique Path objects (deterministic order)."""
 
     if not paths:
         return [Path(".")]
@@ -104,36 +89,28 @@ def _normalize_search_paths(paths: Optional[Sequence[Union[str, Path]]]) -> List
 
     def _add_path(cand: Path) -> None:
         key = str(cand)
-        if not key:
-            return
-        if key in seen:
+        if not key or key in seen:
             return
         seen.add(key)
         out.append(cand)
 
-    _GLOB_CHARS = ('*', '?', '[')
+    _GLOB_CHARS = ("*", "?", "[")
     _MAX_GLOB_MATCHES = 50
 
     def _looks_absolute(s: str) -> bool:
-        if s.startswith('/') or s.startswith('~'):
+        if s.startswith("/") or s.startswith("~"):
             return True
-        # Windows drive letter pattern
         return bool(re.match(r"^[A-Za-z]:", s))
 
     def _glob_allowed(s: str) -> bool:
-        # No recursive glob
-        if '**' in s:
+        if "**" in s:
             return False
-        # No parent traversal
-        if '..' in s.replace('\', '/').split('/'):
+        if ".." in s.replace("\\", "/").split("/"):
             return False
-        # No absolute-ish patterns
         if _looks_absolute(s):
             return False
-        # Disallow character classes
-        if '[' in s or ']' in s:
+        if "[" in s or "]" in s:
             return False
-        # Keep patterns reasonably small
         if len(s) > 160:
             return False
         return True
@@ -155,10 +132,9 @@ def _normalize_search_paths(paths: Optional[Sequence[Union[str, Path]]]) -> List
 
         has_glob = any(ch in s for ch in _GLOB_CHARS)
 
-        # Restricted glob expansion
         if has_glob and _glob_allowed(s):
             try:
-                matches = sorted(Path('.').glob(s))
+                matches = sorted(Path(".").glob(s))
             except Exception:
                 matches = []
             count = 0
@@ -173,7 +149,6 @@ def _normalize_search_paths(paths: Optional[Sequence[Union[str, Path]]]) -> List
                     continue
             continue
 
-        # Treat as literal path
         _add_path(Path(s))
 
     return out or [Path(".")]
@@ -197,19 +172,8 @@ def resolve_training_mapping_path(
     default_path: str = DEFAULT_TRAINING_MAPPING_PATH,
     template: str = PER_GAME_MAPPING_TEMPLATE,
 ) -> str:
-    """Resolve which mapping path to use.
+    """Resolve which mapping path to use."""
 
-    Precedence:
-    1) mapping_path as provided (if exists)
-    2) mapping_path searched under mapping_search_paths
-    3) per-game mapping (template) under mapping_search_paths
-    4) default mapping under mapping_search_paths
-    5) default_path (even if missing; loader will return {})
-
-    Returns the resolved path as a string.
-    """
-
-    # 1) explicit mapping_path if it exists
     if mapping_path:
         p = Path(mapping_path)
         if p.exists():
@@ -217,7 +181,6 @@ def resolve_training_mapping_path(
 
     search_paths = _normalize_search_paths(mapping_search_paths)
 
-    # 2) explicit mapping_path searched under search paths
     if mapping_path:
         name = str(mapping_path).strip()
         if name:
@@ -227,24 +190,22 @@ def resolve_training_mapping_path(
 
     gid = _normalize_game_id(game_id)
 
-    # 3) per-game mapping
     if gid:
         per_game_name = template.format(game_id=gid)
         for cand in _iter_candidate_locations(filename=per_game_name, search_paths=search_paths):
             if cand.exists():
                 return str(cand)
 
-    # 4) default mapping in search paths
     for cand in _iter_candidate_locations(filename=default_path, search_paths=search_paths):
         if cand.exists():
             return str(cand)
 
-    # 5) fallback
     return default_path
 
-
 @lru_cache(maxsize=64)
-def load_tips_training_mapping(path: str = DEFAULT_TRAINING_MAPPING_PATH) -> Dict[str, Dict[str, Any]]:
+def load_tips_training_mapping(
+    path: str = DEFAULT_TRAINING_MAPPING_PATH,
+) -> Dict[str, Dict[str, Any]]:
     """Load a tips training mapping JSON file.
 
     Expected shape (best-effort):
@@ -306,7 +267,11 @@ def infer_element_candidates(
 
     mapping = mapping or {}
 
-    norm_detected = [PatternTagsTaxonomy.normalize_tag(t) for t in (detected_tags or []) if isinstance(t, str)]
+    norm_detected = [
+        PatternTagsTaxonomy.normalize_tag(t)
+        for t in (detected_tags or [])
+        if isinstance(t, str)
+    ]
     norm_detected = [t for t in norm_detected if t]
     detected_set: Set[str] = set(norm_detected)
 
@@ -345,7 +310,9 @@ def infer_element_candidates(
         out.append(cand.to_dict())
 
     # Stable ordering: hit_count desc then element_name asc.
-    out.sort(key=lambda d: (-int(d.get("tag_hit_count") or 0), str(d.get("element_name") or "")))
+    out.sort(
+        key=lambda d: (-int(d.get("tag_hit_count") or 0), str(d.get("element_name") or ""))
+    )
     return out
 
 
@@ -377,7 +344,10 @@ def _normalize_and_report_tags(
     )
 
     try:
-        uncat_set = PatternTagsTaxonomy.uncategorized_tags(export_path=export_path, guides_xlsx_path=guides_xlsx_path)
+        uncat_set = PatternTagsTaxonomy.uncategorized_tags(
+            export_path=export_path,
+            guides_xlsx_path=guides_xlsx_path,
+        )
     except Exception:
         uncat_set = set()
     uncat_hit = [t for t in norm if t in uncat_set]
@@ -406,21 +376,7 @@ def attach_candidates_to_payload(
     export_path: Optional[str] = None,
     guides_xlsx_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Infer candidates and attach them into canonical_payload (additive).
-
-    Mapping resolution:
-    - mapping_path (explicit) if exists
-    - mapping_path under mapping_search_paths
-    - per-game mapping under mapping_search_paths
-    - default mapping under mapping_search_paths
-    - DEFAULT_TRAINING_MAPPING_PATH
-
-    game_id precedence:
-    - explicit game_id argument
-    - canonical_payload['game_id']
-
-    All additional diagnostics are additive.
-    """
+    """Infer candidates and attach them into canonical_payload (additive)."""
 
     detected_tags = canonical_payload.get(detected_tags_key) or []
     if not isinstance(detected_tags, list):
