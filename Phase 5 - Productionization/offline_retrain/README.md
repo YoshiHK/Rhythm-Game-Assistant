@@ -1,4 +1,4 @@
-## Phase 5 — Offline Retrain & Model Ops
+## Phase 5 — Offline Retrain & Model Ops Layer
 
 This layer defines how the system **learns from curated data**
 during Phase 5 (Productionization).
