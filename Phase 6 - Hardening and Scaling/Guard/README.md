@@ -1,4 +1,4 @@
-# Phase 6 Guards
+# Phase 6 - Guards
 
 Guards are **non-semantic enforcement components** in Phase 6.
 
