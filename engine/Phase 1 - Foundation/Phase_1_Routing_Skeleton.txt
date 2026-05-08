@@ -1,0 +1,102 @@
+Phase_1_Foundation/
+├─ README.md
+│  # Phase 1 purpose, guarantees, and locked-scope declaration
+│
+├─ PHASE_1_SPEC.md
+│  # Formal Phase 1 workflow definition (upload → tips → summaries)
+│
+├─ PHASE_1_ARCHITECTURE.md
+│  # High-level pipeline diagram (monolithic but deterministic)
+│
+├─ PHASE_1_TIPS_PRODUCTION_GUIDE.md
+│  # High-level pipeline diagram (monolithic but deterministic)
+│
+├─ interfaces/                         # Implicit contracts (documented, not enforced)
+│  ├─ README.md
+│  │  # Phase 1 interface contracts and change policy
+│  ├─ chart_input.interface.md
+│  ├─ detected_tags.interface.md
+│  ├─ element_candidate.interface.md
+│  ├─ analysed_element.interface.md
+│  └─ tips_output.interface.md
+│
+├─ schemas/                            # Canonical JSON specs (read-only)
+│  ├─ README.md
+│  │  # Phase 1 schema semantics and downstream responsibility
+│  ├─ proseka_internal_analysis.schema.json
+│  ├─ proseka_batch_summary.schema.json
+│  ├─ proseka_summary_blocks.schema.json
+│  └─ tips_generation_spec.schema.json
+│
+├─ registry/                           # Declarative artifacts (read-only)
+│  ├─ README.md
+│  │  # Registry usage, mutability rules, and advisory status
+│  ├─ tips_training_mapping.json
+│  ├─ pattern_signals_export.json
+│  ├─ proseka_batch_pipeline.json
+│  └─ summary_builder_spec.txt
+│
+├─ runtime/                            # Phase 1 execution spine (LOCKED)
+│  ├─ __init__.py
+│  ├─ README.md
+│  │  # Locked runtime declaration and execution guarantees
+│  ├─ proseka_tips_pipeline_runner.py
+│  └─ alignment_helper.py
+│
+├─ visual/                             # Stage 2–4.1 (visual detection)
+│  ├─ __init__.py
+│  ├─ README.md
+│  │  # Visual detection responsibilities and lock policy
+│  ├─ chart_visual_detector_merged.py
+│  └─ utils.py
+│
+├─ tagging/                            # Stage 4.x (pattern tags → elements)
+│  ├─ __init__.py
+│  ├─ README.md
+│  │  # Tagging rules, alignment semantics, and lock policy
+│  ├─ element_rules.py
+│  └─ proseka_element_alignment.py
+│
+├─ selection/                          # Stage 5.2 (Phase 1 selection baseline)
+│  ├─ __init__.py
+│  ├─ README.md
+│  │  # Element selection semantics and Phase 2 replacement note
+│  ├─ proseka_element_selector.py
+│  └─ helper_functions.py
+│
+├─ severity/                           # Stage 5.1 (baseline severity)
+│  ├─ __init__.py
+│  ├─ README.md
+│  │  # Baseline severity semantics and Phase 2 Track A boundary
+│  ├─ proseka_severity_rules.py
+│  └─ severity_detector.py
+│
+├─ guidance/                           # Stage 5.3 & 6 (guidance + narrative v1)
+│  ├─ __init__.py
+│  ├─ README.md
+│  │  # Guidance and narrative responsibilities (Phase 1)
+│  ├─ proseka_guidance_engine.py
+│  └─ narrative_module.py
+│
+├─ summary/                            # Stage 7 (final explanation output)
+│  ├─ __init__.py
+│  ├─ README.md
+│  │  # Summary construction and presentation semantics
+│  ├─ summary_builder.py
+│  ├─ proseka_batch_summary_dataclasses.py
+│  └─ proseka_batch_summary_presenter.py
+│
+├─ events/                             # Diagnostics & reporting (implicit)
+│  └─ (embedded within runtime / summaries; no standalone modules)
+│
+├─ ci/                                 # Phase 1 invariants (conceptual, doc-only)
+│  ├─ determinism.md
+│  ├─ non_regression.md
+│  └─ output_shape_guarantees.md
+│
+└─ utils/                              # Shared helpers (non-decisional)
+   ├─ __init__.py
+   ├─ README.md
+   │  # Utils layer purpose, boundaries, and change policy
+   ├─ utils.py
+   └─ shared_helpers.md

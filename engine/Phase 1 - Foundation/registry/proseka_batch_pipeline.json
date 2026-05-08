@@ -1,0 +1,407 @@
+[
+{
+  "spec_type": "workflow",
+  "scope": "batch orchestration",
+  "not_a_data_schema": true
+},
+"",
+
+{
+  "project": "Project SEKAI Tip Generation Batch Pipeline",
+  "version": "1.0.0",
+  "source_specs": {
+    "tips_generation_spec_file": "proseka_tips_generation_spec_v1.0.1_advisory.json",
+    "internal_analysis_schema_file": "proseka_internal_analysis_schema_official_elements.json"
+  },
+  "difficulty_context": {
+    "chart_difficulty_values": [
+      "expert",
+      "master",
+      "append"
+    ],
+    "master_level_type": [
+      "integer",
+      "null"
+    ]
+  },
+  "batch_input_schema": {
+    "type": "object",
+    "required": [
+      "difficulty",
+      "charts"
+    ],
+    "properties": {
+      "batch_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Identifier for this batch (difficulty-ordered block)."
+      },
+      "difficulty": {
+        "type": "string",
+        "enum": [
+          "expert",
+          "master",
+          "append"
+        ],
+        "description": "Difficulty level for all charts in this batch."
+      },
+      "charts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "elements"
+          ],
+          "properties": {
+            "chart_id": {
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "song_id": {
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "master_level": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "elements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "severity",
+                  "score",
+                  "section_coverage",
+                  "is_chart_defining",
+                  "guidance"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "slight",
+                      "light",
+                      "mild",
+                      "moderate",
+                      "dense",
+                      "complex",
+                      "demanding"
+                    ]
+                  },
+                  "score": {
+                    "type": "number",
+                    "description": "Dominance score in [0,1]."
+                  },
+                  "section_coverage": {
+                    "type": "number",
+                    "description": "Fraction of chart where this element appears."
+                  },
+                  "is_chart_defining": {
+                    "type": "boolean"
+                  },
+                  "guidance": {
+                    "type": "object",
+                    "required": [
+                      "difficulty_causes",
+                      "chart_breakdown",
+                      "primary_focus",
+                      "secondary_focus",
+                      "strategy",
+                      "target_section"
+                    ],
+                    "properties": {
+                      "difficulty_causes": {
+                        "type": "string"
+                      },
+                      "chart_breakdown": {
+                        "type": "string"
+                      },
+                      "primary_focus": {
+                        "type": "string"
+                      },
+                      "secondary_focus": {
+                        "type": "string"
+                      },
+                      "strategy": {
+                        "type": "string"
+                      },
+                      "target_section": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "List of charts in this difficulty batch. Each chart shares the batch difficulty."
+      }
+    }
+  },
+  "element_selection_logic": {
+    "target_count": {
+      "expert": 3,
+      "master": 3,
+      "append": 4
+    },
+    "eligibility_rules": {
+      "min_severity": "moderate",
+      "score_ratio_threshold": 0.8,
+      "allow_chart_defining_override": true
+    },
+    "sorting_priority": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc"
+    ],
+    "hard_constraints": {
+      "no_padding": true,
+      "assert_exact_count": true,
+      "no_severity_downgrade": true
+    }
+  },
+  "tips_layout_and_tone": {
+    "paragraph_count": 2,
+    "structure": [
+      "elements_summary",
+      "breakdown_plus_guidance"
+    ],
+    "word_count_limits": {
+      "total": {
+        "expert": {
+          "target": [
+            70,
+            90
+          ],
+          "hard_max": 95
+        },
+        "master": {
+          "target": [
+            80,
+            100
+          ],
+          "hard_max": 105
+        },
+        "append": {
+          "target": [
+            95,
+            120
+          ],
+          "hard_max": 125
+        }
+      },
+      "paragraph_1": {
+        "expert_master": {
+          "target": [
+            20,
+            30
+          ],
+          "hard_max": 35
+        },
+        "append": {
+          "target": [
+            25,
+            35
+          ],
+          "hard_max": 40
+        }
+      },
+      "paragraph_2": {
+        "expert": {
+          "target": [
+            50,
+            60
+          ],
+          "hard_max": 65
+        },
+        "master": {
+          "target": [
+            55,
+            70
+          ],
+          "hard_max": 75
+        },
+        "append": {
+          "target": [
+            65,
+            85
+          ],
+          "hard_max": 90
+        }
+      }
+    },
+    "templates": {
+      "paragraph_1": "This chart features {{element_list}}, which {{focus_description}}.",
+      "paragraph_2_order": [
+        "difficulty_cause",
+        "chart_breakdown",
+        "player_guidance"
+      ],
+      "paragraph_2_templates": {
+        "difficulty_cause": "The difficulty comes from {{dominant_cause}}, where {{mechanical_interaction}} increases execution pressure.",
+        "chart_breakdown": "This manifests as {{chart_breakdown}}.",
+        "player_guidance": "It helps to focus on {{primary_focus}}, prioritise {{secondary_focus}} over precision, and plan {{strategy}} early to stay consistent through {{target_section}}."
+      }
+    }
+  },
+  "batch_output_schema": {
+    "type": "object",
+    "properties": {
+      "batch_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "difficulty": {
+        "type": "string",
+        "enum": [
+          "expert",
+          "master",
+          "append"
+        ]
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "chart_id": {
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "song_id": {
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "tips_text": {
+              "type": "string"
+            },
+            "chart_summary": {
+              "type": "object",
+              "properties": {
+                "chart_id": {
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "song_id": {
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "element_count": {
+                  "type": "integer"
+                },
+                "element_frequency": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  }
+                },
+                "severity_distribution": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  }
+                },
+                "avg_score": {
+                  "type": "number"
+                },
+                "avg_section_coverage": {
+                  "type": "number"
+                },
+                "max_score": {
+                  "type": "number"
+                },
+                "dominant_elements": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "dominant_selected_flags": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "summary": {
+        "type": "object",
+        "properties": {
+          "chart_count": {
+            "type": "integer"
+          },
+          "difficulty": {
+            "type": "string"
+          },
+          "element_frequency": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "severity_distribution": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "avg_score": {
+            "type": "number"
+          },
+          "avg_section_coverage": {
+            "type": "number"
+          },
+          "dominant_total": {
+            "type": "integer"
+          },
+          "dominant_selected_count": {
+            "type": "integer"
+          },
+          "dominant_selection_ratio": {
+            "type": "number"
+          },
+          "charts_with_full_dominant_coverage": {
+            "type": "integer"
+          },
+          "charts_with_zero_dominant_coverage": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}
+]

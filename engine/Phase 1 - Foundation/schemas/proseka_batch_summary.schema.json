@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project SEKAI Gameplay Tips – Batch Summary Schema",
+  "description": "Aggregated analytical summary for a difficulty-homogeneous batch of Project SEKAI charts. Derived from per-chart canonical summary blocks.",
+  "type": "object",
+  "required": [
+    "difficulty",
+    "chart_count",
+    "element_frequency",
+    "severity_distribution",
+    "avg_score",
+    "avg_section_coverage",
+    "dominant_total",
+    "dominant_selected_count",
+    "dominant_selection_ratio",
+    "charts_with_full_dominant_coverage",
+    "charts_with_zero_dominant_coverage"
+  ],
+  "properties": {
+    "batch_id": {
+      "type": ["string", "null"],
+      "description": "Optional identifier for this batch (difficulty-ordered block)."
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["expert", "master", "append"],
+      "description": "Difficulty level shared by all charts in this batch."
+    },
+    "chart_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of charts included in this batch."
+    },
+    "element_frequency": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "description": "Aggregated count of element occurrences across all charts."
+    },
+    "severity_distribution": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "description": "Aggregated distribution of severity labels across all charts."
+    },
+    "avg_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Average of per-chart average dominance scores."
+    },
+    "avg_section_coverage": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Average of per-chart average section coverage values."
+    },
+    "dominant_total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of dominant elements identified across all charts."
+    },
+    "dominant_selected_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of dominant elements that were successfully selected into tips."
+    },
+    "dominant_selection_ratio": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Ratio of selected dominant elements to total dominant elements."
+    },
+    "charts_with_full_dominant_coverage": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of charts where all dominant elements were selected."
+    },
+    "charts_with_zero_dominant_coverage": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of charts where none of the dominant elements were selected."
+    },
+    "score_distribution": {
+      "type": ["object", "null"],
+      "description": "Optional distribution statistics for dominance scores.",
+      "required": ["min", "p25", "p50", "p75", "p90", "max"],
+      "properties": {
+        "min": { "type": "number" },
+        "p25": { "type": "number" },
+        "p50": { "type": "number" },
+        "p75": { "type": "number" },
+        "p90": { "type": "number" },
+        "max": { "type": "number" }
+      }
+    },
+    "top_elements": {
+      "type": ["array", "null"],
+      "description": "Optional ranked list of most frequent elements.",
+      "items": {
+        "type": "object",
+        "required": ["element", "count", "share"],
+        "properties": {
+          "element": {
+            "type": "string",
+            "description": "Element name."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total count of this element in the batch."
+          },
+          "share": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Proportion of this element among all element occurrences."
+          }
+        }
+      }
+    },
+    "tips_compliance": {
+      "type": ["object", "null"],
+      "description": "Optional diagnostics about tips generation compliance.",
+      "properties": {
+        "tips_generated_count": { "type": "integer", "minimum": 0 },
+        "tips_valid_count": { "type": "integer", "minimum": 0 },
+        "tips_valid_ratio": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "avg_word_count": { "type": ["number", "null"] },
+        "max_word_count": { "type": ["integer", "null"] },
+        "over_limit_count": { "type": ["integer", "null"] }
+      }
+    },
+    "notes": {
+      "type": ["string", "null"],
+      "description": "Optional free-form notes for diagnostics or commentary."
+    }
+  }
+}
