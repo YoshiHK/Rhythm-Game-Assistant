@@ -154,4 +154,3 @@ __all__ = [
     "aggregate_sections",
     "build_section_feature_vector",
 ]
-``
