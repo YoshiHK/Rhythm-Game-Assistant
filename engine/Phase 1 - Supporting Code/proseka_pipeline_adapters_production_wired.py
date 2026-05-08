@@ -117,9 +117,8 @@ class TipsOutput:
 
     @property
     def full_text(self) -> str:
-        return f"{self.paragraph_1}
-
-{self.paragraph_2}".strip()
+        # Preserve intended behavior: paragraph_1 + blank line + paragraph_2, then strip
+        return f"{self.paragraph_1}\n\n{self.paragraph_2}".strip()
 
 
 # -----------------------------
@@ -203,12 +202,11 @@ class ProductionTagToElementMapper:
                     evidence_tags=list(el.get("matched_tags", [])),
                     meta={
                         "training_items": list(el.get("training_items", [])),
-                        "detected_tags": detected_tags
-                    }
+                        "detected_tags": detected_tags,
+                    },
                 )
             )
         return candidates
-
 
 # -----------------------------
 # Adapter 3: ElementAnalyser (wired)
