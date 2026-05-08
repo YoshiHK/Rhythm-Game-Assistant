@@ -61,4 +61,3 @@ Every invocation MUST emit:
 No provenance → invalid output.
 
 **This interface is mandatory and non‑bypassable.**
-``
