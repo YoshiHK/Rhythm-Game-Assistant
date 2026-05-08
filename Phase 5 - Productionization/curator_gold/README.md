@@ -1,3 +1,7 @@
+## Phase 5 — Curator Gold Layer
+
+---
+
 ### Relationship to Phase 6
 
 Curator Gold & Labeling operates **downstream of Phase 6**.
