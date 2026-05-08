@@ -1,4 +1,4 @@
-## Phase 5 – Observability & Experimentation
+## Phase 5 – Observability & Experimentation Layer
 
 This layer defines how the system **measures effectiveness**
 and **runs controlled experiments** during Phase 5 (Productionization).
