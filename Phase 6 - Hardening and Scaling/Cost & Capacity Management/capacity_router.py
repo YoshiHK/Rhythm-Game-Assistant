@@ -40,4 +40,3 @@ class CapacityRouter:
             return True  # unknown capacity → allow (Phase 6 skeleton)
 
         return bool(context.capacity_available)
-``
