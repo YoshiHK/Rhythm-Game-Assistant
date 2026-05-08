@@ -1,4 +1,4 @@
-## PHASE 4 SPEC
+## PHASE_4_SPEC.md
 ### Phase 4 — Personalization & Presentation
 
 **Status:** ✅ Normative (Contract Locked)
