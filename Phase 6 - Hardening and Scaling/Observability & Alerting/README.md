@@ -1,4 +1,4 @@
-# Phase 6 - Observability
+# Phase 6 - Observability Layer
 
 Observability in Phase 6 is **strictly non-semantic**.
 
