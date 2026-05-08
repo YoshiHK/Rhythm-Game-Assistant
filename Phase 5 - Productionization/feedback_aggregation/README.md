@@ -1,4 +1,4 @@
-## Phase 5 — Feedback Aggregation
+## Phase 5 — Feedback Aggregation Layer
 
 Feedback Aggregation is the first learning-facing layer in Phase 5
 (Productionization).
