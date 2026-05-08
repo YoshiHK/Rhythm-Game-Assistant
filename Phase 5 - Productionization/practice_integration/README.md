@@ -1,4 +1,4 @@
-## Phase 5 — Practice Integration
+## Phase 5 — Practice Integration Layer
 
 Practice Integration defines how generated tips and guidance
 are applied during player practice and replay.
