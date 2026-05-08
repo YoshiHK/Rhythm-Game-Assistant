@@ -35,8 +35,8 @@ from proseka_severity_rules import (
 )
 
 # Filenames for metadata sources
-SONG_DB_XLSX = 'proseka song database.xlsx'
-WIKI_HTML = '収録楽曲 _ プロジェクトセカイ攻略Wiki.html'
+SONG_DB_XLSX = "proseka song database.xlsx"
+WIKI_HTML = "収録楽曲 _ プロジェクトセカイ攻略Wiki.html"
 
 # In-memory cache for Excel metadata
 _SONG_META_CACHE: Dict[str, Dict[str, Any]] | None = None
@@ -77,26 +77,26 @@ def analyze_chart_html(html_path: str) -> Dict[str, Any]:
     detected_tags = detect_pattern_tags(notes, bpm, sections, severity_fw)
 
     meta = {
-        'song_title': title,
-        'difficulty_name': diff_name,
-        'difficulty_level': diff_level,
-        'engine_chart_id': None,
-        'duration_sec': duration_sec,
-        'bpm': bpm,
-        'source': 'proseka-trainer-html',
+        "song_title": title,
+        "difficulty_name": diff_name,
+        "difficulty_level": diff_level,
+        "engine_chart_id": None,
+        "duration_sec": duration_sec,
+        "bpm": bpm,
+        "source": "proseka-trainer-html",
     }
 
     diagnostics = {
-        'raw_note_events_count': len(notes),
-        'section_count': len(sections),
-        'canonical_severities': severity_fw.get('aggregated', {}),
+        "raw_note_events_count": len(notes),
+        "section_count": len(sections),
+        "canonical_severities": severity_fw.get("aggregated", {}),
     }
 
     return {
-        'meta': meta,
-        'sections': sections,
-        'detected_tags': detected_tags,
-        'diagnostics': diagnostics,
+        "meta": meta,
+        "sections": sections,
+        "detected_tags": detected_tags,
+        "diagnostics": diagnostics,
     }
 
 
@@ -113,13 +113,13 @@ def infer_title_and_difficulty_from_filename(path: str) -> Tuple[str, Optional[s
         -> title='群青讃歌', diff_name='EXPERT', diff_level=24
     """
     base = os.path.basename(path)
-    if base.lower().endswith('.html'):
+    if base.lower().endswith(".html"):
         base = base[:-5]
-    base = base.split(' の譜面')[0]
+    base = base.split(" の譜面")[0]
 
-    if ' (' in base and ')' in base:
-        title_part, rest = base.split(' (', 1)
-        rest = rest.split(')', 1)[0]
+    if " (" in base and ")" in base:
+        title_part, rest = base.split(" (", 1)
+        rest = rest.split(")", 1)[0]
         parts = rest.strip().split()
         if len(parts) >= 2:
             diff_name = parts[0]
@@ -147,11 +147,11 @@ def normalize_title_for_match(s: str) -> str:
     - remove punctuation commonly appearing in PJSekai titles
     """
     if not s:
-        return ''
+        return ""
     s = s.lower()
-    remove_chars = ' 　!！?？・・/／\"'()[]＜＞<>『』【】.'
+    remove_chars = " 　!！?？・・/／\"'()[]＜＞<>『』【】."
     for ch in remove_chars:
-        s = s.replace(ch, '')
+        s = s.replace(ch, "")
     return s
 
 
@@ -184,9 +184,9 @@ def load_song_meta_excel() -> Dict[str, Dict[str, Any]]:
 
     header = next(sh.iter_rows(min_row=1, max_row=1, values_only=True))
     col_map = {name: idx for idx, name in enumerate(header)}
-    idx_title = col_map.get('楽曲名')
-    idx_time = col_map.get('時間')
-    idx_bpm = col_map.get('BPM')
+    idx_title = col_map.get("楽曲名")
+    idx_time = col_map.get("時間")
+    idx_bpm = col_map.get("BPM")
 
     if idx_title is None or idx_bpm is None:
         _SONG_META_CACHE = meta
@@ -199,12 +199,12 @@ def load_song_meta_excel() -> Dict[str, Dict[str, Any]]:
         bpm = row[idx_bpm]
         t = row[idx_time] if idx_time is not None else None
         duration_sec = None
-        if hasattr(t, 'hour') and hasattr(t, 'minute') and hasattr(t, 'second'):
+        if hasattr(t, "hour") and hasattr(t, "minute") and hasattr(t, "second"):
             duration_sec = int(t.hour) * 3600 + int(t.minute) * 60 + int(t.second)
         meta[str(title)] = {
-            'bpm': float(bpm) if isinstance(bpm, (int, float)) else None,
-            'duration_sec': duration_sec,
-            'norm_title': normalize_title_for_match(str(title)),
+            "bpm": float(bpm) if isinstance(bpm, (int, float)) else None,
+            "duration_sec": duration_sec,
+            "norm_title": normalize_title_for_match(str(title)),
         }
 
     _SONG_META_CACHE = meta
@@ -219,20 +219,20 @@ def lookup_song_metadata(title: str) -> Tuple[Optional[float], Optional[float]]:
     db = load_song_meta_excel()
     if title in db:
         entry = db[title]
-        return entry.get('bpm'), entry.get('duration_sec')
+        return entry.get("bpm"), entry.get("duration_sec")
 
     norm_target = normalize_title_for_match(title)
     best_key = None
     best_score = 0.0
     for key, entry in db.items():
-        norm_key = entry.get('norm_title') or normalize_title_for_match(key)
+        norm_key = entry.get("norm_title") or normalize_title_for_match(key)
         score = simple_similarity(norm_target, norm_key)
         if score > best_score:
             best_score = score
             best_key = key
     if best_key is not None and best_score >= 0.7:
         entry = db[best_key]
-        return entry.get('bpm'), entry.get('duration_sec')
+        return entry.get("bpm"), entry.get("duration_sec")
 
     bpm_html, duration_sec_html = lookup_song_metadata_from_wiki(title)
     return bpm_html, duration_sec_html
@@ -246,7 +246,7 @@ def lookup_song_metadata_from_wiki(title: str) -> Tuple[Optional[float], Optiona
     if not os.path.isfile(WIKI_HTML):
         return None, None
 
-    with open(WIKI_HTML, 'r', encoding='utf-8') as f:
+    with open(WIKI_HTML, "r", encoding="utf-8") as f:
         html = f.read()
 
     m = re.search(r'<table[^>]+id="sortable_table1"[\s\S]*?</table>', html)
@@ -259,9 +259,9 @@ def lookup_song_metadata_from_wiki(title: str) -> Tuple[Optional[float], Optiona
     best_duration = None
     best_score = 0.0
 
-    row_pattern = re.compile(r'<tr[\s\S]*?</tr>')
+    row_pattern = re.compile(r"<tr[\s\S]*?</tr>")
     for row_html in row_pattern.findall(table_html):
-        cells = re.findall(r'<td[^>]*>([\s\S]*?)</td>', row_html)
+        cells = re.findall(r"<td[^>]*>([\s\S]*?)</td>", row_html)
         if len(cells) < 16:
             continue
         title_cell = _strip_tags(cells[3]).strip()  # 楽曲名 column
@@ -279,7 +279,7 @@ def lookup_song_metadata_from_wiki(title: str) -> Tuple[Optional[float], Optiona
             bpm_val = None
 
         duration_sec = None
-        mtime = re.match(r'(\d+):(\d+)', time_cell)
+        mtime = re.match(r"(\d+):(\d+)", time_cell)
         if mtime:
             mm = int(mtime.group(1))
             ss = int(mtime.group(2))
@@ -295,41 +295,39 @@ def lookup_song_metadata_from_wiki(title: str) -> Tuple[Optional[float], Optiona
 
 
 def _strip_tags(s: str) -> str:
-    return re.sub(r'<[^>]+>', '', s)
-
+    return re.sub(r"<[^>]+>", "", s)
 
 # ----------------------------------------------------------------------
 # HTML/SVG loading and lane/timing helpers
 # ----------------------------------------------------------------------
 
 def load_svg_from_html(html_path: str) -> ET.Element:
-    """Load the first <svg> element from a Proseka Trainer HTML export."""
-    with open(html_path, 'r', encoding='utf-8') as f:
+    with open(html_path, "r", encoding="utf-8") as f:
         html = f.read()
 
-    start_idx = html.find('<svg')
+    start_idx = html.find("<svg")
     if start_idx == -1:
-        raise ValueError('No <svg> tag found in HTML.')
+        raise ValueError("No <svg> tag found in HTML.")
 
-    end_idx = html.find('</svg>', start_idx)
+    end_idx = html.find("</svg>", start_idx)
     if end_idx == -1:
-        raise ValueError('No closing </svg> tag found in HTML.')
+        raise ValueError("No closing </svg> tag found in HTML.")
 
-    svg_str = html[start_idx : end_idx + len('</svg>')]
+    svg_str = html[start_idx : end_idx + len("</svg>")]
 
     try:
         svg_root = ET.fromstring(svg_str)
     except ET.ParseError as e:
-        raise ValueError(f'Failed to parse SVG from HTML: {e}')
+        raise ValueError(f"Failed to parse SVG from HTML: {e}")
 
     return svg_root
 
 
 def compute_lane_centers(svg_root: ET.Element) -> List[float]:
     lane_lines: List[float] = []
-    for line in svg_root.findall('.//{*}line'):
-        x1 = line.get('x1')
-        x2 = line.get('x2')
+    for line in svg_root.findall(".//{*}line"):
+        x1 = line.get("x1")
+        x2 = line.get("x2")
         if x1 is None or x2 is None:
             continue
         try:
@@ -341,7 +339,7 @@ def compute_lane_centers(svg_root: ET.Element) -> List[float]:
             lane_lines.append(fx1)
     lane_lines = sorted(_dedupe_floats(lane_lines, tol=0.1))
     if len(lane_lines) < 2:
-        raise ValueError('Not enough vertical lane lines found to compute centers.')
+        raise ValueError("Not enough vertical lane lines found to compute centers.")
     lane_centers: List[float] = []
     for i in range(len(lane_lines) - 1):
         center = (lane_lines[i] + lane_lines[i + 1]) / 2.0
@@ -351,17 +349,17 @@ def compute_lane_centers(svg_root: ET.Element) -> List[float]:
 
 def extract_measure_markers(svg_root: ET.Element) -> List[Tuple[int, float]]:
     markers: List[Tuple[int, float]] = []
-    for text_el in svg_root.findall('.//{*}text'):
-        txt = (text_el.text or '').strip()
+    for text_el in svg_root.findall(".//{*}text"):
+        txt = (text_el.text or "").strip()
         if not txt:
             continue
-        if not re.fullmatch(r'-?\d+', txt):
+        if not re.fullmatch(r"-?\d+", txt):
             continue
         try:
             measure_num = int(txt)
         except ValueError:
             continue
-        y_attr = text_el.get('y')
+        y_attr = text_el.get("y")
         if y_attr is None:
             continue
         try:
@@ -371,7 +369,7 @@ def extract_measure_markers(svg_root: ET.Element) -> List[Tuple[int, float]]:
         markers.append((measure_num, fy))
     markers.sort(key=lambda t: t[1])
     if not markers:
-        raise ValueError('No measure markers found in SVG <text> elements.')
+        raise ValueError("No measure markers found in SVG <text> elements.")
     return markers
 
 
@@ -389,7 +387,11 @@ def compute_px_per_beat(measure_markers: List[Tuple[int, float]]) -> float:
     return avg_px_per_measure / 4.0
 
 
-def beats_from_y(y: float, measure_markers: List[Tuple[int, float]], px_per_beat: float) -> float:
+def beats_from_y(
+    y: float,
+    measure_markers: List[Tuple[int, float]],
+    px_per_beat: float,
+) -> float:
     first_measure, first_y = measure_markers[0]
     beats_at_first_marker = first_measure * 4.0
     dy = first_y - y
@@ -399,7 +401,7 @@ def beats_from_y(y: float, measure_markers: List[Tuple[int, float]], px_per_beat
 
 def lane_from_x(x: float, lane_centers: List[float]) -> int:
     best_idx = 0
-    best_dist = float('inf')
+    best_dist = float("inf")
     for i, cx in enumerate(lane_centers):
         d = abs(x - cx)
         if d < best_dist:
@@ -420,10 +422,10 @@ def _dedupe_floats(values: List[float], tol: float = 0.1) -> List[float]:
 
 
 def _extract_first_xy_from_path_d(d: str) -> Tuple[Optional[float], Optional[float]]:
-    tokens = d.replace(',', ' ').split()
+    tokens = d.replace(",", " ").split()
     if not tokens:
         return None, None
-    if tokens[0].upper() == 'M' and len(tokens) >= 3:
+    if tokens[0].upper() == "M" and len(tokens) >= 3:
         try:
             x = float(tokens[1])
             y = float(tokens[2])
@@ -448,10 +450,10 @@ def _extract_first_xy_from_points(points: str) -> Tuple[Optional[float], Optiona
     if not pts:
         return None, None
     first = pts[0]
-    if ',' in first:
-        xs, ys = first.split(',', 1)
-    elif ' ' in first:
-        xs, ys = first.split(' ', 1)
+    if "," in first:
+        xs, ys = first.split(",", 1)
+    elif " " in first:
+        xs, ys = first.split(" ", 1)
     else:
         return None, None
     try:
@@ -465,16 +467,16 @@ def _extract_first_xy_from_points(points: str) -> Tuple[Optional[float], Optiona
 # ----------------------------------------------------------------------
 
 COLOR_MAP: Dict[str, str] = {
-    '#ab94ff': 'tap',
-    '#4dc775': 'hold_body_or_start',
-    '#bbbb00': 'critical_tap',
-    '#ec62b0': 'flick',
-    '#ed7f9b': 'flick_arrow',
+    "#ab94ff": "tap",
+    "#4dc775": "hold_body_or_start",
+    "#bbbb00": "critical_tap",
+    "#ec62b0": "flick",
+    "#ed7f9b": "flick_arrow",
 }
 
 TRACE_COLOR_MAP: Dict[str, str] = {
-    '#9fd9c0': 'hold_path',
-    '#e3df65': 'critical_hold_path',
+    "#9fd9c0": "hold_path",
+    "#e3df65": "critical_hold_path",
 }
 
 
@@ -482,7 +484,7 @@ def _normalize_color(c: Optional[str]) -> Optional[str]:
     if c is None:
         return None
     c = c.strip().lower()
-    if len(c) == 9 and c.startswith('#'):
+    if len(c) == 9 and c.startswith("#"):
         c = c[:7]
     return c
 
@@ -520,13 +522,13 @@ def parse_svg_to_note_events(svg_root: ET.Element) -> List[NoteEvent]:
 
     events: List[NoteEvent] = []
 
-    for rect in svg_root.findall('.//{*}rect'):
-        stroke = rect.get('stroke')
-        fill = rect.get('fill')
-        x_attr = rect.get('x')
-        y_attr = rect.get('y')
-        w_attr = rect.get('width')
-        h_attr = rect.get('height')
+    for rect in svg_root.findall(".//{*}rect"):
+        stroke = rect.get("stroke")
+        fill = rect.get("fill")
+        x_attr = rect.get("x")
+        y_attr = rect.get("y")
+        w_attr = rect.get("width")
+        h_attr = rect.get("height")
         if x_attr is None or y_attr is None or w_attr is None or h_attr is None:
             continue
         try:
@@ -542,19 +544,19 @@ def parse_svg_to_note_events(svg_root: ET.Element) -> List[NoteEvent]:
         lane_idx = lane_from_x(x, lane_centers)
         time_beats = beats_from_y(y, measure_markers, px_per_beat)
         extra = {
-            'raw_stroke': stroke,
-            'raw_fill': fill,
-            'width_lanes': compute_width_lanes(w, lane_centers),
-            'rect_height': h,
-            'shape': 'rect',
+            "raw_stroke": stroke,
+            "raw_fill": fill,
+            "width_lanes": compute_width_lanes(w, lane_centers),
+            "rect_height": h,
+            "shape": "rect",
         }
         events.append(NoteEvent(time_beats=time_beats, lane=lane_idx, kind=kind, extra=extra))
 
-    for circle in svg_root.findall('.//{*}circle'):
-        stroke = circle.get('stroke')
-        fill = circle.get('fill')
-        cx_attr = circle.get('cx')
-        cy_attr = circle.get('cy')
+    for circle in svg_root.findall(".//{*}circle"):
+        stroke = circle.get("stroke")
+        fill = circle.get("fill")
+        cx_attr = circle.get("cx")
+        cy_attr = circle.get("cy")
         if cx_attr is None or cy_attr is None:
             continue
         try:
@@ -568,51 +570,50 @@ def parse_svg_to_note_events(svg_root: ET.Element) -> List[NoteEvent]:
         lane_idx = lane_from_x(x, lane_centers)
         time_beats = beats_from_y(y, measure_markers, px_per_beat)
         extra = {
-            'raw_stroke': stroke,
-            'raw_fill': fill,
-            'shape': 'circle',
+            "raw_stroke": stroke,
+            "raw_fill": fill,
+            "shape": "circle",
         }
         events.append(NoteEvent(time_beats=time_beats, lane=lane_idx, kind=kind, extra=extra))
 
-    for path in svg_root.findall('.//{*}path'):
-        stroke = path.get('stroke')
+    for path in svg_root.findall(".//{*}path"):
+        stroke = path.get("stroke")
         kind = map_path_color_to_trace_kind(stroke)
         if kind is None:
             continue
-        d = path.get('d') or ''
+        d = path.get("d") or ""
         x, y = _extract_first_xy_from_path_d(d)
         if x is None or y is None:
             continue
         lane_idx = lane_from_x(x, lane_centers)
         time_beats = beats_from_y(y, measure_markers, px_per_beat)
         extra = {
-            'raw_stroke': stroke,
-            'shape': 'path',
-            'd': d,
+            "raw_stroke": stroke,
+            "shape": "path",
+            "d": d,
         }
         events.append(NoteEvent(time_beats=time_beats, lane=lane_idx, kind=kind, extra=extra))
 
-    for poly in svg_root.findall('.//{*}polyline'):
-        stroke = poly.get('stroke')
+    for poly in svg_root.findall(".//{*}polyline"):
+        stroke = poly.get("stroke")
         kind = map_path_color_to_trace_kind(stroke)
         if kind is None:
             continue
-        points = poly.get('points') or ''
+        points = poly.get("points") or ""
         x, y = _extract_first_xy_from_points(points)
         if x is None or y is None:
             continue
         lane_idx = lane_from_x(x, lane_centers)
         time_beats = beats_from_y(y, measure_markers, px_per_beat)
         extra = {
-            'raw_stroke': stroke,
-            'shape': 'polyline',
-            'points': points,
+            "raw_stroke": stroke,
+            "shape": "polyline",
+            "points": points,
         }
         events.append(NoteEvent(time_beats=time_beats, lane=lane_idx, kind=kind, extra=extra))
 
     events.sort(key=lambda e: (e.time_beats, e.lane))
     return events
-
 
 # ----------------------------------------------------------------------
 # SectionMetrics aggregation (with rest/hold/overlap & notes_during_hold)
@@ -760,10 +761,10 @@ def detect_pattern_tags(
     max_beat = max(n.time_beats for n in notes)
     chart_duration_sec = (max_beat / bpm) * 60.0 if bpm > 0 else 0.0
 
-    tap_like = [n for n in notes if n.kind in ('tap', 'critical_tap')]
+    tap_like = [n for n in notes if n.kind in ("tap", "critical_tap")]
 
     if chart_duration_sec >= 150.0:
-        tags.add('duration=>02:30')
+        tags.add("duration=>02:30")
 
     tags |= _detect_jump_and_spacing_tags(notes)
     tags |= _detect_trill_and_stream_tags(tap_like)
@@ -797,13 +798,13 @@ def _detect_jump_and_spacing_tags(notes: List[NoteEvent]) -> set[str]:
             if 0.0 < dt <= 0.25:
                 tight_hits += 1
             if 2 <= lane_delta <= 3 and dt <= 0.5:
-                tags.add('jump')
+                tags.add("jump")
             if lane_delta >= 4 and dt <= 0.75:
-                tags.add('wide_jump')
+                tags.add("wide_jump")
         last = n
 
     if tight_hits >= 10:
-        tags.add('tight_spacing')
+        tags.add("tight_spacing")
     return tags
 
 
@@ -820,7 +821,7 @@ def _detect_trill_and_stream_tags(tap_like: List[NoteEvent]) -> set[str]:
             short_intervals += 1
         last = n
     if short_intervals >= 32:
-        tags.add('stream')
+        tags.add("stream")
 
     def _scan_for_trill(min_length: int = 7) -> Tuple[bool, bool, bool]:
         vertical = False
@@ -842,19 +843,19 @@ def _detect_trill_and_stream_tags(tap_like: List[NoteEvent]) -> set[str]:
                 if len(unique_lanes) == 2:
                     vertical = True
                 else:
-                    groups = ['L' if l <= 4 else 'R' for l in lanes]
-                    if len(set(groups)) == 2 and groups.count('L') > 0 and groups.count('R') > 0:
+                    groups = ["L" if l <= 4 else "R" for l in lanes]
+                    if len(set(groups)) == 2 and groups.count("L") > 0 and groups.count("R") > 0:
                         alternating = True
             i = max(i + 1, j)
         return vertical, alternating, hybrid
 
     vertical, alternating, hybrid = _scan_for_trill()
     if vertical:
-        tags.add('trill_vertical')
+        tags.add("trill_vertical")
     if alternating:
-        tags.add('trill_alternating')
+        tags.add("trill_alternating")
     if hybrid:
-        tags.add('trill_hybrid')
+        tags.add("trill_hybrid")
     return tags
 
 
@@ -880,17 +881,17 @@ def _detect_stair_tags(tap_like: List[NoteEvent]) -> set[str]:
             j += 1
 
         if len(run) >= 4:
-            tags.add('stair_single')
+            tags.add("stair_single")
             avg_lane = sum(ev.lane for ev in run) / len(run)
             if avg_lane <= 4:
-                tags.add('stairway_left')
+                tags.add("stairway_left")
             if avg_lane >= 5:
-                tags.add('stairway_right')
+                tags.add("stairway_right")
             if len(set(directions)) > 1 and directions.count(1) >= 2 and directions.count(-1) >= 2:
-                tags.add('zig-zag_stair')
+                tags.add("zig-zag_stair")
             else:
                 if len(directions) >= 4 and directions[0] != directions[-1]:
-                    tags.add('spiral_stairway')
+                    tags.add("spiral_stairway")
 
         i = max(i + 1, j)
 
@@ -912,7 +913,7 @@ def _detect_drumroll_and_microjack_tags(tap_like: List[NoteEvent]) -> set[str]:
         if len(window_notes) >= min_count:
             lanes = [ev.lane for ev in window_notes]
             if max(lanes) - min(lanes) <= 1:
-                tags.add('drumroll')
+                tags.add("drumroll")
                 break
 
     return tags
@@ -920,8 +921,8 @@ def _detect_drumroll_and_microjack_tags(tap_like: List[NoteEvent]) -> set[str]:
 
 def _detect_slide_and_trace_tags(notes: List[NoteEvent]) -> set[str]:
     tags: set[str] = set()
-    slides = [n for n in notes if n.kind in ('hold_path', 'critical_hold_path')]
-    taps_and_flicks = [n for n in notes if n.kind in ('tap', 'critical_tap', 'flick', 'flick_arrow')]
+    slides = [n for n in notes if n.kind in ("hold_path", "critical_hold_path")]
+    taps_and_flicks = [n for n in notes if n.kind in ("tap", "critical_tap", "flick", "flick_arrow")]
 
     if not slides:
         return tags
@@ -933,7 +934,7 @@ def _detect_slide_and_trace_tags(notes: List[NoteEvent]) -> set[str]:
                 overlap_count += 1
                 break
     if overlap_count >= 5:
-        tags.add('notes_within_slide')
+        tags.add("notes_within_slide")
 
     # low_visibility_trace / zig-zag_slide can be added later with more slide geometry
     return tags
@@ -941,7 +942,7 @@ def _detect_slide_and_trace_tags(notes: List[NoteEvent]) -> set[str]:
 
 def _detect_flick_tags(notes: List[NoteEvent]) -> set[str]:
     tags: set[str] = set()
-    flicks = [n for n in notes if n.kind in ('flick', 'flick_arrow')]
+    flicks = [n for n in notes if n.kind in ("flick", "flick_arrow")]
     if not flicks:
         return tags
 
@@ -953,18 +954,18 @@ def _detect_flick_tags(notes: List[NoteEvent]) -> set[str]:
         if 0.0 < dt <= 0.25:
             run_len += 1
             if run_len >= 4:
-                tags.add('consecutive_flicks')
+                tags.add("consecutive_flicks")
         else:
             run_len = 1
 
-    slides = [n for n in notes if n.kind in ('hold_path', 'critical_hold_path')]
+    slides = [n for n in notes if n.kind in ("hold_path", "critical_hold_path")]
     if slides:
         for f in flicks:
             for s in slides:
                 if abs(f.time_beats - s.time_beats) <= 0.5 and abs(f.lane - s.lane) <= 1:
-                    tags.add('trace_flick')
+                    tags.add("trace_flick")
                     break
-            if 'trace_flick' in tags:
+            if "trace_flick" in tags:
                 break
 
     return tags
@@ -988,28 +989,31 @@ def _detect_readability_tags(notes: List[NoteEvent]) -> set[str]:
     for evs in buckets.values():
         if len(evs) >= 3:
             stacked_hits += 1
-        widths = [e.extra.get('width_lanes', 1) for e in evs]
+        widths = [e.extra.get("width_lanes", 1) for e in evs]
         if any(w > 1 for w in widths) and len(evs) >= 2:
             low_vis_hits += 1
         kinds = {e.kind for e in evs}
-        if (('hold_body_or_start' in kinds) or ('hold_path' in kinds) or ('critical_hold_path' in kinds))            and (('tap' in kinds) or ('critical_tap' in kinds)):
+        if (
+            (("hold_body_or_start" in kinds) or ("hold_path" in kinds) or ("critical_hold_path" in kinds))
+            and (("tap" in kinds) or ("critical_tap" in kinds))
+        ):
             long_short_hits += 1
         for e in evs:
-            if e.kind in ('tap', 'critical_tap') and e.extra.get('width_lanes', 1) == 1:
+            if e.kind in ("tap", "critical_tap") and e.extra.get("width_lanes", 1) == 1:
                 tiny_note_hits += 1
-            if e.kind in ('hold_body_or_start', 'hold_path', 'critical_hold_path') and e.extra.get('width_lanes', 1) == 1:
+            if e.kind in ("hold_body_or_start", "hold_path", "critical_hold_path") and e.extra.get("width_lanes", 1) == 1:
                 tiny_hold_hits += 1
 
     if stacked_hits >= 3:
-        tags.add('stacked_chords')
+        tags.add("stacked_chords")
     if low_vis_hits >= 3:
-        tags.add('low_visibility')
+        tags.add("low_visibility")
     if long_short_hits >= 3:
-        tags.add('long_short_taps_mix')
+        tags.add("long_short_taps_mix")
     if tiny_note_hits >= 10:
-        tags.add('tiny_notes')
+        tags.add("tiny_notes")
     if tiny_hold_hits >= 5:
-        tags.add('tiny_hold')
+        tags.add("tiny_hold")
 
     return tags
 
@@ -1028,13 +1032,13 @@ def _detect_rhythm_tags(tap_like: List[NoteEvent]) -> set[str]:
             intervals.append(dt)
         last = n
 
-    simple_fracs = [1.0, 0.5, 1.0/3.0, 0.25, 1.0/6.0]
+    simple_fracs = [1.0, 0.5, 1.0 / 3.0, 0.25, 1.0 / 6.0]
     off_grid = 0
     for dt in intervals:
         if min(abs(dt - f) for f in simple_fracs) > 0.05:
             off_grid += 1
     if intervals and off_grid / len(intervals) >= 0.3:
-        tags.add('difficult_rhythm')
+        tags.add("difficult_rhythm")
 
     for n in tap_like:
         phase = n.time_beats - int(n.time_beats)
@@ -1045,7 +1049,7 @@ def _detect_rhythm_tags(tap_like: List[NoteEvent]) -> set[str]:
     swing_pair_hits = 0
 
     for dt in intervals:
-        if abs(dt - 1.0/3.0) < 0.04 or abs(dt - 2.0/3.0) < 0.04:
+        if abs(dt - 1.0 / 3.0) < 0.04 or abs(dt - 2.0 / 3.0) < 0.04:
             swing_pair_hits += 1
 
     for p in phases:
@@ -1055,17 +1059,17 @@ def _detect_rhythm_tags(tap_like: List[NoteEvent]) -> set[str]:
             off_beat_count += 1
 
     if swing_pair_hits >= 4:
-        tags.add('swing_rhythm')
+        tags.add("swing_rhythm")
     if off_beat_count > on_beat_count:
-        tags.add('syncopated')
+        tags.add("syncopated")
 
     return tags
 
 
 def _detect_hand_assignment_tags(notes: List[NoteEvent]) -> set[str]:
     tags: set[str] = set()
-    holds = [n for n in notes if n.kind in ('hold_body_or_start', 'hold_path', 'critical_hold_path')]
-    taps = [n for n in notes if n.kind in ('tap', 'critical_tap', 'flick', 'flick_arrow')]
+    holds = [n for n in notes if n.kind in ("hold_body_or_start", "hold_path", "critical_hold_path")]
+    taps = [n for n in notes if n.kind in ("tap", "critical_tap", "flick", "flick_arrow")]
 
     if not holds or not taps:
         return tags
@@ -1074,15 +1078,15 @@ def _detect_hand_assignment_tags(notes: List[NoteEvent]) -> set[str]:
         for t in taps:
             if abs(t.time_beats - h.time_beats) <= 0.5:
                 if (h.lane <= 3 and t.lane >= 7) or (h.lane >= 7 and t.lane <= 3):
-                    tags.add('cross_hand')
+                    tags.add("cross_hand")
                     break
-        if 'cross_hand' in tags:
+        if "cross_hand" in tags:
             break
 
     left_holds = any(h.lane <= 2 for h in holds)
     right_holds = any(h.lane >= 7 for h in holds)
     if left_holds and right_holds:
-        tags.add('forced_hand_swap')
+        tags.add("forced_hand_swap")
 
     return tags
 
@@ -1105,10 +1109,9 @@ def _detect_chord_and_multi_key_tags(tap_like: List[NoteEvent]) -> set[str]:
             multi_key_hits += 1
 
     if multi_key_hits >= 1:
-        tags.add('multi_keys')
+        tags.add("multi_keys")
 
     return tags
-
 
 # ----------------------------------------------------------------------
 # Severity + SectionMetrics-based tags
@@ -1123,78 +1126,79 @@ def _detect_severity_based_tags(
 ) -> set[str]:
     tags: set[str] = set()
 
-    aggregated: Dict[str, str] = severity_fw.get('aggregated', {}) or {}
-    per_section: List[Dict[str, str]] = severity_fw.get('per_section', []) or []
+    aggregated: Dict[str, str] = severity_fw.get("aggregated", {}) or {}
+    per_section: List[Dict[str, str]] = severity_fw.get("per_section", []) or []
 
     # low_bpm_high_density
-    if 'low_bpm_high_density' in aggregated:
-        sev = aggregated['low_bpm_high_density']
-        if severity_ge(sev, 'mild'):
-            tags.add('low_bpm_high_density')
+    if "low_bpm_high_density" in aggregated:
+        sev = aggregated["low_bpm_high_density"]
+        if severity_ge(sev, "mild"):
+            tags.add("low_bpm_high_density")
 
     # bpm_shift
-    if 'bpm_shift' in aggregated:
-        sev = aggregated['bpm_shift']
-        if severity_ge(sev, 'light'):
-            tags.add('bpm_shift')
+    if "bpm_shift" in aggregated:
+        sev = aggregated["bpm_shift"]
+        if severity_ge(sev, "light"):
+            tags.add("bpm_shift")
 
     # sudden_speedup / sudden_slowdown via bpm_delta_ratio
     speedup_sections = sum(1 for m in sections if m.bpm_delta_ratio > 0.15)
     slowdown_sections = sum(1 for m in sections if m.bpm_delta_ratio < -0.15)
     if speedup_sections > 0:
-        tags.add('sudden_speedup')
+        tags.add("sudden_speedup")
     if slowdown_sections > 0:
-        tags.add('sudden_slowdown')
+        tags.add("sudden_slowdown")
 
     # chart_stop & fake_end
-    if 'temporal_disruption' in aggregated:
-        sev = aggregated['temporal_disruption']
-        if severity_ge(sev, 'light'):
-            tags.add('chart_stop')
+    if "temporal_disruption" in aggregated:
+        sev = aggregated["temporal_disruption"]
+        if severity_ge(sev, "light"):
+            tags.add("chart_stop")
     if any(m.chart_stop_count > 0 for m in sections):
-        tags.add('chart_stop')
+        tags.add("chart_stop")
     if any(m.fake_end_flag for m in sections):
-        tags.add('fake_end')
+        tags.add("fake_end")
 
     # stream -> tag "stream"
-    stream_sev = aggregated.get('stream')
-    if stream_sev and severity_ge(stream_sev, 'mild'):
-        tags.add('stream')
+    stream_sev = aggregated.get("stream")
+    if stream_sev and severity_ge(stream_sev, "mild"):
+        tags.add("stream")
 
     # burst -> burst / burst.start / burst.end / post_climax_spike
     burst_sections: List[int] = []
     for idx, sev_map in enumerate(per_section):
-        sev = sev_map.get('burst')
-        if sev and severity_ge(sev, 'mild'):
+        sev = sev_map.get("burst")
+        if sev and severity_ge(sev, "mild"):
             burst_sections.append(idx)
+
     if burst_sections:
-        tags.add('burst')
+        tags.add("burst")
         n_sections = len(sections)
         if n_sections > 0:
             opening_end = max(0, int(n_sections * 0.2))
             ending_start = max(0, int(n_sections * 0.8))
             if any(idx <= opening_end for idx in burst_sections):
-                tags.add('burst.start')
+                tags.add("burst.start")
             if any(idx >= ending_start for idx in burst_sections):
-                tags.add('burst.end')
+                tags.add("burst.end")
             tail_start = int(n_sections * 0.7)
             if any(idx >= tail_start for idx in burst_sections):
-                tags.add('post_climax_spike')
+                tags.add("post_climax_spike")
 
     # hold_interference -> long_short_taps_mix / notes_within_slide
-    hold_int = aggregated.get('hold_interference')
+    hold_int = aggregated.get("hold_interference")
     if hold_int:
-        if severity_ge(hold_int, 'mild'):
-            tags.add('long_short_taps_mix')
-        if severity_ge(hold_int, 'moderate'):
-            tags.add('notes_within_slide')
+        if severity_ge(hold_int, "mild"):
+            tags.add("long_short_taps_mix")
+        if severity_ge(hold_int, "moderate"):
+            tags.add("notes_within_slide")
 
     # readability -> low_visibility / stacked_chords
-    read_sev = aggregated.get('readability')
+    read_sev = aggregated.get("readability")
     if read_sev:
-        if severity_ge(read_sev, 'light'):
-            tags.add('low_visibility')
-        if severity_ge(read_sev, 'mild'):
-            tags.add('stacked_chords')
+        if severity_ge(read_sev, "light"):
+            tags.add("low_visibility")
+        if severity_ge(read_sev, "mild"):
+            tags.add("stacked_chords")
 
     return tags
