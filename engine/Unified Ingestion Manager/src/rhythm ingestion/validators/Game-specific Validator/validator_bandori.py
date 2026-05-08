@@ -150,4 +150,3 @@ class BandoriValidator(BaseValidator):
         if result.get("degraded_mode"):
             return "Bandori chart is valid but runs in degraded mode."
         return ""
-``
