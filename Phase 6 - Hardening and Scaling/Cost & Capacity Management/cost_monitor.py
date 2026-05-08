@@ -36,4 +36,3 @@ class CostMonitor:
         - No actual cost computation.
         """
         return CostMetrics()
-``
