@@ -1,4 +1,4 @@
-# Phase 6 — Lifecycle Management
+# Phase 6 — Lifecycle Management Layer
 
 The Lifecycle Management layer governs **model and deployment state**
 as part of Phase 6 (Platform Hardening and Scale).
