@@ -207,4 +207,3 @@ def get_excel_writer(db_path: str, **kwargs: Any) -> ExcelWriter:
         writer.save()
     """
     return ExcelWriter(db_path=db_path, **kwargs)
-``
