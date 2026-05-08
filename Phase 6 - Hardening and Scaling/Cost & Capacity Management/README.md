@@ -1,4 +1,4 @@
-# Phase 6 — Cost & Capacity Management
+# Phase 6 — Cost & Capacity Management Layer
 
 This layer enforces **cost and capacity safety** as part of Phase 6
 (Platform Hardening and Scale).
