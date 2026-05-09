@@ -1,7 +1,16 @@
 """
 taxonomy_helpers.py (Phase 2)
 
-Lightweight helpers for taxonomy/category handlingLightweight helpers for taxonomy/category handling.
+Lightweight helpers for taxonomy/category handling.
+
+This module:
+- does NOT reinterpret taxonomy semantics
+- does NOT invent new categories
+- provides deterministic helper utilities only
+"""
+
+from __future__ import annotations
+
 from typing import Iterable, List
 
 
@@ -9,24 +18,21 @@ def normalize_taxonomy_labels(labels: Iterable[str]) -> List[str]:
     """
     Normalize taxonomy labels for stable comparison.
 
-    Rules:
-    - lowercase
-    - strip whitespace
-    - drop empty values
+    Current behavior:
     - preserve order
+    - strip whitespace
+    - drop empty or non-string values
     """
-    out: List[str] = []
-    for x in labels or []:
-        if not isinstance(x, str):
+    normalized: List[str] = []
+
+    for label in labels:
+        if not isinstance(label, str):
             continue
-        s = x.strip().lower()
+        s = label.strip()
         if s:
-            out.append(s)
-    return out
+            normalized.append(s)
+
+    return normalized
 
 
 __all__ = ["normalize_taxonomy_labels"]
-
-No semantic interpretation is allowed here.
-"""
-
