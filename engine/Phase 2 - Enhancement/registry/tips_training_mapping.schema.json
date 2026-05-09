@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TipsTrainingMapping",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "training_items": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "required": ["tags", "training_items"],
+    "additionalProperties": true
+  }
+}

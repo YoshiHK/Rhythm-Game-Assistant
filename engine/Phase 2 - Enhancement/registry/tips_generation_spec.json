@@ -1,0 +1,12 @@
+{
+  "description": "Phase 2 tips generation specification",
+  "element_limits": {
+    "expert": 3,
+    "master": 3,
+    "append": 4
+  },
+  "word_budgets": {
+    "paragraph_1": 60,
+    "paragraph_2": 120
+  }
+}

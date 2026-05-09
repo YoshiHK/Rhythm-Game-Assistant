@@ -1,0 +1,14 @@
+{
+  "description": "Phase 2 internal analysis reference schema (declarative)",
+  "severity_levels": [
+    "slight",
+    "light",
+    "mild",
+    "moderate",
+    "dense",
+    "complex",
+    "demanding"
+  ],
+  "score_range": [0.0, 1.0],
+  "coverage_range": [0.0, 1.0]
+}

@@ -1,0 +1,6 @@
+{
+  "EXAMPLE_ELEMENT": {
+    "tags": ["example_tag"],
+    "training_items": ["example_training_item"]
+  }
+}
