@@ -50,3 +50,26 @@
           "description": "Optional locale-specific template overrides.",
           "additionalProperties": {
             "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "variant_block": {
+      "type": "object",
+      "description": "Allow-list of variant IDs for a given template.",
+      "properties": {
+        "variants": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      },
+      "required": ["variants"],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
