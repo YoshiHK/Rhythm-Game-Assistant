@@ -1,14 +1,16 @@
 """
 tag_normalization.py (Phase 2)
 
-Normalizes detected pattern-signal tags before- define taxonomyNormalizes detected pattern-signal tags before candidate inference.
-- invent new tags
-- reinterpret Phase 1 semantics
+Normalizes detected pattern-signal tags before candidate inference.
 
-It only provides a deterministic normalization surface.
+This module:
+- does NOT invent new tags
+- does NOT reinterpret Phase 1 semantics
+- only provides a deterministic normalization surface
 """
 
 from __future__ import annotations
+
 from typing import Iterable, List
 
 
@@ -16,23 +18,22 @@ def normalize_detected_tags(tags: Iterable[str]) -> List[str]:
     """
     Normalize detected tags in a best-effort, deterministic way.
 
-    Rules:
-    - keep order
-    - strip whitespace
-    - drop empty values
-    - lowercase for matching stability
+    This function:
+    - preserves original order
+    - ignores non-string values
+    - strips leading/trailing whitespace
+    - drops empty strings
     """
-    out: List[str] = []
-    for t in tags or []:
-        if not isinstance(t, str):
+    normalized: List[str] = []
+
+    for tag in tags:
+        if not isinstance(tag, str):
             continue
-        s = t.strip().lower()
-        if not s:
-            continue
-        out.append(s)
-    return out
+        t = tag.strip()
+        if t:
+            normalized.append(t)
+
+    return normalized
 
 
 __all__ = ["normalize_detected_tags"]
-
-This module does NOT:
