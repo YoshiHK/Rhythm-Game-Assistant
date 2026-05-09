@@ -4,7 +4,9 @@ diagnostics_collector.py (Phase 2)
 Collects non-invasive diagnostics snapshots for Phase 2 runs.
 """
 
-from __, Any, Listfrom __future__ import annotations
+from __future__ import annotations
+
+from typing import Any, Dict, List
 
 
 def collect_diagnostics(
