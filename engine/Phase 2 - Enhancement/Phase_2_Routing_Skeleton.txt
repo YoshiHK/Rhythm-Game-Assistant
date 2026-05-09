@@ -1,0 +1,115 @@
+Phase_2_Enhancement/
+├─ README.md
+│  # Phase 2 purpose, guarantees, non-goals, and phase (matches pipeline spec)│  # Phase 2 purpose, guarantees, non-goals, and phase boundary
+│
+├─ PHASE_2_ARCHITECTURE.md
+│  # System diagram: Track A / B / C / D routing
+│
+├─ PHASE_2_SPEC.md
+│
+├─ interfaces/                         # Hard contracts (authoritative)
+│  ├─ README.md
+│  ├─ section_metrics.interface.md
+│  ├─ element_candidate.interface.md
+│  ├─ analysed_element.interface.md
+│  ├─ guidance.interface.md
+│  └─ narrative_output.interface.md
+│
+├─ schemas/                            # CI‑enforced canonical shapes
+│  ├─ README.md
+│  ├─ section_metrics.schema.json
+│  ├─ element_candidate.schema.json
+│  ├─ analysed_element.schema.json
+│  ├─ guidance.schema.json
+│  ├─ tips_output.schema.json
+│  └─ summary.schema.json
+│
+├─ registry/                           # Declarative specs & configs (read‑only)
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ tips_training_mapping.schema.json
+│  ├─ tips_training_mapping.seed.json
+│  ├─ internal_analysis_schema.json
+│  ├─ tips_generation_spec.json
+│  └─ score_calibration_config_v0.2.1.json
+│
+├─ runtime/                            # Deterministic execution spine
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ phase2_core.py
+│  ├─ stage_router.py
+│  ├─ track_router.py
+│  └─ runtime_wrapper.py
+│
+├─ visual/                             # Stage 2–4.1
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ visual_detector.py
+│  ├─ section_metrics_builder.py
+│  └─ pattern_signal_extractor.py
+│
+├─ candidate/                          # Stage 4.2
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ element_inference.py
+│  ├─ mapping_resolver.py
+│  └─ tag_normalization.py
+│
+├─ severity/                           # Stage 5.1 (Track A)
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ severity_engine.py
+│  ├─ coverage_calculator.py
+│  ├─ calibration_bridge.py
+│  ├─ feature_blender.py
+│  └─ docs/
+│     └─ TRACK_A_CALIBRATION_PLAYBOOK.md
+│
+├─ selection/                          # Stage 5.2 (Track B)
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ selector_v2_bridge.py
+│  ├─ dominance_ranker.py
+│  └─ diversity_rules.py
+│
+├─ guidance/                           # Stage 5.3 (Track C)
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ guidance_engine_v2.py
+│  ├─ cause_resolver.py
+│  └─ breakdown_formatter.py
+│
+├─ narrative/                          # Stage 6 (Track D)
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ narrative_module_v2.py
+│  ├─ template_renderer.py
+│  └─ readability_adjuster.py
+│
+├─ summary/                            # Stage 7
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ per_chart_summary.py
+│  ├─ batch_summary.py
+│  └─ dominance_score.py
+│
+├─ events/                             # Observational only (no control flow)
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ phase2_event_logger.py
+│  └─ diagnostics_collector.py
+│
+├─ ci/                                 # Phase 2 CI rules (report‑only)
+│  ├─ __init__.py
+│  ├─ README.md
+│  ├─ determinism_checks.py
+│  ├─ schema_alignment_checks.py
+│  └─ non_destructive_checks.py
+│
+└─ utils/                              # Shared helpers (non‑decisional)
+   ├─ __init__.py
+   ├─ README.md
+   ├─ taxonomy_helpers.py
+   ├─ routing_debug.py
+   └─ phase2_guards.py
+

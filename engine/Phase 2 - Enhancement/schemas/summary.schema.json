@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase2Summary",
+  "type": "object",
+  "required": ["elements", "dominant_score"],
+  "properties": {
+    "elements": {
+      "type": "array",
+      "items": { "$ref": "analysed_element.schema.json" }
+    },
+    "dominant_score": { "type": "number", "minimum": 0 }
+  },
+  "additionalProperties": true
+}

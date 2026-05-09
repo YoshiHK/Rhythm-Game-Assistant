@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ElementCandidate",
+  "type": "object",
+  "required": ["element_name", "matched_tags", "training_items", "tag_hit_count"],
+  "properties": {
+    "element_name": { "type": "string" },
+    "matched_tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "training_items": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tag_hit_count": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SectionMetrics",
+  "type": "object",
+  "required": ["section_index", "note_density", "rest_ratio", "hold_coverage"],
+  "properties": {
+    "section_index": { "type": "integer", "minimum": 0 },
+    "note_density": { "type": "number", "minimum": 0 },
+    "rest_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+    "hold_coverage": { "type": "number", "minimum": 0, "maximum": 1 },
+    "notes_during_hold_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+    "overlap_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+    "bpm_delta_ratio": { "type": "number" },
+    "chart_stop_count": { "type": "integer", "minimum": 0 },
+    "fake_end_flag": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}
