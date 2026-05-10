@@ -1,3 +1,0 @@
-mkdir -p CI/Phase_4_5/artifacts CI/Phase_4_5/logs
-touch CI/Phase_4_5/artifacts/.gitkeep
-touch CI/Phase_4_5/logs/.gitkeep
