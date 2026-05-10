@@ -1,168 +1,127 @@
-# PHASE_4.5_SPEC.md
-## Phase 4.5 — Localization & Language Adaptation
+# Phase 4.5 Specification — Localization
 
-**Status:** Draft (Speed‑Run, Ready for Review)  
-**Upstream Dependencies:**
-- Phase 1 — Foundation & Workflow ✅
-- Phase 2 — Enhancement ✅
-- Phase 3 — Unified Ingestion Manager ✅
-- Phase 4 — Personalization & Presentation ✅
-
-**Non‑Negotiable Rule:** *Do not modify anything in Completed Phases.*
+**Status:** Design‑Locked ✅  
+**Scope:** Localization Contracts & Invariants
 
 ---
 
-## 0. Positioning
+## 1. Contract Overview
 
-Phase 4.5 defines the **localization layer** of the Rhythm Game Assistant.
+Phase 4.5 applies localization to personalized outputs
+without changing semantic meaning.
 
-It operates strictly **downstream of Phase 4** and is responsible for adapting
-*rendered tips content* into multiple languages and regional variants **without
-altering meaning, intent, or personalization decisions**.
-
-Phase 4.5 answers:
-
-> “Given the finalized presentation, how should this be expressed for this locale?”
+It is governed by **structural contracts**, not heuristics.
 
 ---
 
-## 1. Purpose
+## 2. Input Contract
 
-Phase 4.5 exists to:
-- enable multi‑language support,
-- ensure consistent phrasing across locales,
-- preserve trust, determinism, and explainability.
+Phase 4.5 accepts:
 
-Localization affects **how text is expressed**, never **what is being advised**.
+- Personalized payload from Phase 4
+- Locale identifier (string)
+- Variant identifier (optional)
+- Feature flags (optional)
 
----
-
-## 2. Phase Boundary
-
-### Inputs (from Phase 4 only)
-- rendered tips text (canonical)
-- narrative template IDs and variant IDs
-- personalization provenance
-- difficulty label
-- locale preference (player or system)
-
-### Outputs
-- localized tips text
-- localization metadata
-- localization provenance
-
-Phase 4.5 MUST NOT mutate:
-- element selection
-- ordering
-- severity
-- personalization decisions
+Inputs are treated as **read‑only**.
 
 ---
 
-## 3. Invariants
+## 3. Output Contract
 
-### 3.1 Semantic Immutability
-Localization MUST NOT change:
-- gameplay advice
-- instructional intent
-- ordering or emphasis
-- safety messaging
+Outputs MUST:
 
-### 3.2 Deterministic Fallback
-- A default locale (e.g. `en-US`) MUST always be available.
-- Missing translations MUST fall back deterministically.
+- preserve element identity
+- preserve ordering semantics
+- preserve placeholder bindings
+- comply with word budget limits
+- include localization metadata
 
-### 3.3 Non‑Interpretive Translation
-Phase 4.5 MAY:
-- translate text
-- substitute locale‑specific phrasing
-- adjust grammar and word order
-
-Phase 4.5 MUST NOT:
-- summarize
-- paraphrase gameplay meaning
-- introduce new guidance
+Outputs MUST NOT:
+- introduce new elements
+- remove required placeholders
+- alter semantic meaning
 
 ---
 
-## 4. Localization Modes
+## 4. Template Contract (Narrative v3)
 
-### 4.1 Pass‑Through Mode
-- Localization disabled
-- Phase‑4 output returned unchanged
+All Narrative v3 templates MUST:
 
-### 4.2 Localized Mode
-- Locale resolved
-- Translation applied
-- Provenance recorded
+- declare `version = "v3"`
+- include `strings.default.text`
+- preserve placeholder sets across locales
+- respect per‑variant word budgets
 
-### 4.3 Pseudo‑Localization Mode (QA)
-- Artificial locale expansion
-- Length and layout stress testing
-- Used for CI and QA only
+Template sets MUST be identical across locales.
 
 ---
 
-## 5. Locale Resolution Rules
+## 5. Placeholder Integrity
 
-Locale is resolved by priority:
-1. explicit request parameter
-2. player profile language
-3. system default locale
+For every template:
 
-Resolution outcome MUST be recorded.
+- declared placeholders and inline placeholders
+  MUST match the base locale
+- duplication or loss is forbidden
 
----
-
-## 6. Translation Sources
-
-Allowed translation sources:
-- curated static translations
-- versioned translation bundles
-- approved machine translation (offline)
-
-Prohibited:
-- runtime free‑form generation
-- context‑less translation
+This prevents runtime binding errors.
 
 ---
 
-## 7. Provenance & Explainability
+## 6. Word Budget Rules
 
-Each localized output MUST record:
-- base_locale
-- target_locale
-- translation_source
-- translation_version
-- fallback_used (boolean)
+Each locale defines word/unit budgets per variant.
 
-Localization provenance MUST be append‑only.
+- Space‑delimited languages → word count
+- CJK / no‑space languages → unit count
+- Exceeding budget is a CI failure
 
----
-
-## 8. Safety Guarantees
-
-Phase 4.5 guarantees:
-- no upstream impact
-- no semantic drift
-- deterministic fallback
-- isolation from gameplay logic
+Budgets are **presentation constraints**, not semantics.
 
 ---
 
-## 9. Contract Closure
+## 7. Waivers & Decay
 
-Phase 4.5 is:
-✅ downstream‑only  
-✅ non‑semantic  
-✅ reversible  
-✅ auditable  
+Some token parity violations may be explicitly waived.
 
-Phase 4.5 is NOT:
-❌ a personalization phase  
-❌ a gameplay phase  
-❌ a learning phase  
+Waivers:
+- MUST be declared in `token_parity_waivers.json`
+- MUST include a reason
+- MUST include `review_by` when decay is enabled
+- are bounded by global and per‑locale budgets
+
+Expired waivers fail CI.
 
 ---
 
-**End of PHASE_4_5_SPEC.md**
+## 8. Observability
+
+Some checks emit a **single‑line CI SUMMARY**.
+
+Properties:
+- deterministic
+- machine‑consumable
+- non‑gating
+- non‑runtime
+
+---
+
+## 9. Non‑Goals
+
+Phase 4.5 does NOT specify:
+- translation quality metrics
+- linguistic style guides
+- runtime fallback behavior
+- UI rendering rules
+
+---
+
+## 10. Summary
+
+Phase 4.5 is governed by:
+- explicit contracts,
+- deterministic CI enforcement,
+- strict separation from runtime semantics.
+
+Violations are surfaced early and loudly.
