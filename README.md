@@ -21,6 +21,7 @@ This repository contains the **source code, API wiring, and authoritative archit
 
 ## 1. High‑Level Architecture
 
+```
 [ OneDrive Charts ]
 ↓ (Scheduled Job)
 [ Phase 1–3: Tip Generation + UMI ]
@@ -30,6 +31,7 @@ This repository contains the **source code, API wiring, and authoritative archit
 [ Thin Backend API (this repo) ]
 ↓
 [ Softr App (UI / Consumption Surface) ]
+```
 
 #### Core Rules
 
