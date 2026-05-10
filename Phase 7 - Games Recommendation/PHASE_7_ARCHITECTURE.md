@@ -1,8 +1,7 @@
-# PHASE_7_ARCHITECTURE.md
-## Phase 7 — Games Recommendation Architecture
+# PHASE_7_ARCHITECTURE.md# PHASE_7 7 — Games Recommendations Architecture
 
-**Status:** Draft (Aligned with PHASE_7_SPEC.md)  
-**Invariant:** Phase 7 is additive and downstream‑only.
+**Status:** Design‑Locked  
+**Invariants:** Additive · Downstream‑Only · Reversible · Non‑Blocking
 
 ---
 
@@ -10,105 +9,142 @@
 
 Phase 7 is a **meta‑recommendation and discovery layer**.
 
-It consumes stabilized outputs from prior phases and produces
-**game‑level guidance**, without participating in:
+It operates **above** song‑level recommendations and tips,
+answering the question:
 
+> **Which rhythm games should a player explore next, and why?**
+
+Phase 7 is explicitly **not** part of:
 - gameplay analysis,
 - tips generation,
 - personalization adjustment,
+- learning or experimentation,
 - or platform enforcement.
 
 ---
 
 ## 2. High‑Level Placement
 
-[ Phase 1–4.5 (Analysis & Presentation) ] ← Locked
-│
-[ Phase 5 (Learning & Contracts) ] ← Locked
-│
-[ Phase 6 (Hardening & Scale) ] ← Locked
-│
-──────────────────┼──────────────────
-▼
-[ Phase 7 (Games Recommendations) ]
-│
-[ UI / Softr / Client Discovery Surfaces ]
+[ Phase 1–4.5 ]  Analysis, Tips, Personalization, Localization  ← Locked
+[ Phase 5     ]  Learning & Productionization                  ← Locked
+[ Phase 6     ]  Platform Hardening & Scale                    ← Locked
+──────────────────────────────────────────────────────────────
+[ Phase 7     ]  Games Recommendations (Discovery Layer)
+[ UI / Client ]  Discovery Surfaces
+
+Phase 7 is **downstream‑only** and **non‑blocking**:
+failure or removal must never affect earlier phases.
 
 ---
 
 ## 3. Core Subsystems
 
-### 3.1 Player Profile Encoder
+### 3.1 Registry & Catalog (Inputs)
 
-Responsibilities:
-- Transform player history into a capability vector
-- Capture skill, consistency, and exposure signals
-- Deterministic and versioned
+- **Registry**
+  - Authoritative list of games and enablement status.
+  - Read‑only adapter over `games.json`.
 
-No inference logic from earlier phases is reused or modified.
-
----
-
-### 3.2 Game Profile Encoder
-
-Responsibilities:
-- Convert batch difficulty profiles into game vectors
-- Represent each game in a shared comparison space
-- One profile per game (optionally per difficulty band)
+- **Catalog**
+  - Optional, additive presentation metadata.
+  - UI‑facing only (display names, icons, grouping).
+  - Absence must never break Phase 7.
 
 ---
 
-### 3.3 Recommendation Ranker
+### 3.2 Routing (Coordinator)
 
-Responsibilities:
-- Compute player–game fit scores
-- Apply constraints (platform, locale, availability)
-- Produce ranked candidate lists
-- Maintain scoring version lineage
-
----
-
-### 3.4 Explanation Engine
-
-Responsibilities:
-- Translate scoring signals into human‑readable rationales
-- Bind explanations to i18n templates
-- Ensure every recommendation is explainable
+- Single runtime entrypoint.
+- Orchestrates:
+  - candidate selection,
+  - ranking,
+  - explanation,
+  - side‑channel emission (feedback, observability).
+- **Coordinator only**:
+  - no learning,
+  - no eligibility logic,
+  - no runtime version switching.
 
 ---
 
-### 3.5 Feedback & Telemetry Sink
+### 3.3 Ranking (Authoritative)
 
-Responsibilities:
-- Record user interactions with recommendations
-- Emit metrics to Phase 6 observability
-- Feed Phase 5 learning pipelines
+- Single deterministic ranker implementation at runtime.
+- Properties:
+  - deterministic,
+  - auditable,
+  - explainable,
+  - no I/O,
+  - no runtime versioning.
+- Evolution occurs via **implementation updates**, not schema switching.
+
+---
+
+### 3.4 Explanation (Bounded)
+
+- Translates structured ranking signals into
+  presentation‑safe explanations.
+- Bounded, deterministic, i18n‑ready.
+- No free‑form generation required.
+
+---
+
+### 3.5 Feedback (Forward‑Only)
+
+- Captures user interactions with recommendations.
+- Emits structured events forward to Phase 5.
+- Observational only:
+  - no runtime influence,
+  - no closed loop inside Phase 7.
+
+---
+
+### 3.6 Observability (Semantic)
+
+- Emits semantic metrics:
+  - coverage,
+  - explainability completeness,
+  - degradation signals.
+- Phase 6 owns transport, storage, alerting.
 
 ---
 
 ## 4. Integration Model
 
-- Phase 7 may execute:
-  - post‑ingestion,
-  - post‑request,
-  - or asynchronously on profile updates.
-- Execution is non‑blocking to core flows.
-- Failure or disablement of Phase 7 must not affect earlier phases.
+- Phase 7 is invoked **only via Phase 6**.
+- Phase 6 owns:
+  - authentication,
+  - authorization,
+  - rate limiting,
+  - lifecycle control,
+  - failure isolation.
+
+Phase 7 never assumes transport or persistence guarantees.
 
 ---
 
-## 5. Architectural Summary
+## 5. Failure Semantics
 
-Phase 7 is:
-✅ a discovery layer  
-✅ a recommender  
-✅ explainable  
-
-Phase 7 is NOT:
-❌ a platform layer  
-❌ a hardening layer  
-❌ a semantic rewrite  
+- Phase 7 failures are **isolated**.
+- On failure or disablement:
+  - return empty recommendations,
+  - emit observability signals,
+  - never block upstream flows.
 
 ---
+
+## 6. Architectural Summary
+
+Phase 7 **IS**:
+- a discovery layer,
+- a recommender,
+- explainable,
+- additive and reversible.
+
+Phase 7 **IS NOT**:
+- a platform layer,
+- a learning engine,
+- a personalization override,
+- a semantic rewrite.
 
 **End of PHASE_7_ARCHITECTURE.md**
