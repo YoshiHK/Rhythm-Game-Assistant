@@ -1,182 +1,229 @@
-# rhythm_ingestion.orchestrator_ext
+# Orchestrator Extension (Control‑Plane)
 
-The **orchestrator extension** is an **additive, non‑breaking control‑plane layer**
-for the Unified Ingestion Manager (UMI).
-
-It exists to **stabilize, boost, and optimize orchestration work** as the system
-scales across:
-
-- many rhythm games
-- multiple run modes
-- personalization
-- localization
-- future production hardening phases
-
-> **This package MUST NOT modify completed semantic phases.**  
-> It coordinates execution and observability — not gameplay logic.
+**Status:** Design‑Locked ✅  
+**Scope:** Phase 3 (Unified Ingestion Manager) control plane  
+**Compatibility Rule:**  
+> **Do not modify completed semantic phases.  
+> Wiring between phases may evolve freely.**
 
 ---
 
-## What this package is
+## 1. What This Is
 
-A **control‑plane extension layer** that can wrap an existing Phase‑3 orchestrator
-**without modifying it**, providing:
+The **Orchestrator Extension** is the **control‑plane layer** that wraps the
+existing orchestrator without modifying it.
 
-- deterministic orchestration
-- unified STOP / DEGRADED gating
-- structured run reporting
-- retry and circuit‑breaker hooks
-- idempotency and provenance
-- schema‑validated CLI JSON output
+Its purpose is to absorb **operational complexity**—not to add gameplay logic.
 
-All behavior is **opt‑in via feature flags**.
+It provides:
+- a **stable execution boundary**,
+- deterministic run identity,
+- explicit STOP / DEGRADED semantics,
+- retries and isolation,
+- structured observability outputs.
 
-If extensions are disabled, the orchestrator behaves **exactly as before**.
-
----
-
-## What this package is NOT
-
-The orchestrator extension **does not**:
-
-- change Phase 1–2 detection, tagging, scoring, or narrative generation
-- change Phase 4 personalization logic or model behavior
-- introduce gameplay heuristics
-- mutate canonical payloads beyond additive diagnostics
-
-This preserves correctness, determinism, and long‑term auditability.
+If all feature flags are disabled, behavior is a **thin pass‑through**.
 
 ---
 
-## Module overview
+## 2. What This Is NOT
 
-### Core data & contracts
+The Orchestrator Extension is **explicitly NOT**:
 
-- **`types.py`**  
-  Canonical control‑plane dataclasses and enums:
-  - `RunMode`
-  - `Stage`
-  - `GateDecision`
-  - `GateResult`
-  - `StageResult`
-  - `RunPlan`
-  - `RunReport`
-  - `RunContext`
-  - `compute_run_key()`
+- ❌ gameplay logic
+- ❌ tip generation logic
+- ❌ personalization logic
+- ❌ heuristic tuning layer
+- ❌ per‑game branching logic
 
-- **`reason_codes.py`**  
-  Stable, machine‑readable reason‑code enum.
-  - Used for all STOP / DEGRADED decisions
-  - Additive only (no removals)
+It MUST NOT:
+- change Phase 1–2 detection, scoring, or narrative,
+- change Phase 4 personalization behavior,
+- mutate canonical payload semantics.
 
-- **`interfaces.py`**  
-  Protocol definitions for:
-  - adapters
-  - validators
-  - orchestrator core
-
-  Allows wrapping without rewriting existing code.
+Violating these rules collapses the phase boundary.
 
 ---
 
-### Configuration & feature control
+## 3. Architectural Position
 
-- **`feature_flags.py`**  
-  Feature‑flag switches controlling all extension behavior.
-  - Defaults preserve existing behavior
-  - Enables gradual rollout and per‑environment control
+```
+API / Phase 6
+↓
+OrchestratorBridge   ← stable control‑plane boundary
+↓
+[ optional ] OrchestratorStabilizer
+↓
+core.run(...) / core.ingest(...)
+↓
+Completed semantic phases (unchanged)
+```
 
-- **`config.py`**  
-  Orchestrator extension configuration:
-  - retry policy
-  - circuit breaker policy
-  - per‑game defaults
-  - strict vs permissive preflight
-
----
-
-### Booster layer (planning & gating)
-
-- **`run_plan.py`**  
-  Declarative stage‑plan assembly.
-  - Builds a `RunPlan` from run mode, flags, and capabilities
-  - Non‑breaking: disabled → current fixed pipeline order
+Key properties:
+- **Single stable entrypoint:** `OrchestratorBridge.run(...)`
+- **Boundary contract:** `mode` is accepted as a string
+- **No runtime versioning**
+- **No Phase 1/2/4 imports**
 
 ---
 
-### Stabilizer layer (reliability & safety)
+## 4. Core Responsibilities
 
-- **`stabilizer.py`**  
-  Execution hardening wrapper:
-  - idempotency via `RunKey`
-  - retry (transient failures only)
-  - circuit breakers / bulkheads
-  - exception → STOP conversion
-  - safe fallback paths
+### 4.1 Execution Coordination
+- Run modes: `ingest`, `tips`, `personalized`, `full`
+- Declarative stage ordering
+- Optional RunPlan assembly (additive)
 
-  Control‑plane only; no semantic logic.
+### 4.2 Gating & Decision Semantics
+- Unified decisions: `ALLOW / STOP / DEGRADED`
+- Stable, machine‑readable `reason_code`
+- No silent fallback paths
 
----
+### 4.3 Stabilization
+- Deterministic RunKey
+- Bounded retries (opt‑in)
+- Circuit breakers (opt‑in)
+- Exception → STOP conversion
 
-### Reporting & observability
+### 4.4 Observability
+- Structured `RunReport`
+- CLI JSON projection
+- JSON schema enforcement
+- CI / QA validation hooks
 
-- **`reporting.py`**  
-  Helpers for constructing and projecting `RunReport` objects.
-
-- **`schemas/`**  
-  Canonical JSON Schemas:
-  - `orchestrator_run_report.schema.json`
-  - `orchestrator_cli_result.schema.json`
-
-  These define the **contract** for structured output and CLI JSON.
-
-- **`schema_validator.py`**  
-  Optional schema validation hook:
-  - Validates RunReport and CLI JSON against schemas
-  - Uses `jsonschema` if available
-  - Falls back to minimal structural checks if not
-  - Intended for CI, QA, and optional runtime assertions
+### 4.5 Multi‑Game Safety
+- Per‑game defaults via configuration
+- Capability introspection (informational)
+- Failure isolation
+- No `if game_id == ...` sprawl
 
 ---
 
-### Integration & wiring
+## 5. Stable Public Surface
 
-- **`bridge.py`**  
-  The **single integration entrypoint**.
+The **only stable public surface** is:
 
-  Wraps:
-  - a core object exposing `.run(...)`, **or**
-  - an existing orchestrator module exposing `ingest(...)`
-
-  Guarantees:
-  - stable `.run()` surface
-  - pass‑through behavior when flags are off
-  - no dependency on Phase 1 / 2 / 4 logic
-
----
-
-## Typical usage
-
-```python
 from rhythm_ingestion.orchestrator_ext import (
+    OrchestratorBridge,
     wrap_orchestrator,
     OrchestratorExtensionConfig,
     FeatureFlags,
 )
 
-cfg = OrchestratorExtensionConfig(
-    feature_flags=FeatureFlags(
-        enable_retries=True,
-        enable_circuit_breakers=True,
-        enable_run_report=True,
-    )
-)
+Entry Behavior
 
-orch = wrap_orchestrator(existing_orchestrator, cfg)
+- wrap_orchestrator(core, config) → OrchestratorBridge
+- ✅ All flags OFF → thin pass‑through
+- ✅ Any flag ON → stabilizer may apply
+- Wrapped core may expose:
 
-result = orch.run(
-    game_id="pjsekai",
-    chart_path="./charts",
-    db_path="SongDB.xlsx",
-    tips_mode="production",
-)
+  - .run(...) ✅ required
+  - .recommend(...) ✅ optional (API usage)
+
+---
+
+## 6. Run Identity & Determinism
+
+Every run computes a deterministic RunKey based on:
+
+- game_id
+- chart_id
+- difficulty (if present)
+- adapter version
+- pipeline version
+- feature flag digest
+
+Properties:
+
+- same inputs ⇒ same RunKey
+- retries do not change identity
+- safe for deduplication and idempotency
+
+---
+
+## 7. STOP / DEGRADED Semantics
+
+STOP and DEGRADED are valid outcomes
+Any STOP / DEGRADED must include:
+
+- stage
+- decision
+- reason_code
+
+
+
+A human must be able to answer:
+
+“Why didn’t tips generate?”
+
+by reading one field.
+
+---
+
+## 8. Schemas & Contracts
+
+The extension defines control‑plane schemas:
+
+- orchestrator_run_report.schema.json
+- orchestrator_cli_result.schema.json
+
+Properties:
+
+- STOP / DEGRADED are legal outputs
+- Schemas are additive
+- Validation is non‑blocking
+- Minimal structural fallback exists if jsonschema is unavailable
+
+---
+
+## 9. Feature Flags
+
+All extension behavior is gated by FeatureFlags.
+Rules:
+
+- Defaults preserve legacy behavior
+- Flags are orthogonal
+- Flag digest contributes to RunKey
+- No hidden coupling
+
+Turning all flags OFF must yield behavior identical to pre‑extension orchestration.
+
+---
+
+## 10. Scale Assumptions
+
+This architecture is designed for:
+
+- ~10–25 meaningful rhythm game models
+- high‑value games, not long‑tail
+- coordination complexity > algorithmic complexity
+
+It is not designed for unbounded horizontal scale—and does not need to be.
+
+---
+
+## 11. Relationship to Other Phases
+
+| Phase | Relationship |
+|---|---|
+| Phase 1-2 | Semantic core (frozen) |
+| Phase 4 | Personalization (frozen) |
+| Phase 4.5 | Locale routing via wiring |
+| Phase 5 | Observability & reliability |
+| Phase 6 | Platform gate & safety |
+| Phase 7 | Recommendation orchestration only |
+
+The extension enables evolution without reopening completed work.
+
+---
+
+## 12. Steady‑State Declaration
+
+When the checklist is satisfied:
+✅ Semantic phases preserved
+✅ Control‑plane isolated
+✅ STOP reasons explicit
+✅ Deterministic and explainable
+✅ Safe for long‑term maintenance
+
+The Orchestrator Extension is considered Design‑Locked.

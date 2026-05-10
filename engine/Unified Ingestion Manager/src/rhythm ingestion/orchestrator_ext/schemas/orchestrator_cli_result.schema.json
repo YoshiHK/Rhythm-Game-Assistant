@@ -1,81 +1,52 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://rhythm-ingestion/schema/orchestrator_cli_result.schema.json",
-  "title": "Orchestrator CLI JSON Result",
+
+{ "title": "OrchestratorCLIResult",
+  "$schema": "https://json-schema.org/draft/2020-12 / batch runs. This schema is additive and non-breaking.",  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
+
   "required": [
     "file",
     "game_id",
     "passed"
   ],
+
   "properties": {
     "file": {
       "type": "string",
-      "description": "Source file or directory processed."
+      "description": "Input file or directory processed by the orchestrator."
     },
+
     "game_id": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": "string",
+      "description": "Target game identifier."
     },
+
     "passed": {
       "type": "boolean",
-      "description": "True only if execution completed without STOP."
+      "description": "Whether the run passed all control-plane checks."
     },
+
     "decision": {
       "type": "string",
-      "enum": [
-        "ALLOW",
-        "STOP",
-        "DEGRADED"
-      ],
-      "description": "Final orchestration decision."
+      "description": "Gate decision when the run does not pass.",
+      "enum": ["ALLOW", "STOP", "DEGRADED"]
     },
+
     "stage": {
       "type": "string",
-      "enum": [
-        "INGEST",
-        "VALIDATE",
-        "APPROACHABILITY",
-        "PHASE1",
-        "PHASE2",
-        "PHASE4"
-      ]
+      "description": "Stage at which the decision was made (control-plane only)."
     },
+
     "reason_code": {
       "type": "string",
-      "description": "Required when decision is STOP or DEGRADED."
+      "description": "Stable control-plane reason code explaining STOP/DEGRADED."
     },
-    "run_key": {
-      "type": "string"
-    },
-    "run_report": {
-      "$ref": "orchestrator_run_report.schema.json",
-      "description": "Optional full structured run report."
-    },
-    "diagnostics": {
+
+    "details": {
       "type": "object",
+      "description": "Additional diagnostic details for debugging or QA.",
       "additionalProperties": true
     }
   },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "passed": {
-            "const": false
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "decision",
-          "stage",
-          "reason_code"
-        ]
-      }
-    }
-  ],
+
   "additionalProperties": true
 }

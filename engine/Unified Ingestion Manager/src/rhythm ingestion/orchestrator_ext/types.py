@@ -1,5 +1,5 @@
-"""rhythm_ingestion.orchestrator_ext.types
-
+"""
+rhythm_ingestion.orchestrator_ext.types
 Interface skeleton (dataclasses + enums) for orchestrator extensions.
 
 Control-plane only. Must not embed gameplay semantics.
@@ -7,6 +7,7 @@ Control-plane only. Must not embed gameplay semantics.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -105,14 +106,57 @@ class RunContext:
     trace: Dict[str, Any] = field(default_factory=dict)
 
 
+def coerce_run_mode(mode: Any) -> RunMode:
+    """
+    Coerce external mode input (string/enum) into RunMode.
+    This keeps bridge + stabilizer tolerant and phase-safe.
+    """
+    if isinstance(mode, RunMode):
+        return mode
+    s = str(mode or "").strip().lower()
+    for m in RunMode:
+        if m.value == s:
+            return m
+    # Default fallback (control-plane only)
+    return RunMode.FULL
+
+
 def compute_run_key(ctx: RunContext) -> str:
-    """Compute a deterministic RunKey string (caller may hash)."""
+    """
+    Compute a deterministic RunKey string (caller may hash).
+    Stable with respect to input field values.
+    """
     parts = [
         f"game_id={ctx.game_id}",
         f"chart_id={ctx.chart_id}",
-        f"difficulty={ctx.difficulty or ' '}",
-        f"adapter_version={ctx.adapter_version or ' '}",
-        f"pipeline_version={ctx.pipeline_version or ' '}",
-        f"flags={ctx.feature_flags_digest or ' '}",
+        f"difficulty={ctx.difficulty or ''}",
+        f"adapter_version={ctx.adapter_version or ''}",
+        f"pipeline_version={ctx.pipeline_version or ''}",
+        f"flags={ctx.feature_flags_digest or ''}",
     ]
     return "|".join(parts)
+
+
+def compute_run_key_sha256(ctx: RunContext) -> str:
+    """
+    Convenience: return a SHA256 digest of compute_run_key(ctx).
+    """
+    s = compute_run_key(ctx)
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+__all__ = [
+    "RunMode",
+    "Stage",
+    "GateDecision",
+    "StageStatus",
+    "GateResult",
+    "StageResult",
+    "CapabilityMatrix",
+    "RunPlan",
+    "RunReport",
+    "RunContext",
+    "coerce_run_mode",
+    "compute_run_key",
+    "compute_run_key_sha256",
+]

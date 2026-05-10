@@ -1,19 +1,54 @@
-"""rhythm_ingestion.orchestrator_ext.reporting
+"""
+rhythm_ingestion.orchestrator_ext.reporting
 
 Observability helpers for structured RunReport.
+
+- No I/O
+- No gameplay semantics
+- Pure conversion helpers
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional
 
 from .types import GateResult, RunMode, RunReport, StageResult
 
 
 def run_report_to_dict(report: RunReport) -> Dict[str, Any]:
+    """
+    Convert RunReport dataclass to a plain dict.
+    """
     return asdict(report)
 
 
-def minimal_report(*, run_key: str, game_id: str, chart_id: str, mode: RunMode, stage_results: List[StageResult], gates: Optional[List[GateResult]] = None, degraded_mode: bool = False, warnings: Optional[List[str]] = None, diagnostics: Optional[Dict[str, Any]] = None) -> RunReport:
-    return RunReport(run_key=run_key, game_id=game_id, chart_id=chart_id, mode=mode, stage_results=list(stage_results), gates=list(gates or []), degraded_mode=bool(degraded_mode), warnings=list(warnings or []), diagnostics=dict(diagnostics or {}))
+def minimal_report(
+    *,
+    run_key: str,
+    game_id: str,
+    chart_id: str,
+    mode: RunMode,
+    stage_results: List[StageResult],
+    gates: Optional[List[GateResult]] = None,
+    degraded_mode: bool = False,
+    warnings: Optional[List[str]] = None,
+    diagnostics: Optional[Dict[str, Any]] = None,
+) -> RunReport:
+    """
+    Construct a minimal RunReport with safe defaults.
+    """
+    return RunReport(
+        run_key=str(run_key),
+        game_id=str(game_id),
+        chart_id=str(chart_id),
+        mode=mode,
+        stage_results=list(stage_results),
+        gates=list(gates or []),
+        degraded_mode=bool(degraded_mode),
+        warnings=list(warnings or []),
+        diagnostics=dict(diagnostics or {}),
+    )
+
+
+__all__ = ["run_report_to_dict", "minimal_report"]
