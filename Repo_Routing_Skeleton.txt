@@ -1,0 +1,321 @@
+## Repo_Routing_Skeleton.txt
+
+Purpose:
+This document describes the CURRENT routing topology of the repository.
+It is an INITIAL MAP and a LIVING DOCUMENT.
+
+- No versioning (no v1 / v2 / v3)
+- No backward-compatibility guarantees
+- Always reflects the present routing reality only
+
+If a routing path no longer exists, it MUST be removed from this document.
+
+================================================
+0. High-Level Rule (Non-Negotiable)
+================================================
+
+- Phase 6 is the ONLY runtime gatekeeper.
+- No Phase may be directly invoked by UI, SDK, or external clients.
+- All runtime flows pass through Phase 6 (or API façade owned by Phase 6).
+
+================================================
+1. Repository Outer Layer (Top-Level)
+================================================
+
+Repo Root
+├─ .github/
+│  ├─ ISSUE_TEMPLATE/
+│  │  ├─ bug_report.md
+│  │  └─ feature_request.md
+│  └─ workflows/
+│     └─ codeql.yml
+│
+├─ api/
+│  ├─ app.py                # API bootstrap (Phase 6 owned)
+│  ├─ auth.py               # Auth & security (Phase 6 owned)
+│  ├─ recommend.py          # Unified recommendation API (Phase 6 façade)
+│  └─ routes/
+│     └─ recommend.py       # Route binding only (no logic)
+│
+├─ ci/                      # CI pipelines and checks (non-runtime)
+│
+├─ doc/                     # Architectural truth (design-locked)
+│  ├─ ARCHITECTURE.md
+│  ├─ ARCHITECTURE_CLOSEOUT.md
+│  ├─ LIMITATIONS.md
+│  ├─ MANIFEST.md
+│  ├─ PLATFORM_OVERVIEW.md
+│  ├─ README.md
+│  ├─ SPEC.md
+│  └─ USAGE.md
+│
+├─ engine/
+│  ├─ Phase_1_Foundation/
+│  ├─ Phase_2_Enhancement/
+│  └─ Unified_Ingestion_Manager/   # Phase 3 (UMI)
+│
+├─ Phase_4_Personalization/
+├─ Phase_4.5_Localization/
+├─ Phase_5_Productionization/
+├─ Phase_6_Hardening/
+├─ Phase_7_Games_Recommendations/
+│
+├─ requirements.txt
+├─ README.md
+├─ SECURITY.md
+├─ LICENSE
+└─ CODE_OF_CONDUCT.md
+
+================================================
+2. Phase-Level Routing Ownership
+================================================
+
+------------------------------------------------
+Phase 1 — Foundation (Semantic, Frozen)
+------------------------------------------------
+
+Role:
+- Chart upload intake (via Phase 3 ingestion)
+- Visual scanning and structural detection
+- Approachability determination
+- Pattern signal extraction
+- Base tip generation
+
+Routing:
+- NEVER invoked directly at runtime
+- Executed ONLY inside Phase 3 orchestrator
+- Consumed read-only by Phase 2 and Phase 4
+
+Outbound:
+- Canonical payloads
+- Pattern tags
+- Section metrics
+- Summary blocks
+
+------------------------------------------------
+Phase 2 — Enhancement (Semantic, Frozen)
+------------------------------------------------
+
+Role:
+- Severity computation and overrides
+- Element selection and diversity enforcement
+- Guidance field filling
+- Narrative rendering (v2)
+
+Routing:
+- NEVER invoked directly
+- Executed ONLY as part of Phase 3 run modes
+- Depends on Phase 1 outputs only
+
+Outbound:
+- Finalized tips
+- Narrative text
+- Enhanced summaries
+
+------------------------------------------------
+Phase 3 — Unified Ingestion Manager (Control Plane Spine)
+------------------------------------------------
+
+Role:
+- Adapter and validator resolution
+- Schema enforcement
+- Batch QA and ingestion
+- Orchestrator execution
+- CLI and batch entrypoints
+
+Routing:
+- Primary execution spine for Phase 1–2
+- Entry via:
+  - CLI
+  - Batch jobs
+  - Phase 6 runtime invocation (via OrchestratorBridge)
+
+Outbound:
+- Stabilized canonical artifacts
+- Run reports
+- CLI JSON outputs
+- Diagnostics
+
+------------------------------------------------
+Phase 4 — Personalization (Semantic, Frozen)
+------------------------------------------------
+
+Role:
+- Deterministic personalization decisions
+- Model inference
+- Safe adjustment application
+- Narrative v3 rendering
+
+Routing:
+- Runtime entry ONLY via Phase 6
+- Executed AFTER Phase 3 / Phase 2 completion
+- MAY call Phase 4.5 for locale handling
+
+Outbound:
+- Personalized tips
+- Adjustment metadata
+- Event logs and feedback signals
+
+------------------------------------------------
+Phase 4.5 — Localization (Control Plane)
+------------------------------------------------
+
+Role:
+- Locale resolution
+- i18n template selection
+- Translation fallback
+- Pseudo-localization for CI
+
+Routing:
+- Invoked ONLY via Phase 6
+- Called by:
+  - Phase 4 (personalized tips)
+  - Phase 7 (game recommendations explanation)
+
+Outbound:
+- Localized narratives
+- Locale metadata
+- QA signals
+
+------------------------------------------------
+Phase 5 — Productionization (Learning & Feedback)
+------------------------------------------------
+
+Role:
+- Curator labeling
+- Offline retraining
+- Recommendation production pipelines
+- Experimentation and observability
+
+Routing:
+- NO direct runtime user entry
+- Consumes signals from Phase 4 and Phase 7
+- Operates asynchronously and offline
+
+Inbound:
+- Feedback events
+- Run reports
+- Observability metrics
+
+------------------------------------------------
+Phase 6 — Platform Hardening (Runtime Gate)
+------------------------------------------------
+
+Role:
+- API surface
+- Authentication and authorization
+- Rate limiting
+- Lifecycle control
+- Failure isolation
+
+Routing:
+- ONLY runtime entrypoint for UI / client
+- Mediates ALL cross-phase calls
+- Owns API → Phase invocation wiring
+
+Outbound:
+- Calls Phase 3 via OrchestratorBridge
+- Calls Phase 4 / 4.5 for tips
+- Calls Phase 7 for discovery
+- Emits platform-level observability
+
+------------------------------------------------
+Phase 7 — Games Recommendations (Expansion, Discovery)
+------------------------------------------------
+
+Role:
+- Player capability modeling
+- Game capability modeling
+- Matching and ranking
+- Explanation generation
+- Feedback capture
+
+Routing:
+- Runtime entry ONLY via Phase 6
+- Non-blocking and reversible
+- NEVER mutates upstream phases
+
+Outbound:
+- Game recommendations
+- Explanation payloads
+- Feedback events → Phase 5
+- Observability signals
+
+================================================
+3. Unified Mediation Interface (UMI)
+================================================
+
+UMI Role:
+- Logical orchestration façade
+- Control-plane routing hub
+- Phase 3 execution coordinator
+
+UMI MUST NOT:
+- Implement gameplay logic
+- Own semantic decisions
+- Bypass Phase 6 runtime gate
+
+================================================
+4. Runtime Routing Flows (Snapshots)
+================================================
+
+------------------------------------------------
+A. Tips Generation Flow
+------------------------------------------------
+
+UI / Client
+→ Phase 6 (API / Auth / Guards)
+→ Phase 3 (Orchestrator)
+→ Phase 1 → Phase 2
+→ Phase 4 (Personalization)
+→ Phase 4.5 (Localization)
+→ Response
+
+------------------------------------------------
+B. Games Recommendation Flow
+------------------------------------------------
+
+UI / Client
+→ Phase 6 (recommend API)
+→ Phase 7 (Router)
+→ Registry / Catalog
+→ Ranker
+→ Explanation
+→ Feedback / Observability (side-channel)
+→ Response
+
+------------------------------------------------
+C. Feedback & Learning Flow
+------------------------------------------------
+
+UI Interaction
+→ Phase 6
+→ Phase 7 Feedback Emitter
+→ Phase 5 (Learning Pipelines)
+
+================================================
+5. Forbidden Routing (Hard Rules)
+================================================
+
+The following are NOT allowed:
+
+- UI / Client → Phase 1–5 (direct)
+- UI / Client → Phase 7 (direct)
+- Phase 7 → Phase 4 / Phase 6 mutation
+- Phase 7 → Phase 5 learning loop (direct)
+- Any Phase bypassing Phase 6
+- Runtime invocation of CI-only logic
+
+================================================
+6. Change Discipline (No Versioning)
+================================================
+
+- This document has NO version number.
+- Updates reflect CURRENT routing only.
+- Deprecated paths are REMOVED, not archived.
+- Structural changes imply architectural review,
+  but NOT runtime breaking changes by default.
+
+================================================
+End of Repo_Routing_Skeleton.txt
+================================================
