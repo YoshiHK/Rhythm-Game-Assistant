@@ -79,12 +79,12 @@ with respect to Phases 1–6.
 
 ## 4. Architectural Position
 
-|[ Phase 1–4.5 ] | Analysis, Tips, Personalization, Localization |  ← Locked
-|[ Phase 5     ] | Learning & Productionization                  | ← Locked
-|[ Phase 6     ] | Platform Hardening & Scale                    | ← Locked
+[ Phase 1–4.5 ]  Analysis, Tips, Personalization, Localization   ← Locked
+[ Phase 5     ]  Learning & Productionization                   ← Locked
+[ Phase 6     ]  Platform Hardening & Scale                     ← Locked
 ──────────────────────────────────────────────────────────────
-|[ Phase 7     ] | Games Recommendations (Discovery Layer)       |
-|[ UI / Client ] | Discovery Surfaces                            |
+[ Phase 7     ]  Games Recommendations (Discovery Layer)       
+[ UI / Client ]  Discovery Surfaces                            
 
 Phase 7 is a **meta‑recommendation layer**, not a core pipeline stage.
 
