@@ -1,63 +1,233 @@
-# System Specification (Phases 1–7)
+# System Specification (API & Integration)
 
-This document defines the **system-wide contract** of the Rhythm Game Assistant.
+**Status:** Design‑Locked ✅  
+**Perspective:** External API & Platform (Phase 6)  
+**Scope:** Runtime Integration (Phase 1–7)
 
-## 1) Phase boundaries (normative)
+---
 
-### Phase 1–2: Analytical pipelines (tips generation)
-- Inputs: chart exports / structured payloads.
-- Outputs (per chart): `tips_text` (2 paragraphs) + canonical per-chart summary.
-- Outputs (batch): batch summary.
+## 1. Purpose
 
-Phase 2 extends Phase 1 with Track A–D **non-breaking** upgrades: calibrated scoring, selection diversity, guidance phrasing upgrades, narrative word-budget control, while preserving schema shapes.
+This document defines the **external system contract**:
+- what clients may call,
+- what responses they may receive,
+- and what guarantees the platform provides.
 
-### Phase 3: Unified Ingestion Manager (UMI)
-UMI is the deterministic, auditable orchestration layer between Phase 1–2 pipelines and downstream consumers.
-UMI MUST:
-- route files to the correct game adapter,
-- produce canonical rows and canonical payloads,
-- invoke validators,
-- invoke Phase 1–2 without altering logic,
-- gate optional tips generation via capability config,
-- persist outputs and emit batch summaries / run reports.
+It does **not** define internal algorithms or phase implementations.
 
-UMI MUST NOT:
-- contain gameplay analysis logic,
-- re-implement Phase 1/2,
-- decide severity/selection/narrative meaning,
-- embed game-specific heuristics,
-- perform personalization.
+---
 
-### Phase 4: Personalization & Presentation
-Phase 4 consumes only Phase 3 outputs and may apply **non-destructive** presentation adjustments.
-Phase 4 MUST NOT modify detected elements, severity labels, scores, training items, or section coverage.
-Phase 4 MUST provide deterministic fallback.
+## 2. Non‑Negotiable System Rules
 
-### Phase 4.5: Localization & Language Adaptation
-Phase 4.5 localizes finalized Phase 4 output.
-It MUST NOT alter meaning, intent, ordering/emphasis, severity, or personalization decisions.
-It MUST provide deterministic fallback and provenance.
+- ✅ Completed semantic phases (Phase 1, 2, 4) MUST NOT be modified.
+- ✅ Phase 6 is the **only runtime entrypoint**.
+- ✅ Routing topology is defined in `Repo_Routing_Skeleton.txt`.
+- ✅ STOP / DEGRADED are valid outcomes.
+- ✅ No runtime version switching.
 
-### Phase 5: Productionization & Learning Loop
-Phase 5 closes the loop via feedback aggregation, curator labeling, and **offline-only** learning.
-Phase 5 MUST NOT alter Phase 4 outputs at runtime and MUST NOT modify semantic meaning.
+If any integration violates these rules, it is **architecturally invalid**.
 
-### Phase 6: Platform Hardening and Scale
-Phase 6 hardens the system for reliability, security, compliance, and scale **without changing semantics**.
-Phase 6 MUST NOT reinterpret gameplay advice, alter personalization/localization outputs, introduce new learning logic, or override Phase 5 contracts.
+---
 
-### Phase 7: Games Recommendations (Expansion Pack)
-Phase 7 adds game-level recommendations as a **downstream-only, additive, explainable, reversible** discovery layer.
-Phase 7 MUST NOT:
-- alter song/chart recommendations,
-- change tips meaning/severity/narrative logic,
-- redefine difficulty labels/taxonomies,
-- inject logic into Phases 1–6,
-- bypass Phase 6 enforcement/observability.
+## 3. API Entry Point (Phase 6)
 
-## 2) Invariants (system-wide)
-- **Semantic immutability:** gameplay meaning and upstream semantics are preserved; downstream phases do not rewrite earlier phase meaning.
-- **Determinism:** deterministic fallback paths exist (notably Phase 4 and Phase 4.5, and UMI dry-run equivalence).
-- **Explainability:** outputs are explainable via provenance and transparent scoring logic (especially Phases 4 and 7).
-- **Offline learning only:** any learning is offline and promoted via gated rollout (Phase 5).
+### 3.1 Unified Recommendation Endpoint
 
+All runtime requests enter via **Phase 6 API**.
+
+POST /api/v1/recommend
+
+Phase 6 is responsible for:
+- authentication & authorization,
+- request normalization,
+- routing to internal phases,
+- failure isolation,
+- observability emission.
+
+No client may call internal phases directly.
+
+---
+
+### 3.2 Request Shape (Logical)
+
+The API accepts a **unified recommendation request**.
+
+Conceptual fields include:
+
+- `game_id` (string, required)
+- `mode` (string)
+  - `"songs"` — song‑level tips
+  - `"games"` — game discovery (Phase 7)
+- `locale` (string)
+- `max_items` (integer)
+- optional player context:
+  - user id
+  - player signals
+  - preferences
+  - evidence
+  - client metadata
+
+> The exact wire format is defined by the API implementation.  
+> This spec defines **behavioral guarantees**, not JSON minutiae.
+
+---
+
+## 4. Runtime Routing Behavior
+
+### 4.1 Songs Recommendation Flow
+
+When `mode = "songs"`:
+
+Client
+→ Phase 6 API
+→ Phase 3 Orchestrator
+→ Phase 1 → Phase 2
+→ Phase 4 Personalization
+→ Phase 4.5 Localization
+→ Response
+
+Properties:
+- deterministic
+- explainable
+- semantic meaning preserved
+- localization affects presentation only
+
+---
+
+### 4.2 Games Recommendation Flow (Phase 7)
+
+When `mode = "games"`:
+
+Client
+→ Phase 6 API
+→ Phase 7 Router
+→ Matching & Ranking
+→ Explanation
+→ Feedback / Observability (async)
+→ Response
+
+Properties:
+- discovery only
+- non‑blocking
+- reversible
+- does not alter song‑level recommendations
+
+---
+
+## 5. Response Semantics
+
+### 5.1 Success Responses
+
+A successful response may include:
+- one or more recommendation items,
+- explanations or rationale,
+- provenance and diagnostics metadata.
+
+---
+
+### 5.2 STOP / DEGRADED Responses
+
+STOP or DEGRADED responses are **valid**.
+
+They must be:
+- explicit,
+- explainable,
+- machine‑readable.
+
+A client must be able to determine:
+- **what stopped**, and
+- **why**.
+
+Worst‑case behavior:
+> Clean STOP with reason code and observability signal.
+
+---
+
+## 6. Failure Isolation Guarantees
+
+The platform guarantees:
+
+- failures are isolated to a phase,
+- no upstream phase is mutated,
+- no crash propagates to the client,
+- retries and fallbacks are explicit (never silent).
+
+Phase 6 never retries blindly.
+Control‑plane logic governs recovery.
+
+---
+
+## 7. Security & Trust Model
+
+- All requests are authenticated at Phase 6.
+- Lower phases assume requests are already authorized.
+- Phase 6 enforces:
+  - abuse prevention,
+  - partner boundaries,
+  - compliance constraints.
+
+Security logic must not leak into semantic phases.
+
+---
+
+## 8. Observability & Feedback
+
+The platform emits:
+- structured run reports (when enabled),
+- STOP / DEGRADED reason codes,
+- metrics and diagnostics,
+- feedback signals for offline learning (Phase 5).
+
+Observability:
+- is additive,
+- must not affect execution semantics,
+- must not block responses.
+
+---
+
+## 9. Relationship to Learning (Phase 5)
+
+Phase 5 operates **outside the runtime path**.
+
+- No online learning.
+- No runtime model updates.
+- Feedback flows asynchronously.
+- Phase 6 never waits on Phase 5.
+
+---
+
+## 10. Versioning & Evolution Policy
+
+- No runtime API version branching.
+- No semantic version negotiation.
+- Evolution is **additive and gated**.
+- Routing changes are reflected by updating:
+  - `Repo_Routing_Skeleton.txt`
+  - relevant documentation.
+
+---
+
+## 11. What This Spec Does NOT Cover
+
+This spec intentionally excludes:
+- Phase 1–2 algorithms,
+- personalization model internals,
+- learning pipelines,
+- UI rendering details.
+
+Those belong to phase‑specific documentation.
+
+---
+
+## 12. Summary
+
+This API spec guarantees:
+
+- ✅ a single runtime entrypoint,
+- ✅ stable and explainable behavior,
+- ✅ strict phase boundaries,
+- ✅ safe expansion via Phase 7,
+- ✅ long‑term maintainability.
+
+For routing behavior,  
+**`Repo_Routing_Skeleton.txt` is authoritative.**
