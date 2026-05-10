@@ -23,13 +23,13 @@ This repository contains the **source code, API wiring, and authoritative archit
 
 ```
 [ OneDrive Charts ]
-↓ (Scheduled Job)
+       ↓ (Scheduled Job)
 [ Phase 1–3: Tip Generation + UMI ]
-↓
+       ↓
 [ Tips Database (Generated Outputs Only) ]
-↓
+       ↓
 [ Thin Backend API (this repo) ]
-↓
+       ↓
 [ Softr App (UI / Consumption Surface) ]
 ```
 
