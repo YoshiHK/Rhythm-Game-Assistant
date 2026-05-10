@@ -1,150 +1,198 @@
-# Phase 7 — CI Test Suite
+# Phase 7 — CI Test Suite (Games Recommendations)
 
-This directory defines the **continuous integration (CI) guardrails**
-for **Phase 7 – Games Recommendations**.
-
-These tests exist to **protect architectural invariants**,
-not to evaluate recommendation quality.
+**Status:** Design‑Locked ✅  
+**Scope:** Phase 7 (Games Recommendations) only  
+**Execution Context:** CI‑only (non‑runtime)
 
 ---
 
-## Core Principle
+## 1. Purpose
 
-> **Phase 7 CI tests are guardrails, not quality evaluators.**
+This directory defines the **continuous integration (CI) guardrails**
+for **Phase 7 — Games Recommendations**.
+
+Phase 7 CI exists to **protect architectural and contractual invariants**,
+not to evaluate recommendation quality or business outcomes.
+
+If these tests pass, Phase 7 can be:
+- safely integrated,
+- safely evolved,
+- or temporarily disabled  
+without breaking upstream phases or platform guarantees.
+
+---
+
+## 2. Core Principle
+
+**Phase 7 CI tests are guardrails, not quality evaluators.**
 
 They ensure that:
 - contracts do not silently break,
-- boundaries are not violated,
-- and runtime behavior does not regress in unsafe ways.
+- architectural boundaries are respected,
+- runtime behavior remains deterministic and non‑blocking.
 
 They intentionally avoid judging:
 - recommendation “goodness”,
 - player satisfaction,
-- or business outcomes.
+- engagement or monetization outcomes.
 
 ---
 
-## CI Layering Model
+## 3. Relationship to Phase 7 Architecture
 
-Phase 7 CI tests are organized into **four conceptual layers**.
+Phase 7 CI mirrors the **Phase 7 routing structure** and enforces
+its declared boundaries.
 
-### 1. Contract‑Level Tests (Always‑On)
+CI categories correspond directly to Phase 7 components:
 
-Purpose:
+| CI Category | Phase 7 Component |
+|------------|------------------|
+| `catalog/` | Presentation metadata & catalog wiring |
+| `eligibility/` | Explicit recommendation eligibility rules |
+| `ranking/` | Deterministic ranker & scoring integrity |
+| `policy/` | Diversity & explainability guardrails |
+| `contracts/` | Observability & feedback payload contracts |
+
+Phase 7 CI never introduces new routing paths.
+
+---
+
+## 4. CI Layering Model
+
+Phase 7 CI tests are organized into **five governance layers**.
+
+### 4.1 Contract‑Level Tests (Always‑On)
+
+**Purpose**
 - Ensure payload shapes are stable and serializable.
-- Ensure non‑blocking behavior when downstream systems fail.
+- Ensure non‑blocking behavior when downstream sinks fail.
 
-Examples:
+**Examples**
 - `test_observability_payload_shape.py`
 - `test_feedback_payload_shape.py`
 
-Guarantees:
+**Guarantees**
 - Required keys exist.
 - Values are JSON‑serializable.
-- Sink / transport failures never crash Phase 7.
+- Sink or transport failures never crash Phase 7.
 
-Non‑goals:
+**Non‑goals**
 - Do not validate metric values.
-- Do not validate learning behavior.
+- Do not validate learning or feedback consumption.
 
 ---
 
-### 2. Wave 1 — Structural Safety
+### 4.2 Structural Safety
 
-Purpose:
-- Ensure Phase 7 does not crash under minimal or empty inputs.
+**Purpose**
+- Ensure Phase 7 does not crash under minimal or empty inputs.
 - Ensure deterministic behavior for identical inputs.
 
-Examples:
+**Examples**
 - `test_ranker.py`
 - `test_catalog_completeness.py`
 - `test_catalog_presentation.py`
 
-Guarantees:
+**Guarantees**
 - Same input → same output.
-- Empty / minimal inputs are handled safely.
+- Empty or minimal inputs are handled safely.
 
-Non‑goals:
+**Non‑goals**
 - No evaluation of ranking quality.
 
 ---
 
-### 3. Wave 2 — Governance & Readiness
+### 4.3 Governance & Readiness
 
-Purpose:
-- Enforce governance rules around eligibility and data readiness.
+**Purpose**
+- Enforce explicit eligibility and data readiness rules.
 
-Examples:
+**Examples**
 - `test_recommendation_eligibility.py`
 - `test_recommendation_data_readiness.py`
 
-Guarantees:
-- No “silent exclusion” of enabled games.
+**Guarantees**
+- No silent exclusion of enabled games.
 - Recommendable games meet minimal UI‑safe data requirements.
 
-Non‑goals:
-- No ranking logic.
+**Non‑goals**
 - No runtime policy enforcement.
+- No ranking logic.
 
 ---
 
-### 4. Wave 3 — Behavioral Guardrails
+### 4.4 Behavioral Guardrails
 
-Purpose:
+**Purpose**
 - Prevent degenerate or unsafe recommendation behavior.
 
-Examples:
+**Examples**
 - `test_recommendation_explainability_coverage.py`
 - `test_recommendation_score_diversity.py`
 - `test_recommendation_scoring_availability.py`
 
-Guarantees:
+**Guarantees**
 - Recommendations remain explainable.
 - Scores are not degenerate (e.g., all identical).
 - Every eligible game is scorable.
 
-Non‑goals:
+**Non‑goals**
 - Does not judge explanation quality.
 - Does not enforce diversity thresholds.
 
 ---
 
-## What CI Tests MUST NOT Do
+## 5. What Phase 7 CI MUST NOT Do
 
-Phase 7 CI tests MUST NOT:
+Phase 7 CI tests MUST NOT:
 
-- import Phase 6 infrastructure or APIs
-- depend on production databases or services
-- perform I/O beyond in‑memory operations
-- introduce runtime branching or feature flags
-- redefine eligibility or ranking semantics
+- import Phase 6 infrastructure or APIs,
+- depend on production databases or services,
+- perform I/O beyond in‑memory operations,
+- introduce runtime branching or feature flags,
+- redefine eligibility, ranking, or explanation semantics.
 
-Violations of these rules are considered architectural errors.
+Violations of these rules are **architectural errors**.
 
 ---
 
-## Relationship to Other Phases
+## 6. Evolution Rules (Design‑Locked)
 
-- **Phase 5**
-  - Consumes feedback and metrics produced by Phase 7.
+Phase 7 CI is **design‑locked**.
+
+Allowed changes:
+- Add tests for newly introduced Phase 7 components.
+- Add regression coverage for fixed bugs.
+- Strengthen contract validation (shape, determinism).
+
+Disallowed changes:
+- Adding “pure checks” that gate runtime behavior.
+- Introducing quality scoring or business KPIs.
+- Using CI to enforce semantic or product policy.
+
+---
+
+## 7. Relationship to Other Phases
+
+- **Phase 5**
+  - Consumes feedback and metrics produced by Phase 7.
   - CI does not validate learning outcomes.
 
-- **Phase 6**
+- **Phase 6**
   - Owns transport, observability pipelines, and alerting.
-  - CI only validates payload contracts, not delivery.
+  - CI validates payload contracts, not delivery.
 
-- **Phase 7 Runtime**
+- **Phase 7 Runtime**
   - Must remain independent from CI logic.
   - CI failures block merges, not runtime execution.
 
 ---
 
-## Design Intent
+## 8. Summary
 
-If all Phase 7 CI tests pass, the following statement must be true:
+Phase 7 CI ensures that **Games Recommendations remain safe, bounded, and reversible**.
 
-> *Phase 7 can be safely integrated, evolved, or temporarily disabled
-> without breaking upstream phases or platform guarantees.*
+It is intentionally strict and conservative.
 
-This README is intentionally strict.
-If you are unsure whether a test belongs here, it probably does not.
+If you are unsure whether a test belongs here,
+it probably does not.
