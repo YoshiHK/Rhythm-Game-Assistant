@@ -1,143 +1,105 @@
-## Rhythm Game Assistant — Platform Overview
+# Platform Overview
 
-**Purpose**  
-This document provides a high‑level overview of the Rhythm Game Assistant (RGA) platform
-for external audiences, including product partners, platform evaluators, and collaborators.
-
-It describes what the platform **does**, what it **guarantees**, and what it **intentionally does not do**.
+**Status:** Design‑Locked ✅  
+**Perspective:** Platform / Operations (Phase 6)  
+**Scope:** End‑to‑End Runtime System (Phase 1–7)
 
 ---
 
-## 1. What Rhythm Game Assistant Is
+## 1. Purpose
 
-Rhythm Game Assistant (RGA) is a **gameplay insight platform** for rhythm games.
+This document provides a **platform‑level view** of the system.
 
-It helps players discover:
-- what skills a chart emphasizes,
-- where they can improve,
-- and which games may be a good fit for them,
+It answers:
+- how the system is invoked at runtime,
+- where operational responsibility lives,
+- how failures are isolated,
+- and how new capabilities (e.g. Phase 7) are added safely.
 
-by generating **algorithmic gameplay tips** from chart analysis.
-
-The platform is designed to be:
-- deterministic,
-- explainable,
-- multi‑game,
-- and safe to operate at scale.
+This document does **not** describe gameplay logic or algorithm internals.
 
 ---
 
-## 2. How the Platform Works (High Level)
+## 2. Platform Boundary (Phase 6)
 
-RGA operates on a **generate‑once, consume‑many** model:
+> ✅ **Phase 6 is the ONLY runtime gatekeeper.**
 
-1. Gameplay charts are analyzed **offline** using deterministic pipelines.
-2. Gameplay tips and summaries are generated and stored as immutable outputs.
-3. Player‑facing applications consume these outputs via a thin API layer.
-4. Presentation can be personalized and localized **without changing meaning**.
-5. Optional discovery features suggest games based on player preferences.
+All external requests—UI, SDK, partner, or automation—enter through Phase 6.
 
-Players never upload charts and never trigger analysis directly.
+Phase 6 owns:
+- API surface
+- authentication and authorization
+- request normalization
+- rate limiting
+- lifecycle control
+- failure isolation
+- platform‑level observability
 
----
-
-## 3. Core Capabilities
-
-### ✅ Deterministic Gameplay Tips
-- Tips are generated from structured chart analysis.
-- The same input always produces the same output.
-- Once generated, tips are not modified retroactively.
-
-### ✅ Multi‑Game Support
-- The platform supports multiple rhythm games through a strict adapter model.
-- New games are integrated via validation and onboarding checks.
-
-### ✅ Personalization (Presentation‑Only)
-- Tips can be reordered or rephrased for readability.
-- Personalization does not change gameplay meaning, difficulty, or evaluation.
-
-### ✅ Localization
-- Tips can be delivered in multiple languages.
-- Localization affects presentation only and is structurally validated.
-
-### ✅ Game Discovery (Advisory)
-- The platform can suggest games that may align with player interests.
-- These suggestions are explainable and non‑binding.
+No other phase may be invoked directly at runtime.
 
 ---
 
-## 4. What the Platform Does Not Do
+## 3. Routing Truth (Authoritative)
 
-To preserve trust and clarity, RGA explicitly does **not**:
+> ✅ **The authoritative routing topology is defined in:**  
+> **`Repo_Routing_Skeleton.txt`**
 
-- Provide real‑time coaching or judgment
-- Modify gameplay difficulty or skill ratings
-- Learn or adapt at runtime based on player behavior
-- Run analysis or training via public APIs
-- Enforce recommendations or rankings
+This file defines:
+- legal runtime entrypoints,
+- cross‑phase invocation rules,
+- forbidden routing paths,
+- current Phase 1–7 wiring.
 
-The platform offers **guidance**, not authority.
-
----
-
-## 5. API & Integration Model
-
-RGA exposes a **consumption‑only API** intended for frontend applications and partners.
-
-- APIs return finalized tips and recommendations.
-- APIs do not trigger analysis or learning.
-- Authentication is client‑level (service‑to‑service), not player‑level.
-
-This design ensures safe integration without exposing high‑risk operations.
+If code, diagrams, or documentation disagree,
+**the routing skeleton is authoritative**.
 
 ---
 
-## 6. Safety, Scale, and Reliability
+## 4. Runtime Invocation Model
 
-The platform is safe to operate at scale because:
-- All compute‑intensive operations are performed offline.
-- Public interfaces expose results, not control.
-- There is no mutable runtime state accessible to clients.
-- Platform invariants are enforced through automated checks.
+From a platform perspective, all runtime flows follow this pattern:
 
-As a result, misuse does not propagate into analytical or semantic layers.
+Client / UI / Partner
+→ Phase 6 API (auth, guards, normalization)
+→ Routed Phase (3 / 4 / 7)
+→ Response
 
----
 
-## 7. Platform Maturity
+Phase 6 enforces:
+- authentication and authorization
+- abuse prevention
+- partner boundaries
+- compliance constraints
 
-The Rhythm Game Assistant has reached **System API maturity**:
-- stable behavior,
-- clear responsibility boundaries,
-- and governance safeguards.
-
-The platform is **technically ready** to evolve into a broader Platform API,
-should that be strategically desired.
+Lower phases must assume:
+- requests are already authenticated
+- security checks are complete
 
 ---
 
-## 8. Responsible Use
+## 12. Evolution Rules (Platform)
 
-RGA is designed to assist players, not evaluate them.
+The platform may evolve by:
+- adding new routing paths (via skeleton update),
+- enabling new control‑plane features,
+- introducing new expansion phases.
 
-- Recommendations are suggestions, not endorsements.
-- Personalization improves clarity, not judgment.
-- Insights are informational, not prescriptive.
-
-This boundary is central to the platform’s design.
-
----
-
-## 9. Summary
-
-Rhythm Game Assistant is a production‑ready gameplay insight platform that:
-- scales safely,
-- preserves meaning,
-- and supports thoughtful expansion.
-
-It is built to be dependable today and adaptable tomorrow.
+The platform MUST NOT evolve by:
+- modifying completed semantic phases,
+- introducing runtime version switching,
+- bypassing Phase 6.
 
 ---
 
-*For technical specifications, governance rules, and architectural audits,
-please refer to the internal Architecture Close‑out documentation.*
+## 13. Summary
+
+From a platform perspective:
+
+- ✅ Phase 6 is the single runtime gate
+- ✅ Routing truth is centralized
+- ✅ Semantic meaning is protected
+- ✅ Expansion is safe and reversible
+- ✅ The system is operable at scale
+
+For routing and invocation questions,  
+**always consult `Repo_Routing_Skeleton.txt` first.**

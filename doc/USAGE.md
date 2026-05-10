@@ -1,54 +1,119 @@
-# Usage Guide (Entry Points & Integration)
+# Usage Guide
 
-This guide describes supported integration entrypoints **without changing completed-phase behavior**.
+This document describes **supported entry points and integration patterns**
+for the current system architecture.
 
-## 1) Run the Phase 3 UMI orchestrator (batch ingestion)
+It does NOT describe internal phase logic.
 
-The UMI orchestrator provides a CLI surface with the following options:
+---
+
+## 1. Batch & CLI Usage (Phase 3)
+
+The Unified Ingestion Manager (UMI) provides a CLI surface for batch ingestion.
+
+Typical usage includes:
 - `--source` directory of raw chart files
-- `--db` path to the Song Database Excel (required unless `--dry-run`)
+- `--db` path to Song Database Excel (unless `--dry-run`)
 - `--dry-run` run without persistence
 - `--game` restrict run to a single enabled `game_id`
-- `--json` write run report to a JSON path
+- `--json` emit structured run report
 - `--tips-mode` `production` or `debug`
 
-UMI produces canonical rows/payloads, invokes Phase 1–2 pipelines, and emits batch summaries and run reports.
+UMI:
+- resolves adapters and validators,
+- invokes Phase 1–2 pipelines,
+- emits canonical artifacts and run reports.
 
-## 2) Use the orchestrator extension bridge (non-breaking)
+---
 
-The bridge provides a stable `.run()` surface to wrap either:
-- a core object with `.run(...)`, or
-- a module-like object exposing `.ingest(...)`.
+## 2. Orchestrator Extension Bridge
 
-If all FeatureFlags are disabled, the wrapper behaves as a thin pass-through.
-The bridge must not import or call Phase 1/2/4 logic directly.
+Runtime and batch execution are mediated via **OrchestratorBridge**.
 
-## 3) Game registry (games.json)
+The bridge:
+- wraps an existing orchestrator core,
+- exposes a stable `.run(...)` surface,
+- preserves legacy behavior when all flags are off,
+- enforces control‑plane guarantees.
 
-`games.json` is the single source of truth for supported rhythm games.
-Adapters/validators MUST NOT hardcode game lists.
+Rules:
+- The bridge MUST NOT import Phase 1 / 2 / 4 logic.
+- STOP / DEGRADED are valid outcomes.
+- The bridge is non‑semantic by design.
 
-## 4) Tip generation inputs/outputs (Phase 1–2)
+---
 
-Preferred payload shape (per chart):
-```json
-{
-  "detected_tags": ["..."],
-  "sections": ["SectionMetrics", "..."],
-  "diagnostics": {"...": "..."}
-}
-```
-Fallback payload shape:
-```json
-{ "detected_tags": ["..."] }
-```
-Outputs include:
-- `tips_text` (2 paragraphs)
-- per-chart summary block
-- batch summary block
+## 3. Runtime API Usage (Phase 6)
 
-## 5) Localization store (Phase 4.5)
+All runtime traffic enters via **Phase 6 API only**.
 
-Localization assets live under `translations/` with required folder parity.
-Localization changes presentation, never meaning.
+Phase 6 responsibilities:
+- authentication & authorization,
+- request normalization,
+- failure isolation,
+- routing to Phase 3 / Phase 4 / Phase 7.
 
+Direct invocation of internal phases is not supported.
+
+---
+
+## 4. Tips Generation Flow (Songs)
+
+Client
+→ Phase 6 API
+→ Phase 3 Orchestrator
+→ Phase 1 → Phase 2
+→ Phase 4 Personalization
+→ Phase 4.5 Localization
+→ Response
+
+This flow is deterministic and explainable.
+
+---
+
+## 5. Games Recommendation Flow (Phase 7)
+
+Client
+→ Phase 6 API
+→ Phase 7 Router
+→ Ranking + Explanation
+→ Feedback / Observability
+→ Response
+
+Properties:
+- discovery only,
+- no gameplay mutation,
+- non‑blocking,
+- feedback flows to Phase 5 asynchronously.
+
+---
+
+## 6. Game Registry
+
+`games.json` is the single source of truth for supported games.
+
+Rules:
+- Adapters and validators MUST NOT hardcode game lists.
+- Per‑game behavior is expressed via configuration.
+
+---
+
+## 7. Localization Assets (Phase 4.5)
+
+Localization assets live under `translations/`.
+
+Localization:
+- changes presentation only,
+- never changes semantic meaning,
+- is treated as wiring, not logic.
+
+---
+
+## 8. What This Guide Does NOT Cover
+
+- Internal Phase 1–2 algorithms
+- Personalization model internals
+- Learning pipeline details
+- UI rendering specifics
+
+For routing topology, consult **`Repo_Routing_Skeleton.txt`**.
