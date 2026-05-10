@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Dict, List, Optional
+
+from typing import Dict, Optional
 
 
 def normalize_locale(
@@ -9,86 +10,88 @@ def normalize_locale(
     alias_config: Dict,
 ) -> Dict:
     """
-    Normalize an arbitrary locale input into a canonical, supported locale.
+    Normalize a requested locale into a canonical, supported locale.
 
-    Phase: 4.5 (Localization)
-    Scope: Presentation-only
-    Determinism: Required
+    This function is wiring-only and non-semantic.
+    It performs explicit table-based resolution with deterministic fallback.
 
-    Inputs
-    ------
-    requested_locale:
-        Raw locale input (e.g. "zh-CN", "EN_gb", "ja", None)
+    Inputs:
+    - requested_locale: raw locale string from client (may be None)
+    - locales_config: contents of translations/_meta/locales.json
+    - alias_config: contents of translations/_meta/locale_aliases.json
 
-    locales_config:
-        Parsed contents of translations/_meta/locales.json
-
-    alias_config:
-        Parsed contents of translations/_meta/locale_aliases.json
-
-    Returns
-    -------
-    dict with keys:
-        - requested_locale
-        - normalized_locale
-        - resolved_locale
-        - fallback_chain
-        - fallback_used
+    Returns a structured result dict:
+    {
+        "requested": <original input or None>,
+        "resolved": <canonical supported locale>,
+        "supported": <bool>,
+        "fallback": <bool>,
+        "fallback_reason": <str | None>,
+        "base_locale": <base locale string>,
+    }
     """
 
-    base_locale: str = locales_config["base_locale"]
-    supported_locales: List[str] = locales_config["supported_locales"]
-    fallbacks: Dict[str, List[str]] = locales_config.get("fallbacks", {})
-    aliases: Dict[str, str] = alias_config.get("aliases", {})
+    # Defensive defaults
+    requested = requested_locale.strip() if isinstance(requested_locale, str) else None
 
-    # --------------------------------------------------
-    # Step 1: Sanitize input
-    # --------------------------------------------------
-    raw = (requested_locale or "").strip()
-    sanitized = raw.replace("_", "-")
-    lookup_key = sanitized.lower()
+    supported_locales = set(
+        locales_config.get("supported_locales", [])
+        or locales_config.get("supportedLocales", [])
+        or []
+    )
 
-    # --------------------------------------------------
-    # Step 2: Alias resolution
-    # --------------------------------------------------
-    normalized = aliases.get(lookup_key, sanitized)
-
-    # --------------------------------------------------
-    # Step 3: Canonical validation
-    # --------------------------------------------------
-    if normalized in supported_locales:
+    if not supported_locales:
+        # Hard fallback: configuration error, but remain non-throwing
         return {
-            "requested_locale": requested_locale,
-            "normalized_locale": normalized,
-            "resolved_locale": normalized,
-            "fallback_chain": [],
-            "fallback_used": False,
+            "requested": requested,
+            "resolved": None,
+            "supported": False,
+            "fallback": True,
+            "fallback_reason": "no_supported_locales_configured",
+            "base_locale": None,
         }
 
-    # --------------------------------------------------
-    # Step 4: Fallback resolution (data-driven only)
-    # --------------------------------------------------
-    tried: List[str] = []
-    queue: List[str] = fallbacks.get(normalized, [])
+    # Determine base locale
+    base_locale = (
+        locales_config.get("base_locale")
+        or locales_config.get("default_locale")
+        or locales_config.get("root_locale")
+        or next(iter(sorted(supported_locales)))
+    )
 
-    for candidate in queue:
-        tried.append(candidate)
-        if candidate in supported_locales:
+    # Normalize aliases mapping
+    aliases = alias_config.get("aliases", {}) if isinstance(alias_config, dict) else {}
+
+    # Step 1: direct match
+    if requested and requested in supported_locales:
+        return {
+            "requested": requested,
+            "resolved": requested,
+            "supported": True,
+            "fallback": False,
+            "fallback_reason": None,
+            "base_locale": base_locale,
+        }
+
+    # Step 2: alias resolution
+    if requested and requested in aliases:
+        target = aliases.get(requested)
+        if isinstance(target, str) and target in supported_locales:
             return {
-                "requested_locale": requested_locale,
-                "normalized_locale": normalized,
-                "resolved_locale": candidate,
-                "fallback_chain": tried,
-                "fallback_used": True,
+                "requested": requested,
+                "resolved": target,
+                "supported": True,
+                "fallback": True,
+                "fallback_reason": "alias_resolution",
+                "base_locale": base_locale,
             }
 
-    # --------------------------------------------------
-    # Step 5: Hard fallback to base locale
-    # --------------------------------------------------
+    # Step 3: fallback to base locale
     return {
-        "requested_locale": requested_locale,
-        "normalized_locale": normalized,
-        "resolved_locale": base_locale,
-        "fallback_chain": tried + [base_locale],
-        "fallback_used": True,
+        "requested": requested,
+        "resolved": base_locale,
+        "supported": False,
+        "fallback": True,
+        "fallback_reason": "base_locale_fallback",
+        "base_locale": base_locale,
     }
