@@ -59,13 +59,169 @@ Phase 4 - Personalization/
 │  ├─ offline_retrain.py
 │  └─ model_promotion.py
 │
-├─ ci/                        # Phase 4 CI rules
-│  ├─ __init__.py
-│  ├─ determinism_checks.py
-│  ├─ safety_checks.py
-│  └─ explainability_checks.py
+├─ ci/                              # Phase 4 CI Governance (NON-RUNTIME)
+│  ├─ README.md                     # Governance rules & non-goals
+│  │
+│  ├─ phase_4_ci_runner.py          # CI runner (orchestration only)
+│  │  - Deterministic execution order
+│  │  - Executes Phase 4 CI checks & tests
+│  │  - MUST NOT be used as runtime gate
+│  │
+│  ├─ checks/                       # Governance / invariant checks
+│  │  ├─ determinism_checks.py      # Phase 4 must not break Phase 1–3 determinism
+│  │  ├─ safety_checks.py           # Non-semantic mutation guards
+│  │  ├─ explainability_checks.py   # Explainability chain enforcement
+│  │  └─ event_logging_contract.py  # Event schema presence & shape
+│  │
+│  ├─ tests/                        # Execution & regression tests
+│  │  ├─ test_deterministic_core_invariants.py
+│  │  │  - Import & surface integrity (Phase 1–3 immutability)
+│  │  │
+│  │  ├─ test_fixture_determinism_regression.py
+│  │  │  - Golden fixture determinism regression
+│  │  │
+│  │  ├─ test_personalized_fixture_bounds.py
+│  │  │  - Bounded safety + explainability chain (Spec §7.2)
+│  │  │
+│  │  ├─ test_personalization_decision_schema.py
+│  │  │  - Decision & safe-adjustment contract existence
+│  │  │
+│  │  └─ test_safe_adjustment_bounds.py
+│  │     - Guardrail surface existence
+│  │
+│  ├─ fixtures/                     # Design-locked fixtures (policy surface)
+│  │  ├─ fixture_deterministic_input.json
+│  │  └─ fixture_personalized_input.json
+│  │
+│  └─ infra_tests/                  # Meta-CI (CI infrastructure)
+│     └─ test_ci_runner_contract.py # Runner behavior & determinism
 │
 └─ utils/
    ├─ __init__.py
    ├─ provenance_builder.py
    └─ debug_helpers.py
+   
+------------------------------------------------
+Phase 4 CI — Governance & Safety Layer
+------------------------------------------------
+
+Scope:
+- Applies ONLY to Phase 4 (Personalization)
+- Enforces invariants without modifying runtime behavior
+
+Execution Context:
+- CI-only
+- NEVER part of runtime execution
+- NEVER invoked by Phase 3 Orchestrator
+- NEVER invoked by Phase 6 API
+
+------------------------------------------------
+CI Categories (Phase 4)
+------------------------------------------------
+
+1. Determinism & Regression
+   Files:
+   - ci/determinism_checks.py
+   - test_deterministic_core_invariants.py
+   - test_fixture_determinism_regression.py
+   - fixtures/fixture_deterministic_input.json
+
+   Purpose:
+   - Ensure Phase 4 does not break deterministic guarantees
+   - Detect accidental behavioral drift via golden fixtures
+   - No judgement of personalization quality
+
+------------------------------------------------
+
+2. Safety & Guardrails
+   Files:
+   - ci/safety_checks.py
+   - test_safe_adjustment_bounds.py
+   - test_personalized_fixture_bounds.py
+   - fixtures/fixture_personalized_input.json
+
+   Purpose:
+   - Ensure safe adjustment layer exists and is not bypassed
+   - Ensure selected elements are not semantically mutated
+   - Enforce bounded, non-destructive personalization
+
+------------------------------------------------
+
+3. Explainability & Contract Integrity
+   Files:
+   - ci/explainability_checks.py
+   - test_personalization_decision_schema.py
+   - test_event_logging_contract.py
+   - test_personalized_fixture_bounds.py
+
+   Purpose:
+   - Enforce explainability chain:
+     decision_source → model_outputs → applied_adjustments → provenance
+   - Validate presence and parseability of contract docs and schemas
+   - Ensure event logging schema exists
+
+------------------------------------------------
+Forbidden CI Behavior (Hard Rules)
+------------------------------------------------
+
+- Phase 4 CI MUST NOT:
+  - judge model quality or ranking performance
+  - enforce language or narrative quality
+  - mutate Phase 4 runtime behavior
+  - gate runtime execution directly
+  - bypass Phase 6 governance
+  
+------------------------------------------------
+Phase 4 CI — Tests vs Checks Separation
+------------------------------------------------
+
+Phase 4 CI is explicitly divided into two layers:
+
+1. Checks (Governance / Contract Layer)
+   Location:
+   - Phase_4_Personalization/ci/*_checks.py
+
+   Purpose:
+   - Enforce non-negotiable invariants
+   - Validate contracts, schemas, and guardrail existence
+   - Prevent silent semantic drift
+
+   Properties:
+   - CI-only
+   - No fixture execution
+   - No runtime mutation
+   - Authoritative for governance
+
+------------------------------------------------
+
+2. Tests (Execution / Regression Layer)
+   Location:
+   - Phase_4_Personalization/tests/
+   - Includes fixture-based and runtime-executing tests
+
+   Purpose:
+   - Validate deterministic behavior
+   - Detect regression via golden fixtures
+   - Assert bounded and explainable personalization behavior
+
+   Properties:
+   - Executes Phase 4 runtime
+   - Uses fixtures and golden hashes
+   - Does not judge model or narrative quality
+
+------------------------------------------------
+
+Runner Exception:
+- run_all_personalization_checks.py
+  - Belongs to the test layer
+  - Acts as a test orchestrator only
+  - Never considered a governance check
+
+------------------------------------------------
+Relationship to Other Phases
+------------------------------------------------
+
+- Phase 4 CI constrains Phase 4 runtime only
+- Phase 4 CI has NO authority over Phase 1–3 semantics
+- Phase 4 CI emits no signals to Phase 5 learning
+- Phase 4 CI is advisory to developers, authoritative to CI

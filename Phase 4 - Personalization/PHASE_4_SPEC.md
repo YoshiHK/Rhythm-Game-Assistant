@@ -1,188 +1,208 @@
-## PHASE_4_SPEC.md
-### Phase 4 — Personalization & Presentation
+# Phase 4 Specification — Personalization
 
-**Status:** ✅ Normative (Contract Locked)
-
-**Upstream Dependencies:**
-- Phase 1 — Foundation & Workflow ✅
-- Phase 2 — Enhancement ✅
-- Phase 3 — Unified Ingestion Manager ✅
-
-**Non‑Negotiable Rule:**  
-**Phase 4 MUST NOT modify anything in Completed Phases.**
+**Status:** Design‑Locked ✅  
+**Scope:** Phase 4 (Personalization)  
+**Normative Authority:** Runtime + CI
 
 ---
 
-### 0. Positioning
+## §0. Normative Status
 
-Phase 4 defines the **personalization and presentation layer** of the system.
+This specification is **normative**.
 
-It operates strictly downstream of Phase 3 and consumes only:
-- canonical payloads
-- canonical rows
-- elements skeletons
-- upstream provenance
+Compliance is enforced by:
+- Phase 4 runtime implementation, and
+- Phase 4 CI governance layer.
 
-Phase 4 personalizes **how results are shown**, never **what they mean**.
+Where runtime behavior is ambiguous, **CI interpretation is authoritative**.
 
 ---
 
-### 1. Purpose
+## §1. Inputs (Normative)
 
-Phase 4 exists to:
-- adapt presentation to player context
-- improve clarity and engagement
-- preserve determinism, auditability, and trust
+Phase 4 accepts:
+- deterministic outputs from Phases 1–3,
+- player context and feature flags,
+- locale metadata (passed through only).
 
----
-
-### 2. Phase Boundary
-
-#### Inputs (from Phase 3 only)
-- canonical payload
-- canonical row(s)
-- elements skeleton
-- upstream provenance
-
-#### Outputs
-- rendered tips text
-- presentation metadata
-- Phase 4 provenance
-
-**Phase 4 MUST NOT mutate Phase 3 artifacts.**
+Inputs are treated as read‑only.
 
 ---
 
-### 3. Invariants (Normative)
+## §2. Determinism (Normative)
 
-#### 3.1 Semantic Immutability
+### Requirement
 
-Phase 4 MUST NOT modify:
-- detected elements
-- severity labels
-- scores
-- training items
-- section coverage
-- guidance text
+For identical inputs, Phase 4 MUST produce identical outputs.
 
-#### 3.2 Deterministic Fallback
+### Enforcement
 
-- A deterministic, non-personalized output MUST always exist.
-- Personalization MUST be optional and reversible.
+- Runtime MUST avoid nondeterminism.
+- CI MUST verify determinism using:
+  - repeated execution checks,
+  - fixture‑based regression tests.
 
-#### 3.3 Non‑Destructive Adjustments Only
-
-Phase 4 MAY:
-- reorder elements
-- reweight rankings
-- select narrative templates
-- select phrasing variants
-
-Phase 4 MUST NOT:
-- create elements
-- delete elements
-- rewrite gameplay meaning
+Any nondeterministic output is a **spec violation**.
 
 ---
 
-### 4. Engine Modes
+## §3. Output Structure (Normative)
 
-- **deterministic**: no personalization
-- **personalized**: gated, explainable personalization
-- **debug**: deterministic output with full provenance
-
----
-
-### 5. Personalization Decision Gates
-
-Personalization MAY occur only if all gates pass:
-- feature flag enabled
-- player opt-in
-- required context available
-- safety constraints satisfied
-
-Gate outcomes MUST be recorded in provenance.
+Phase 4 outputs MUST:
+- preserve element identity,
+- preserve semantic meaning,
+- include explainability provenance,
+- be JSON‑serializable.
 
 ---
 
-### 6. Safe Adjustment Interface
+## §4. Semantic Immutability (Normative)
 
-Allowed adjustments:
-- element ordering
-- scalar reweighting
-- narrative template selection
-- variant selection
+### Requirement
 
-Adjustments MUST:
-- be additive
-- be reversible
-- preserve Phase 2 meaning
+Phase 4 MUST NOT modify semantic fields produced by Phases 1–3, including:
+- severity labels,
+- scores,
+- coverage,
+- guidance,
+- matched tags.
 
----
+### Enforcement
 
-### 7. Provenance & Explainability
+- Runtime treats these fields as read‑only.
+- CI fails on any detected mutation.
 
-Every Phase 4 output MUST include provenance explaining:
-- decision source
-- gate outcomes
-- applied adjustments
-- template and variant IDs
-
-No personalization is allowed without explainability.
+Semantic immutability is **non‑negotiable**.
 
 ---
 
-### 8. Models (Constraints)
+## §5. Safe Adjustment (Normative)
 
-Models in Phase 4 are presentation-only.
+### Requirement
 
-Allowed:
-- ranking
-- template selection
-- variant selection
+Adjustments MAY be applied only through the safe‑adjustment layer.
 
-Prohibited:
-- gameplay detection
-- severity modification
-- free-form text generation
+Adjustments MUST be:
+- bounded,
+- non‑destructive,
+- explicitly declared.
 
----
+### Enforcement
 
-### 9. Narrative Module v3
-
-Narrative v3:
-- renders template-bound text
-- enforces tone and word budgets
-- attaches template/variant metadata
-
-Narrative v3 MUST NOT alter gameplay guidance.
+- Runtime MUST expose guardrails.
+- CI MUST fail if the guardrail surface is missing or bypassed.
 
 ---
 
-### 10. Logging, Feedback, and Curation
+## §6. Decision Source (Normative)
 
-Phase 4 MUST emit:
-- structured event logs
-- feedback capture records
+Phase 4 MUST declare a `decision_source`:
 
-Feedback and curator actions:
-- are offline only
-- MUST NOT affect live behavior
+- `rule`
+- `model`
+- `hybrid`
+
+The value MUST be explicit and auditable.
 
 ---
 
-### 11. Contract Closure
+## §7. Explainability Chain (Normative, CI‑Enforced)
 
-Phase 4 is:
-✅ downstream-only  
-✅ non-destructive  
-✅ deterministic by default  
-✅ explainable by construction  
+### §7.1 Chain Definition
 
-Phase 4 is NOT:
-❌ an analysis phase  
-❌ a semantic rewrite  
-❌ a live-learning system  
+Phase 4 MUST maintain:
 
-**End of PHASE_4_SPEC.md**
-``
+decision_source → model_outputs → applied_adjustments → provenance
+
+---
+
+### §7.2 Rules
+
+- If `decision_source == "model"` or `"hybrid"`:
+  - `model_outputs` MUST be present and non‑empty
+  - `applied_adjustments` MUST reflect `model_outputs`
+  - `provenance.adjustments` MUST match `applied_adjustments`
+
+- If `decision_source == "rule"`:
+  - `model_outputs` MUST be empty
+  - `applied_adjustments` MUST be empty
+
+---
+
+### §7.3 Ordering Consistency
+
+If ordering is produced by the model:
+- output ordering MUST respect the model ordering
+- relative order MUST be preserved
+
+---
+
+### §7.4 Model Metadata (Optional)
+
+If present, `model_metadata` MUST:
+- be an object,
+- contain string fields only,
+- include `model_role` when decision_source is model‑driven.
+
+---
+
+### Enforcement
+
+All rules in §7 are **enforced by CI**.
+Violations are **architectural errors**.
+
+---
+
+## §8. Fixtures as Policy Surface (Normative)
+
+Phase 4 fixtures are **normative policy surfaces**.
+
+They exist to:
+- represent allowed behavior,
+- detect regressions,
+- enforce safety and explainability invariants.
+
+Fixtures are **not quality benchmarks**.
+
+CI treats fixtures as authoritative.
+
+---
+
+## §9. Event Logging (Normative)
+
+Phase 4 MUST emit events conforming to declared schemas.
+
+CI enforces:
+- schema presence,
+- parseability.
+
+---
+
+## §10. CI Authority Statement
+
+The Phase 4 CI layer is authoritative for:
+- invariant enforcement,
+- contract validation,
+- regression detection.
+
+Runtime behavior that passes CI is considered **spec‑compliant**.
+
+---
+
+## §11. Non‑Goals
+
+Phase 4 does NOT specify:
+- localization behavior (Phase 4.5),
+- recommendation logic (Phase 7),
+- learning outcomes (Phase 5),
+- platform concerns (Phase 6).
+
+---
+
+## §12. Design‑Locked Statement
+
+As of this revision:
+
+> **Phase 4 specification is Design‑Locked ✅**
+
+Future changes must preserve all guarantees above.

@@ -1,123 +1,185 @@
 # Phase 4 — Personalization
 
-Phase 4 is the **personalization and presentation layer** of the Rhythm Game Assistant.
-
-It answers one question:
-
-> Given the analytical truth, **how should this be presented to this player?**
-
-Phase 4 is strictly **downstream-only** and **non-destructive**.
-It personalizes *presentation*, not *meaning*.
+**Status:** Design‑Locked ✅  
+**Role:** Semantic Personalization (Presentation‑Safe)  
+**Runtime Entry:** Phase 6 only
 
 ---
 
-## What Phase 4 Does
+## 1. What Phase 4 Is
 
-Phase 4:
-- adapts tip presentation to player context
-- optionally reorders or reweights elements
-- selects narrative templates and phrasing variants
-- produces explainable, auditable outputs
-- guarantees deterministic fallback at all times
+Phase 4 applies **bounded, explainable personalization**
+on top of the deterministic analysis produced by Phases 1–3.
 
-Phase 4 does **not**:
-- detect gameplay patterns
-- change severity, scores, or guidance
-- generate free-form text
-- learn online or affect live behavior
+It adjusts **ordering, emphasis, and presentation** of gameplay tips
+**without changing their semantic meaning**.
+
+Phase 4 is the **last phase allowed to influence gameplay tips directly**.
+All downstream phases treat Phase 4 outputs as authoritative.
 
 ---
 
-## Inputs and Outputs
+## 2. What Phase 4 Is NOT
 
-### Inputs (from Phase 3 only)
-- canonical payload
-- canonical row(s)
-- elements skeleton
-- upstream provenance
-- optional player context and flags
+Phase 4 does **NOT**:
 
-### Outputs
-- rendered tips text
-- unchanged elements skeleton
-- personalization provenance
-- presentation metadata (for UI and CI)
+- ❌ modify severity, score, coverage, or guidance semantics
+- ❌ introduce nondeterminism
+- ❌ perform localization (Phase 4.5)
+- ❌ perform game recommendations (Phase 7)
+- ❌ bypass Phase 6 governance
+- ❌ gate runtime execution based on CI outcomes
 
----
-
-## Runtime Flow (High-Level)
-
-1. Request received
-2. Deterministic core run
-3. Personalization decision (rule-based)
-4. Optional model inference (advisory)
-5. Safe adjustment application (non-destructive)
-6. Narrative Module v3 rendering
-7. Response assembly
-8. Event logging
-9. Feedback capture
-10. Curator triage (offline)
-11. Offline retraining and promotion
+If you are looking for localization or recommendation logic,
+you are in the wrong phase.
 
 ---
 
-## Determinism and Safety
+## 3. Where Phase 4 Sits in the Pipeline
 
-Phase 4 guarantees:
-- a deterministic, non-personalized output is always available
-- personalization can be skipped or reverted safely
-- no upstream artifacts are mutated
-- all adjustments are traceable
+Phase 1–3 (Deterministic Core)
+↓
+Phase 4 (Personalization)
+↓
+Phase 6 (API / Platform)
 
-If any invariant fails, Phase 4 **falls back to deterministic mode**.
-
----
-
-## Explainability
-
-Every Phase 4 output includes provenance that explains:
-- why personalization was (or was not) applied
-- what adjustments were suggested
-- what adjustments were actually applied
-- which template and variant were used
-
-No personalization is allowed without explainability.
+- Phase 4 is invoked **only** via Phase 6.
+- Phase 4 never invokes earlier phases.
+- Phase 4 never invokes Phase 4.5 or Phase 7.
 
 ---
 
-## Events, Feedback, and Curators
+## 4. Core Responsibilities
 
-Phase 4 emits:
-- structured, append-only events
-- user feedback records (offline only)
+Phase 4 is responsible for:
 
-Curators:
-- review flagged or sampled outputs
-- provide gold labels
-- trigger offline retraining
-
-Curator actions **never affect live behavior**.
+- personalization decisions (rule / model / hybrid),
+- safe adjustment application (bounded, non‑destructive),
+- explainability provenance generation,
+- narrative module selection (non‑i18n),
+- event logging and feedback capture,
+- curator triage and offline learning hooks.
 
 ---
 
-## Relationship to Other Phases
+## 5. Determinism & Safety Guarantees
 
-- Phase 1–3: analytical truth (locked)
-- Phase 4: presentation personalization (this phase)
-- Phase 4.5: localization and i18n
-- Phase 5+: productionization, learning, recommendations
+Phase 4 guarantees:
+
+- **Determinism**  
+  Identical inputs always produce identical outputs.
+
+- **Semantic Immutability**  
+  Fields produced by Phases 1–3 are treated as read‑only.
+
+- **Explainability**  
+  Every personalization decision is auditable.
+
+These guarantees are enforced jointly by **runtime code and CI governance**.
 
 ---
 
-## Status
+## 6. Explainability Chain (Key Concept)
 
-Phase 4 is:
-✅ downstream-only  
-✅ non-destructive  
-✅ explainable by construction  
-✅ CI-enforced  
+Phase 4 enforces a strict explainability chain:
 
-See:
-- `PHASE_4_SPEC.md` for normative rules
-- `PHASE_4_ARCHITECTURE.md` for system structure
-- `ci/` for enforcement logic
+decision_source
+→ model_outputs
+→ applied_adjustments
+→ provenance
+
+- Rule‑based decisions produce no model outputs.
+- Model‑driven decisions must expose their effects explicitly.
+- Provenance must reflect what was actually applied.
+
+Breaking this chain is considered an **architectural error**.
+
+---
+
+## 7. Directory Overview
+
+Phase_4_Personalization/
+├─ interfaces/        # Hard contracts (authoritative)
+├─ schemas/           # CI‑enforced schemas
+├─ registry/          # Declarative allow‑lists
+├─ runtime/           # Deterministic execution spine
+├─ decision/          # Presentation‑only decisions
+├─ inference/         # Advisory model boundary
+├─ safe_adjustment/   # Guardrails (non‑destructive)
+├─ narrative/         # Narrative v3 selection (non‑i18n)
+├─ events/            # Observational only
+├─ curator/           # Offline human loop
+├─ ci/                # CI governance (NON‑RUNTIME)
+└─ utils/             # Helpers
+
+If you are changing behavior, you are likely touching `runtime/`.
+If you are enforcing guarantees, you are likely touching `ci/`.
+
+---
+
+## 8. CI Governance (Very Important)
+
+Phase 4 includes a **first‑class CI governance layer**.
+
+CI exists to:
+- enforce determinism,
+- enforce semantic immutability,
+- enforce explainability chain integrity,
+- detect accidental behavioral drift.
+
+CI is:
+- ✅ authoritative for governance
+- ❌ never part of runtime execution
+
+CI failures block merges, **not runtime execution**.
+
+See `Phase_4_Personalization/ci/README.md` for details.
+
+---
+
+## 9. Fixtures as Policy Surface
+
+Fixtures under `ci/tests/fixtures/` are **design‑locked policy surfaces**.
+
+They exist to:
+- represent allowed behavior,
+- detect regressions,
+- enforce safety and explainability invariants.
+
+Fixtures are **not quality benchmarks**.
+They are authoritative examples of what Phase 4 is allowed to do.
+
+---
+
+## 10. Relationship to Other Phases
+
+- **Phases 1–3**  
+  Deterministic core. Phase 4 must not mutate their semantics.
+
+- **Phase 4.5**  
+  Localization and language handling. Separate CI and ownership.
+
+- **Phase 5**  
+  Learning and retraining. Phase 4 emits signals but does not learn.
+
+- **Phase 6**  
+  Platform and governance gate. Owns runtime invocation.
+
+- **Phase 7**  
+  Game recommendations. Entirely separate decision surface.
+
+---
+
+## 11. Design‑Locked Statement
+
+As of this revision:
+
+> **Phase 4 — Runtime, CI, Architecture, and Spec are Design‑Locked ✅**
+
+Future changes must:
+- preserve all guarantees above,
+- update CI before runtime,
+- remain presentation‑safe and explainable.
+
+If you are unsure whether a change belongs in Phase 4,
+it probably does not.
