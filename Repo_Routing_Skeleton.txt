@@ -33,9 +33,10 @@ Repo Root
 ├─ api/
 │  ├─ app.py              # API bootstrap (Phase 6 owned)
 │  ├─ auth.py             # Auth & security (Phase 6 owned)
-│  ├─ requirements.txt    # Unified recommendation API (Phase 6 façade)
 │  └─ routes/
 │     └─ recommend.py     # Route binding only (no logic)
+│
+├─ reequirements.txt
 │
 ├─ ci/                    # Repo-level CI infrastructure (NON-RUNTIME)
 │  └─ observability/      # Phase-agnostic CI signal aggregation & alerting
