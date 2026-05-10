@@ -1,7 +1,7 @@
 # Phase 7 — Games Recommendations
 
 **Status Additive · Downstream‑Only · Reversible · Non‑Blocking**
-**Status:** Design‑Locked ✅ Engineering Complete ✅  
+**Status:** Design‑Locked ✅, Engineering Complete ✅  
 
 ---
 
