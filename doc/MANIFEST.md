@@ -4,6 +4,8 @@ This repository is derived from the following **authoritative wave artifacts**.
 
 Each wave represents a completed or design‑locked milestone.
 
+Note: Phase 4, Phase 4.5, and Phase 7 CI governance layers are design-locked and enforced separately.
+
 ---
 
 ### Wave 1 — Phase 1 Baseline
