@@ -1,41 +1,85 @@
+"""
+app.py
+
+Responsibilities:
+- Initialize FastAPI application
+- Wire Phase 6 API routes
+- Inject orchestrator and optional Phase 7 components
+- Enforce routing boundaries (no direct phase imports)
+
+Non-goals:
+- No recommendation logic
+- No learning logic
+- No phase mutation
+"""
+
 from __future__ import annotations
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
-from .routes.proseka import router as proseka_router
-from .routes.recommend import router as recommend_router
+# ------------------------------------------------------------
+# Core API routers (Phase 6 surface)
+# ------------------------------------------------------------
 
-def create_app() -> FastAPI:
+from .recommend import (
+    router as recommend_router,
+    compat_routers as recommend_compat_routers,
+    set_orchestrator,
+    set_games_recommender,
+)
+
+# Auth routes (Phase 6 owned)
+from .auth import router as auth_router
+
+# ------------------------------------------------------------
+# Runtime wiring (injected from platform / main)
+# ------------------------------------------------------------
+
+def create_app(
+    *,
+    orchestrator,
+    games_recommender=None,
+) -> FastAPI:
+    """
+    Application factory.
+
+    Parameters:
+    - orchestrator:
+        OrchestratorBridge (required)
+        The ONLY execution dependency (Phase 3+)
+
+    - games_recommender:
+        Optional callable implementing Phase 7 game discovery.
+        Injected here to avoid importing Phase 7 modules directly.
+    """
     app = FastAPI(
-        title="Rhythm Game Assistant API (Thin Layer)",
+        title="Rhythm Game Assistant API",
         version="0.1.0",
-        description=(
-            "Thin backend API layer intended for Softr integration. "
-            "This layer is wiring-only and must not modify completed-phase semantics."
-        ),
     )
 
-    # Phase-6 wiring: allow Softr browser origin to call this API through ngrok.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
-            "https://*.softr.app",
-            "https://beatblast-laverna57427.softr.app",
-        ],
-        allow_credentials=False,
-        allow_methods=["POST", "GET", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
-    )
+    # -------------------------
+    # Inject runtime dependencies
+    # -------------------------
 
-    app.include_router(proseka_router)
+    # Phase 3+ execution bridge (mandatory)
+    set_orchestrator(orchestrator)
+
+    # Phase 7 game recommendations (optional)
+    if games_recommender is not None:
+        set_games_recommender(games_recommender)
+
+    # -------------------------
+    # Register API routes
+    # -------------------------
+
+    # Auth (Phase 6)
+    app.include_router(auth_router)
+
+    # Unified recommendation API
     app.include_router(recommend_router)
 
-    @app.get("/health")
-    def health():
-        return {"ok": True}
+    # Optional backward-compatible routes
+    for r in recommend_compat_routers:
+        app.include_router(r)
 
     return app
-
-
-app = create_app()
