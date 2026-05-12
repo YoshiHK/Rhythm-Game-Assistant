@@ -1,0 +1,45 @@
+{
+  "game_id": "ユメステ",
+
+  "difficulty_tiers": [
+    "normal",
+    "hard",
+    "extra",
+    "stella",
+    "olivier"
+  ],
+
+  "completion_ladder": [
+    "clear",
+    "fc",
+    "ap"
+  ],
+
+  "tier_aliases": {
+    "NORMAL": "normal",
+    "Normal": "normal",
+
+    "HARD": "hard",
+    "Hard": "hard",
+
+    "EXTRA": "extra",
+    "Extra": "extra",
+
+    "STELLA": "stella",
+    "Stella": "stella",
+
+    "OLIVIER": "olivier",
+    "Olivier": "olivier"
+  },
+
+  "completion_aliases": {
+    "CLEAR": "clear",
+    "Clear": "clear",
+
+    "FC": "fc",
+    "FullCombo": "fc",
+
+    "AP": "ap",
+    "AllPerfect": "ap"
+  }
+}

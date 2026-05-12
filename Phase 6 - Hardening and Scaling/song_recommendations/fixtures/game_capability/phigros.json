@@ -1,0 +1,15 @@
+{
+  "game_id": "phigros",
+  "difficulty_tiers": ["ez", "hd", "in", "at"],
+  "completion_ladder": ["clear", "fc"],
+  "tier_aliases": {
+    "EZ": "ez",
+    "HD": "hd",
+    "IN": "in",
+    "AT": "at"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "FC": "fc"
+  }
+}

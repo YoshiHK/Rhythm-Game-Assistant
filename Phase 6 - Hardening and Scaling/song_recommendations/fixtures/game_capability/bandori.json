@@ -1,0 +1,19 @@
+{
+  "game_id": "bandori",
+  "difficulty_tiers": ["easy", "normal", "hard", "expert", "special"],
+  "completion_ladder": ["clear", "fc", "ap"],
+  "tier_aliases": {
+    "Easy": "easy",
+    "Normal": "normal",
+    "Hard": "hard",
+    "Expert": "expert",
+    "Special": "special"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "FC": "fc",
+    "FullCombo": "fc",
+    "AP": "ap",
+    "AllPerfect": "ap"
+  }
+}

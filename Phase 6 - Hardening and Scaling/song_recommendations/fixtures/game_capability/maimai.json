@@ -1,0 +1,17 @@
+{
+  "game_id": "maimai",
+  "difficulty_tiers": ["basic", "advanced", "expert", "master", "remaster"],
+  "completion_ladder": ["clear", "fc", "ap"],
+  "tier_aliases": {
+    "Basic": "basic",
+    "Advanced": "advanced",
+    "Expert": "expert",
+    "Master": "master",
+    "Re:Master": "remaster"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "FC": "fc",
+    "AP": "ap"
+  }
+}

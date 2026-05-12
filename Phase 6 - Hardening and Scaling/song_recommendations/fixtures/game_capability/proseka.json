@@ -1,0 +1,17 @@
+{
+  "game_id": "proseka",
+  "difficulty_tiers": ["expert", "master", "append"],
+  "completion_ladder": ["clear", "fc", "ap"],
+  "tier_aliases": {
+    "Expert": "expert",
+    "Master": "master",
+    "Append": "append"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "FC": "fc",
+    "FullCombo": "fc",
+    "AP": "ap",
+    "AllPerfect": "ap"
+  }
+}

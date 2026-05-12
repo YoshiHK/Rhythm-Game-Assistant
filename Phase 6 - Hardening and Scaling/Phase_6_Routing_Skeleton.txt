@@ -1,3 +1,23 @@
+Phase 6 — Platform Hardening & Runtime Routing
+=============================================
+
+Purpose:
+- Act as the ONLY runtime gatekeeper.
+- Own authentication, guards, routing, failure isolation, observability.
+- Provide platform-level coordination for:
+  - song recommendations (mode="songs")
+  - game recommendations (mode="games", Phase 7)
+
+Non-Negotiable Rules:
+- No UI / client may invoke Phase 1–5 or Phase 7 directly.
+- No semantic logic lives in Phase 6.
+- Phase 6 performs coordination, normalization, and policy enforcement only.
+
+------------------------------------------------
+Directory Structure
+------------------------------------------------
+
+
 phase6/
 ├─ README.md
 ├─ PHASE_6_SPEC.md
@@ -5,10 +25,11 @@ phase6/
 │
 ├─ router/
 │  ├─ __init__.py
-│  ├─ phase6_router.py
-│  ├─ routing_context.py
-│  ├─ routing_policy.py
-│  └─ trigger_router.py
+│  ├─ phase6_router.py            # Unified runtime entry (ALL requests)
+│  ├─ routing_context.py          # Normalized request context
+│  ├─ routing_policy.py           # mode-based routing (songs vs games)
+│  ├─ trigger_router.py           # Internal trigger resolution
+│  └─ domain_dispatch.py
 │
 ├─ guards/
 │  ├─ README.md
@@ -37,8 +58,185 @@ phase6/
 │  ├─ budget_policy.py
 │  └─ capacity_router.py
 │
-└─ integration/
-   ├─ README.md
-   ├─ api_version_router.py
-   ├─ partner_gateway.py
-   └─ sdk_boundary.py
+├─ integration/
+│  ├─ README.md
+│  ├─ api_version_router.py
+│  ├─ partner_gateway.py
+│  └─ sdk_boundary.py
+│
+└─ song_recommendation/            # Phase 6 — Song Recommendation routing domain
+   ├─ __init__.py                  # Package marker (no side effects)
+   ├─ README.md                    # Scope, invariants, non-responsibilities
+   │
+   ├─ request_normalizer.py        # Normalize incoming song recommendation requests
+   ├─ game_capability_resolver.py  # Resolve game capability & completion ladder
+   ├─ song_rec_coordinator.py      # Orchestrate recommendation flow
+   ├─ persistence_policy.py        # Save / refresh / rotation planning
+   ├─ response_shaper.py           # Final API response assembly
+   │
+   ├─ catalog/                     # Read-only catalog & selection layer
+   │  ├─ __init__.py
+   │  ├─ README.md
+   │  ├─ catalog_loader.py         # Load canonical song/difficulty artifacts
+   │  ├─ song_catalog.py           # In-memory catalog representation
+   │  └─ catalog_selector.py       # Deterministic song selection
+   │
+   ├─ schemas/                     # Song Recommendation contracts (CI enforced)
+   │  ├─ README.md
+   │  ├─ game_capability.schema.json
+   │  ├─ capability_registry.schema.json
+   │  ├─ song_recommendation_request.schema.json
+   │  ├─ song_recommendation_response.schema.json
+   │  ├─ recommendation_item.schema.json
+   │  ├─ rationale.schema.json
+   │  └─ persistence_plan.schema.json
+   │
+   ├─ fixtures/                    # Non-runtime fixtures (CI / validation only)
+   │  └─ game_capability/
+   │     ├─ README.md
+   │     ├─ proseka.json
+   │     ├─ arcaea.json
+   │     ├─ bandori.json
+   │     ├─ maimai.json
+   │     ├─ dynamix.json
+   │     ├─ chunithm.json
+   │     ├─ d4dj.json
+   │     ├─ phigros.json
+   │     ├─ lanota.json
+   │     ├─ ongeki.json
+   │     ├─ sound_voltex.json
+   │     ├─ cytus_ii.json
+   │     ├─ groove_coaster.json
+   │     ├─ ユメステ.json
+   │     └─ invalid_missing_ladder.json
+   │
+   └─ tests/                       # Phase 6 Song Recommendation CI layer
+      ├─ README.md
+      ├─ capability/
+      │  ├─ test_all_games_capability_coverage.py
+      │  ├─ test_game_capability_fixtures.py
+      │  ├─ test_game_capability_resolver.py
+      │  └─ test_game_capability_ladder_invariants.py
+      │
+      ├─ schemas/
+      │  ├─ test_schema_json_parseability.py
+      │  └─ test_schema_cross_reference.py
+      │
+      ├─ selector/
+      │  ├─ test_selector_determinism.py
+      │  ├─ test_selector_exclusions.py
+      │  ├─ test_selector_multi_tier.py
+      │  └─ test_selector_window_widening.py
+      │
+      ├─ coordinator/
+      │  ├─ test_coordinator_determinism.py
+      │  └─ test_song_rec_coordinator_integration.py
+      │
+      ├─ contract/
+      │  ├─ test_request_normalizer_contract.py
+      │  └─ test_response_shaper_contract.py
+      │
+      └─ persistence/
+         └─ test_rotation_policy.py
+
+------------------------------------------------
+Runtime Routing Overview
+------------------------------------------------
+
+ALL runtime traffic:
+UI / Client / Softr
+→ Phase 6 (API / Auth / Guards)
+→ phase6_router.py
+
+------------------------------------------------
+Routing Policy (High Level)
+------------------------------------------------
+
+routing_policy.py evaluates request.mode:
+
+- mode = "songs"
+  → Song Recommendation Flow (Phase 6 + Phases 1–4.5)
+
+- mode = "games"
+  → Game Recommendation Flow (Phase 7)
+
+Any other mode:
+  → STOP (explicit, explainable)
+
+------------------------------------------------
+Song Recommendation Flow (mode="songs")
+------------------------------------------------
+
+1. Phase 6 receives request
+   - Auth, security, abuse, compliance guards applied
+   - Request normalized into routing_context
+
+2. song_recommendation/request_normalizer.py
+   - Validate canonical submission schema
+   - No Proseka-specific assumptions
+   - Difficulty tiers and completion labels remain opaque strings
+
+3. song_recommendation/game_capability_resolver.py
+   - Resolve game_id → game capability config
+   - Provides:
+     - difficulty tier ordering
+     - completion ladder ordering
+   - Phase 6 does NOT interpret semantics beyond ordering
+
+4. song_recommendation/song_rec_coordinator.py
+   - Coordinates deterministic recommendation generation
+   - Delegates semantic computation to downstream phases
+   - Assembles 3-in-a-group recommendation intent:
+     - AP/FC/Clear equivalents via ladder positions
+
+5. Downstream execution (per system spec):
+   Phase 3 Orchestrator
+   → Phase 1 → Phase 2
+   → Phase 4 Personalization
+   → Phase 4.5 Localization
+
+6. song_recommendation/persistence_policy.py
+   - action = "refresh" → no persistence
+   - action = "save" → persist recommendation set
+   - Apply rotation policy (e.g. max N, keep bookmarked)
+
+7. song_recommendation/response_shaper.py
+   - Assemble final API response
+   - Attach diagnostics and provenance metadata
+
+------------------------------------------------
+Game Recommendation Flow (mode="games")
+------------------------------------------------
+
+Client
+→ Phase 6
+→ Phase 7 Router
+→ Player Capability Modeling
+→ Game Capability Modeling
+→ Matching & Ranking
+→ Explanation
+→ Feedback / Observability (async)
+→ Response
+
+------------------------------------------------
+Explicit Non-Responsibilities
+------------------------------------------------
+
+Phase 6 MUST NOT:
+- Contain gameplay analysis logic
+- Contain chart-level semantics
+- Hardcode difficulty names or completion labels
+- Perform localization logic
+- Run CI or learning pipelines
+
+------------------------------------------------
+Design Notes
+------------------------------------------------
+
+- Multi-game support is achieved via game capability resolution,
+  not by branching logic in UI or algorithms.
+- Proseka is treated as one game profile, not a system baseline.
+- Phase 6 remains a coordination and policy layer only.
+
+End of Phase 6 Routing Skeleton
+=============================================

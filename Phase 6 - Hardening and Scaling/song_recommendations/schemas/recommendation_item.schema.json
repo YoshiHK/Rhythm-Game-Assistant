@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recommendation_item.schema.json",
+  "title": "RecommendationItem",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["recommendation_type", "song_id", "song_name", "difficulty", "level", "rationale"],
+  "properties": {
+    "recommendation_type": { "type": "string", "enum": ["AP", "FC", "Clear"] },
+    "song_id": { "type": "string", "minLength": 1 },
+    "song_name": { "type": "string", "minLength": 1 },
+    "producer_name": { "type": "string" },
+    "difficulty": { "type": "string", "minLength": 1 },
+    "level": { "type": "number" },
+    "rationale": { "$ref": "#/$defs/Rationale" },
+    "is_active": { "type": "boolean", "default": true },
+    "bookmarked": { "type": "boolean", "default": false }
+  },
+  "$defs": {
+    "Rationale": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["summary", "why"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "why": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "related_provenance_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "taxonomy_reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
