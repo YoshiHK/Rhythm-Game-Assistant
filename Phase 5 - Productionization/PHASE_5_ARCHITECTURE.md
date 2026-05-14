@@ -5,16 +5,25 @@
 
 ---
 
+# Phase 5 — Productionization Architecture
+
+**Status:** Design‑Locked (Aligned with PHASE_5_SPEC.md)  
+**Invariant:** Phase 5 is downstream‑only, non‑semantic, and offline‑learning‑only.
+
+---
+
 ## 1. Architectural Role
 
-Phase 5 sits **downstream of personalization and localization (Phases 1–4.5)** and **upstream of platform hardening (Phase 6)**.
+Phase 5 sits **downstream of personalization and localization (Phases 1–4.5)**
+and **upstream of platform hardening (Phase 6)**.
 
 Its role is to:
-- Observe runtime outcomes
-- Convert feedback into learning signals
-- Improve models offline
-- Expose stable recommendation contracts
-- Prepare the system for scale and governance
+
+- observe runtime outcomes,
+- convert feedback into learning signals,
+- improve models offline,
+- expose stable recommendation contracts,
+- prepare the system for scale and governance.
 
 Phase 5 never interprets gameplay semantics.
 
@@ -23,22 +32,23 @@ Phase 5 never interprets gameplay semantics.
 ## 2. High‑Level Data Flow
 
 ```
-┌─────────────────────────────┐
-│ Phase 4 / 4.5 Outputs       │
-└─────────────────────────────┘
-              ▼
-        Phase 5 Entry
-              │
-        ┌─────┴─────┬─────────┬──────────┬─────────┬──────────┬─────────┬──────────┐
-        │           │         │          │         │          │         │          │
-        ▼           ▼         ▼          ▼         ▼          ▼         ▼          ▼
-    Feedback    Curator   Offline    Recommend. Practice  Observ.  Marketplace  Safety/
-    Aggregation  Gold &   Retrain &   Layer     Integration & Exp.   Layer       Legal
-                Labeling  Model Ops  (Song-Lvl)  (Opt-In)                       Signals
-        │           │         │          │         │          │         │          │
-        └─────┬─────┴─────────┴──────────┴─────────┴──────────┴─────────┴──────────┘
-              ▼
-      Phase 5 Artifacts
+Phase 4 / 4.5 Outputs
+↓
+Phase 5 Entry
+↓
++----------------------+--------------------+--------------------+
+| Feedback Aggregation | Curator & Labeling |  Offline Retraining|
++----------------------+--------------------+--------------------+
+↓
++----------------------+--------------------+--------------------+
+| Recommendation Layer | Practice (Opt‑In)  |  Observability     |
++----------------------+--------------------+--------------------+
+↓
++----------------------+--------------------+
+| Marketplace          | Safety / Legal     |
++----------------------+--------------------+
+↓
+Phase 5 Artifacts
 ```
 
 ---
@@ -46,9 +56,9 @@ Phase 5 never interprets gameplay semantics.
 ## 3. Feedback & Signals Layer
 
 **Responsibilities:**
-- Collect player and system interaction signals
-- Normalize and group feedback by provenance
-- Preserve append‑only audit trails
+- collect player and system interaction signals,
+- normalize and group feedback by provenance,
+- preserve append‑only audit trails.
 
 No judgment or scoring occurs here.
 
@@ -57,9 +67,9 @@ No judgment or scoring occurs here.
 ## 4. Curator & Learning Layer
 
 **Responsibilities:**
-- Surface curator review queues
-- Manage gold labels and disagreement
-- Construct versioned training datasets
+- surface curator review queues,
+- manage gold labels and disagreement,
+- construct versioned training datasets.
 
 All decisions are human‑in‑the‑loop.
 
@@ -68,10 +78,10 @@ All decisions are human‑in‑the‑loop.
 ## 5. Offline Retraining & Model Ops
 
 **Responsibilities:**
-- Train candidate models offline
-- Validate against benchmarks
-- Register model artifacts
-- Submit promotion candidates to Phase 6
+- train candidate models offline,
+- validate against benchmarks,
+- register model artifacts,
+- submit promotion candidates to Phase 6.
 
 Phase 5 never deploys models.
 
@@ -80,63 +90,90 @@ Phase 5 never deploys models.
 ## 6. Recommendation Layer (Song‑Level)
 
 **Responsibilities:**
-- Expose stable, read‑only recommendation APIs
-- Attach rationale and provenance metadata
+- expose stable, read‑only recommendation contracts,
+- attach rationale and provenance metadata.
 
 This layer owns contracts, not UI behavior.
 
 ---
 
-## 7. Practice & In‑Session Integration
+## 7. Song Recommendation Learning Sub‑Architecture
 
-**Optional sub‑layer:**
-- Practice mapping and drills
-- Opt‑in in‑session hints
-- Non‑judgmental practice telemetry
+Song Recommendation learning is implemented as a **dedicated Phase 5 pipeline**.
+
+**Key properties:**
+- fully offline,
+- deterministic,
+- non‑semantic,
+- deployment‑only outputs.
+
+**Pipeline structure:**
+- feedback aggregation,
+- feature construction,
+- heuristic calibration,
+- evaluation with regression guards,
+- static artifact generation.
+
+This sub‑architecture does not bypass curator‑backed learning;
+it complements it for song‑level selection quality.
+
+---
+
+## 8. Practice & In‑Session Integration (Optional)
+
+**Responsibilities:**
+- practice mapping and drills,
+- opt‑in in‑session hints,
+- non‑judgmental practice telemetry.
 
 All features must be user‑disableable.
 
 ---
 
-## 8. Observability & Experimentation
+## 9. Observability & Experimentation
 
 **Responsibilities:**
-- Define canonical metrics
-- Run presentation‑only experiments
-- Enforce feature flags and safety bounds
+- define canonical metrics,
+- run presentation‑only experiments,
+- enforce feature flags and safety bounds.
 
 No semantic changes are permitted.
 
 ---
 
-## 9. Marketplace Layer
+## 10. Marketplace Layer
 
 **Responsibilities:**
-- Define creator participation rules
-- Manage content catalog references
-- Support monetization signals
+- define creator participation rules,
+- manage content catalog references,
+- support monetization signals.
 
 Marketplace logic never affects ranking.
 
 ---
 
-## 10. Safety / Legal / Anti‑Cheat Signals
+## 11. Safety / Legal / Anti‑Cheat Signals
 
 **Responsibilities:**
-- Define unacceptable behaviors
-- Record safety‑relevant events
-- Escalate evidence to Phase 6
+- define unacceptable behaviors,
+- record safety‑relevant events,
+- escalate evidence to Phase 6.
 
 Phase 5 never enforces penalties.
 
 ---
 
-## 11. Architectural Summary
+## 12. Architectural Summary
 
-| | |
-|---|---|
-| **Phase 5 IS:** | ✅ Downstream‑only<br/>✅ Explainable<br/>✅ Offline‑learning‑first<br/>✅ Recommendation‑safe |
-| **Phase 5 IS NOT:** | ❌ A semantic authority<br/>❌ A real‑time decision engine |
+**Phase 5 IS:**
+- downstream‑only,
+- explainable,
+- offline‑learning‑first,
+- recommendation‑safe.
+
+**Phase 5 IS NOT:**
+- a semantic authority,
+- a real‑time decision engine.
 
 ---
 

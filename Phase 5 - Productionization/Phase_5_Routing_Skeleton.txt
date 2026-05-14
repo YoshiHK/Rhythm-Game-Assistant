@@ -1,3 +1,20 @@
+Phase 5 — Productionization & Offline Learning Routing Skeleton
+===============================================================
+
+Purpose:
+- Define the **offline learning dataflow order** across Phase 5 systems.
+- Provide governance for how learning-facing layers connect.
+- This is NOT a runtime decision engine.
+
+Non-Negotiable Rules:
+- Phase 5 operates offline only.
+- Phase 5 MUST NOT modify any Completed Phases.
+- Phase 5 outputs are introduced via deployment only.
+
+------------------------------------------------
+Directory Structure
+------------------------------------------------
+
 phase5/
 ├─ README.md
 ├─ PHASE_5_SPEC.md
@@ -10,10 +27,53 @@ phase5/
 │  │   # NOT a runtime decision engine
 │  │
 │  └─ learning_flow.md
-│      # Declarative description of Phase 5 learning pipeline:
-│      # feedback → curator → retrain → recommendation → practice → marketplace → safety
+│      # Declarative description of Phase 5 learning pipelines:
+│      #
+│      # 1) Song Recommendation learning (offline only)
+│      #    feedback → aggregation → features → training → evaluation → artifacts → deployment
+│      #
+│      # 2) Other Phase 5 learning flows (curator-backed, domain-specific)
+│      #    feedback → curator → retrain → recommendation → practice → marketplace → safety
 │
-├─ feedback_aggregation/
+├─ song_recommendation/                 # ✅ Phase 5 Song Recommendation Learning (Offline)
+│  ├─ README.md                         # Main contract & boundaries
+│  ├─ PHASE_5_SONG_RECOMMENDATION_LEARNING_SPEC.md
+│  │
+│  ├─ aggregation/                      # Feedback → selection-level records
+│  │  ├─ README.md
+│  │  ├─ __init__.py
+│  │  └─ aggregate_song_feedback.py
+│  │
+│  ├─ features/                         # Selection-level feature construction
+│  │  ├─ README.md
+│  │  ├─ __init__.py
+│  │  └─ selection_features.py
+│  │
+│  ├─ training/                         # Heuristic calibration (no models)
+│  │  ├─ README.md
+│  │  ├─ __init__.py
+│  │  └─ train_selector_params.py
+│  │
+│  ├─ evaluation/                       # Metrics, deltas, regression guards
+│  │  ├─ README.md
+│  │  ├─ __init__.py
+│  │  └─ evaluate_selection_quality.py
+│  │
+│  ├─ artifacts/                        # Deployment-safe static artifacts
+│  │  ├─ README.md
+│  │  ├─ __init__.py
+│  │  └─ song_selector_params.json
+│  │
+│  ├─ utils/                            # Offline orchestration helpers
+│  │  ├─ README.md
+│  │  ├─ __init__.py
+│  │  └─ song_rec_learning_orchestrator.py
+│  │
+│  └─ tests/                            # CI hard-gated learning invariants
+│     ├─ README.md
+│     └─ (determinism, semantic isolation, regression guard tests)
+│
+├─ feedback_aggregation/                # Generic Phase 5 feedback ingestion
 │  ├─ README.md
 │  ├─ feedback_events.schema.json
 │  ├─ feedback_collector.md
@@ -68,3 +128,14 @@ phase5/
    ├─ legal_compliance.md
    ├─ escalation_policy.md
    └─ safety_events.schema.json
+
+------------------------------------------------
+Notes
+------------------------------------------------
+
+- Song Recommendation learning is a **fully offline, deterministic Phase 5 pipeline**.
+- It does not replace or bypass curator-backed learning flows.
+- It produces static artifacts that are introduced via deployment only.
+- Phase 6 runtime MUST NOT load or adapt learning artifacts dynamically.
+
+End of Phase 5 Routing Skeleton
