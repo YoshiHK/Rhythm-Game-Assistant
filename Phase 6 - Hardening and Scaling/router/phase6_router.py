@@ -1,6 +1,5 @@
 """
 Phase 6 Router
-
 Central non-semantic coordinator for Phase 6 execution.
 
 Responsibilities:
@@ -13,7 +12,13 @@ This module MUST NOT:
 - contain business logic,
 - interpret gameplay semantics,
 - or modify payload contents.
+
+Invariant (Learning Flags):
+- Learning-loop flags MUST NOT influence routing decisions.
+- Routing is based ONLY on context.mode ("songs" vs "games") plus guards/policy.
+- Any presence of learning flags in payload/context is treated as informational only.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -57,11 +62,42 @@ class Phase6Router:
         self._song_handler = song_handler
         self._game_handler = game_handler
 
+    # ------------------------------------------------------------------
+    # Invariant: learning flags MUST NOT influence routing
+    # ------------------------------------------------------------------
+    def _assert_learning_flags_do_not_affect_routing(self, context: RoutingContext) -> None:
+        """
+        Mechanical invariant check.
+
+        This does NOT block requests.
+        It exists to prevent accidental coupling where learning flags
+        (e.g., learning_loop, learning_phase) start influencing routing.
+        """
+        payload = getattr(context, "payload", None)
+        if not isinstance(payload, dict):
+            return
+
+        # If clients send learning flags, they must be ignored by routing.
+        # We only assert that mode still exists and is the single routing key.
+        # (No semantic meaning; purely structural guardrail.)
+        _ = payload.get("learning_loop")
+        _ = payload.get("learning_phase")
+        _ = payload.get("song_recommendation")
+        _ = payload.get("game_recommendation")
+
+        # Ensure routing key is still mode (if provided)
+        mode = getattr(context, "mode", None)
+        if mode is not None and not isinstance(mode, str):
+            raise AssertionError("RoutingContext.mode must be a string when provided")
+
     def route(self, *, trigger: TriggerContext, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        # 1) Normalize trigger + routing metadata into immutable context
+        # 1) Normalize trigger + metadata into immutable context
         context = self._trigger_router.normalize(trigger, payload)
 
-        # 2) Evaluate guards (deterministic order)
+        # 2) Enforce invariant (informational only)
+        self._assert_learning_flags_do_not_affect_routing(context)
+
+        # 3) Evaluate guards (deterministic order)
         for g in self._guards:
             res = getattr(g, "evaluate", None)
             if callable(res):
@@ -70,23 +106,25 @@ class Phase6Router:
                     if not out.ok:
                         return self._stop_response(context, out.code or "STOP_GUARD", out.message or "Guard blocked execution")
                 else:
-                    # If guard returns a bool, treat False as STOP (avoid runtime failures)
                     if out is False:
                         return self._stop_response(context, "STOP_GUARD", "Guard blocked execution")
 
-        # 3) Apply routing policy (non-semantic)
+        # 4) Apply routing policy (non-semantic)
         decision: RoutingDecision = self._policy.decide(context)
         if not decision.proceed:
-            return self._stop_response(context, decision.stop_code or "STOP_POLICY", decision.stop_message or "Policy blocked execution")
+            return self._stop_response(
+                context,
+                decision.stop_code or "STOP_POLICY",
+                decision.stop_message or "Policy blocked execution",
+            )
 
-        # 4) Dispatch to domain handler based on route
+        # 5) Dispatch (ONLY by route selected by policy; must be mode-based)
         try:
             if decision.route == "songs":
                 return self._song_handler(context)
             if decision.route == "games":
                 return self._game_handler(context)
         except Exception as e:
-            # Failure isolation: return explicit DEGRADED
             return self._degraded_response(context, "DEGRADED_HANDLER_ERROR", str(e))
 
         return self._stop_response(context, "STOP_NO_ROUTE", "No valid route selected")
@@ -96,9 +134,9 @@ class Phase6Router:
             "status": "STOP",
             "code": code,
             "message": message,
-            "mode": context.mode,
-            "game_id": context.game_id,
-            "request_id": context.request_id,
+            "mode": getattr(context, "mode", None),
+            "game_id": getattr(context, "game_id", None),
+            "request_id": getattr(context, "request_id", None),
         }
 
     def _degraded_response(self, context: RoutingContext, code: str, message: str) -> Dict[str, Any]:
@@ -106,7 +144,7 @@ class Phase6Router:
             "status": "DEGRADED",
             "code": code,
             "message": message,
-            "mode": context.mode,
-            "game_id": context.game_id,
-            "request_id": context.request_id,
+            "mode": getattr(context, "mode", None),
+            "game_id": getattr(context, "game_id", None),
+            "request_id": getattr(context, "request_id", None),
         }

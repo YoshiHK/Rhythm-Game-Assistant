@@ -81,6 +81,14 @@ phase6/
    │  ├─ song_catalog.py           # In-memory catalog representation
    │  └─ catalog_selector.py       # Deterministic song selection
    │
+   ├─ feedback/                    # Song Recommendation Feedback Layer
+   │  ├─ __init__.py
+   │  ├─ song_feedback_forwarder.py
+   │  │   # Forward-only feedback events (Phase 6 → Phase 5)
+   │  │   # No runtime learning or adaptation
+   │  └─ README.md
+   │      # Feedback & learning loop contract (offline only)
+   │
    ├─ schemas/                     # Song Recommendation contracts (CI enforced)
    │  ├─ README.md
    │  ├─ game_capability.schema.json
