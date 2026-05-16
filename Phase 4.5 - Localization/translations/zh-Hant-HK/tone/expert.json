@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_expert",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} 這反映出穩定的模式要求。", "placeholders": ["base_text"] },
+    "concise": { "text": "{base_text} 結構穩定但具持續負荷。", "placeholders": ["base_text"] },
+    "technical": { "text": "{base_text} 模式一致性是關鍵因素。", "placeholders": ["base_text"] }
+  }
+}

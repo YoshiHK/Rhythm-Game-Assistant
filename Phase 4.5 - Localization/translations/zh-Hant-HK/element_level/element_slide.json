@@ -1,0 +1,10 @@
+{
+  "template_id": "element_slide",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "滑條需要持續追蹤其移動路徑。", "placeholders": [] },
+    "overlap_taps": { "text": "滑條進行時可能同時出現點擊輸入。", "placeholders": [] },
+    "zigzag": { "text": "滑條方向頻繁變化。", "placeholders": [] },
+    "unclear_end": { "text": "部分滑條終點不夠直觀。", "placeholders": [] }
+  }
+}

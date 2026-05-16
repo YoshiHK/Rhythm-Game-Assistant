@@ -1,0 +1,10 @@
+{
+  "template_id": "element_density",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "高音符密度會減少恢復空間。", "placeholders": [] },
+    "sustained": { "text": "各段落中密度持續維持在較高水平。", "placeholders": [] },
+    "spikes": { "text": "短時間密度上升會帶來瞬時壓力。", "placeholders": [] },
+    "mixed": { "text": "不同段落之間的密度變化會影響節奏。", "placeholders": [] }
+  }
+}

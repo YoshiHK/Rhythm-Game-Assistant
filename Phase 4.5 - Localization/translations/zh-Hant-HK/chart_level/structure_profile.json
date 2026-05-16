@@ -1,0 +1,25 @@
+{
+  "template_id": "structure_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text":"此譜面呈現出清晰的結構推進。",
+      "placeholders": []
+    },
+
+    "burst_pattern": {
+      "text": "譜面中分佈著多段短時間的高強度段落。",
+      "placeholders": []
+    },
+
+    "climax_spike": {
+      "text": "在後段出現明顯的強度高峰。",
+      "placeholders": []
+    },
+
+    "gradual_build": {
+      "text": "整體結構的壓力隨時間逐步提升。",
+      "placeholders": []
+    }
+  }
+}

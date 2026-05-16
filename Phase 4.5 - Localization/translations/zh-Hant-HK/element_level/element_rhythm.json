@@ -1,0 +1,10 @@
+{
+  "template_id": "element_rhythm",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "節奏模式需要精確的判定控制。", "placeholders": [] },
+    "irregular": { "text": "不規則節奏可能打亂預期流暢度。", "placeholders": [] },
+    "syncopated": { "text": "反拍節奏會改變時間基準。", "placeholders": [] },
+    "mixed_patterns": { "text": "多種節奏模式在譜面中交替出現。", "placeholders": [] }
+  }
+}

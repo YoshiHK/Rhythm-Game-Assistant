@@ -1,0 +1,9 @@
+{
+  "template_id": "element_movement",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "大範圍移動需要良好的協調能力。", "placeholders": [] },
+    "wide_jumps": { "text": "大幅移動會減少調整時間。", "placeholders": [] },
+    "cross_screen": { "text": "移動經常跨越整個判定區域。", "placeholders": [] }
+  }
+}

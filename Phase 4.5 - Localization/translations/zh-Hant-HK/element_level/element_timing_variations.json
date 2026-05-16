@@ -1,0 +1,9 @@
+{
+  "template_id": "element_timing_variation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "節奏條件會隨時間變化。", "placeholders": [] },
+    "tempo_shift": { "text": "速度變化需要調整。", "placeholders": [] },
+    "irregular_flow": { "text": "不規則節奏可能打亂既定節拍。", "placeholders": [] }
+  }
+}

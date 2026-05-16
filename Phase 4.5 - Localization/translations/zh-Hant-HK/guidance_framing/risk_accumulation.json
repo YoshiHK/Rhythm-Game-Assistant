@@ -1,0 +1,10 @@
+{
+  "template_id": "risk_accumulation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "細微誤差可能隨時間累積。", "placeholders": [] },
+    "fatigue_building": { "text": "疲勞可能逐漸影響穩定性。", "placeholders": [] },
+    "error_chain": { "text": "恢復不足時錯誤可能連鎖出現。", "placeholders": [] },
+    "late_chart_pressure": { "text": "後段壓力可能逐步提升。", "placeholders": [] }
+  }
+}

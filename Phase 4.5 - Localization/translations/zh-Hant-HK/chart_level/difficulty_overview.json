@@ -1,0 +1,30 @@
+{
+  "template_id": "difficulty_overview",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "此難度同時考驗節奏與穩定性。",
+      "placeholders": []
+    },
+
+    "steady": {
+      "text": "此難度需要長時間維持穩定操作。",
+      "placeholders": []
+    },
+
+    "dense": {
+      "text": "高密度段落令恢復空間十分有限。",
+      "placeholders": []
+    },
+
+    "precision": {
+      "text": "細微的時間誤差可能迅速累積。",
+      "placeholders": []
+    },
+
+    "endurance": {
+      "text": "此難度在長時間段落中考驗持續穩定性。",
+      "placeholders": []
+    }
+  }
+}

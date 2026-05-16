@@ -1,0 +1,9 @@
+{
+  "template_id": "element_pattern_complexity",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "多種模式在譜面中相互交織。", "placeholders": [] },
+    "mixed_patterns": { "text": "不同模式頻繁切換。", "placeholders": [] },
+    "hybrid": { "text": "組合模式會增加認知負擔。", "placeholders": [] }
+  }
+}

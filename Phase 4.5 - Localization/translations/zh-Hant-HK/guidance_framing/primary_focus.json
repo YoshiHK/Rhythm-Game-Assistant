@@ -1,0 +1,10 @@
+{
+  "template_id": "primary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "需要將主要注意力放在穩定操作上。", "placeholders": [] },
+    "timing_focus": { "text": "節奏控制是關鍵重點。", "placeholders": [] },
+    "consistency_focus": { "text": "維持穩定性是核心要求。", "placeholders": [] },
+    "pattern_focus": { "text": "辨識模式變化十分重要。", "placeholders": [] }
+  }
+}

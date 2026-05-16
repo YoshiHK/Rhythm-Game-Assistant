@@ -1,0 +1,10 @@
+{
+  "template_id": "awareness_framing",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "需要全程維持注意力。", "placeholders": [] },
+    "divided_attention": { "text": "可能需要分配注意力於不同元素。", "placeholders": [] },
+    "tracking_focus": { "text": "需要持續追蹤模式變化。", "placeholders": [] },
+    "anticipation": { "text": "需要提前預判變化。", "placeholders": [] }
+  }
+}

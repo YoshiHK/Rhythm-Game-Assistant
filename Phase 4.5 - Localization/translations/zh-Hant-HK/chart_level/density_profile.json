@@ -1,0 +1,25 @@
+{
+  "template_id": "density_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "整體維持較高的音符密度。",
+      "placeholders": []
+    },
+
+    "high_density": {
+      "text": "高密度段落限制了恢復時間。",
+      "placeholders": []
+    },
+
+    "stream_focus": {
+      "text": "連續的流動型模式構成了節奏核心。",
+      "placeholders": []
+    },
+
+    "variable_density": {
+      "text": "不同段落密度變化明顯，產生節奏壓力轉換。",
+      "placeholders": []
+    }
+  }
+}

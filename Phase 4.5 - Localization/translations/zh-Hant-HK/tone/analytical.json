@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_analytical",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} 這顯示出持續性的壓力。", "placeholders": ["base_text"] },
+    "observational": { "text": "{base_text} 這反映出一致趨勢。", "placeholders": ["base_text"] },
+    "structured": { "text": "{base_text} 結構表現出明顯重複。", "placeholders": ["base_text"] }
+  }
+}
