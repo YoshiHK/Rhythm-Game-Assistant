@@ -1,0 +1,35 @@
+{
+  "taxonomy": {
+    "chart_level": {
+      "difficulty_overview": "난이도",
+      "chart_summary": "요약",
+      "endurance_profile": "지구력",
+      "density_profile": "밀도",
+      "structure_profile": "구조"
+    },
+    "element_level": {
+      "element_density": "밀도",
+      "element_flick": "플릭",
+      "element_hold": "홀드",
+      "element_trill": "트릴",
+      "element_slide": "슬라이드",
+      "element_rhythm": "리듬",
+      "element_precision": "정밀도",
+      "element_visibility": "가시성",
+      "element_movement": "이동",
+      "element_pattern_complexity": "패턴",
+      "element_timing_variation": "타이밍 변화",
+      "element_chord": "동시 입력",
+      "element_coordination": "협응",
+      "element_cross_hand": "크로스",
+      "element_flow_direction": "흐름"
+    }
+  },
+  "terms": {
+    "note": "노트",
+    "pattern": "패턴",
+    "timing": "타이밍",
+    "flow": "흐름",
+    "control": "컨트롤"
+  }
+}

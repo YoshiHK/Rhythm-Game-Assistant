@@ -1,0 +1,10 @@
+{
+  "template_id": "risk_accumulation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "작은 오차가 시간이 지나면서 누적됩니다.", "placeholders": [] },
+    "fatigue_building": { "text": "피로가 점차 안정성에 영향을 줄 수 있습니다.", "placeholders": [] },
+    "error_chain": { "text": "회복이 어려우면 오류가 연속될 수 있습니다.", "placeholders": [] },
+    "late_chart_pressure": { "text": "후반으로 갈수록 압력이 증가할 수 있습니다.", "placeholders": [] }
+  }
+}

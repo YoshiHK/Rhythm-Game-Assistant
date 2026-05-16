@@ -1,0 +1,10 @@
+{
+  "template_id": "secondary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "보조적인 주의는 조정에 필요합니다.", "placeholders": [] },
+    "transition_focus": { "text": "구간 전환에 주의가 필요합니다.", "placeholders": [] },
+    "spacing_focus": { "text": "입력 간격이 안정성에 영향을 줍니다.", "placeholders": [] },
+    "recovery_focus": { "text": "회복 시간이 흐름에 영향을 줄 수 있습니다.", "placeholders": [] }
+  }
+}

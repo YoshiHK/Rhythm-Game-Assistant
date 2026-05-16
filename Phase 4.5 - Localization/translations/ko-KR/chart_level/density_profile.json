@@ -1,0 +1,25 @@
+{
+  "template_id": "density_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "차트 전반에 걸쳐 밀도가 일정하게 유지됩니다.",
+      "placeholders": []
+    },
+
+    "high_density": {
+      "text": "고밀도 구간은 회복 시간을 제한합니다.",
+      "placeholders": []
+    },
+
+    "stream_focus": {
+      "text": "연속적인 흐름 패턴이 전체 페이싱을 형성합니다.",
+      "placeholders": []
+    },
+
+    "variable_density": {
+      "text": "구간마다 밀도가 달라지며 압력이 변화합니다.",
+      "placeholders": []
+    }
+  }
+}

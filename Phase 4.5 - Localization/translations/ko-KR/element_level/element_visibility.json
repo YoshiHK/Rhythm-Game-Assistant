@@ -1,0 +1,10 @@
+{
+  "template_id": "element_visibility",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "일부 노트는 한눈에 식별하기 어렵습니다.", "placeholders": [] },
+    "low_visibility": { "text": "겹치거나 밀집된 노트가 가시성을 낮춥니다.", "placeholders": [] },
+    "tiny_notes": { "text": "작은 노트는 놓치기 쉽습니다.", "placeholders": [] },
+    "cluttered": { "text": "시각적으로 복잡해 패턴 인식이 어려워집니다.", "placeholders": [] }
+  }
+}

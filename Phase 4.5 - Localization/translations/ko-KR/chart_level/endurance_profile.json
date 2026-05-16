@@ -1,0 +1,25 @@
+{
+  "template_id": "endurance_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "전체 구간에서 지속적인 컨트롤이 요구됩니다.",
+      "placeholders": []
+    },
+
+    "long_duration": {
+      "text": "곡 길이가 길어 안정적인 유지력이 중요해집니다.",
+      "placeholders": []
+    },
+
+    "fatigue_building": {
+      "text": "지속 구간에서 피로가 점차 누적될 수 있습니다.",
+      "placeholders": []
+    },
+
+    "consistency_focus": {
+      "text": "짧은 폭발보다는 안정적인 플레이가 중요합니다.",
+      "placeholders": []
+    }
+  }
+}

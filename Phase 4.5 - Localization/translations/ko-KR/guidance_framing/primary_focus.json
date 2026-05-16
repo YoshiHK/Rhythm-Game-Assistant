@@ -1,0 +1,10 @@
+{
+  "template_id": "primary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "안정적인 실행에 주요한 주의가 필요합니다.", "placeholders": [] },
+    "timing_focus": { "text": "타이밍 제어가 핵심입니다.", "placeholders": [] },
+    "consistency_focus": { "text": "일관성 유지가 중요합니다.", "placeholders": [] },
+    "pattern_focus": { "text": "패턴 변화를 인식하는 것이 중요합니다.", "placeholders": [] }
+  }
+}

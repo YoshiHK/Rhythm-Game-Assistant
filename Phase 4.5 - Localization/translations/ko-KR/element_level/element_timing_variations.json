@@ -1,0 +1,8 @@
+{
+  "template_id": "element_timing_variation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "타이밍 조건이 시간에 따라 변합니다.", "placeholders": [] },
+    "tempo_shift": { "text": "템포 변화에 적응이 필요합니다.", "placeholders": [] },
+    "irregular_flow": { "text": "불규칙한 타이밍이 리듬을 흐트러뜨릴 수 있습니다.", "placeholders": [] }
+ 

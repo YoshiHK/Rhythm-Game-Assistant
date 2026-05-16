@@ -1,0 +1,26 @@
+{
+  "template_id": "element_chord",
+  "version": "v3",
+  "strings": {
+	  
+    "default": {
+      "text": "여러 노트를 동시에 입력해야 합니다.",
+	  "placeholders": []
+	},
+	
+    "wide_chords": {
+      "text": "넓은 범위의 동시 입력은 큰 손 이동을 요구합니다.",
+      "placeholders": []
+	},
+	
+    "dense_chords": {
+	  "text": "촘촘한 동시 입력이 자주 등장합니다.",
+	  "placeholders": []
+	},
+	
+    "high_coordination": {
+      "text": "여러 라인에 걸친 협응 입력이 요구됩니다.",
+	  "placeholders": []
+	}
+  }
+}

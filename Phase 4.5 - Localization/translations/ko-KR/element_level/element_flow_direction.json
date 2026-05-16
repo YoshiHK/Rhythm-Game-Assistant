@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flow_direction",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "패턴 흐름의 방향이 시간에 따라 바뀝니다.", "placeholders": [] },
+    "zigzag_flow": { "text": "방향이 자주 바뀝니다.", "placeholders": [] },
+    "rotational_patterns": { "text": "곡선 또는 회전 형태의 움직임이 포함됩니다.", "placeholders": [] },
+    "directional_shift": { "text": "방향 변화가 패턴 인식에 영향을 줍니다.", "placeholders": [] }
+  }
+}

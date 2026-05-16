@@ -1,0 +1,10 @@
+{
+  "template_id": "climax_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "차트에서 두드러지는 최고 강도 구간이 있습니다.", "placeholders": [] },
+    "late_climax": { "text": "주요 피크는 후반부에 나타납니다.", "placeholders": [] },
+    "sustained_climax": { "text": "피크가 여러 구간에 걸쳐 이어집니다.", "placeholders": [] },
+    "sharp_climax": { "text": "짧지만 분명한 피크가 나타납니다.", "placeholders": [] }
+  }
+}

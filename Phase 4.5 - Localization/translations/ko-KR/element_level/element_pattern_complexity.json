@@ -1,0 +1,9 @@
+{
+  "template_id": "element_pattern_complexity",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "여러 패턴 유형이 서로 결합됩니다.", "placeholders": [] },
+    "mixed_patterns": { "text": "다양한 패턴이 자주 전환됩니다.", "placeholders": [] },
+    "hybrid": { "text": "복합 패턴이 인지 부담을 증가시킵니다.", "placeholders": [] }
+  }
+}

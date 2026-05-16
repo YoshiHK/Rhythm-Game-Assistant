@@ -1,0 +1,25 @@
+{
+  "template_id": "structure_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "이 차트는 명확한 구조적 진행을 보여줍니다."
+      "placeholders": []
+    },
+
+    "burst_pattern": {
+      "text": "차트 전반에 걸쳐 짧은 고강도 구간이 나타납니다."
+      "placeholders": []
+    },
+
+    "climax_spike": {
+      "text": "후반부에 뚜렷한 난이도 상승 구간이 나타납니다."
+      "placeholders": []
+    },
+
+    "gradual_build": {
+      "text": "시간이 지날수록 점진적으로 압력이 증가합니다.
+      "placeholders": []
+    }
+  }
+}

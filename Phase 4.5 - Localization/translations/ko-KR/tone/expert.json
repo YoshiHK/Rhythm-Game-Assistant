@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_expert",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} 이는 일정한 패턴 요구를 반영합니다.", "placeholders": ["base_text"] },
+    "concise": { "text": "{base_text} 구조는 안정적이나 부담이 있습니다.", "placeholders": ["base_text"] },
+    "technical": { "text": "{base_text} 패턴 일관성이 핵심 요소입니다.", "placeholders": ["base_text"] }
+  }
+}

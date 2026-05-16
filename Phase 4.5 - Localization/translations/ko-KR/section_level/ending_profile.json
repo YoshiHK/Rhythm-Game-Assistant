@@ -1,0 +1,11 @@
+{
+  "template_id": "ending_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "차트는 명확한 구간으로 마무리됩니다.", "placeholders": [] },
+    "final_spike": { "text": "마지막 전에 강도 상승이 나타납니다.", "placeholders": [] },
+    "fake_ending": { "text": "끝난 것처럼 보이지만 계속됩니다.", "placeholders": [] },
+    "tapered_finish": { "text": "마무리로 갈수록 강도가 감소합니다.", "placeholders": [] }
+  }
+}
+``

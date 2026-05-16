@@ -1,0 +1,11 @@
+{
+  "template_id": "element_hold",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "홀드 노트는 입력 영역을 일정 시간 점유합니다.", "placeholders": [] },
+    "overlap": { "text": "겹치는 홀드로 인해 이동 공간이 제한됩니다.", "placeholders": [] },
+    "long_duration": { "text": "긴 홀드 지속은 지속적인 컨트롤을 요구합니다.", "placeholders": [] },
+    "restricted_transition": { "text": "홀드 주변에서 이동이 제한될 수 있습니다.", "placeholders": [] },
+    "fatigue": { "text": "긴 홀드 구간은 손의 피로를 누적시킬 수 있습니다.", "placeholders": [] }
+  }
+}

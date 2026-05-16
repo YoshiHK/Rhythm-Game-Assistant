@@ -1,0 +1,10 @@
+{
+  "template_id": "element_density",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "높은 노트 밀도는 회복 시간을 줄입니다.", "placeholders": [] },
+    "sustained": { "text": "여러 구간에서 높은 밀도가 지속됩니다.", "placeholders": [] },
+    "spikes": { "text": "짧은 밀도 상승이 순간적인 압력을 만듭니다.", "placeholders": [] },
+    "mixed": { "text": "구간 간 밀도 변화가 흐름에 영향을 줍니다.", "placeholders": [] }
+  }
+}

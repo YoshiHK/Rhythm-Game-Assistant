@@ -1,0 +1,10 @@
+{
+  "template_id": "burst_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "짧은 구간에서 강도가 급격히 증가합니다.", "placeholders": [] },
+    "early_burst": { "text": "초반 스파이크가 초기 페이싱을 변화시킵니다.", "placeholders": [] },
+    "late_burst": { "text": "후반부에 강도 상승 구간이 나타납니다.", "placeholders": [] },
+    "clustered_bursts": { "text": "여러 스파이크가 밀집되어 나타납니다.", "placeholders": [] }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "교차 입력이 빠르게 반복됩니다.", "placeholders": [] },
+    "simple": { "text": "안정적인 교차 패턴에는 정확한 타이밍이 필요합니다.", "placeholders": [] },
+    "extended": { "text": "긴 교차 구간은 지속적인 협응을 요구합니다.", "placeholders": [] },
+    "hybrid": { "text": "교차 입력이 다른 입력과 결합됩니다

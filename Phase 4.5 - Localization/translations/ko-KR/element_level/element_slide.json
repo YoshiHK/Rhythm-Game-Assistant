@@ -1,0 +1,10 @@
+{
+  "template_id": "element_slide",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "슬라이드는 지속적인 추적 동작을 요구합니다.", "placeholders": [] },
+    "overlap_taps": { "text": "슬라이드 중에 탭 입력이 동시에 발생할 수 있습니다.", "placeholders": [] },
+    "zigzag": { "text": "방향이 자주 변경됩니다.", "placeholders": [] },
+    "unclear_end": { "text": "끝 지점이 명확하지 않을 수 있습니다.", "placeholders": [] }
+  }
+}

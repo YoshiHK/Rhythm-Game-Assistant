@@ -1,0 +1,10 @@
+{
+  "template_id": "opening_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "초반 구간이 전체 페이싱을 설정합니다.", "placeholders": [] },
+    "gradual_start": { "text": "초반부터 점진적으로 강도가 증가합니다.", "placeholders": [] },
+    "immediate_pressure": { "text": "시작부터 높은 강도가 나타납니다.", "placeholders": [] },
+    "unstable_opening": { "text": "초반부터 패턴이 빠르게 변화합니다.", "placeholders": [] }
+  }
+}

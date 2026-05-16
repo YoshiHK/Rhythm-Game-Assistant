@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flick",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "방향 입력에는 정교한 조작이 필요합니다.", "placeholders": [] },
+    "consecutive": { "text": "연속 플릭 입력은 조작 부담을 증가시킵니다.", "placeholders": [] },
+    "directional": { "text": "방향 변화가 타이밍 안정성에 영향을 줍니다.", "placeholders": [] },
+    "embedded": { "text": "플릭이 다른 패턴 사이에 포함될 수 있습니다.", "placeholders": [] }
+  }
+}

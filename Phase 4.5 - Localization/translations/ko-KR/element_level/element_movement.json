@@ -1,0 +1,9 @@
+{
+  "template_id": "element_movement",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "큰 이동은 협응 능력을 요구합니다.", "placeholders": [] },
+    "wide_jumps": { "text": "넓은 이동은 조정 시간을 줄입니다.", "placeholders": [] },
+    "cross_screen": { "text": "움직임이 화면 전체를 가로지릅니다.", "placeholders": [] }
+  }
+}
