@@ -1,0 +1,30 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ R̃ãp̃ĩd̃ ãl̃t̃ẽr̃ñãt̃ĩñg̃ ĩñp̃ũt̃s̃ t̃ẽs̃t̃ c̃õñs̃ĩs̃t̃ẽñc̃ỹ õṽẽr̃ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "fast": {
+      "text": "⟦⟦ F̃ãs̃t̃ t̃r̃ĩl̃l̃ s̃ẽc̃t̃ĩõñs̃ r̃ẽq̃ũĩr̃ẽ s̃t̃ãb̃l̃ẽ r̃h̃ỹt̃h̃m̃ c̃õñt̃r̃õl̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "extended": {
+      "text": "⟦⟦ Ẽx̃t̃ẽñd̃ẽd̃ t̃r̃ĩl̃l̃ p̃ãt̃t̃ẽr̃ñs̃ c̃ãñ c̃ãũs̃ẽ s̃t̃ãb̃ĩl̃ĩt̃ỹ t̃õ d̃r̃ĩf̃t̃ ĩf̃ t̃ẽñs̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "timing_sensitive": {
+      "text": "⟦⟦ T̃r̃ĩl̃l̃ t̃ĩm̃ĩñg̃ ĩs̃ s̃ẽñs̃ĩt̃ĩṽẽ,̃ w̃h̃ẽr̃ẽ ĩr̃r̃ẽg̃ũl̃ãr̃ ĩñp̃ũt̃s̃ c̃ãñ q̃ũĩc̃k̃l̃ỹ ãd̃d̃ ũp̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "fatigue": {
+      "text": "⟦⟦ C̃õñt̃ĩñũõũs̃ t̃r̃ĩl̃l̃s̃ õṽẽr̃ l̃õñg̃ s̃t̃r̃ẽt̃c̃h̃ẽs̃ c̃ãñ b̃ũĩl̃d̃ f̃ãt̃ĩg̃ũẽ ãñd̃ ãf̃f̃ẽc̃t̃ c̃õñt̃r̃õl̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

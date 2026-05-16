@@ -1,0 +1,30 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "整體而言，此譜面強調穩定操作與模式認知。",
+      "placeholders": []
+    },
+
+    "control_focused": {
+      "text": "此譜面更強調穩定控制，而非短時間速度爆發。",
+      "placeholders": []
+    },
+
+    "rhythm_driven": {
+      "text": "整體譜面中維持穩定節奏是關鍵。",
+      "placeholders": []
+    },
+
+    "pressure_building": {
+      "text": "隨著段落推進，壓力逐漸累積。",
+      "placeholders": []
+    },
+
+    "endurance_weighted": {
+      "text": "整體結構更偏向耐力而非瞬間速度。",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "template_id": "difficulty_overview",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "该难度同时考验节奏判定与稳定性。",
+      "placeholders": []
+    },
+
+    "steady": {
+      "text": "该难度需要在过程中持续保持稳定操作。",
+      "placeholders": []
+    },
+
+    "dense": {
+      "text": "高密度段落使得恢复空间十分有限。",
+      "placeholders": []
+    },
+
+    "precision": {
+      "text": "微小的判定误差可能迅速累积。",
+      "placeholders": []
+    },
+
+    "endurance": {
+      "text": "该难度在长时间段落中考验持续稳定性。",
+      "placeholders": []
+    }
+  }
+}

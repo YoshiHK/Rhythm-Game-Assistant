@@ -1,0 +1,10 @@
+{
+  "template_id": "ending_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "The chart concludes with a distinct section.", "placeholders": [] },
+    "final_spike": { "text": "A final spike appears before the end.", "placeholders": [] },
+    "fake_ending": { "text": "The chart appears to end but continues.", "placeholders": [] },
+    "tapered_finish": { "text": "Intensity decreases toward the end.", "placeholders": [] }
+  }
+}

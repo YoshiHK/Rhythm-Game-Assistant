@@ -1,0 +1,10 @@
+{
+  "template_id": "element_coordination",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "多重輸入需要協調的時機控制。", "placeholders": [] },
+    "rapid_sequences": { "text": "快速連續輸入提高了協調難度。", "placeholders": [] },
+    "interleaving_patterns": { "text": "不同輸入類型在模式中交錯出現。", "placeholders": [] },
+    "high_load_coordination": { "text": "高輸入負荷可能影響同步穩定性。", "placeholders": [] }
+  }
+}

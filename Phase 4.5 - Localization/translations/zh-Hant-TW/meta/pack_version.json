@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "description": "Traditional Chinese (Taiwan) locale pack metadata",
+    "scope": "Phase 4.5 Localization",
+    "role": "localized"
+  },
+  "locale": "zh-Hant-TW",
+  "coverage": {
+    "chart_level": 5,
+    "element_level": 15,
+    "section_level": 4,
+    "guidance_framing": 4,
+    "tone": 4
+  },
+  "template_counts": {
+    "total_templates": 32,
+    "total_variants_expected_min": 128
+  },
+  "validation": {
+    "all_templates_present": true,
+    "placeholder_parity_verified": true,
+    "taxonomy_alignment_verified": true,
+    "glossary_alignment_verified": false
+  },
+  "build": {
+    "generated": false,
+    "pseudo_applied": false,
+    "ci_ready": true
+  },
+  "notes": "Traditional Chinese (Taiwan) localization."
+}

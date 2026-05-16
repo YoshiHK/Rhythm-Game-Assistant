@@ -1,0 +1,10 @@
+{
+  "template_id": "climax_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "譜面中存在明顯的高峰段落。", "placeholders": [] },
+    "late_climax": { "text": "主要高峰出現在後段。", "placeholders": [] },
+    "sustained_climax": { "text": "高峰持續跨越多個段落。", "placeholders": [] },
+    "sharp_climax": { "text": "高峰短暫但明顯。", "placeholders": [] }
+  }
+}

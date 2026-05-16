@@ -1,0 +1,25 @@
+{
+  "template_id": "endurance_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "此譜面需要在全程維持穩定操作。",
+      "placeholders": []
+    },
+
+    "long_duration": {
+      "text": "長時間遊玩強調穩定表現。",
+      "placeholders": []
+    },
+
+    "fatigue_building": {
+      "text": "持續段落會逐漸累積疲勞。",
+      "placeholders": []
+    },
+
+    "consistency_focus": {
+      "text": "譜面更偏向穩定輸出，而非瞬間爆發。",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "template_id": "element_hold",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "長按音符會長時間佔用輸入區域。", "placeholders": [] },
+    "overlap": { "text": "重疊的長按可能限制可移動空間。", "placeholders": [] },
+    "long_duration": { "text": "較長的長按需要持續控制。", "placeholders": [] },
+    "restricted_transition": { "text": "在長按附近轉移時可能受到空間限制。", "placeholders": [] },
+    "fatigue": { "text": "長時間長按可能逐漸累積手部疲勞。", "placeholders": [] }
+  }
+}
