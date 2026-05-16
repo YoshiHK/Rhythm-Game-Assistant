@@ -1,0 +1,9 @@
+{
+  "template_id": "element_precision",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Input spacing requires careful precision.", "placeholders": [] },
+    "tight_spacing": { "text": "Very short intervals increase precision demand.", "placeholders": [] },
+    "tiny_inputs": { "text": "Small input areas limit tolerance for error.", "placeholders": [] }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Alternating inputs repeat in quick succession.", "placeholders": [] },
+    "simple": { "text": "Consistent alternating patterns require stable timing.", "placeholders": [] },
+    "extended": { "text": "Long trill sections increase sustained coordination demand.", "placeholders": [] },
+    "hybrid": { "text": "Alternating inputs combine with other input types.", "placeholders": [] }
+  }
+}

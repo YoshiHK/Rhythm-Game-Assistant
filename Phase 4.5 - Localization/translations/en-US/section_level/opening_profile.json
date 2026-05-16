@@ -1,0 +1,10 @@
+{
+  "template_id": "opening_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "The early sections establish the pacing.", "placeholders": [] },
+    "gradual_start": { "text": "The chart builds gradually from the opening.", "placeholders": [] },
+    "immediate_pressure": { "text": "Intensity is present from the beginning.", "placeholders": [] },
+    "unstable_opening": { "text": "The opening shifts quickly between patterns.", "placeholders": [] }
+  }
+}

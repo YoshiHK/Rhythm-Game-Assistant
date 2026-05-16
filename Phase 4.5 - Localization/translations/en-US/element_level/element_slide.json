@@ -1,0 +1,10 @@
+{
+  "template_id": "element_slide",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Slide patterns require steady tracking across the playfield.", "placeholders": [] },
+    "overlap_taps": { "text": "Taps may occur while slides are active, dividing attention.", "placeholders": [] },
+    "zigzag": { "text": "Slide patterns shift direction frequently across lanes.", "placeholders": [] },
+    "unclear_end": { "text": "Some slide endpoints may not be immediately clear.", "placeholders": [] }
+  }
+}

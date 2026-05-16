@@ -1,0 +1,10 @@
+{
+  "template_id": "element_density",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "High note density can reduce recovery time.", "placeholders": [] },
+    "sustained": { "text": "Density remains consistently high across sections.", "placeholders": [] },
+    "spikes": { "text": "Short bursts of density increase momentary pressure.", "placeholders": [] },
+    "mixed": { "text": "Density varies across sections, affecting pacing.", "placeholders": [] }
+  }
+}

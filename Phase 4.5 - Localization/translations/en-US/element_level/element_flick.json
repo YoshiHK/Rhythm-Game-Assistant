@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flick",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Directional inputs require controlled movement.", "placeholders": [] },
+    "consecutive": { "text": "Consecutive flick inputs require sustained control.", "placeholders": [] },
+    "directional": { "text": "Changing flick directions affects timing consistency.", "placeholders": [] },
+    "embedded": { "text": "Flick inputs may appear within other patterns.", "placeholders": [] }
+  }
+}

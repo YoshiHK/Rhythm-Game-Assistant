@@ -1,0 +1,10 @@
+{
+  "template_id": "burst_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Short sections show sudden increases in intensity.", "placeholders": [] },
+    "early_burst": { "text": "An early spike changes the initial pacing.", "placeholders": [] },
+    "late_burst": { "text": "Intensity spikes occur in later sections.", "placeholders": [] },
+    "clustered_bursts": { "text": "Multiple bursts appear close together.", "placeholders": [] }
+  }
+}

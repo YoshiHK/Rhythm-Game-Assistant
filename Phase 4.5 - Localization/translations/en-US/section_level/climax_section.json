@@ -1,0 +1,10 @@
+{
+  "template_id": "climax_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "A peak section stands out in the chart.", "placeholders": [] },
+    "late_climax": { "text": "The main peak occurs toward the end.", "placeholders": [] },
+    "sustained_climax": { "text": "The peak extends across multiple sections.", "placeholders": [] },
+    "sharp_climax": { "text": "The peak is brief but distinct.", "placeholders": [] }
+  }
+}

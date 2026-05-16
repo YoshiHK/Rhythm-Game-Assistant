@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flow_direction",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Pattern flow shifts direction over time.", "placeholders": [] },
+    "zigzag_flow": { "text": "Direction alternates frequently across movements.", "placeholders": [] },
+    "rotational_patterns": { "text": "Patterns follow curved or rotating trajectories.", "placeholders": [] },
+    "directional_shift": { "text": "Changes in flow direction influence pattern readability.", "placeholders": [] }
+  }
+}

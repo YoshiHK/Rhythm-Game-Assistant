@@ -1,0 +1,30 @@
+{
+  "template_id": "difficulty_overview",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "This difficulty level challenges both timing and consistency.",
+      "placeholders": []
+    },
+
+    "steady": {
+      "text": "This difficulty requires steady execution over time.",
+      "placeholders": []
+    },
+
+    "dense": {
+      "text": "High density sections leave little room for recovery.",
+      "placeholders": []
+    },
+
+    "precision": {
+      "text": "Small timing inaccuracies can accumulate quickly.",
+      "placeholders": []
+    },
+
+    "endurance": {
+      "text": "This level tests consistency across long stretches.",
+      "placeholders": []
+    }
+  }
+}

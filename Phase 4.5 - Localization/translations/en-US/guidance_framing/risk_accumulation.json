@@ -1,0 +1,10 @@
+{
+  "template_id": "risk_accumulation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Small inaccuracies can accumulate over time.", "placeholders": [] },
+    "fatigue_building": { "text": "Fatigue can gradually affect stability.", "placeholders": [] },
+    "error_chain": { "text": "Errors may cluster if recovery is limited.", "placeholders": [] },
+    "late_chart_pressure": { "text": "Pressure can increase toward later sections.", "placeholders": [] }
+  }
+}
