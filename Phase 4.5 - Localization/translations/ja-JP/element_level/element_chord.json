@@ -1,0 +1,25 @@
+{
+  "template_id": "element_chord",
+  "version": "v3",
+  "strings": {
+    "default": { 
+	  "text": "複数のノーツを同時に入力する必要があります。",
+	  "placeholders": []
+	},
+	
+    "wide_chords": {
+	  "text": "広い間隔の同時押しは大きな手の動きを必要とします。",
+	  "placeholders": []
+	},
+	
+    "dense_chords": {
+	  "text": "密集した同時押しが連続して現れます。",
+	  "placeholders": []
+	},
+	
+    "high_coordination": {
+	  "text": "複数レーンにわたる協調入力が必要です。",
+	  "placeholders": []
+	}
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "secondary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "補助的な注意が調整に必要です。", "placeholders": [] },
+    "transition_focus": { "text": "区間の切り替えに注意が必要です。", "placeholders": [] },
+    "spacing_focus": { "text": "入力間隔が安定性に影響します。", "placeholders": [] },
+    "recovery_focus": { "text": "回復時間が流れに影響します。", "placeholders": [] }
+  }
+}

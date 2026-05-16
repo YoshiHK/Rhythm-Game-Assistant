@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_casual",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} — 状況によっては負荷を感じることがあります。", "placeholders": ["base_text"] },
+    "light": { "text": "{base_text} — 一部が目立つ場面があります。", "placeholders": ["base_text"] },
+    "friendly": { "text": "{base_text} — 意識しておくと対応しやすくなります。", "placeholders": ["base_text"] }
+  }
+}

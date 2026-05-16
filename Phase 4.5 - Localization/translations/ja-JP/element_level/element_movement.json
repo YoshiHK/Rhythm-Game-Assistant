@@ -1,0 +1,9 @@
+{
+  "template_id": "element_movement",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "大きな移動には協調操作が必要です。", "placeholders": [] },
+    "wide_jumps": { "text": "大きな移動は調整時間を減少させます。", "placeholders": [] },
+    "cross_screen": { "text": "動きが画面全体にわたって広がります。", "placeholders": [] }
+  }
+}

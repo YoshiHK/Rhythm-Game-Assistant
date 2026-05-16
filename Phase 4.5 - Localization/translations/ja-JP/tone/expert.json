@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_expert",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} これはパターン要求の一貫性を示しています。", "placeholders": ["base_text"] },
+    "concise": { "text": "{base_text} 構造は安定していますが負荷があります。", "placeholders": ["base_text"] },
+    "technical": { "text": "{base_text} パターンの一貫性が重要な要素です。", "placeholders": ["base_text"] }
+  }
+}

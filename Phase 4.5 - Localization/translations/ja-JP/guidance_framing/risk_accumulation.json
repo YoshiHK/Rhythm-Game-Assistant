@@ -1,0 +1,10 @@
+{
+  "template_id": "risk_accumulation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "小さな誤差が時間とともに蓄積します。", "placeholders": [] },
+    "fatigue_building": { "text": "疲労が徐々に安定性に影響します。", "placeholders": [] },
+    "error_chain": { "text": "回復が難しい場合、ミスが連続することがあります。", "placeholders": [] },
+    "late_chart_pressure": { "text": "終盤に向けて負荷が増加することがあります。", "placeholders": [] }
+  }
+}

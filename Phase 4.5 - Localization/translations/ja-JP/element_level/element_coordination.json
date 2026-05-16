@@ -1,0 +1,26 @@
+{
+  "template_id": "element_coordination",
+  "version": "v3",
+  "strings": {
+	  
+    "default": {
+	  "text": "複数の入力に対してタイミングの協調が求められます。",
+	  "placeholders": []
+	},
+	
+    "rapid_sequences": { 
+	  "text": "高速な連続入力により協調の要求が高まります。",
+	  "placeholders": []
+	},
+	
+    "interleaving_patterns": {
+	  "text": "異なる入力タイプが交互に現れます。",
+	  "placeholders": []
+	},
+	
+    "high_load_coordination": {
+	  "text": "高い入力負荷により同期が乱れやすくなります。",
+	  "placeholders": []
+	}
+  }
+}

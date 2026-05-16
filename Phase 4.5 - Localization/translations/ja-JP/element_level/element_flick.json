@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flick",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "方向入力には正確な操作が求められます。", "placeholders": [] },
+    "consecutive": { "text": "連続フリックにより操作の要求が高まります。", "placeholders": [] },
+    "directional": { "text": "方向の変化が判定の安定性に影響します。", "placeholders": [] },
+    "embedded": { "text": "フリックが他のパターン内に組み込まれます。", "placeholders": [] }
+  }
+}

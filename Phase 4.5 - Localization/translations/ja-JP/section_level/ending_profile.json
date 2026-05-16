@@ -1,0 +1,10 @@
+{
+  "template_id": "ending_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "終盤は明確なセクションで締めくくられます。", "placeholders": [] },
+    "final_spike": { "text": "終了直前に強度の上昇があります。", "placeholders": [] },
+    "fake_ending": { "text": "終わったように見えて続きます。", "placeholders": [] },
+    "tapered_finish": { "text": "終盤に向かって強度が徐々に下がります。", "placeholders": [] }
+  }
+}

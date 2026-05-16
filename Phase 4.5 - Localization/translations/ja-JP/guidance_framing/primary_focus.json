@@ -1,0 +1,10 @@
+{
+  "template_id": "primary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "安定した操作に主な注意が必要です。", "placeholders": [] },
+    "timing_focus": { "text": "タイミング制御が重要な焦点です。", "placeholders": [] },
+    "consistency_focus": { "text": "安定性の維持が重要です。", "placeholders": [] },
+    "pattern_focus": { "text": "パターン変化の把握が重要です。", "placeholders": [] }
+  }
+}

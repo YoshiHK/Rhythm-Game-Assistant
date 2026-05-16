@@ -1,0 +1,30 @@
+{
+  "template_id": "difficulty_overview",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "この難度はタイミングと安定性の両方が求められます。",
+      "placeholders": []
+    },
+
+    "steady": {
+      "text": "この難度では時間を通して安定した操作が求められます。",
+      "placeholders": []
+    },
+
+    "dense": {
+      "text": "高密度区間により回復の余裕がほとんどありません。",
+      "placeholders": []
+    },
+
+    "precision": {
+      "text": "わずかなタイミングのズレが蓄積しやすくなります。",
+      "placeholders": []
+    },
+
+    "endurance": {
+      "text": "長い区間を通して安定性が試されます。",
+      "placeholders": []
+    }
+  }
+}

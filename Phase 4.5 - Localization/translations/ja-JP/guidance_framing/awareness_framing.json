@@ -1,0 +1,10 @@
+{
+  "template_id": "awareness_framing",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "全体を通して注意を維持する必要があります。", "placeholders": [] },
+    "divided_attention": { "text": "注意を複数に分ける必要があります。", "placeholders": [] },
+    "tracking_focus": { "text": "パターンを継続して追跡する必要があります。", "placeholders": [] },
+    "anticipation": { "text": "変化を予測する必要があります。", "placeholders": [] }
+  }
+}

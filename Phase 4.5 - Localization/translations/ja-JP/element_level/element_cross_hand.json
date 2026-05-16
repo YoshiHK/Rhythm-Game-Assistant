@@ -1,0 +1,26 @@
+{
+  "template_id": "element_cross_hand",
+  "version": "v3",
+  "strings": {
+	  
+    "default": {
+	   "text": "入力位置がプレイフィールド上で干渉することがあります。",
+	   "placeholders": []
+	},
+	
+    "crossing_paths": {
+	   "text": "入力領域をまたぐ動きが必要となります。",
+	   "placeholders": []
+	},
+	
+    "hand_switching": {
+	   "text": "操作が途中で左右の手に切り替わることがあります。",
+	   "placeholders": []
+	},
+	
+    "spatial_conflict": {
+	   "text": "同時入力領域が重なり合う場合があります。",
+	   "placeholders": []
+	}
+  }
+}

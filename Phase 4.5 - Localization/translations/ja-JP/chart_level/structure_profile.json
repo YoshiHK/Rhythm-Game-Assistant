@@ -1,0 +1,25 @@
+{
+  "template_id": "structure_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "譜面は明確な構造的な進行を示しています。",
+      "placeholders": []
+    },
+
+    "burst_pattern": {
+      "text": "譜面全体に短い高密度の区間が点在しています。",
+      "placeholders": []
+    },
+
+    "climax_spike": {
+      "text": "後半に顕著なピークが現れます。",
+      "placeholders": []
+    },
+
+    "gradual_build": {
+      "text": "時間の経過とともに徐々に負荷が増していきます。",
+      "placeholders": []
+    }
+  }
+}

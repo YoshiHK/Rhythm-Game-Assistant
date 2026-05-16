@@ -1,0 +1,30 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "全体として、この譜面は安定した操作とパターン認識が重要です。",
+      "placeholders": []
+    },
+
+    "control_focused": {
+      "text": "短い高速区間よりも安定した操作が重視されます。",
+      "placeholders": []
+    },
+
+    "rhythm_driven": {
+      "text": "全体を通して安定したリズム維持が重要です。",
+      "placeholders": []
+    },
+
+    "pressure_building": {
+      "text": "セクションが進むにつれて徐々に負荷が高まります。",
+      "placeholders": []
+    },
+
+    "endurance_weighted": {
+      "text": "瞬間的な速度よりも持久力が重視されます。",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "交互入力が連続して現れます。", "placeholders": [] },
+    "simple": { "text": "安定した交互パターンには正確なタイミングが必要です。", "placeholders": [] },
+    "extended": { "text": "長い交互区間により持続的な協調が求められます。", "placeholders": [] },
+    "hybrid": { "text": "交互入力が他の入力と組み合わさります。", "placeholders": [] }
+  }
+}

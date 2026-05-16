@@ -1,0 +1,25 @@
+{
+  "template_id": "endurance_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "譜面全体を通して安定した操作が求められます。",
+      "placeholders": []
+    },
+
+    "long_duration": {
+      "text": "長さにより安定した継続力が重視されます。",
+      "placeholders": []
+    },
+
+    "fatigue_building": {
+      "text": "継続した区間で徐々に疲労が蓄積します。",
+      "placeholders": []
+    },
+
+    "consistency_focus": {
+      "text": "短いピークよりも安定したプレイが重視されます。",
+      "placeholders": []
+    }
+  }
+}

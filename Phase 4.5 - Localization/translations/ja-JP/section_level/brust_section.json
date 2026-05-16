@@ -1,0 +1,10 @@
+{
+  "template_id": "burst_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "短い区間で強度が急上昇します。", "placeholders": [] },
+    "early_burst": { "text": "序盤のスパイクが初期のペースに影響します。", "placeholders": [] },
+    "late_burst": { "text": "後半に強度の上昇が現れます。", "placeholders": [] },
+    "clustered_bursts": { "text": "複数のスパイクが近い間隔で現れます。", "placeholders": [] }
+  }
+}

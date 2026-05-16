@@ -1,0 +1,9 @@
+{
+  "template_id": "element_pattern_complexity",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "複数のパターンが組み合わさって現れます。", "placeholders": [] },
+    "mixed_patterns": { "text": "異なるパターンが頻繁に切り替わります。", "placeholders": [] },
+    "hybrid": { "text": "複合パターンにより認知負荷が増加します。", "placeholders": [] }
+  }
+}

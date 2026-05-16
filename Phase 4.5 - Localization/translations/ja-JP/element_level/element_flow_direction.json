@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flow_direction",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "パターンの流れの方向が変化します。", "placeholders": [] },
+    "zigzag_flow": { "text": "方向が頻繁に切り替わります。", "placeholders": [] },
+    "rotational_patterns": { "text": "曲線や回転する動きが含まれます。", "placeholders": [] },
+    "directional_shift": { "text": "方向変化が譜面の認識に影響します。", "placeholders": [] }
+  }
+}

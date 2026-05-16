@@ -1,0 +1,10 @@
+{
+  "template_id": "element_rhythm",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "リズムパターンは正確なタイミング判断を必要とします。", "placeholders": [] },
+    "irregular": { "text": "不規則なリズムが流れを乱すことがあります。", "placeholders": [] },
+    "syncopated": { "text": "オフビートがタイミング基準を変化させます。", "placeholders": [] },
+    "mixed_patterns": { "text": "複数のリズムパターンが混在します。", "placeholders": [] }
+  }
+}

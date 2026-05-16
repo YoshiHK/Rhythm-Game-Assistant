@@ -1,0 +1,10 @@
+{
+  "template_id": "opening_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "序盤の区間が全体のペースを決定します。", "placeholders": [] },
+    "gradual_start": { "text": "序盤から徐々に強度が上がっていきます。", "placeholders": [] },
+    "immediate_pressure": { "text": "開始直後から強度が高い状態です。", "placeholders": [] },
+    "unstable_opening": { "text": "序盤からパターンが頻繁に変化します。", "placeholders": [] }
+  }
+}

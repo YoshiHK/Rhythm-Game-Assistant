@@ -1,0 +1,11 @@
+{
+  "template_id": "element_hold",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "ホールドノーツは一定時間入力領域を占有します。", "placeholders": [] },
+    "overlap": { "text": "重なるホールドにより動ける範囲が制限されます。", "placeholders": [] },
+    "long_duration": { "text": "長いホールドには継続的な操作が求められます。", "placeholders": [] },
+    "restricted_transition": { "text": "ホールド周辺での移動が制限される場合があります。", "placeholders": [] },
+    "fatigue": { "text": "長時間のホールドで手の疲労が蓄積します。", "placeholders": [] }
+  }
+}

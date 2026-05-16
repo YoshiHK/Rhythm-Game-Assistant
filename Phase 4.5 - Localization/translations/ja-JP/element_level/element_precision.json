@@ -1,0 +1,9 @@
+{
+  "template_id": "element_precision",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "入力間隔には高い精度が求められます。", "placeholders": [] },
+    "tight_spacing": { "text": "短い間隔が精度要求を高めます。", "placeholders": [] },
+    "tiny_inputs": { "text": "小さい入力領域により余裕が減少します。", "placeholders": [] }
+  }
+}

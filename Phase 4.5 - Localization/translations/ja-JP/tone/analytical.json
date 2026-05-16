@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_analytical",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} これは持続的な負荷を示唆しています。", "placeholders": ["base_text"] },
+    "observational": { "text": "{base_text} これは一定の傾向を示しています。", "placeholders": ["base_text"] },
+    "structured": { "text": "{base_text} 構造に明確な反復が見られます。", "placeholders": ["base_text"] }
+  }
+}

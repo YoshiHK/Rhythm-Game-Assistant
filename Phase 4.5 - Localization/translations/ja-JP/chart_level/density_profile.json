@@ -1,0 +1,26 @@
+{
+  "template_id": "density_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "譜面全体を通して密度が保たれています。",
+      "placeholders": []
+    },
+
+    "high_density": {
+      "text": "高密度区間により回復の余裕が少なくなります。",
+	  
+      "placeholders": []
+    },
+
+    "stream_focus": {
+      "text": "連続した流れのあるパターンがテンポを形作っています。",
+      "placeholders": []
+    },
+
+    "variable_density": {
+      "text": "セクションごとに密度が変化し、負荷が移行します。",
+      "placeholders": []
+    }
+  }
+}

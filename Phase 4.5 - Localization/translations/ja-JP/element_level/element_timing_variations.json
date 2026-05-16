@@ -1,0 +1,9 @@
+{
+  "template_id": "element_timing_variation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "タイミング条件が時間とともに変化します。", "placeholders": [] },
+    "tempo_shift": { "text": "テンポの変化に対応が必要です。", "placeholders": [] },
+    "irregular_flow": { "text": "不規則なタイミングがリズムを乱します。", "placeholders": [] }
+  }
+}

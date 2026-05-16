@@ -1,0 +1,10 @@
+{
+  "template_id": "element_density",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "高い密度により回復の余裕が少なくなります。", "placeholders": [] },
+    "sustained": { "text": "複数の区間で密度が高い状態が維持されます。", "placeholders": [] },
+    "spikes": { "text": "短い高密度区間が一時的な負荷を生みます。", "placeholders": [] },
+    "mixed": { "text": "区間ごとの密度変化がテンポに影響します。", "placeholders": [] }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "climax_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "譜面の中で目立つピーク区間があります。", "placeholders": [] },
+    "late_climax": { "text": "主なピークは終盤に現れます。", "placeholders": [] },
+    "sustained_climax": { "text": "ピークが複数の区間にわたって続きます。", "placeholders": [] },
+    "sharp_climax": { "text": "ピークは短いですが明確に現れます。", "placeholders": [] }
+  }
+}

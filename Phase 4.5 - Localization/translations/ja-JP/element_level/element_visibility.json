@@ -1,0 +1,10 @@
+{
+  "template_id": "element_visibility",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "一目で把握しづらいノーツがあります。", "placeholders": [] },
+    "low_visibility": { "text": "重なりや密集により視認性が低下します。", "placeholders": [] },
+    "tiny_notes": { "text": "小さなノーツは見落としやすくなります。", "placeholders": [] },
+    "cluttered": { "text": "視覚的に密集しているため判別が難しくなります。", "placeholders": [] }
+  }
+}

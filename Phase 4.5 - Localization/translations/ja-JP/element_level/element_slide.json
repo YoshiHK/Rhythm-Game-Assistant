@@ -1,0 +1,10 @@
+{
+  "template_id": "element_slide",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "スライドは継続的な追従操作が求められます。", "placeholders": [] },
+    "overlap_taps": { "text": "スライド中にタップが重なる場合があります。", "placeholders": [] },
+    "zigzag": { "text": "方向が頻繁に変化します。", "placeholders": [] },
+    "unclear_end": { "text": "終点が分かりにくい場合があります。", "placeholders": [] }
+  }
+}
