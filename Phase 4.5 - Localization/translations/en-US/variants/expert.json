@@ -1,7 +1,0 @@
-{
-  "variant_id": "expert",
-  "rules": {
-    "tone": "technical",
-    "max_words": 40
-  }
-}
