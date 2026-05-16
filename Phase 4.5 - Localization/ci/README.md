@@ -6,137 +6,218 @@
 
 ---
 
-## 1. Purpose
+# 1. Purpose
 
 This directory defines the **CI governance layer** for Phase 4.5 (Localization).
 
 Its purpose is to:
-- enforce structural and policy contracts for localization,
-- prevent runtime breakage caused by translation drift,
-- provide deterministic, auditable failure signals.
 
-This CI layer is **not** part of the runtime execution path.
+- ✅ enforce structural and policy contracts for localization
+- ✅ prevent runtime breakage caused by translation drift
+- ✅ provide deterministic, auditable failure signals
+
+This CI layer is **strictly non-runtime** and MUST NOT influence execution.
 
 ---
 
-## 2. What This CI Layer IS
+# 2. What This CI Layer IS
 
 Phase 4.5 CI:
 
-- ✅ validates localization structure and contracts,
-- ✅ enforces placeholder and token integrity,
-- ✅ enforces narrative word budgets,
-- ✅ supports explicit, auditable waivers with decay,
-- ✅ emits a stable CI SUMMARY line for observability.
+- ✅ validates localization structure and contracts  
+- ✅ enforces template parity across locales  
+- ✅ enforces placeholder integrity  
+- ✅ ensures taxonomy ↔ registry alignment  
+- ✅ ensures debug configuration consistency  
+- ✅ enforces word/token budget constraints  
+- ✅ emits deterministic CI SUMMARY signals  
 
 ---
 
-## 3. What This CI Layer is NOT
+# 3. What This CI Layer is NOT
 
 Phase 4.5 CI **does NOT**:
 
-- ❌ evaluate translation quality or style,
-- ❌ judge linguistic correctness,
-- ❌ execute runtime localization logic,
-- ❌ gate Phase 6 runtime execution,
-- ❌ invoke Phase 7 logic,
-- ❌ modify localization or narrative content.
+- ❌ evaluate translation quality or fluency  
+- ❌ judge linguistic correctness  
+- ❌ execute runtime localization logic  
+- ❌ gate Phase 6 runtime execution  
+- ❌ introduce or modify semantics  
+- ❌ auto-fix localization errors  
 
 ---
 
-## 4. CI Structure
+# 4. CI Architecture
 
 ci/
-├─ run_all_localization_checks.py   # CI runner (checks‑only)
+├─ run_all_localization_checks.py          # CI runner (deterministic, checks-only)
 │
-├─ check_localization.py            # Localization directory integrity
-├─ check_template_parity.py         # Narrative v3 template parity + schema
-├─ check_placeholder_integrity.py   # Placeholder preservation across locales
+├─ checks/
+│  ├─ taxonomy_validator.py                # Taxonomy docs ↔ registry alignment
+│  ├─ check_pack_integrity.py              # Locale pack completeness + schema sanity
+│  ├─ check_localization.py                # translations/ structural integrity
+│  ├─ check_template_parity.py             # template file-set parity + schema sanity
+│  ├─ check_placeholder_integrity.py       # placeholder preservation across locales
+│  ├─ check_debug_consistency.py           # debug.json identical across locales
+│  ├─ check_token_counts.py                # aggregate token count consistency
+│  ├─ check_token_parity_per_string.py     # per-string token parity + waivers + CI SUMMARY
+│  └─ check_word_budget.py                 # per-variant word/unit budget enforcement
 │
-├─ check_token_parity_per_string.py # Per‑string token parity + waivers + summary
-├─ check_token_counts.py            # Aggregate token count consistency
-├─ check_word_budget.py             # Narrative v3 word/unit budget enforcement
+├─ data/
+│  └─ token_parity_waivers.json            # waivers, budgets, decay (CI-only)
 │
-├─ token_parity_waivers.json        # CI governance data (waivers, budgets, decay)
+├─ observability/
+│  └─ OBSERVABILITY_SNIPPET.md
 │
-└─ README.md                        # This document
+├─ tests/
+│  ├─ test_pseudo_validation_rules.py
+│  └─ test_token_parity_summary.py
+│
+└─ test_token_parity_summary.py         # locks CI SUMMARY format (meta-CI)
 
-
+Runner behavior:
 - Executes Phase 4.5 checks **only**
 - Runs checks in deterministic order
 - Stops on first failure
 - Produces a single PASS/FAIL exit code
-
-This runner:
-- ✅ is safe to run locally or in CI,
-- ❌ must not be used as a runtime gate,
-- ❌ must not invoke Phase 7 logic.
+- CI failures block merges, not runtime execution
 
 ---
 
-## 7. Token Parity Waivers
+# 5. Deterministic Execution Order (CRITICAL)
 
-`token_parity_waivers.json` defines **explicit exceptions** to token parity rules.
+Checks MUST run in the following order:
+
+### 🔹 Stage 1 — Contract Layer
+- taxonomy_validator.py
+- check_pack_integrity.py
+
+✅ Validate global correctness before file-level checks
+
+---
+
+### 🔹 Stage 2 — Structure Layer
+- check_localization.py
+- check_template_parity.py
+
+✅ Ensure file completeness and schema validity
+
+---
+
+### 🔹 Stage 3 — Integrity Layer
+- check_placeholder_integrity.py
+- check_debug_consistency.py
+
+✅ Prevent runtime-breaking drift
+
+---
+
+### 🔹 Stage 4 — Quantitative Constraints
+- check_token_counts.py
+- check_token_parity_per_string.py
+- check_word_budget.py
+
+✅ Enforce presentation consistency and budgets
+
+---
+
+# 6. Key Invariants
+
+### 🔒 Template Parity
+
+All templates MUST exist in all locales.
+
+---
+
+### 🔒 Placeholder Integrity
+
+- Placeholder sets MUST match across all locales
+- No additions / removals allowed
+
+---
+
+### 🔒 Taxonomy Alignment
+
+- Every template_id MUST exist in one taxonomy
+- No orphan or duplicate mappings allowed
+
+---
+
+### 🔒 Debug Consistency
+
+> ✅ debug.json MUST be identical across ALL locales
+
+This prevents:
+- routing divergence
+- inconsistent tracing
+- non-deterministic debug output
+
+---
+
+# 7. Token Parity Waivers
+
+`data/token_parity_waivers.json` defines **explicit exceptions**.
 
 Properties:
-- Waivers are **auditable**
-- Budgets exist at global and per‑locale levels
-- Waivers **decay** via `review_by` dates
-- Expired or invalid waivers fail CI
 
-This file is **governance data**, not versioned configuration.
+- ✅ auditable
+- ✅ time-bounded (review_by)
+- ✅ budget-constrained
+- ❌ expired waivers FAIL CI
 
 ---
 
-## 8. CI SUMMARY Output (Observability)
+# 8. CI SUMMARY Output
 
-Some checks (notably token parity) emit a **single‑line CI SUMMARY**:
-CI SUMMARY: 
-token_parity_per_string status=PASS 
-mismatches=0 
-waivers_used=0 
-invalid_waivers=0
-
+CI SUMMARY: = ...
 Guarantees:
-- Exactly one physical line
-- Stable, machine‑consumable format
-- No embedded or escaped newlines
 
-CI SUMMARY:
-- ✅ may be scraped for observability,
-- ❌ must not be used to gate runtime behavior.
+- ✅ single line only
+- ✅ stable format
+- ✅ machine-consumable
 
 ---
 
-## 9. Relationship to Other Phases
+# 9. Failure Model
 
-- Phase 4.5 CI constrains **localization only**
-- Phase 4 (Personalization) CI is separate
-- Phase 7 CI is separate
-- Phase 6 may observe CI results, but does not depend on them
+- ❌ CI stops at first failure
+- ✅ Errors MUST be fixed in localization layer
+- ❌ Runtime MUST NOT compensate
 
 ---
 
-## 10. Design Principles (Non‑Negotiable)
+# 10. Relationship to Other Phases
+
+- Phase 4.5 CI governs **localization only**
+- Phase 4 CI governs personalization
+- Phase 7 CI governs recommendation
+- Phase 6 observes, but does NOT depend on CI
+
+---
+
+# 11. Design Principles
 
 - ✅ Deterministic
-- ✅ CI‑only
-- ✅ No runtime mutation
-- ✅ No versioned contracts
-- ✅ Fail loud, fail early
-- ✅ Clear ownership and boundaries
+- ✅ CI-only enforcement
+- ✅ Fail fast
+- ✅ No runtime coupling
+- ✅ Separation of concerns
 
 ---
 
-## 11. Summary
+# ✅ Final Rule
 
-Phase 4.5 CI exists to ensure that **localization remains safe, consistent, and operable at scale** without ever becoming part of runtime logic.
+> 🔒 If CI fails, the system is NOT safe to ship.
 
-If this CI fails, the fix is always:
-- adjust localization artifacts, or
-- update explicit waivers with review dates.
+---
 
-It is never:
-- a runtime hotfix,
-- a semantic override,
-- or a Phase 6 decision.
+# ✅ Summary
+
+Phase 4.5 CI ensures:
+
+- stable localization structure
+- cross-locale consistency
+- zero semantic drift
+- fully deterministic behavior
+
+It is the **final safety gate** before localization reaches runtime.
