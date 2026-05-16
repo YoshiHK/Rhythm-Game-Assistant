@@ -1,0 +1,25 @@
+{
+  "template_id": "primary_focus",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ M̃ãĩñ ãt̃t̃ẽñt̃ĩõñ ĩs̃ r̃ẽq̃ũĩr̃ẽd̃ õñ s̃t̃ãb̃l̃ẽ ẽx̃ẽc̃ũt̃ĩõñ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "timing_focus": {
+      "text": "⟦⟦ T̃ĩm̃ĩñg̃ c̃õñt̃r̃õl̃ ĩs̃ ã k̃ẽỹ f̃õc̃ũs̃ t̃h̃r̃õũg̃h̃õũt̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "consistency_focus": {
+      "text": "⟦⟦ C̃õñs̃ĩs̃t̃ẽñc̃ỹ ĩs̃ c̃ẽñt̃r̃ãl̃ t̃õ m̃ãĩñt̃ãĩñĩñg̃ p̃ẽr̃f̃õr̃m̃ãñc̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "pattern_focus": {
+      "text": "⟦⟦ R̃ẽc̃õg̃ñĩz̃ĩñg̃ p̃ãt̃t̃ẽr̃ñ s̃h̃ĩf̃t̃s̃ ĩs̃ ĩm̃p̃õr̃t̃ãñt̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

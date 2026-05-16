@@ -1,0 +1,25 @@
+{
+  "template_id": "awareness_framing",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ S̃ũs̃t̃ãĩñẽd̃ ãw̃ãr̃ẽñẽs̃s̃ ĩs̃ r̃ẽq̃ũĩr̃ẽd̃ t̃h̃r̃õũg̃h̃õũt̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "divided_attention": {
+      "text": "⟦⟦ Ãt̃t̃ẽñt̃ĩõñ m̃ãỹ ñẽẽd̃ t̃õ b̃ẽ s̃p̃l̃ĩt̃ ãc̃r̃õs̃s̃ ẽl̃ẽm̃ẽñt̃s̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "tracking_focus": {
+      "text": "⟦⟦ C̃õñt̃ĩñũõũs̃ t̃r̃ãc̃k̃ĩñg̃ õf̃ p̃ãt̃t̃ẽr̃ñs̃ ĩs̃ r̃ẽq̃ũĩr̃ẽd̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "anticipation": {
+      "text": "⟦⟦ Ũp̃c̃õm̃ĩñg̃ c̃h̃ãñg̃ẽs̃ m̃ãỹ r̃ẽq̃ũĩr̃ẽ ãñt̃ĩc̃ĩp̃ãt̃ĩõñ. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "template_id": "tone_expert",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ {base_text} T̃h̃ĩs̃ r̃ẽf̃l̃ẽc̃t̃s̃ c̃õñs̃ĩs̃t̃ẽñt̃ p̃ãt̃t̃ẽr̃ñ d̃ẽm̃ãñd̃. ⟧⟧",
+      "placeholders": ["base_text"]
+    },
+
+    "concise": {
+      "text": "⟦⟦ {base_text} S̃t̃r̃ũc̃t̃ũr̃ãl̃l̃ỹ s̃t̃ãb̃l̃ẽ b̃ũt̃ d̃ẽm̃ãñd̃ĩñg̃. ⟧⟧",
+      "placeholders": ["base_text"]
+    },
+
+    "technical": {
+      "text": "⟦⟦ {base_text} P̃ãt̃t̃ẽr̃ñ c̃õñs̃ĩs̃t̃ẽñc̃ỹ ĩs̃ ã k̃ẽỹ f̃ãc̃t̃õr̃. ⟧⟧",
+      "placeholders": ["base_text"]
+    }
+  }
+}

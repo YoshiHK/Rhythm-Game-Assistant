@@ -1,0 +1,25 @@
+{
+  "template_id": "structure_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ T̃h̃ẽ c̃h̃ãr̃t̃ s̃h̃õw̃s̃ c̃l̃ẽãr̃ s̃t̃r̃ũc̃t̃ũr̃ãl̃ p̃r̃õg̃r̃ẽs̃s̃ĩõñ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "burst_pattern": {
+      "text": "⟦⟦ S̃h̃õr̃t̃ b̃ũr̃s̃t̃s̃ õf̃ ĩñt̃ẽñs̃ĩt̃ỹ ãp̃p̃ẽãr̃ t̃h̃r̃õũg̃h̃õũt̃ t̃h̃ẽ c̃h̃ãr̃t̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "climax_spike": {
+      "text": "⟦⟦ Ã ñõt̃ãb̃l̃ẽ s̃p̃ĩk̃ẽ õc̃c̃ũr̃s̃ ñẽãr̃ t̃h̃ẽ l̃ãt̃ẽ s̃ẽc̃t̃ĩõñs̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "gradual_build": {
+      "text": "⟦⟦ T̃h̃ẽ s̃t̃r̃ũc̃t̃ũr̃ẽ g̃r̃ãd̃ũãl̃l̃ỹ ĩñc̃r̃ẽãs̃ẽs̃ ĩñ p̃r̃ẽs̃s̃ũr̃ẽ õṽẽr̃ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

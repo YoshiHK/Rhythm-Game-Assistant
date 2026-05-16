@@ -1,0 +1,26 @@
+{
+  "template_id": "element_hold",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ Hold notes occupy input areas for extended periods. ⟧⟧",
+      "placeholders": []
+    },
+    "overlap": {
+      "text": "⟦⟦ Overlapping hold notes can limit available movement space. ⟧⟧",
+      "placeholders": []
+    },
+    "long_duration": {
+      "text": "⟦⟦ Long hold durations require sustained control. ⟧⟧",
+      "placeholders": []
+    },
+    "restricted_transition": {
+      "text": "⟦⟦ Transitions around holds can be restricted when repositioning is tight. ⟧⟧",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "⟦⟦ Extended hold sections can build hand fatigue over time. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

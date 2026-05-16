@@ -1,0 +1,25 @@
+{
+  "template_id": "endurance_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ T̃h̃ĩs̃ c̃h̃ãr̃t̃ r̃ẽq̃ũĩr̃ẽs̃ s̃ũs̃t̃ãĩñẽd̃ c̃õñt̃r̃õl̃ ãc̃r̃õs̃s̃ ĩt̃s̃ d̃ũr̃ãt̃ĩõñ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "long_duration": {
+      "text": "⟦⟦ T̃h̃ẽ l̃ẽñg̃t̃h̃ õf̃ t̃h̃ẽ c̃h̃ãr̃t̃ p̃l̃ãc̃ẽs̃ ẽm̃p̃h̃ãs̃ĩs̃ õñ c̃õñs̃ĩs̃t̃ẽñc̃ỹ õṽẽr̃ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "fatigue_building": {
+      "text": "⟦⟦ S̃ũs̃t̃ãĩñẽd̃ s̃ẽc̃t̃ĩõñs̃ c̃ãñ g̃r̃ãd̃ũãl̃l̃ỹ b̃ũĩl̃d̃ f̃ãt̃ĩg̃ũẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "consistency_focus": {
+      "text": "⟦⟦ T̃h̃ẽ c̃h̃ãr̃t̃ f̃ãṽõr̃s̃ s̃t̃ẽãd̃ỹ p̃l̃ãỹ r̃ãt̃h̃ẽr̃ t̃h̃ãñ s̃h̃õr̃t̃ p̃ẽãk̃ b̃ũr̃s̃t̃s̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

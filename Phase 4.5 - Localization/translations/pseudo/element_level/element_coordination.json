@@ -1,0 +1,25 @@
+{
+  "template_id": "element_coordination",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ M̃ũl̃t̃ĩp̃l̃ẽ ĩñp̃ũt̃s̃ r̃ẽq̃ũĩr̃ẽ c̃õõr̃d̃ĩñãt̃ẽd̃ t̃ĩm̃ĩñg̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "rapid_sequences": {
+      "text": "⟦⟦ R̃ãp̃ĩd̃ ĩñp̃ũt̃ s̃ẽq̃ũẽñc̃ẽs̃ ĩñc̃r̃ẽãs̃ẽ c̃õõr̃d̃ĩñãt̃ĩõñ d̃ẽm̃ãñd̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "interleaving_patterns": {
+      "text": "⟦⟦ D̃ĩf̃f̃ẽr̃ẽñt̃ ĩñp̃ũt̃ t̃ỹp̃ẽs̃ ĩñt̃ẽr̃l̃ẽãṽẽ t̃h̃r̃õũg̃h̃õũt̃ t̃h̃ẽ p̃ãt̃t̃ẽr̃ñ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "high_load_coordination": {
+      "text": "⟦⟦ H̃ĩg̃h̃ ĩñp̃ũt̃ l̃õãd̃ c̃ãñ s̃t̃r̃ẽs̃s̃ s̃ỹñc̃h̃r̃õñĩz̃ãt̃ĩõñ. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

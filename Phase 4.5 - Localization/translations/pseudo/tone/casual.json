@@ -1,0 +1,20 @@
+{
+  "template_id": "tone_casual",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ {base_text} — ĩt̃ c̃ãñ f̃ẽẽl̃ q̃ũĩt̃ẽ d̃ẽm̃ãñd̃ĩñg̃ ãt̃ t̃ĩm̃ẽs̃. ⟧⟧",
+      "placeholders": ["base_text"]
+    },
+
+    "light": {
+      "text": "⟦⟦ {base_text} — s̃õm̃ẽ p̃ãr̃t̃s̃ m̃ãỹ s̃t̃ãñd̃ õũt̃ m̃õr̃ẽ. ⟧⟧",
+      "placeholders": ["base_text"]
+    },
+
+    "friendly": {
+      "text": "⟦⟦ {base_text} — k̃ẽẽp̃ĩñg̃ t̃r̃ãc̃k̃ õf̃ ĩt̃ h̃ẽl̃p̃s̃. ⟧⟧",
+      "placeholders": ["base_text"]
+    }
+  }
+}

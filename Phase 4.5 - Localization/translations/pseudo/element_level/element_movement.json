@@ -1,0 +1,18 @@
+{
+  "template_id": "element_movement",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ Large movements across lanes require coordination. ⟧⟧",
+      "placeholders": []
+    },
+    "wide_jumps": {
+      "text": "⟦⟦ Wide transitions reduce time for adjustment. ⟧⟧",
+      "placeholders": []
+    },
+    "cross_screen": {
+      "text": "⟦⟦ Movement spans across the playfield frequently. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

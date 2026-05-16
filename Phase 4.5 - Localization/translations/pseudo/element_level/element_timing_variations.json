@@ -1,0 +1,18 @@
+{
+  "template_id": "element_timing_variation",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ T̃ĩm̃ĩñg̃ c̃õñd̃ĩt̃ĩõñs̃ c̃h̃ãñg̃ẽ õṽẽr̃ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+    "tempo_shift": {
+      "text": "⟦⟦ C̃h̃ãñg̃ẽs̃ ĩñ t̃ẽm̃p̃õ r̃ẽq̃ũĩr̃ẽ ãd̃j̃ũs̃t̃m̃ẽñt̃. ⟧⟧",
+      "placeholders": []
+    },
+    "irregular_flow": {
+      "text": "⟦⟦ Ĩr̃r̃ẽg̃ũl̃ãr̃ t̃ĩm̃ĩñg̃ c̃ãñ d̃ĩs̃r̃ũp̃t̃ ẽs̃t̃ãb̃l̃ĩs̃h̃ẽd̃ r̃h̃ỹt̃h̃m̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "template_id": "difficulty_overview",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ T̃h̃ĩs̃ d̃ĩf̃f̃ĩc̃ũl̃t̃ỹ l̃ẽṽẽl̃ c̃h̃ãl̃l̃ẽñg̃ẽs̃ b̃õt̃h̃ t̃ĩm̃ĩñg̃ ãñd̃ c̃õñs̃ĩs̃t̃ẽñc̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "steady": {
+      "text": "⟦⟦ T̃h̃ĩs̃ d̃ĩf̃f̃ĩc̃ũl̃t̃ỹ r̃ẽq̃ũĩr̃ẽs̃ s̃t̃ẽãd̃ỹ ẽx̃ẽc̃ũt̃ĩõñ õṽẽr̃ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "dense": {
+      "text": "⟦⟦ H̃ĩg̃h̃ d̃ẽñs̃ĩt̃ỹ s̃ẽc̃t̃ĩõñs̃ l̃ẽãṽẽ l̃ĩt̃t̃l̃ẽ r̃õõm̃ f̃õr̃ r̃ẽc̃õṽẽr̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "precision": {
+      "text": "⟦⟦ S̃m̃ãl̃l̃ t̃ĩm̃ĩñg̃ ĩñãc̃c̃ũr̃ãc̃ĩẽs̃ c̃ãñ ãc̃c̃ũm̃ũl̃ãt̃ẽ q̃ũĩc̃k̃l̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "endurance": {
+      "text": "⟦⟦ T̃h̃ĩs̃ l̃ẽṽẽl̃ t̃ẽs̃t̃s̃ c̃õñs̃ĩs̃t̃ẽñc̃ỹ ãc̃r̃õs̃s̃ l̃õñg̃ s̃t̃r̃ẽt̃c̃h̃ẽs̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

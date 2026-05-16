@@ -1,0 +1,25 @@
+{
+  "template_id": "risk_accumulation",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ S̃m̃ãl̃l̃ ĩñãc̃c̃ũr̃ãc̃ĩẽs̃ c̃ãñ ãc̃c̃ũm̃ũl̃ãt̃ẽ õṽẽr̃ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "fatigue_building": {
+      "text": "⟦⟦ F̃ãt̃ĩg̃ũẽ c̃ãñ g̃r̃ãd̃ũãl̃l̃ỹ ãf̃f̃ẽc̃t̃ s̃t̃ãb̃ĩl̃ĩt̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "error_chain": {
+      "text": "⟦⟦ Ẽr̃r̃õr̃s̃ m̃ãỹ c̃l̃ũs̃t̃ẽr̃ ĩf̃ r̃ẽc̃õṽẽr̃ỹ ĩs̃ l̃ĩm̃ĩt̃ẽd̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "late_chart_pressure": {
+      "text": "⟦⟦ P̃r̃ẽs̃s̃ũr̃ẽ c̃ãñ ĩñc̃r̃ẽãs̃ẽ t̃õw̃ãr̃d̃ t̃h̃ẽ l̃ãt̃ẽ s̃ẽc̃t̃ĩõñs̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

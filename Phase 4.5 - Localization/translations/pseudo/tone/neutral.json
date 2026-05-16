@@ -1,0 +1,10 @@
+{
+  "template_id": "tone_neutral",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ {base_text} ⟧⟧",
+      "placeholders": ["base_text"]
+    }
+  }
+}

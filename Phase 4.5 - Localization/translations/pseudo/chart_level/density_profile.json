@@ -1,0 +1,25 @@
+{
+  "template_id": "density_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ T̃h̃ẽ c̃h̃ãr̃t̃ m̃ãĩñt̃ãĩñs̃ ã ñõt̃ãb̃l̃ẽ d̃ẽñs̃ĩt̃ỹ t̃h̃r̃õũg̃h̃õũt̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "high_density": {
+      "text": "⟦⟦ H̃ĩg̃h̃ d̃ẽñs̃ĩt̃ỹ s̃ẽc̃t̃ĩõñs̃ l̃ĩm̃ĩt̃ r̃ẽc̃õṽẽr̃ỹ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "stream_focus": {
+      "text": "⟦⟦ C̃õñt̃ĩñũõũs̃ f̃l̃õw̃ p̃ãt̃t̃ẽr̃ñs̃ d̃ẽf̃ĩñẽ t̃h̃ẽ c̃h̃ãr̃t̃'s̃ p̃ãc̃ĩñg̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "variable_density": {
+      "text": "⟦⟦ D̃ẽñs̃ĩt̃ỹ ṽãr̃ĩẽs̃ b̃ẽt̃w̃ẽẽñ s̃ẽc̃t̃ĩõñs̃,̃ c̃r̃ẽãt̃ĩñg̃ s̃h̃ĩf̃t̃ĩñg̃ p̃r̃ẽs̃s̃ũr̃ẽ. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

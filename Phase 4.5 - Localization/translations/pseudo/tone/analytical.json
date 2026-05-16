@@ -1,0 +1,20 @@
+{
+  "template_id": "tone_analytical",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ {base_text} T̃h̃ĩs̃ s̃ũg̃g̃ẽs̃t̃s̃ ã p̃ãt̃t̃ẽr̃ñ õf̃ s̃ũs̃t̃ãĩñẽd̃ p̃r̃ẽs̃s̃ũr̃ẽ. ⟧⟧",
+      "placeholders": ["base_text"]
+    },
+
+    "observational": {
+      "text": "⟦⟦ {base_text} T̃h̃ĩs̃ ĩñd̃ĩc̃ãt̃ẽs̃ ã c̃õñs̃ĩs̃t̃ẽñt̃ t̃r̃ẽñd̃. ⟧⟧",
+      "placeholders": ["base_text"]
+    },
+
+    "structured": {
+      "text": "⟦⟦ {base_text} T̃h̃ẽ s̃t̃r̃ũc̃t̃ũr̃ẽ s̃h̃õw̃s̃ c̃l̃ẽãr̃ r̃ẽp̃ẽt̃ĩt̃ĩõñ. ⟧⟧",
+      "placeholders": ["base_text"]
+    }
+  }
+}

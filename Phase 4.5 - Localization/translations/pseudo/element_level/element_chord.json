@@ -1,0 +1,25 @@
+{
+  "template_id": "element_chord",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ M̃ũl̃t̃ĩp̃l̃ẽ ñõt̃ẽs̃ ãr̃ẽ r̃ẽq̃ũĩr̃ẽd̃ s̃ĩm̃ũl̃t̃ãñẽõũs̃l̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "wide_chords": {
+      "text": "⟦⟦ W̃ĩd̃ẽ s̃p̃ãñ c̃h̃õr̃d̃s̃ r̃ẽq̃ũĩr̃ẽ l̃ãr̃g̃ẽ h̃ãñd̃ m̃õṽẽm̃ẽñt̃s̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "dense_chords": {
+      "text": "⟦⟦ C̃h̃õr̃d̃s̃ ãp̃p̃ẽãr̃ f̃r̃ẽq̃ũẽñt̃l̃ỹ ĩñ t̃ĩg̃h̃t̃ s̃ẽq̃ũẽñc̃ẽs̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "high_coordination": {
+      "text": "⟦⟦ T̃h̃ĩs̃ p̃ãt̃t̃ẽr̃ñ r̃ẽq̃ũĩr̃ẽs̃ c̃õõr̃d̃ĩñãt̃ẽd̃ ĩñp̃ũt̃s̃ ãc̃r̃õs̃s̃ l̃ãñẽs̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

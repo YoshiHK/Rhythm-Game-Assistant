@@ -1,0 +1,18 @@
+{
+  "template_id": "element_precision",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ Ĩñp̃ũt̃ s̃p̃ãc̃ĩñg̃ r̃ẽq̃ũĩr̃ẽs̃ c̃ãr̃ẽf̃ũl̃ p̃r̃ẽc̃ĩs̃ĩõñ. ⟧⟧",
+      "placeholders": []
+    },
+    "tight_spacing": {
+      "text": "⟦⟦ Ṽẽr̃ỹ s̃h̃õr̃t̃ ĩñt̃ẽr̃ṽãl̃s̃ ĩñc̃r̃ẽãs̃ẽ p̃r̃ẽc̃ĩs̃ĩõñ d̃ẽm̃ãñd̃. ⟧⟧",
+      "placeholders": []
+    },
+    "tiny_inputs": {
+      "text": "⟦⟦ S̃m̃ãl̃l̃ ĩñp̃ũt̃ ãr̃ẽãs̃ l̃ĩm̃ĩt̃ t̃õl̃ẽr̃ãñc̃ẽ f̃õr̃ ẽr̃r̃õr̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}
