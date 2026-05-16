@@ -1,4 +1,9 @@
 {
+  "_meta": {
+    "description": "Canonical locale configuration and fallback graph",
+    "scope": "Phase 4.5 Localization",
+    "role": "contract"
+  },
   "base_locale": "en-US",
   "supported_locales": [
     "en-US",
@@ -18,5 +23,11 @@
     "ja-JP": ["en-US"],
     "ko-KR": ["en-US"],
     "pseudo": ["en-US"]
+  },
+  "constraints": {
+    "must_include_base_locale": true,
+    "all_locales_must_be_available": true,
+    "fallback_chain_must_terminate": true,
+    "no_circular_fallbacks": true
   }
 }

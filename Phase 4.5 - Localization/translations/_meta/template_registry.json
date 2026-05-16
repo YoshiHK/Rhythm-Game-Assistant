@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "description": "Central registry for all narrative templates across taxonomy layers.",
+    "scope": "Phase 4.5 Localization",
+    "contract": "template_id must map to exactly one taxonomy category",
+    "versioning": "none"
+  },
+
+  "chart_level": [
+    "difficulty_overview",
+    "chart_summary",
+    "endurance_profile",
+    "density_profile",
+    "structure_profile"
+  ],
+
+  "element_level": [
+    "element_density",
+    "element_flick",
+    "element_hold",
+    "element_trill",
+    "element_slide",
+    "element_rhythm",
+    "element_precision",
+    "element_visibility",
+    "element_movement",
+    "element_pattern_complexity",
+    "element_timing_variation",
+    "element_chord",
+    "element_coordination",
+    "element_cross_hand",
+    "element_flow_direction"
+  ],
+
+  "section_level": [
+    "burst_section",
+    "climax_section",
+    "opening_profile",
+    "ending_profile"
+  ],
+
+  "guidance_framing": [
+    "primary_focus",
+    "secondary_focus",
+    "awareness_framing",
+    "risk_accumulation"
+  ],
+
+  "tone": [
+    "neutral",
+    "casual",
+    "expert",
+    "analytical"
+  ],
+
+  "constraints": {
+    "unique_template_ids": true,
+    "single_taxonomy_mapping": true,
+    "must_exist_in_all_locales": true,
+    "must_exist_in_glossary": true
+  }
+}

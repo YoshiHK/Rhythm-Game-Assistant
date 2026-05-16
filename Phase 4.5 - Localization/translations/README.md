@@ -1,171 +1,233 @@
-
 # translations/ — Localization Store (Phase 4.5)
 
 This directory contains **all localization assets** for the Rhythm Game Assistant.
-It is introduced and governed by **Phase 4.5 – Localization**.
 
-> **Core rule:** Localization changes *how things are said*, never *what they mean*.
+✅ Introduced and governed by **Phase 4.5 – Localization**  
+✅ **Core rule:** Localization changes *how things are said*, never *what they mean*
 
 ---
 
-## 1. Purpose of this folder
+# 1. Purpose of this folder
 
 The `translations/` folder provides:
 
-- language- and locale-specific **narrative templates**
-- presentation-only **variants** (casual / expert / debug)
-- **glossaries** for consistent terminology
-- **locale metadata** for normalization and fallback
-- a **pseudo-locale** used exclusively for CI and QA
-
-This folder is **downstream-only**:
-- It consumes outputs from Phases 1–4
-- It MUST NOT influence gameplay analysis, scoring, or personalization decisions
+- ✅ language- and locale-specific **narrative templates**
+- ✅ tone / variant overlays (**casual / expert / analytical / debug**)
+- ✅ **glossaries** for terminology consistency
+- ✅ **locale metadata** for routing and fallback
+- ✅ **pack metadata** for CI validation and completeness tracking
+- ✅ a **pseudo-locale** used exclusively for CI and QA
 
 ---
 
-## 2. High-level structure
+# 2. Critical architectural rules
 
-```
+## ✅ Phase discipline
+
+- ❌ No gameplay logic allowed
+- ❌ No scoring / severity logic
+- ❌ No personalization decisions
+- ✅ Phase 4.5 is strictly **presentation-only**
+- ✅ Completely **downstream from Phases 1–4**
+
+---
+
+## ✅ Determinism
+
+- All templates MUST be deterministic
+- No randomness
+- No conditional execution
+- Output must be reproducible
+
+---
+
+## ✅ Locale parity (STRICT)
+
+> 🔒 **All templates MUST exist in all locales**
+
+Enforced by CI via:
+
+- template_registry.json  
+- pack_version.json  
+- validator checks  
+
+---
+
+# 3. Folder structure
+
 translations/
-├─ _meta/
-│  ├─ locales.json          # Canonical locales and fallback graph
-│  ├─ locale_aliases.json   # Input alias → canonical locale mapping
-│  └─ sources.json          # Allowed translation sources
+├─ _meta/                      ← GLOBAL CONTRACT (not per locale)
+│  ├─ locales.json
+│  ├─ locale_aliases.json
+│  ├─ template_registry.json
+│  └─ sources.json
 │
-├─ en-US/                   # Base locale (authoritative fallback)
-├─ en-GB/                   # English (UK)
-├─ ja-JP/                   # Japanese
-├─ ko-KR/                   # Korean
-├─ zh-Hans/                 # Simplified Chinese
-├─ zh-Hant-HK/              # Traditional Chinese (Hong Kong)
-├─ zh-Hant-TW/              # Traditional Chinese (Taiwan)
-├─ pseudo/                  # Pseudo-locale (CI only)
-└─ README.md                # This file
-```
-
----
-
-## 3. Per-locale folder layout
-
-Each locale directory follows the **same required structure**:
-
-```
-<locale>/
-├─ templates/
-│  ├─ narrative_v3/
-│  │  ├─ difficulty/
-│  │  ├─ elements/
-│  │  └─ summaries/
-│  └─ shared/               # Optional shared fragments (presentation-only)
+├─ {locale}/
+│  ├─ _meta/                  ← PER-LOCALE META
+│  │  ├─ locale_meta.json
+│  │  ├─ glossary.json
+│  │  ├─ pack_version.json
+│  │  └─ debug.json
+│  │
+│  ├─ chart_level/
+│  ├─ element_level/
+│  ├─ section_level/
+│  ├─ guidance_framing/
+│  └─ tone/
 │
-├─ variants/
-│  ├─ casual.json
-│  ├─ expert.json
-│  └─ debug.json
-│
-├─ glossary.json
-└─ locale_meta.json
-```
-
-**All locales must maintain template parity.**
+└─ pseudo/                   ← CI ONLY
 
 ---
 
-## 4. Narrative templates (`templates/narrative_v3/`)
+# 4. Template layers
 
-- Templates are rendered by **Narrative Module v3**
-- Each file must declare:
-  - `template_id`
-  - `version: "v3"`
-  - `strings.default`
-- Templates MUST NOT:
-  - contain gameplay logic
-  - introduce new advice
-  - reinterpret analysis results
+## ✅ Chart Level
+- High-level summary of difficulty and structure
 
-They are **pure render-time assets**.
+## ✅ Element Level
+- Core gameplay mechanics (density, flick, hold, etc.)
+- ✅ Most important layer (largest coverage)
 
----
+## ✅ Section Level
+- Structural emphasis (opening, climax, ending)
 
-## 5. Variants (`variants/`)
+## ✅ Guidance Framing
+- Attention framing and risk explanation
+- ✅ No new advice introduced
 
-Variants control **tone and word budgets only**:
-
-- `casual` → friendly, shorter phrasing
-- `expert` → technical, more precise phrasing
-- `debug`  → verbose, QA / audit use
-
-Variants:
-- do not change meaning
-- do not change element selection
-- are safe to share across locales
+## ✅ Tone Layer
+- Controls presentation style only
+- Uses `{base_text}` placeholder
 
 ---
 
-## 6. Glossary (`glossary.json`)
+# 5. Meta layers
 
-Glossaries provide **terminology consistency** for each locale.
+## ✅ GLOBAL (shared)
 
-They:
-- are presentation-only
-- are not authoritative for gameplay semantics
-- help translators and curators stay consistent
+### template_registry.json
+- ✅ Single source of truth
+- ✅ Defines ALL template IDs
+- ❌ MUST NOT be duplicated per locale
 
-Glossaries MUST NOT be used by Phases 1–3.
+### locales.json
+- Defines locale list + fallback graph
 
----
+### locale_aliases.json
+- Maps user input → canonical locale
 
-## 7. Locale metadata (`locale_meta.json`)
-
-Each locale declares:
-
-- canonical locale code (e.g. `ja-JP`, `zh-Hans`)
-- language name
-- fallback locale (always resolves to `en-US` eventually)
-- source (`curated`, `approved_machine`, or `generated`)
-
-This file is used by **locale normalization and provenance only**.
+### sources.json
+- Defines allowed translation provenance
 
 ---
 
-## 8. Pseudo locale (`pseudo/`)
+## ✅ PER-LOCALE (_meta)
 
-The `pseudo/` locale is **CI-only** and never user-facing.
+### locale_meta.json
+- Locale identity + routing metadata
 
-It is used to:
-- stress-test UI layouts
-- catch truncation and overflow bugs
-- detect hard-coded English strings
-- validate placeholder integrity
+### glossary.json
+- Terminology mapping (NOT full translation)
 
-Pseudo-localized strings are intentionally unreadable.
+### pack_version.json
+- Coverage + validation status
+- Used by CI
 
----
-
-## 9. What must NOT go in `translations/`
-
-To preserve phase boundaries, this folder MUST NOT contain:
-
-- gameplay rules or heuristics
-- element definitions
-- severity or scoring logic
-- personalization decisions
-- conditional logic
-
-If a file is required by Phases 1–3, it does not belong here.
+### debug.json
+- ✅ MUST exist per locale
+- ✅ MUST be identical across all locales
 
 ---
 
-## 10. Phase discipline
+# 6. Glossary rules (CRITICAL)
 
-- Phases 1–4 are **locked**
-- Phase 4.5 adds localization **without modifying upstream behavior**
-- This folder is safe to evolve independently
+Glossary is:
 
-When in doubt:
-> **Localization changes presentation, never meaning.**
+✅ terminology reference  
+❌ NOT a translation layer  
+
+Rules:
+
+- Keys MUST NOT change
+- Values MUST stay semantically aligned
+- MUST NOT introduce new concepts
 
 ---
 
-**End of README**
+# 7. Tone system
+
+Tone templates:
+
+- neutral
+- casual
+- expert
+- analytical
+
+Rules:
+
+- ✅ MUST preserve `{base_text}`
+- ❌ MUST NOT change meaning
+- ✅ Only modifies phrasing / emphasis
+
+---
+
+# 8. Pseudo locale (CI only)
+
+Purpose:
+
+- UI stress testing
+- placeholder validation
+- overflow detection
+- missing translation detection
+
+Rules:
+
+- ❌ NEVER user-facing
+- ✅ MUST contain all templates
+
+---
+
+# 9. CI validation (MANDATORY)
+
+All changes MUST pass:
+
+- ✅ template parity check
+- ✅ placeholder integrity check
+- ✅ pack completeness check
+- ✅ debug consistency check
+
+Validator:
+
+ci/checks/check_pack_integrity.py
+
+
+---
+
+# 10. Non-goals (important)
+
+This folder MUST NOT contain:
+
+- gameplay logic
+- scoring rules
+- evaluation heuristics
+- AI decision-making
+- runtime branching
+
+---
+
+# 11. Design philosophy
+
+> ✅ Localization = Presentation Layer  
+> ✅ Templates = Deterministic Data  
+> ✅ Meta = System Contract  
+> ✅ CI = Enforcement Layer  
+
+---
+
+# ✅ Final rule (memorize this)
+
+> 🔒 **If a change alters meaning, it does NOT belong in Phase 4.5**
+
+---
+
+# ✅ End of README

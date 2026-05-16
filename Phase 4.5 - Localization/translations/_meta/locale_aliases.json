@@ -1,28 +1,29 @@
 {
+  "_meta": {
+    "description": "Locale alias mapping for input normalization",
+    "scope": "Phase 4.5 Localization",
+    "role": "routing"
+  },
   "aliases": {
     "en": "en-US",
-    "en-us": "en-US",
-    "en-gb": "en-GB",
+    "en-AU": "en-GB",
+    "en-CA": "en-US",
 
     "zh": "zh-Hans",
-    "zh-cn": "zh-Hans",
-    "zh-sg": "zh-Hans",
-    "zh-hans": "zh-Hans",
+    "zh-CN": "zh-Hans",
+    "zh-SG": "zh-Hans",
 
-    "zh-hk": "zh-Hant-HK",
-    "zh-hant-hk": "zh-Hant-HK",
-
-    "zh-tw": "zh-Hant-TW",
-    "zh-hant-tw": "zh-Hant-TW",
-
-    "zh-mo": "zh-Hant-HK",
-    "zh-hant": "zh-Hant-TW",
+    "zh-HK": "zh-Hant-HK",
+    "zh-TW": "zh-Hant-TW",
+    "zh-Hant": "zh-Hant-TW",
 
     "ja": "ja-JP",
-    "ja-jp": "ja-JP",
-
     "ko": "ko-KR",
-    "ko-kr": "ko-KR"
+
+    "pseudo-test": "pseudo"
   },
-  "notes": "Alias table used by Phase 4.5 locale normalization. Keys are lowercased before lookup. Values must be canonical locales present in locales.json."
+  "constraints": {
+    "aliases_must_resolve": true,
+    "no_recursive_aliases": true
+  }
 }

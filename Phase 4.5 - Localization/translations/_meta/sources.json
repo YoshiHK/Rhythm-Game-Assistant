@@ -1,8 +1,18 @@
 {
+  "_meta": {
+    "description": "Allowed translation sources and provenance tracking",
+    "scope": "Phase 4.5 Localization",
+    "role": "governance"
+  },
   "allowed_sources": [
     "curated",
     "approved_machine",
+    "generated",
     "pseudo"
   ],
-  "default_source": "curated"
+  "default_source": "approved_machine",
+  "constraints": {
+    "source_must_be_declared": true,
+    "unknown_sources_forbidden": true
+  }
 }
