@@ -1,7 +1,0 @@
-{
-  "variant_id": "debug",
-  "rules": {
-    "tone": "pseudo",
-    "max_words": 200
-  }
-}
