@@ -1,0 +1,10 @@
+{
+  "template_id": "secondary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "次要注意力需要用于调整。", "placeholders": [] },
+    "transition_focus": { "text": "段落切换可能需要额外关注。", "placeholders": [] },
+    "spacing_focus": { "text": "输入间距可能影响稳定性。", "placeholders": [] },
+    "recovery_focus": { "text": "恢复时间会影响整体节奏。", "placeholders": [] }
+  }
+}

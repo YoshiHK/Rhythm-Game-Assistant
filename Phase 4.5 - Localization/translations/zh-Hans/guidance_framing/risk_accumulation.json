@@ -1,0 +1,10 @@
+{
+  "template_id": "risk_accumulation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "细小误差可能随时间累积。", "placeholders": [] },
+    "fatigue_building": { "text": "疲劳可能逐渐影响稳定性。", "placeholders": [] },
+    "error_chain": { "text": "恢复不足时错误可能连续发生。", "placeholders": [] },
+    "late_chart_pressure": { "text": "后段压力可能逐渐增加。", "placeholders": [] }
+  }
+}

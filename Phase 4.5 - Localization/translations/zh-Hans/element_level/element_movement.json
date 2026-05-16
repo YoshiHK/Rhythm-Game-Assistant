@@ -1,0 +1,9 @@
+{
+  "template_id": "element_movement",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "大范围移动需要良好的协调能力。", "placeholders": [] },
+    "wide_jumps": { "text": "大幅移动减少了调整时间。", "placeholders": [] },
+    "cross_screen": { "text": "移动频繁跨越整个判定区域。", "placeholders": [] }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "template_id": "element_coordination",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "多个输入需要协调的时机控制。",
+      "placeholders": []
+    },
+    "rapid_sequences": {
+      "text": "快速连续输入增加了协调难度。",
+      "placeholders": []
+    },
+    "interleaving_patterns": {
+      "text": "不同输入类型在模式中交替出现。",
+      "placeholders": []
+    },
+    "high_load_coordination": {
+      "text": "高输入负荷可能影响同步稳定性。",
+      "placeholders": []
+    }
+  }
+}

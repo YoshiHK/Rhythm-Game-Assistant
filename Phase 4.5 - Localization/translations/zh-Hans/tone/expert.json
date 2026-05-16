@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_expert",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} 这反映了稳定的模式要求。", "placeholders": ["base_text"] },
+    "concise": { "text": "{base_text} 结构稳定但具有持续要求。", "placeholders": ["base_text"] },
+    "technical": { "text": "{base_text} 模式一致性是关键因素。", "placeholders": ["base_text"] }
+  }
+}

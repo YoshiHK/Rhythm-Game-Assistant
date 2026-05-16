@@ -1,0 +1,10 @@
+{
+  "template_id": "element_trill",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "交替输入在短时间内反复出现。", "placeholders": [] },
+    "simple": { "text": "稳定的交替模式需要稳定判定。", "placeholders": [] },
+    "extended": { "text": "较长的交替段落提高持续协调要求。", "placeholders": [] },
+    "hybrid": { "text": "交替输入与其他输入类型结合出现。", "placeholders": [] }
+  }
+}

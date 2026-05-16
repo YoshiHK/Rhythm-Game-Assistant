@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_casual",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text}——有时可能会感觉有些吃力。", "placeholders": ["base_text"] },
+    "light": { "text": "{base_text}——部分段落会比较突出。", "placeholders": ["base_text"] },
+    "friendly": { "text": "{base_text}——保持关注会有所帮助。", "placeholders": ["base_text"] }
+  }
+}

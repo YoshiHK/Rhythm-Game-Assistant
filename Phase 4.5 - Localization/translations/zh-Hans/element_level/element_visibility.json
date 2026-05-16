@@ -1,0 +1,10 @@
+{
+  "template_id": "element_visibility",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "部分音符不容易一眼识别。", "placeholders": [] },
+    "low_visibility": { "text": "重叠或紧密排列降低视觉清晰度。", "placeholders": [] },
+    "tiny_notes": { "text": "较小音符容易被忽略。", "placeholders": [] },
+    "cluttered": { "text": "视觉信息密集使模式更难辨认。", "placeholders": [] }
+  }
+}

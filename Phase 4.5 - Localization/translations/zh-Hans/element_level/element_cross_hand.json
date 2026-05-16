@@ -1,0 +1,22 @@
+{
+  "template_id": "element_cross_hand",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "输入位置可能在谱面中产生冲突。",
+      "placeholders": []
+    },
+    "crossing_paths": {
+      "text": "模式需要在不同输入区域之间交叉操作。",
+      "placeholders": []
+    },
+    "hand_switching": {
+      "text": "控制可能在过程中在双手之间切换。",
+      "placeholders": []
+    },
+    "spatial_conflict": {
+      "text": "多个输入区域可能同时产生重叠干扰。",
+      "placeholders": []
+    }
+  }
+}

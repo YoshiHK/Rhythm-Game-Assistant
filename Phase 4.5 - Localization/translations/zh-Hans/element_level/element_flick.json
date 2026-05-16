@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flick",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "方向性输入需要精确控制。", "placeholders": [] },
+    "consecutive": { "text": "连续flick会提高控制要求。", "placeholders": [] },
+    "directional": { "text": "方向变化会影响判定稳定性。", "placeholders": [] },
+    "embedded": { "text": "flick可能嵌入其他模式中出现。", "placeholders": [] }
+  }
+}

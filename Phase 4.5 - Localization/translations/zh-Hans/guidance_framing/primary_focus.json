@@ -1,0 +1,10 @@
+{
+  "template_id": "primary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "需要将主要注意力集中在稳定执行上。", "placeholders": [] },
+    "timing_focus": { "text": "节奏控制是关键关注点。", "placeholders": [] },
+    "consistency_focus": { "text": "保持稳定性是核心要求。", "placeholders": [] },
+    "pattern_focus": { "text": "识别模式变化非常重要。", "placeholders": [] }
+  }
+}

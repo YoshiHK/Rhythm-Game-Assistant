@@ -1,0 +1,30 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "整体而言，该谱面强调稳定的操作控制与模式识别。",
+      "placeholders": []
+    },
+
+    "control_focused": {
+      "text": "该谱面更侧重稳定控制，而非短时间的速度爆发。",
+      "placeholders": []
+    },
+
+    "rhythm_driven": {
+      "text": "在整个谱面中维持稳定节奏是关键。",
+      "placeholders": []
+    },
+
+    "pressure_building": {
+      "text": "随着段落推进，整体压力逐渐累积。",
+      "placeholders": []
+    },
+
+    "endurance_weighted": {
+      "text": "整体结构更侧重耐力而非瞬间速度。",
+      "placeholders": []
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "element_flow_direction",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "模式的移动方向会随时间变化。", "placeholders": [] },
+    "zigzag_flow": { "text": "移动方向频繁交替。", "placeholders": [] },
+    "rotational_patterns": { "text": "模式呈现曲线或旋转轨迹。", "placeholders": [] },
+    "directional_shift": { "text": "方向变化会影响谱面阅读。", "placeholders": [] }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "template_id": "burst_section",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "短时间段落出现强度突然提升。", "placeholders": [] },
+    "early_burst": { "text": "较早出现的爆发改变了初始节奏。", "placeholders": [] },
+    "late_burst": { "text": "强度在后段出现跃升。", "placeholders": [] },
+    "clustered_bursts": { "text": "多个爆发段集中出现。", "placeholders": [] }
+  }
+}

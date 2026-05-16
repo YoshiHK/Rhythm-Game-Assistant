@@ -1,0 +1,22 @@
+{
+  "template_id": "element_chord",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "需要同时进行多个输入。",
+      "placeholders": []
+    },
+    "wide_chords": {
+      "text": "跨度较大的和弦需要更大的手部移动。",
+      "placeholders": []
+    },
+    "dense_chords": {
+      "text": "密集的和弦频繁出现。",
+      "placeholders": []
+    },
+    "high_coordination": {
+      "text": "该模式需要在多个轨道之间进行协调输入。",
+      "placeholders": []
+    }
+  }
+}

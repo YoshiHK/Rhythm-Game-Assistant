@@ -1,0 +1,10 @@
+{
+  "template_id": "opening_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "开头段落决定整体节奏。", "placeholders": [] },
+    "gradual_start": { "text": "谱面从开头逐渐提升强度。", "placeholders": [] },
+    "immediate_pressure": { "text": "一开始就进入高强度。", "placeholders": [] },
+    "unstable_opening": { "text": "开头模式快速变化。", "placeholders": [] }
+  }
+}

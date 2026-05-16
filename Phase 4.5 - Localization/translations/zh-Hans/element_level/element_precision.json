@@ -1,0 +1,9 @@
+{
+  "template_id": "element_precision",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "输入间距要求较高的精度。", "placeholders": [] },
+    "tight_spacing": { "text": "极短间隔会提高精度要求。", "placeholders": [] },
+    "tiny_inputs": { "text": "较小输入区域降低容错空间。", "placeholders": [] }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "template_id": "density_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "整体保持了较高的音符密度。",
+      "placeholders": []
+    },
+
+    "high_density": {
+      "text": "高密度区段减少了恢复空间。",
+      "placeholders": []
+    },
+
+    "stream_focus": {
+      "text": "连贯的连打流构成了谱面的节奏核心。",
+      "placeholders": []
+    },
+
+    "variable_density": {
+      "text": "各段之间密度变化明显，带来节奏上的压力变化。",
+      "placeholders": []
+    }
+  }
+}

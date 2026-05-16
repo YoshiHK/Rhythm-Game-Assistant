@@ -1,0 +1,10 @@
+{
+  "template_id": "ending_profile",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "谱面以明显段落结束。", "placeholders": [] },
+    "final_spike": { "text": "结束前出现最后一次强度提升。", "placeholders": [] },
+    "fake_ending": { "text": "看似结束但仍继续。", "placeholders": [] },
+    "tapered_finish": { "text": "强度在结尾逐渐降低。", "placeholders": [] }
+  }
+}

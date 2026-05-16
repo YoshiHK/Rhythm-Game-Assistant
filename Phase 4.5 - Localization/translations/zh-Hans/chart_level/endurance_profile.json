@@ -1,0 +1,25 @@
+{
+  "template_id": "endurance_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "该谱面需要在全程保持稳定的操控能力。",
+      "placeholders": []
+    },
+
+    "long_duration": {
+      "text": "谱面长度强调持续稳定的表现。",
+      "placeholders": []
+    },
+
+    "fatigue_building": {
+      "text": "持续段落可能逐渐造成体力消耗。",
+      "placeholders": []
+    },
+
+    "consistency_focus": {
+      "text": "该谱面更强调稳定性，而非短时间爆发。",
+      "placeholders": []
+    }
+  }
+}
