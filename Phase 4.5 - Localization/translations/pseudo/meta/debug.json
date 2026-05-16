@@ -47,3 +47,4 @@
 
   "notes": "This file is used for CI validation, debugging, template tracing, and taxonomy verification. It must never affect runtime output semantics."
 }
+``
