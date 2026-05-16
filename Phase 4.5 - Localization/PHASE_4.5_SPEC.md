@@ -5,123 +5,154 @@
 
 ---
 
-## 1. Contract Overview
+# 1. Contract Overview
 
-Phase 4.5 applies localization to personalized outputs
-without changing semantic meaning.
+Phase 4.5 applies localization to Phase 4 output **without changing meaning**.
 
-It is governed by **structural contracts**, not heuristics.
+It is governed by:
 
----
-
-## 2. Input Contract
-
-Phase 4.5 accepts:
-
-- Personalized payload from Phase 4
-- Locale identifier (string)
-- Variant identifier (optional)
-- Feature flags (optional)
-
-Inputs are treated as **read‑only**.
+- ✅ structural contracts
+- ✅ deterministic behavior
+- ✅ strict invariants
 
 ---
 
-## 3. Output Contract
+# 2. Input Contract
+
+Phase 4.5 accepts:
+
+- tips_text (from Phase 4)
+- template_id
+- variant_id (optional)
+- locale hint
+- engine_mode (optional)
+
+Inputs are:
+
+- ✅ immutable
+- ✅ deterministic
+- ❌ never reinterpreted
+
+---
+
+# 3. Output Contract
 
 Outputs MUST:
 
-- preserve element identity
-- preserve ordering semantics
-- preserve placeholder bindings
-- comply with word budget limits
-- include localization metadata
+- ✅ preserve semantic meaning
+- ✅ preserve element identity
+- ✅ preserve placeholder structure
+- ✅ apply locale transformation only
+- ✅ include localization metadata
 
 Outputs MUST NOT:
-- introduce new elements
-- remove required placeholders
-- alter semantic meaning
+
+- ❌ modify logic
+- ❌ add/remove elements
+- ❌ change priority or ordering
 
 ---
 
-## 4. Template Contract (Narrative v3)
+# 4. Template Contract (Narrative v3)
 
-All Narrative v3 templates MUST:
+All templates MUST:
 
-- declare `version = "v3"`
+- define `template_id`
+- declare `"version": "v3"`
 - include `strings.default.text`
 - preserve placeholder sets across locales
-- respect per‑variant word budgets
-
-Template sets MUST be identical across locales.
 
 ---
 
-## 5. Placeholder Integrity
+# 5. Taxonomy Contract
 
-For every template:
-
-- declared placeholders and inline placeholders
-  MUST match the base locale
-- duplication or loss is forbidden
-
-This prevents runtime binding errors.
+- every template_id MUST exist in taxonomy
+- template_id MUST belong to exactly one layer
+- taxonomy MUST match template_registry
 
 ---
 
-## 6. Word Budget Rules
+# 6. Locale Contract
 
-Each locale defines word/unit budgets per variant.
-
-- Space‑delimited languages → word count
-- CJK / no‑space languages → unit count
-- Exceeding budget is a CI failure
-
-Budgets are **presentation constraints**, not semantics.
+- all locales MUST be present in locales.json
+- alias mapping MUST resolve deterministically
+- fallback graph MUST:
+  - have no cycles
+  - terminate
 
 ---
 
-## 7. Waivers & Decay
+# 7. Placeholder Contract
 
-Some token parity violations may be explicitly waived.
-
-Waivers:
-- MUST be declared in `token_parity_waivers.json`
-- MUST include a reason
-- MUST include `review_by` when decay is enabled
-- are bounded by global and per‑locale budgets
-
-Expired waivers fail CI.
+- placeholders MUST NOT change across locales
+- placeholders MUST NOT be added or removed
+- placeholder ordering MUST be preserved
 
 ---
 
-## 8. Observability
+# 8. Tone Contract
 
-Some checks emit a **single‑line CI SUMMARY**.
+Tone layer:
 
-Properties:
+- ✅ post-processing only
+- ✅ uses `{base_text}`
+- ❌ must not alter meaning
+
+---
+
+# 9. Debug Contract
+
+- debug.json MUST exist per locale
+- debug.json MUST be identical across all locales
+
+---
+
+# 10. CI Contract
+
+All localization assets MUST pass:
+
+- taxonomy_validator
+- pack_integrity
+- template_parity
+- placeholder_integrity
+- debug_consistency
+- token/word constraints
+
+---
+
+# 11. Determinism Requirements
+
+Phase 4.5 MUST be:
+
 - deterministic
-- machine‑consumable
-- non‑gating
-- non‑runtime
+- reproducible
+- locale-consistent
 
 ---
 
-## 9. Non‑Goals
+# 12. Non-goals
 
-Phase 4.5 does NOT specify:
-- translation quality metrics
-- linguistic style guides
-- runtime fallback behavior
-- UI rendering rules
+Phase 4.5 MUST NOT:
+
+- perform translation inference
+- introduce AI generation
+- modify Phase 4 outputs
+- influence gameplay semantics
 
 ---
 
-## 10. Summary
+# ✅ Final Rule
 
-Phase 4.5 is governed by:
-- explicit contracts,
-- deterministic CI enforcement,
-- strict separation from runtime semantics.
+> 🔒 If a change alters meaning, it is invalid in Phase 4.5.
 
-Violations are surfaced early and loudly.
+---
+
+# ✅ Summary
+
+Phase 4.5 is a **strictly controlled transformation layer**:
+
+- deterministic
+- non-semantic
+- CI-governed
+- fully auditable
+``

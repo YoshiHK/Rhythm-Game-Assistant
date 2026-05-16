@@ -1,123 +1,195 @@
-# Phase 4.5 Architecture — Localization
+## Phase 4.5 Architecture — Localization
 
 **Status:** Design‑Locked ✅  
-**Phase Type:** Presentation / Wiring  
+**Phase Type:** Presentation Layer (Deterministic)  
 **Runtime Ownership:** Phase 6 (invocation only)
 
 ---
 
-## 1. Purpose
+# 1. Purpose
 
-Phase 4.5 provides **localization and internationalization wiring**
+Phase 4.5 provides **deterministic localization and presentation transformation**
 for personalized gameplay tips.
 
-It exists to:
-- adapt presentation to locale,
-- preserve semantic meaning,
-- prevent runtime breakage caused by translation drift.
+Its responsibilities are to:
 
-Phase 4.5 does **not** introduce new gameplay logic.
+- ✅ adapt presentation to locale
+- ✅ enforce template-based rendering
+- ✅ preserve semantic meaning strictly
+- ✅ ensure cross-locale consistency
+
+Phase 4.5 NEVER modifies gameplay semantics.
 
 ---
 
-## 2. Architectural Position
+# 2. Architectural Position
 
-Phase 4 (Personalization Output)
+Phase 1–3 → Analysis (locked)
+Phase 4   → Personalization (locked)
 ↓
-Phase 4.5 (Localization Wiring)
+Phase 4.5 → Localization
 ↓
-Localized Presentation Payload
+Phase 6   → Runtime routing
 
-Phase 4.5:
-- is invoked **only via Phase 6**,
-- never invokes Phase 4 or earlier phases directly,
-- never mutates semantic decisions.
-
----
-
-## 3. Responsibilities
-
-Phase 4.5 owns:
-
-- Locale resolution and fallback
-- Narrative v3 template localization
-- Variant selection (casual / expert / debug)
-- Placeholder preservation
-- Presentation‑level constraints (word budgets)
-- Localization provenance metadata
+Phase 4.5:
+- ✅ is downstream-only
+- ✅ is non-semantic
+- ✅ is deterministic
+- ❌ cannot call upstream phases
 
 ---
 
-## 4. Non‑Responsibilities (Hard Boundaries)
+# 3. Core Layers (Current Architecture)
 
-Phase 4.5 MUST NOT:
-
-- modify detected elements or scores
-- alter severity or guidance meaning
-- reorder or filter tips
-- perform free‑form translation
-- bypass Phase 6 routing
-- gate runtime execution
+Phase 4.5 is composed of:
 
 ---
 
-## 5. Translation Store Architecture
+## 3.1 Translation Store
 
-Localization assets live under a **deterministic folder layout**:
+translations/
+├─ _meta/                (global contract)
+├─ {locale}/             (self-contained locale pack)
 
-- `translations/_meta/` — locale registry and sources
-- `translations/<locale>/templates/` — Narrative v3 templates
-- `translations/<locale>/variants/` — word budget definitions
-- `translations/<locale>/glossary/` — reference‑only glossary
-- `translations/<locale>/locale_meta.json` — locale metadata
+Each locale contains:
 
-All locales must maintain **template parity**.
-
----
-
-## 6. Locale Normalization
-
-Locale normalization is handled by:
-
-- `locale_normalizer.normalize_locale`
-- explicit alias mappings
-- deterministic fallback rules
-
-Normalization is wiring‑only and non‑semantic.
+_meta/
+chart_level/
+element_level/
+section_level/
+guidance_framing/
+tone/
 
 ---
 
-## 7. CI Governance Layer
+## 3.2 Template System (Narrative v3)
 
-Phase 4.5 is protected by a **dedicated CI governance layer**:
+Template structure is stratified:
 
-- Structural integrity checks
-- Template parity enforcement
-- Placeholder/token safety
-- Narrative word budgets
-- Explicit waivers with decay
+| Layer | Role |
+|------|------|
+| Element | WHAT |
+| Section | WHEN |
+| Chart | OVERALL |
+| Guidance | WHERE TO FOCUS |
+| Tone | HOW TO SAY |
 
-CI is **non‑runtime** and **non‑blocking**.
-
----
-
-## 8. Failure Semantics
-
-Phase 4.5 failures result in:
-
-- CI failures (during development), or
-- STOP / DEGRADED outcomes via Phase 6 (runtime)
-
-There is no silent fallback.
+All templates:
+- MUST be deterministic
+- MUST preserve placeholders
+- MUST be identical in structure across locales
 
 ---
 
-## 9. Summary
+## 3.3 Taxonomy Layer
 
-Phase 4.5 is a **pure presentation layer**:
-- semantics are preserved,
-- localization is deterministic,
-- failures are explicit,
-- governance is enforced by CI.
+Taxonomy defines:
 
-This phase is **safe, sealed, and extensible**.
+- ✅ allowed template families
+- ✅ grouping rules
+
+It does NOT define:
+- ❌ logic
+- ❌ detection
+
+Enforced via:
+- taxonomy_validator.py
+
+---
+
+## 3.4 Locale Normalizer
+
+locale_normalizer/
+├─ normalize_locale.py
+└─ fallback_rules.py
+
+Responsibilities:
+
+- ✅ resolve canonical locale
+- ✅ apply aliases
+- ✅ build fallback chain
+
+This layer is:
+- deterministic
+- non-semantic
+- routing-only
+
+---
+
+## 3.5 CI Governance Layer
+
+ci/
+├─ run_all_localization_checks.py
+└─ checks/
+
+CI enforces:
+
+- ✅ taxonomy alignment
+- ✅ template parity
+- ✅ placeholder integrity
+- ✅ debug consistency
+- ✅ token/word constraints
+
+---
+
+# 4. Responsibilities
+
+Phase 4.5 owns:
+
+- locale resolution
+- template selection (mapping only)
+- placeholder-safe rendering
+- tone application
+- localization metadata
+
+---
+
+# 5. Hard Boundaries
+
+Phase 4.5 MUST NOT:
+
+- ❌ modify gameplay meaning
+- ❌ introduce new elements
+- ❌ change severity or score
+- ❌ perform free-form translation
+- ❌ apply AI transformation
+
+---
+
+# 6. Determinism Guarantees
+
+Phase 4.5 guarantees:
+
+- same input → same output
+- locale-independent semantics
+- no hidden fallback behavior
+
+---
+
+# 7. Failure Model
+
+Failures are:
+
+- ✅ caught in CI (preferred)
+- ✅ explicit at runtime
+- ❌ NEVER silent
+
+---
+
+# 8. Key Invariants
+
+- template_registry is global source of truth
+- all locales must have full template parity
+- debug.json must be identical across locales
+- fallback chains must terminate
+
+---
+
+# ✅ Final Statement
+
+Phase 4.5 is a **sealed, deterministic presentation layer**  
+that guarantees:
+
+- semantic safety
+- cross-language consistency
+- CI-enforced correctness

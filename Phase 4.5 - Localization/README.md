@@ -1,93 +1,185 @@
 # Phase 4.5 — Localization
 
-Phase 4.5 provides **safe, deterministic localization**
-for personalized gameplay tips.
-
-It adapts presentation to language and locale
-**without changing gameplay meaning**.
+**Status:** Design‑Locked ✅  
+**Type:** Presentation Layer (Non-Semantic)  
+**Runtime Entry:** Phase 6 only  
 
 ---
 
-## What Phase 4.5 Does
+# 1. What Phase 4.5 Is
 
-- Applies locale‑specific narrative templates
-- Enforces placeholder safety
-- Enforces word budgets
-- Handles locale normalization and fallback
-- Emits localization metadata
+Phase 4.5 is the **localization and presentation layer** of the system.
 
----
+It:
 
-## What Phase 4.5 Does NOT Do
-
-- ❌ No gameplay analysis
-- ❌ No semantic decisions
-- ❌ No personalization logic
-- ❌ No free‑form translation
-- ❌ No runtime gating
+- ✅ transforms narrative output into different locales
+- ✅ applies tone and formatting
+- ✅ preserves semantic meaning strictly
+- ✅ ensures cross-locale consistency
 
 ---
 
-## Where It Runs
+# 2. What Phase 4.5 Is NOT
 
-Phase 4.5:
-- is invoked only via **Phase 6**
-- never runs standalone
-- never bypasses platform controls
+Phase 4.5 MUST NOT:
 
----
-
-## Folder Layout
-
-Phase_4.5_Localization/
-├─ translations/
-├─ locale_normalizer/
-├─ ci/                # governance only
-├─ PHASE_4.5_SPEC.md
-├─ PHASE_4.5_ARCHITECTURE.md
-└─ README.md
+- ❌ modify gameplay meaning
+- ❌ introduce new advice
+- ❌ alter scoring / severity
+- ❌ perform inference or analysis
+- ❌ execute runtime routing decisions
 
 ---
 
-## CI Governance
+# 3. System Position
 
-Localization is protected by **Phase 4.5 CI**:
+```
+Phase 1–3 → Analysis (locked)
+Phase 4   → Personalization (locked)
+   ↓
+Phase 4.5 → Localization (this phase)
+   ↓
+Phase 6   → Runtime routing
+```
 
-- Structural checks
-- Template parity
-- Placeholder & token safety
-- Word budgets
-- Auditable waivers
+Phase 4.5 is:
 
-CI failures indicate **contract violations**, not translation quality issues.
-
----
-
-## Relationship to Other Phases
-
-- Phase 4 → produces personalized content
-- Phase 4.5 → localizes presentation
-- Phase 6 → routes and handles failures
-- Phase 7 → unrelated (separate CI)
+- ✅ downstream-only
+- ✅ deterministic
+- ✅ non-semantic
 
 ---
 
-## Design Principles
-
-- Deterministic
-- Non‑semantic
-- CI‑governed
-- No silent fallback
-- No versioned contracts
+# 4. Core Components
 
 ---
 
-## Summary
+## 4.1 Translation Store
 
-Phase 4.5 ensures that localization is:
-**safe, explainable, and scalable**.
+translations/
+├─ _meta/          (global contract)
+└─ {locale}/       (self-contained packs)
 
-If something fails here,
-the fix is always in localization assets or CI governance —
-never in runtime logic.
+Each locale includes:
 
+_meta/
+chart_level/
+element_level/
+section_level/
+guidance_framing/
+tone/
+
+---
+
+## 4.2 Template System
+
+Narrative v3 templates are **layer-based**:
+
+| Layer | Meaning |
+|------|--------|
+| Element | WHAT |
+| Section | WHEN |
+| Chart | OVERALL |
+| Guidance | WHERE TO FOCUS |
+| Tone | HOW TO SAY |
+
+---
+
+## 4.3 Taxonomy Layer
+
+Taxonomy defines:
+
+- ✅ template families
+- ✅ structural grouping
+
+It enforces:
+
+- no overlap
+- no drift
+- full alignment with registry
+
+---
+
+## 4.4 Locale Normalizer
+
+locale_normalizer/
+├─ normalize_locale.py
+└─ fallback_rules.py
+
+Responsible for:
+
+- locale resolution
+- alias mapping
+- fallback chain generation
+
+---
+
+## 4.5 CI Governance
+
+ci/
+├─ run_all_localization_checks.py
+└─ checks/
+
+CI enforces:
+
+- template parity
+- placeholder integrity
+- taxonomy alignment
+- debug consistency
+- token & word constraints
+
+---
+
+# 5. Key Concepts
+
+### ✅ Determinism
+
+Same input → same output
+
+---
+
+### ✅ Template Parity
+
+All locales MUST contain all templates
+
+---
+
+### ✅ Debug Consistency
+
+> debug.json MUST be identical across ALL locales
+
+---
+
+### ✅ Taxonomy Alignment
+
+- every template belongs to one taxonomy
+- no missing / extra categories
+
+---
+
+# 6. Failure Model
+
+- ❌ Failures are NOT hidden
+- ✅ CI catches issues
+- ✅ Runtime surfaces degradation explicitly
+
+---
+
+# 7. Relationship to Other Phases
+
+- Phase 4.5 **depends on Phase 4 output**
+- Phase 4.5 **feeds Phase 6**
+- Phase 4.5 **does not modify upstream logic**
+
+---
+
+# ✅ Final Rule
+
+> 🔒 If a change alters meaning, it does NOT belong here.
+
+---
+
+# ✅ Summary
+
+Phase 4.5 is a **fully deterministic presentation system**  
+with strict contracts, enforced by CI, ensuring safe multi-language output.

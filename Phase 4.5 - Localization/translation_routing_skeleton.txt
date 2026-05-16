@@ -1,0 +1,53 @@
+Localization/
+└─ translations/
+   └─ {language}/
+      │
+      ├─ _meta/
+      │  ├─ locale_meta.json
+      │  ├─ glossary.json
+      │  ├─ pack_version.json
+	  │  └─ debug.json
+      │
+      ├─ chart_level/
+      │  ├─ difficulty_overview.json
+      │  ├─ chart_summary.json
+      │  ├─ endurance_profile.json
+      │  ├─ density_profile.json
+      │  └─ structure_profile.json
+      │
+      ├─ element_level/
+      │  ├─ element_density.json
+      │  ├─ element_flick.json
+      │  ├─ element_hold.json
+      │  ├─ element_trill.json
+      │  ├─ element_slide.json
+      │  ├─ element_rhythm.json
+      │  ├─ element_precision.json
+      │  ├─ element_visibility.json
+      │  ├─ element_movement.json
+      │  ├─ element_pattern_complexity.json
+      │  ├─ element_timing_variation.json
+      │  ├─ element_chord.json
+      │  ├─ element_coordination.json
+      │  ├─ element_cross_hand.json
+      │  └─ element_flow_direction.json
+      │
+      ├─ section_level/
+      │  ├─ burst_section.json
+      │  ├─ climax_section.json
+      │  ├─ opening_profile.json
+      │  └─ ending_profile.json
+      │
+      ├─ guidance_framing/
+      │  ├─ primary_focus.json
+      │  ├─ secondary_focus.json
+      │  ├─ awareness_framing.json
+      │  └─ risk_accumulation.json
+      │
+      ├─ tone/
+      │  ├─ neutral.json
+      │  ├─ casual.json
+      │  ├─ expert.json
+      │  └─ analytical.json
+      │
+      └─ README.md
