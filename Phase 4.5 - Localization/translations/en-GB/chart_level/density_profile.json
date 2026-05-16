@@ -1,0 +1,25 @@
+{
+  "template_id": "density_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "The chart maintains a notable density throughout.",
+      "placeholders": []
+    },
+
+    "high_density": {
+      "text": "High-density sections limit recovery time.",
+      "placeholders": []
+    },
+
+    "stream_focus": {
+      "text": "Continuous flow patterns define the chart’s pacing.",
+      "placeholders": []
+    },
+
+    "variable_density": {
+      "text": "Density varies between sections, creating shifting pressure.",
+      "placeholders": []
+    }
+  }
+}

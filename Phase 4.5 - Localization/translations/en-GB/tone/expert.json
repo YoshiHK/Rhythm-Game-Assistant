@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_expert",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} This reflects consistent pattern demand.", "placeholders": ["base_text"] },
+    "concise": { "text": "{base_text} Structurally stable but demanding.", "placeholders": ["base_text"] },
+    "technical": { "text": "{base_text} Pattern consistency is a key factor.", "placeholders": ["base_text"] }
+  }
+}

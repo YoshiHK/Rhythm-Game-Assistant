@@ -1,0 +1,22 @@
+{
+  "template_id": "element_chord",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "Multiple notes are required simultaneously.",
+      "placeholders": []
+    },
+    "wide_chords": {
+      "text": "Wide span chords require large hand movements.",
+      "placeholders": []
+    },
+    "dense_chords": {
+      "text": "Chords appear frequently in tight sequences.",
+      "placeholders": []
+    },
+    "high_coordination": {
+      "text": "This pattern requires coordinated inputs across lanes.",
+      "placeholders": []
+    }
+  }
+}

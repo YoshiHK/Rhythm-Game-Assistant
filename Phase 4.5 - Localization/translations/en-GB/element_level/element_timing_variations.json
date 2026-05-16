@@ -1,0 +1,9 @@
+{
+  "template_id": "element_timing_variation",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Timing conditions change over time.", "placeholders": [] },
+    "tempo_shift": { "text": "Changes in tempo require adjustment.", "placeholders": [] },
+    "irregular_flow": { "text": "Irregular timing can disrupt established rhythm.", "placeholders": [] }
+  }
+}

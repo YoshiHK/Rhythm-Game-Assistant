@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_casual",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} — it can feel quite demanding at times.", "placeholders": ["base_text"] },
+    "light": { "text": "{base_text} — some parts may stand out more.", "placeholders": ["base_text"] },
+    "friendly": { "text": "{base_text} — keeping track of it helps.", "placeholders": ["base_text"] }
+  }
+}

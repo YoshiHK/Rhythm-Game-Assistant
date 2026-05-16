@@ -1,0 +1,30 @@
+{
+  "template_id": "chart_summary",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "Overall, the chart emphasises consistent control and pattern awareness.",
+      "placeholders": []
+    },
+
+    "control_focused": {
+      "text": "This chart favours steady control over short bursts of speed.",
+      "placeholders": []
+    },
+
+    "rhythm_driven": {
+      "text": "Maintaining a stable rhythm is central throughout the chart.",
+      "placeholders": []
+    },
+
+    "pressure_building": {
+      "text": "Pressure gradually builds as sections progress.",
+      "placeholders": []
+    },
+
+    "endurance_weighted": {
+      "text": "The overall structure places more weight on endurance than peak speed.",
+      "placeholders": []
+    }
+  }
+}

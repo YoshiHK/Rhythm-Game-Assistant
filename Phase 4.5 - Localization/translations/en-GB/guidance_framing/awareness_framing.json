@@ -1,0 +1,10 @@
+{
+  "template_id": "awareness_framing",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Sustained awareness is required throughout.", "placeholders": [] },
+    "divided_attention": { "text": "Attention may need to be split across elements.", "placeholders": [] },
+    "tracking_focus": { "text": "Continuous tracking of patterns is required.", "placeholders": [] },
+    "anticipation": { "text": "Upcoming changes may require anticipation.", "placeholders": [] }
+  }
+}

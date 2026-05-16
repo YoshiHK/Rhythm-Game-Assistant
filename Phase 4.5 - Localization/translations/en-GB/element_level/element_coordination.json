@@ -1,0 +1,22 @@
+{
+  "template_id": "element_coordination",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "Multiple inputs require co-ordinated timing.",
+      "placeholders": []
+    },
+    "rapid_sequences": {
+      "text": "Rapid input sequences increase co-ordination demand.",
+      "placeholders": []
+    },
+    "interleaving_patterns": {
+      "text": "Different input types interleave throughout the pattern.",
+      "placeholders": []
+    },
+    "high_load_coordination": {
+      "text": "High input load can stress synchronisation.",
+      "placeholders": []
+    }
+  }
+}

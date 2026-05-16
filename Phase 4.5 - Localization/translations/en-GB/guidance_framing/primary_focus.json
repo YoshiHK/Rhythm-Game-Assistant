@@ -1,0 +1,10 @@
+{
+  "template_id": "primary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Main attention is required on stable execution.", "placeholders": [] },
+    "timing_focus": { "text": "Timing control is a key focus throughout.", "placeholders": [] },
+    "consistency_focus": { "text": "Consistency is central to maintaining performance.", "placeholders": [] },
+    "pattern_focus": { "text": "Recognizing pattern shifts is important.", "placeholders": [] }
+  }
+}

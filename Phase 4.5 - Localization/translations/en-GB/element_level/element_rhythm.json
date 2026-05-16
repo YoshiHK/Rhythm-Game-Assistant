@@ -1,0 +1,10 @@
+{
+  "template_id": "element_rhythm",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "The rhythm pattern requires careful timing judgment.", "placeholders": [] },
+    "irregular": { "text": "Irregular timing intervals can disrupt expected flow.", "placeholders": [] },
+    "syncopated": { "text": "Off-beat emphasis shifts the timing reference.", "placeholders": [] },
+    "mixed_patterns": { "text": "Different rhythm patterns are mixed throughout.", "placeholders": [] }
+  }
+}

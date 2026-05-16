@@ -1,0 +1,9 @@
+{
+  "template_id": "tone_analytical",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "{base_text} This suggests sustained pressure.", "placeholders": ["base_text"] },
+    "observational": { "text": "{base_text} This indicates a consistent trend.", "placeholders": ["base_text"] },
+    "structured": { "text": "{base_text} The structure shows clear repetition.", "placeholders": ["base_text"] }
+  }
+}

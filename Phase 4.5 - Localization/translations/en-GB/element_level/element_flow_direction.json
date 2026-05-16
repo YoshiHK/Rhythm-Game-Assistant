@@ -1,0 +1,25 @@
+{
+  "template_id": "element_flow_direction",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ P̃ãt̃t̃ẽr̃ñ f̃l̃õw̃ s̃h̃ĩf̃t̃s̃ d̃ĩr̃ẽc̃t̃ĩõñ õṽẽr̃ t̃ĩm̃ẽ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "zigzag_flow": {
+      "text": "⟦⟦ D̃ĩr̃ẽc̃t̃ĩõñ ãl̃t̃ẽr̃ñãt̃ẽs̃ f̃r̃ẽq̃ũẽñt̃l̃ỹ ãc̃r̃õs̃s̃ m̃õṽẽm̃ẽñt̃s̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "rotational_patterns": {
+      "text": "⟦⟦ P̃ãt̃t̃ẽr̃ñs̃ f̃õl̃l̃õw̃ c̃ũr̃ṽẽd̃ õr̃ r̃õt̃ãt̃ĩñg̃ t̃r̃ãj̃ẽc̃t̃õr̃ĩẽs̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "directional_shift": {
+      "text": "⟦⟦ F̃l̃õw̃ d̃ĩr̃ẽc̃t̃ĩõñ c̃h̃ãñg̃ẽs̃ c̃ãñ ãf̃f̃ẽc̃t̃ p̃ãt̃t̃ẽr̃ñ r̃ẽãd̃ĩñg̃. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

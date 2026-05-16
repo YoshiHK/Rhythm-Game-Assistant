@@ -1,0 +1,22 @@
+{
+  "template_id": "element_cross_hand",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "Input positions can conflict across the playfield.",
+      "placeholders": []
+    },
+    "crossing_paths": {
+      "text": "Patterns require crossing between input regions.",
+      "placeholders": []
+    },
+    "hand_switching": {
+      "text": "Control may shift between hands during sequences.",
+      "placeholders": []
+    },
+    "spatial_conflict": {
+      "text": "Simultaneous input areas can overlap in usage.",
+      "placeholders": []
+    }
+  }
+}

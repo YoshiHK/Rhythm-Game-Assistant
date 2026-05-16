@@ -1,0 +1,25 @@
+{
+  "template_id": "structure_profile",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "The chart shows a clear structural progression.",
+      "placeholders": []
+    },
+
+    "burst_pattern": {
+      "text": "Short bursts of intensity appear throughout the chart.",
+      "placeholders": []
+    },
+
+    "climax_spike": {
+      "text": "A notable spike occurs in the later sections.",
+      "placeholders": []
+    },
+
+    "gradual_build": {
+      "text": "The structure gradually builds in pressure over time.",
+      "placeholders": []
+    }
+  }
+}

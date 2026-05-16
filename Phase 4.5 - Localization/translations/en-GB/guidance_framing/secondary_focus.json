@@ -1,0 +1,10 @@
+{
+  "template_id": "secondary_focus",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Secondary attention is needed for adjustments.", "placeholders": [] },
+    "transition_focus": { "text": "Transitions between sections may require attention.", "placeholders": [] },
+    "spacing_focus": { "text": "Input spacing can affect stability.", "placeholders": [] },
+    "recovery_focus": { "text": "Recovery windows may influence flow.", "placeholders": [] }
+  }
+}

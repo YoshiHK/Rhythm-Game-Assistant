@@ -1,0 +1,9 @@
+{
+  "template_id": "element_movement",
+  "version": "v3",
+  "strings": {
+    "default": { "text": "Large movements across lanes require coordination.", "placeholders": [] },
+    "wide_jumps": { "text": "Wide transitions reduce time available for adjustment.", "placeholders": [] },
+    "cross_screen": { "text": "Movement frequently spans across the playfield.", "placeholders": [] }
+  }
+}
