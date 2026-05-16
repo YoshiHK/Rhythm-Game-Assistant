@@ -1,0 +1,37 @@
+name: Phase 4.5 Localization CI
+
+on:
+  push:
+    paths:
+      - "Phase 4.5 - Localization/**"
+  pull_request:
+    paths:
+      - "Phase 4.5 - Localization/**"
+
+jobs:
+  localization-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ✅ 安裝 pytest（只為 CI tests）
+      - name: Install dependencies
+        run: |
+          pip install pytest
+
+      # ✅ 🔥 你的主 CI（最重要）
+      - name: Run Phase 4.5 CI checks
+        run: |
+          python "Phase 4.5 - Localization/ci/run_all_localization_checks.py"
+
+      # ✅ CI infra tests（次要）
+      - name: Run CI tests
+        run: |
+          pytest "Phase 4.5 - Localization/ci/tests/"
