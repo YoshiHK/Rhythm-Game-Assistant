@@ -1,10 +1,10 @@
 {
-  "template_id": "ending_profile",
+  "template_id": "element_chord",
   "version": "v3",
   "strings": {
-    "default": { "text": "The chart concludes with a distinct section.", "placeholders": [] },
-    "final_spike": { "text": "A final spike appears before the end.", "placeholders": [] },
-    "fake_ending": { "text": "The chart appears to end but continues.", "placeholders": [] },
-    "tapered_finish": { "text": "Intensity decreases toward the end.", "placeholders": [] }
+    "default": { "text": "需要同時輸入多個音符。", "placeholders": [] },
+    "wide_chords": { "text": "寬跨度和弦需要較大幅度的手部移動。", "placeholders": [] },
+    "dense_chords": { "text": "密集的和弦頻繁出現。", "placeholders": [] },
+    "high_coordination": { "text": "此模式需要在多個軌道之間協調輸入。", "placeholders": [] }
   }
 }

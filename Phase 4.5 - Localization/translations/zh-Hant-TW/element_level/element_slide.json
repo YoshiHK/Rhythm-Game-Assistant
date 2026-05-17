@@ -2,24 +2,9 @@
   "template_id": "element_slide",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ S̃l̃ĩd̃ẽ p̃ãt̃t̃ẽr̃ñs̃ r̃ẽq̃ũĩr̃ẽ s̃t̃ẽãd̃ỹ t̃r̃ãc̃k̃ĩñg̃ ãc̃r̃õs̃s̃ t̃h̃ẽ p̃l̃ãỹf̃ĩẽl̃d̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "overlap_taps": {
-      "text": "⟦⟦ T̃ãp̃s̃ õc̃c̃ũr̃ w̃h̃ĩl̃ẽ s̃l̃ĩd̃ẽs̃ ãr̃ẽ ãc̃t̃ĩṽẽ,̃ l̃ĩm̃ĩt̃ĩñg̃ ãṽãĩl̃ãb̃l̃ẽ ãt̃t̃ẽñt̃ĩõñ. ⟧⟧",
-      "placeholders": []
-    },
-
-    "zigzag": {
-      "text": "⟦⟦ S̃l̃ĩd̃ẽ p̃ãt̃t̃ẽr̃ñs̃ s̃h̃ĩf̃t̃ d̃ĩr̃ẽc̃t̃ĩõñ f̃r̃ẽq̃ũẽñt̃l̃ỹ ãc̃r̃õũs̃s̃ l̃ãñẽs̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "unclear_end": {
-      "text": "⟦⟦ S̃õm̃ẽ s̃l̃ĩd̃ẽ ẽñd̃p̃õĩñt̃s̃ ãr̃ẽ ñõt̃ ĩm̃m̃ẽd̃ĩãt̃ẽl̃ỹ ṽĩs̃ĩb̃l̃ẽ. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "滑條需要持續追蹤其移動路徑。", "placeholders": [] },
+    "overlap_taps": { "text": "滑條進行時可能同時出現點擊輸入。", "placeholders": [] },
+    "zigzag": { "text": "滑條方向頻繁變化。", "placeholders": [] },
+    "unclear_end": { "text": "部分滑條終點不夠直觀。", "placeholders": [] }
   }
 }

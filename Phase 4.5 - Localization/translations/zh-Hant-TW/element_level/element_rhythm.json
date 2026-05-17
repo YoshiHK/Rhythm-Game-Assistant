@@ -2,24 +2,9 @@
   "template_id": "element_rhythm",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ T̃h̃ẽ r̃h̃ỹt̃h̃m̃ p̃ãt̃t̃ẽr̃ñ r̃ẽq̃ũĩr̃ẽs̃ c̃ãr̃ẽf̃ũl̃ t̃ĩm̃ĩñg̃ j̃ũd̃g̃m̃ẽñt̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "irregular": {
-      "text": "⟦⟦ Ĩr̃r̃ẽg̃ũl̃ãr̃ t̃ĩm̃ĩñg̃ ĩñt̃ẽr̃ṽãl̃s̃ c̃ãñ d̃ĩs̃r̃ũp̃t̃ ẽx̃p̃ẽc̃t̃ẽd̃ f̃l̃õw̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "syncopated": {
-      "text": "⟦⟦ Õf̃f̃-̃b̃ẽãt̃ ẽm̃p̃h̃ãs̃ĩs̃ s̃h̃ĩf̃t̃s̃ t̃h̃ẽ p̃l̃ãỹẽr̃'s̃ t̃ĩm̃ĩñg̃ r̃ẽf̃ẽr̃ẽñc̃ẽ. ⟧⟧",
-      "placeholders": []
-    },
-
-    "mixed_patterns": {
-      "text": "⟦⟦ D̃ĩf̃f̃ẽr̃ẽñt̃ r̃h̃ỹt̃h̃m̃ p̃ãt̃t̃ẽr̃ñs̃ ãr̃ẽ m̃ĩx̃ẽd̃ t̃h̃r̃õũg̃h̃õũt̃. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "節奏模式需要精確的判定控制。", "placeholders": [] },
+    "irregular": { "text": "不規則節奏可能打亂預期流暢度。", "placeholders": [] },
+    "syncopated": { "text": "反拍節奏會改變時間基準。", "placeholders": [] },
+    "mixed_patterns": { "text": "多種節奏模式在譜面中交替出現。", "placeholders": [] }
   }
 }

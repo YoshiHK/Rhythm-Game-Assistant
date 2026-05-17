@@ -2,24 +2,9 @@
   "template_id": "element_visibility",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ S̃õm̃ẽ ñõt̃ẽs̃ ãr̃ẽ h̃ãr̃d̃ t̃õ r̃ẽãd̃ ãt̃ ã g̃l̃ãñc̃ẽ. ⟧⟧",
-      "placeholders": []
-    },
-
-    "low_visibility": {
-      "text": "⟦⟦ Õṽẽr̃l̃ãp̃p̃ĩñg̃ õr̃ c̃õm̃p̃ãc̃t̃ ñõt̃ẽs̃ r̃ẽd̃ũc̃ẽ ṽĩs̃ũãl̃ c̃l̃ãr̃ĩt̃ỹ. ⟧⟧",
-      "placeholders": []
-    },
-
-    "tiny_notes": {
-      "text": "⟦⟦ S̃m̃ãl̃l̃ ñõt̃ẽ s̃ĩz̃ẽs̃ c̃ãñ b̃ẽ ẽãs̃ỹ t̃õ m̃ĩs̃s̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "cluttered": {
-      "text": "⟦⟦ Ṽĩs̃ũãl̃ c̃l̃ũt̃t̃ẽr̃ c̃ãñ m̃ãk̃ẽ p̃ãt̃t̃ẽr̃ñs̃ h̃ãr̃d̃ẽr̃ t̃õ p̃ãr̃s̃ẽ. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "部分音符不容易一眼辨認。", "placeholders": [] },
+    "low_visibility": { "text": "重疊或緊密排列降低視覺清晰度。", "placeholders": [] },
+    "tiny_notes": { "text": "細小音符較容易被忽略。", "placeholders": [] },
+    "cluttered": { "text": "視覺過於密集使模式更難判讀。", "placeholders": [] }
   }
 }

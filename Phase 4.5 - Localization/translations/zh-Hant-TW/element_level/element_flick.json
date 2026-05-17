@@ -2,29 +2,9 @@
   "template_id": "element_flick",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ P̃ãỹ ãt̃t̃ẽñt̃ĩõñ t̃õ f̃l̃ĩc̃k̃ d̃ĩr̃ẽc̃t̃ĩõñs̃ t̃õ ãṽõĩd̃ m̃ĩs̃s̃ẽd̃ ĩñp̃ũt̃s̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "frequent": {
-      "text": "⟦⟦ F̃l̃ĩc̃k̃ ñõt̃ẽs̃ ãp̃p̃ẽãr̃ f̃r̃ẽq̃ũẽñt̃l̃ỹ,̃ r̃ẽq̃ũĩr̃ĩñg̃ c̃õñs̃ĩs̃t̃ẽñt̃ d̃ĩr̃ẽc̃t̃ĩõñ c̃õñt̃r̃õl̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "direction_change": {
-      "text": "⟦⟦ Q̃ũĩc̃k̃ d̃ĩr̃ẽc̃t̃ĩõñ c̃h̃ãñg̃ẽs̃ ĩñ f̃l̃ĩc̃k̃s̃ c̃ãñ d̃ĩs̃r̃ũp̃t̃ r̃h̃ỹt̃h̃m̃ ĩf̃ r̃ũs̃h̃ẽd̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "tight_timing": {
-      "text": "⟦⟦ F̃l̃ĩc̃k̃ t̃ĩm̃ĩñg̃ w̃ĩñd̃õw̃s̃ ãr̃ẽ t̃ĩg̃h̃t̃,̃ l̃ẽãṽĩñg̃ l̃ĩt̃t̃l̃ẽ m̃ãr̃g̃ĩñ f̃õr̃ ãd̃j̃ũs̃t̃m̃ẽñt̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "fatigue": {
-      "text": "⟦⟦ R̃ẽp̃ẽãt̃ẽd̃ f̃l̃ĩc̃k̃ ĩñp̃ũt̃s̃ õṽẽr̃ t̃ĩm̃ẽ c̃ãñ ĩñc̃r̃ẽãs̃ẽ h̃ãñd̃ f̃ãt̃ĩg̃ũẽ. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "方向性輸入需要精確控制。", "placeholders": [] },
+    "consecutive": { "text": "連續 flick 會提高控制要求。", "placeholders": [] },
+    "directional": { "text": "方向變化會影響判定穩定性。", "placeholders": [] },
+    "embedded": { "text": "flick 可能嵌入其他模式中出現。", "placeholders": [] }
   }
 }

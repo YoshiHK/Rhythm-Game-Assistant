@@ -3,27 +3,27 @@
   "version": "v3",
   "strings": {
     "default": {
-      "text": "该难度同时考验节奏判定与稳定性。",
+      "text": "此難度同時考驗節奏與穩定性。",
       "placeholders": []
     },
 
     "steady": {
-      "text": "该难度需要在过程中持续保持稳定操作。",
+      "text": "此難度需要長時間維持穩定操作。",
       "placeholders": []
     },
 
     "dense": {
-      "text": "高密度段落使得恢复空间十分有限。",
+      "text": "高密度段落令恢復空間十分有限。",
       "placeholders": []
     },
 
     "precision": {
-      "text": "微小的判定误差可能迅速累积。",
+      "text": "細微的時間誤差可能迅速累積。",
       "placeholders": []
     },
 
     "endurance": {
-      "text": "该难度在长时间段落中考验持续稳定性。",
+      "text": "此難度在長時間段落中考驗持續穩定性。",
       "placeholders": []
     }
   }

@@ -3,22 +3,19 @@
   "version": "v3",
   "strings": {
     "default": {
-      "text": "⟦⟦ Ĩñp̃ũt̃ p̃õs̃ĩt̃ĩõñs̃ c̃ãñ c̃õñf̃l̃ĩc̃t̃ ãc̃r̃õs̃s̃ t̃h̃ẽ p̃l̃ãỹf̃ĩẽl̃d̃. ⟧⟧",
+      "text": "輸入位置可能在譜面上產生衝突。",
       "placeholders": []
     },
-
     "crossing_paths": {
-      "text": "⟦⟦ P̃ãt̃t̃ẽr̃ñs̃ r̃ẽq̃ũĩr̃ẽ c̃r̃õs̃s̃ĩñg̃ b̃ẽt̃w̃ẽẽñ ĩñp̃ũt̃ r̃ẽg̃ĩõñs̃. ⟧⟧",
+      "text": "模式需要在不同輸入區域之間交叉操作。",
       "placeholders": []
     },
-
     "hand_switching": {
-      "text": "⟦⟦ C̃õñt̃r̃õl̃ m̃ãỹ s̃h̃ĩf̃t̃ b̃ẽt̃w̃ẽẽñ h̃ãñd̃s̃ d̃ũr̃ĩñg̃ s̃ẽq̃ũẽñc̃ẽs̃. ⟧⟧",
+      "text": "控制可能在過程中於雙手之間切換。",
       "placeholders": []
     },
-
     "spatial_conflict": {
-      "text": "⟦⟦ S̃ĩm̃ũl̃t̃ãñẽõũs̃ ĩñp̃ũt̃ ãr̃ẽãs̃ c̃ãñ õṽẽr̃l̃ãp̃ ĩñ ũs̃ãg̃ẽ. ⟧⟧",
+      "text": "多個輸入區域可能同時產生重疊干擾。",
       "placeholders": []
     }
   }
