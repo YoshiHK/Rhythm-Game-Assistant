@@ -16,6 +16,7 @@ not a product-quality issue.
 
 from __future__ import annotations
 
+import pytest
 import argparse
 import hashlib
 import json
