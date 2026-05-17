@@ -61,3 +61,4 @@ def test_runner_passes_with_no_errors(tmp_path):
     proc = _run_runner(runner_path, repo_root)
 
     assert proc.returncode == 0, "Runner should pass when all checks succeed"
+    ``
