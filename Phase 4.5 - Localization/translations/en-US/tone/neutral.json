@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_neutral",
+  "template_id": "neutral",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text}", "placeholders": ["base_text"] }

@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_analytical",
+  "template_id": "analytical",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} This suggests sustained pressure.", "placeholders": ["base_text"] },
