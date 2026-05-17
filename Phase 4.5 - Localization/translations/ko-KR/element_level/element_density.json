@@ -2,9 +2,10 @@
   "template_id": "element_density",
   "version": "v3",
   "strings": {
-    "default": { "text": "높은 노트 밀도는 회복 시간을 줄입니다.", "placeholders": [] },
-    "sustained": { "text": "여러 구간에서 높은 밀도가 지속됩니다.", "placeholders": [] },
-    "spikes": { "text": "짧은 밀도 상승이 순간적인 압력을 만듭니다.", "placeholders": [] },
-    "mixed": { "text": "구간 간 밀도 변화가 흐름에 영향을 줍니다.", "placeholders": [] }
+    "default": { "text": "노트 밀도가 높아 입력 간격이 짧습니다.", "placeholders": [] },
+    "steady": { "text": "밀도가 일정하게 유지되어 지속적인 집중이 필요합니다.", "placeholders": [] },
+    "bursty": { "text": "짧은 폭발 형태로 밀도가 상승해 반응 여유가 줄어듭니다.", "placeholders": [] },
+    "compressed": { "text": "입력이 좁은 시간 창에 압축되어 회복 여유가 감소합니다.", "placeholders": [] },
+    "overload": { "text": "고밀도가 긴 구간에서 빠르게 피로를 누적시킬 수 있습니다.", "placeholders": [] }
   }
 }
