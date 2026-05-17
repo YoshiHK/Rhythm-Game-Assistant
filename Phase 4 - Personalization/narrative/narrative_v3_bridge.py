@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from narrative_module_v2 import generate_tips_text_v2
+from narrative.narrative_v3_bridge import generate_tips_text_v3
 
 
 def _reorder_elements(
