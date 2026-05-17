@@ -1,0 +1,47 @@
+name: Phase 4 Personalization CI
+
+on:
+  push:
+    paths:
+      - "Phase 4 - Personalization/**"
+      - "Phase 3 - UMI/**"
+  pull_request:
+    paths:
+      - "Phase 4 - Personalization/**"
+      - "Phase 3 - UMI/**"
+
+jobs:
+  phase4-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ✅ Minimal dependency (keep Phase 4 clean)
+      - name: Install dependencies
+        run: |
+          pip install pytest
+
+      # 🔒 Phase 4 CI Runner (Authoritative Gate)
+      - name: Run Phase 4 CI checks
+        run: |
+          python "Phase 4 - Personalization/ci/phase_4_ci_runner.py"
+
+      # ✅ Pytest layer (non-blocking if no tests discovered)
+      - name: Run Phase 4 tests
+        run: |
+          pytest "Phase 4 - Personalization/ci/tests/" -q || {
+            code=$?;
+            if [ "$code" = "5" ]; then
+              echo "No pytest tests collected (allowed).";
+              exit 0;
+            else
+              exit $code;
+            fi
+          }
