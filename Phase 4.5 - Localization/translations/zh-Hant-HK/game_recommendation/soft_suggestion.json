@@ -1,0 +1,22 @@
+{
+  "template_id": "soft_suggestion",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "你可以按自己的節奏慢慢探索。",
+      "placeholders": []
+    },
+    "light_encouragement": {
+      "text": "或者值得試一試。",
+      "placeholders": []
+    },
+    "gentle_exploration": {
+      "text": "如果覺得合適，可以慢慢接觸一下。",
+      "placeholders": []
+    },
+    "soft_confirmation": {
+      "text": "它可能會自然契合你的玩法。",
+      "placeholders": []
+    }
+  }
+}
