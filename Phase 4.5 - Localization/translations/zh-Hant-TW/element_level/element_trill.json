@@ -2,9 +2,25 @@
   "template_id": "element_trill",
   "version": "v3",
   "strings": {
-    "default": { "text": "交替輸入在短時間內反覆出現。", "placeholders": [] },
-    "simple": { "text": "穩定交替模式需要穩定判定。", "placeholders": [] },
-    "extended": { "text": "長時間交替段落提高持續協調要求。", "placeholders": [] },
-    "hybrid": { "text": "交替輸入與其他輸入類型混合出現。", "placeholders": [] }
+    "default": {
+      "text": "快速交替輸入考驗長時間穩定性。",
+      "placeholders": []
+    },
+    "fast": {
+      "text": "高速顫音段需要穩定節奏控制。",
+      "placeholders": []
+    },
+    "extended": {
+      "text": "長時間顫音在緊張狀態下可能降低穩定性。",
+      "placeholders": []
+    },
+    "timing_sensitive": {
+      "text": "顫音對時機較為敏感，不規則輸入會迅速累積誤差。",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "長時間持續顫音會累積疲勞並影響控制。",
+      "placeholders": []
+    }
   }
 }
