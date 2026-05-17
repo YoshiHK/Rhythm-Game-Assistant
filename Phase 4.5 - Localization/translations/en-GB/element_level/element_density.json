@@ -2,29 +2,9 @@
   "template_id": "element_density",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ Ñõt̃ẽ d̃ẽñs̃ĩt̃ỹ ĩs̃ h̃ĩg̃h̃,̃ l̃ẽãṽĩñg̃ l̃ĩt̃t̃l̃ẽ t̃ĩm̃ẽ b̃ẽt̃w̃ẽẽñ ĩñp̃ũt̃s̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "steady": {
-      "text": "⟦⟦ T̃h̃ẽ d̃ẽñs̃ĩt̃ỹ r̃ẽm̃ãĩñs̃ c̃õñs̃ĩs̃t̃ẽñt̃,̃ r̃ẽq̃ũĩr̃ĩñg̃ c̃õñt̃ĩñũõũs̃ ãt̃t̃ẽñt̃ĩõñ. ⟧⟧",
-      "placeholders": []
-    },
-
-    "bursty": {
-      "text": "⟦⟦ D̃ẽñs̃ĩt̃ỹ s̃p̃ĩk̃ẽs̃ ãp̃p̃ẽãr̃ ĩñ s̃h̃õr̃t̃ b̃ũr̃s̃t̃s̃,̃ l̃ĩm̃ĩt̃ĩñg̃ r̃ẽãc̃t̃ĩõñ t̃ĩm̃ẽ. ⟧⟧",
-      "placeholders": []
-    },
-
-    "compressed": {
-      "text": "⟦⟦ Ĩñp̃ũt̃s̃ ãr̃ẽ c̃õm̃p̃r̃ẽs̃s̃ẽd̃ ĩñt̃õ t̃ĩg̃h̃t̃ w̃ĩñd̃õw̃s̃,̃ r̃ẽd̃ũc̃ĩñg̃ r̃ẽc̃õṽẽr̃ỹ m̃ãr̃g̃ĩñs̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "overload": {
-      "text": "⟦⟦ H̃ĩg̃h̃ d̃ẽñs̃ĩt̃ỹ õṽẽr̃ ẽx̃t̃ẽñd̃ẽd̃ s̃ẽc̃t̃ĩõñs̃ c̃ãñ q̃ũĩc̃k̃l̃ỹ b̃ũĩl̃d̃ f̃ãt̃ĩg̃ũẽ. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "High note density can reduce recovery time.", "placeholders": [] },
+    "sustained": { "text": "Density remains consistently high across sections.", "placeholders": [] },
+    "spikes": { "text": "Short bursts of density increase momentary pressure.", "placeholders": [] },
+    "mixed": { "text": "Density varies across sections, affecting pacing.", "placeholders": [] }
   }
 }

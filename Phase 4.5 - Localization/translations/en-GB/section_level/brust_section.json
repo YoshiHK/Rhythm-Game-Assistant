@@ -2,24 +2,9 @@
   "template_id": "burst_section",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ S̃h̃õr̃t̃ s̃ẽc̃t̃ĩõñs̃ s̃h̃õw̃ s̃ũd̃d̃ẽñ ĩñc̃r̃ẽãs̃ẽs̃ ĩñ ĩñt̃ẽñs̃ĩt̃ỹ. ⟧⟧",
-      "placeholders": []
-    },
-
-    "early_burst": {
-      "text": "⟦⟦ Ã s̃p̃ĩk̃ẽ ãp̃p̃ẽãr̃s̃ ẽãr̃l̃ỹ ãñd̃ c̃h̃ãñg̃ẽs̃ t̃h̃ẽ ĩñĩt̃ĩãl̃ p̃ãc̃ĩñg̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "late_burst": {
-      "text": "⟦⟦ Ĩñt̃ẽñs̃ĩt̃ỹ s̃p̃ĩk̃ẽs̃ õc̃c̃ũr̃ ĩñ l̃ãt̃ẽ s̃ẽc̃t̃ĩõñs̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "clustered_bursts": {
-      "text": "⟦⟦ M̃ũl̃t̃ĩp̃l̃ẽ b̃ũr̃s̃t̃s̃ ãp̃p̃ẽãr̃ c̃l̃õs̃ẽ t̃õg̃ẽt̃h̃ẽr̃. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "Short sections show sudden increases in intensity.", "placeholders": [] },
+    "early_burst": { "text": "An early spike changes the initial pacing.", "placeholders": [] },
+    "late_burst": { "text": "Intensity spikes occur in later sections.", "placeholders": [] },
+    "clustered_bursts": { "text": "Multiple bursts appear close together.", "placeholders": [] }
   }
 }

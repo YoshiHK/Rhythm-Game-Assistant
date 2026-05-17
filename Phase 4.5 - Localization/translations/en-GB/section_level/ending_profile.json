@@ -3,23 +3,21 @@
   "version": "v3",
   "strings": {
     "default": {
-      "text": "⟦⟦ T̃h̃ẽ c̃h̃ãr̃t̃ c̃õñc̃l̃ũd̃ẽs̃ w̃ĩt̃h̃ ã d̃ĩs̃t̃ĩñc̃t̃ s̃ẽc̃t̃ĩõñ. ⟧⟧",
+      "text": "The chart concludes with a distinct section.",
       "placeholders": []
     },
-
     "final_spike": {
-      "text": "⟦⟦ Ã f̃ĩñãl̃ s̃p̃ĩk̃ẽ ãp̃p̃ẽãr̃s̃ b̃ẽf̃õr̃ẽ t̃h̃ẽ ẽñd̃. ⟧⟧",
+      "text": "A final spike appears before the end.",
       "placeholders": []
     },
-
     "fake_ending": {
-      "text": "⟦⟦ T̃h̃ẽ c̃h̃ãr̃t̃ ãp̃p̃ẽãr̃s̃ t̃õ ẽñd̃ b̃ũt̃ c̃õñt̃ĩñũẽs̃. ⟧⟧",
+      "text": "The chart appears to end but continues.",
       "placeholders": []
     },
-
     "tapered_finish": {
-      "text": "⟦⟦ Ĩñt̃ẽñs̃ĩt̃ỹ d̃ẽc̃r̃ẽãs̃ẽs̃ t̃õw̃ãr̃d̃ t̃h̃ẽ ẽñd̃. ⟧⟧",
+      "text": "Intensity decreases toward the end.",
       "placeholders": []
     }
   }
 }
+``

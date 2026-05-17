@@ -2,24 +2,9 @@
   "template_id": "climax_section",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ Ã p̃ẽãk̃ s̃ẽc̃t̃ĩõñ s̃t̃ãñd̃s̃ õũt̃ ĩñ t̃h̃ẽ c̃h̃ãr̃t̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "late_climax": {
-      "text": "⟦⟦ T̃h̃ẽ m̃ãĩñ p̃ẽãk̃ õc̃c̃ũr̃s̃ t̃õw̃ãr̃d̃ t̃h̃ẽ ẽñd̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "sustained_climax": {
-      "text": "⟦⟦ T̃h̃ẽ p̃ẽãk̃ ẽx̃t̃ẽñd̃s̃ õṽẽr̃ m̃ũl̃t̃ĩp̃l̃ẽ s̃ẽc̃t̃ĩõñs̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "sharp_climax": {
-      "text": "⟦⟦ T̃h̃ẽ p̃ẽãk̃ ĩs̃ s̃h̃õr̃t̃ b̃ũt̃ d̃ĩs̃t̃ĩñc̃t̃. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "A peak section stands out in the chart.", "placeholders": [] },
+    "late_climax": { "text": "The main peak occurs toward the end.", "placeholders": [] },
+    "sustained_climax": { "text": "The peak extends across multiple sections.", "placeholders": [] },
+    "sharp_climax": { "text": "The peak is brief but distinct.", "placeholders": [] }
   }
 }

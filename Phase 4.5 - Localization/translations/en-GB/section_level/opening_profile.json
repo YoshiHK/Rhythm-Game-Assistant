@@ -2,24 +2,9 @@
   "template_id": "opening_profile",
   "version": "v3",
   "strings": {
-    "default": {
-      "text": "⟦⟦ T̃h̃ẽ ẽãr̃l̃ỹ s̃ẽc̃t̃ĩõñs̃ ẽs̃t̃ãb̃l̃ĩs̃h̃ t̃h̃ẽ p̃ãc̃ĩñg̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "gradual_start": {
-      "text": "⟦⟦ T̃h̃ẽ c̃h̃ãr̃t̃ b̃ũĩl̃d̃s̃ g̃r̃ãd̃ũãl̃l̃ỹ f̃r̃õm̃ ĩt̃s̃ õp̃ẽñĩñg̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "immediate_pressure": {
-      "text": "⟦⟦ Ĩñt̃ẽñs̃ĩt̃ỹ ĩs̃ p̃r̃ẽs̃ẽñt̃ f̃r̃õm̃ t̃h̃ẽ b̃ẽg̃ĩññĩñg̃. ⟧⟧",
-      "placeholders": []
-    },
-
-    "unstable_opening": {
-      "text": "⟦⟦ T̃h̃ẽ õp̃ẽñĩñg̃ s̃h̃ĩf̃t̃s̃ q̃ũĩc̃k̃l̃ỹ b̃ẽt̃w̃ẽẽñ p̃ãt̃t̃ẽr̃ñs̃. ⟧⟧",
-      "placeholders": []
-    }
+    "default": { "text": "The early sections establish the pacing.", "placeholders": [] },
+    "gradual_start": { "text": "The chart builds gradually from the opening.", "placeholders": [] },
+    "immediate_pressure": { "text": "Intensity is present from the beginning.", "placeholders": [] },
+    "unstable_opening": { "text": "The opening shifts quickly between patterns.", "placeholders": [] }
   }
 }
