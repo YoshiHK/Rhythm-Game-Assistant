@@ -1,33 +1,27 @@
 """
-Phase 4 CI — Fixture-Based Determinism Regression (Design-LPhase 4 CI — Fixture-Based Determinism Regression (Design-Locked)
-- Enforce deterministic behavior for identical inputs
+Phase 4 CI — Fixture-Based Determinism Regression (pytest-native)
 
-This is the ONLY Phase 4 CI test allowed to execute runtime code.
+Purpose:
+- Enforce deterministic behavior for identical inputs (after scrubbing volatile fields)
+- This is a regression / architecture test, NOT a quality test.
 
-Non-goals:
-- Does NOT evaluate personalization quality
-- Does NOT judge ranking, narrative, or model correctness
-- Does NOT enforce explainability or safety invariants
-  (those are covered by dedicated Phase 4 CI checks)
-
-If this test fails, it indicates an architectural regression,
-not a product-quality issue.
+Markers:
+- phase4_determinism
 """
 
 from __future__ import annotations
 
-import pytest
-import argparse
-import hashlib
 import json
+import hashlib
 from pathlib import Path
-import sys
-from typing import Any
+from typing import Any, Dict
 
+import pytest
 
+# ✅ fixtures live in Phase 4 - Personalization/ci/fixtures
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
-# Fields that are allowed to vary across runs and MUST be scrubbed
+# Fields allowed to vary across runs and must be scrubbed
 VOLATILE_KEY_TOKENS = (
     "timestamp",
     "time",
@@ -37,16 +31,8 @@ VOLATILE_KEY_TOKENS = (
 )
 
 
-def fail(msg: str) -> None:
-    print(f"CI FAIL: {msg}")
-    sys.exit(1)
-
-
 def scrub(obj: Any):
-    """
-    Remove volatile, non-deterministic fields from output.
-    This is an intentional governance decision, not a workaround.
-    """
+    """Remove volatile, non-deterministic fields from output (governance decision)."""
     if isinstance(obj, dict):
         return {
             k: scrub(v)
@@ -59,79 +45,56 @@ def scrub(obj: Any):
 
 
 def stable_hash(obj: Any) -> str:
-    """
-    Compute a canonical, deterministic hash of the output payload.
-    """
-    try:
-        text = json.dumps(
-            obj,
-            sort_keys=True,
-            ensure_ascii=True,
-            separators=(",", ":"),
-        )
-    except Exception as e:
-        fail(f"Output is not JSON-serializable: {e}")
-
+    """Compute a canonical, deterministic hash of a JSON-serializable object."""
+    text = json.dumps(
+        obj,
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def run_fixture(fixture: dict):
+def run_fixture(fixture: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute Phase 4 runtime once for a single fixture input.
+    NOTE: This should import the runtime wrapper aligned with your routing skeleton.
     """
     try:
-        from phase4_personalization_runtime import run_phase4_personalization
+        from runtime.runtime_wrapper import run_phase4_personalization
     except Exception as e:
-        fail(f"Unable to import Phase 4 runtime: {e}")
+        raise AssertionError(f"Unable to import Phase 4 runtime: {e}")
 
-    return run_phase4_personalization(**fixture)
+    for k in ("canonical_payload", "canonical_row", "selected_elements", "difficulty"):
+        assert k in fixture, f"Fixture missing required key '{k}'"
 
-
-def main() -> int:
-    inputs = sorted(FIXTURES_DIR.glob("fixture_*_input.json"))
-    if not inputs:
-        fail("No Phase 4 fixture inputs found")
-
-    for inp in inputs:
-        try:
-            data = json.loads(inp.read_text(encoding="utf-8"))
-        except Exception as e:
-            fail(f"Invalid fixture JSON ({inp.name}): {e}")
-
-        out1 = scrub(run_fixture(data))
-        out2 = scrub(run_fixture(data))
-
-        if not isinstance(out1, dict) or not isinstance(out2, dict):
-            fail(f"Phase 4 output must be a dict (fixture={inp.name})")
-
-        h1 = stable_hash(out1)
-        h2 = stable_hash(out2)
-
-        if h1 != h2:
-            fail(
-                "Non-deterministic Phase 4 output detected "
-                f"(fixture={inp.name}, hash1={h1}, hash2={h2})"
-            )
-
-    print("CI PASS: Phase 4 fixture determinism regression verified")
-    return 0
+    out = run_phase4_personalization(
+        canonical_payload=fixture["canonical_payload"],
+        canonical_row=fixture["canonical_row"],
+        elements_skeleton=fixture["selected_elements"],   # Phase 4 uses elements_skeleton
+        difficulty=fixture["difficulty"],
+        engine_mode=str(fixture.get("engine_mode", "deterministic")),
+        locale=fixture.get("locale"),
+        player_context=fixture.get("player_context"),
+        feature_flags=fixture.get("feature_flags"),
+        opt_in=fixture.get("opt_in"),
+    )
+    assert isinstance(out, dict), "Phase 4 runtime output must be a dict"
+    return out
 
 @pytest.mark.phase4_determinism
 def test_fixture_determinism_regression():
     inputs = sorted(FIXTURES_DIR.glob("fixture_*_input.json"))
-    assert inputs, "No Phase 4 fixture inputs found"
+    assert inputs, f"No Phase 4 fixture inputs found in {FIXTURES_DIR}"
 
     for path in inputs:
-        fixture = load_fixture(path)  # 依你現有函式
-        try:
-            out1 = run_fixture(fixture)
-            out2 = run_fixture(fixture)
-        except SystemExit:
-            raise AssertionError(f"Determinism runner exited on fixture: {path.name}")
+        fixture = json.loads(path.read_text(encoding="utf-8"))
+
+        # Run twice for determinism
+        out1 = run_fixture(fixture)
+        out2 = run_fixture(fixture)
 
         h1 = stable_hash(scrub(out1))
         h2 = stable_hash(scrub(out2))
+
         assert h1 == h2, f"Determinism violated for fixture: {path.name}"
-        
-if __name__ == "__main__":
-    raise SystemExit(main())
