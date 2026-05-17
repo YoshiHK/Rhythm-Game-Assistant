@@ -1,9 +1,7 @@
 from __future__ import annotations
-
 from typing import Any, Dict, List
 
-from ..inference.model_gateway import run_model_inference as _run_model_inference
-
+from inference.model_gateway import run_model_inference as _run_model_inference
 
 _ALLOWED_DIRECTIVES = {
     "element_ordering",
@@ -20,16 +18,9 @@ def run_model_inference(
     elements_skeleton: List[Dict[str, Any]],
     include_experimental_variants: bool,
 ) -> Dict[str, Any]:
-    """
-    Runtime adapter for Phase 4 Model Inference.
-
-    Returns:
-      { "adjustment_directives": { ... } }
-    """
-
+    """Runtime adapter for Phase 4 Model Inference."""
     base_directives = decision.get("adjustment_directives") or {}
 
-    # Rule-only decisions must not call inference
     if decision.get("decision_source") == "rule":
         return {
             "adjustment_directives": {

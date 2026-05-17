@@ -1,8 +1,7 @@
 from __future__ import annotations
-
 from typing import Any, Dict, List
 
-from ..safe_adjustment import apply_safe_adjustments
+from safe_adjustment.apply_adjustment import apply_safe_adjustment
 
 
 def apply_adjustments(
@@ -12,20 +11,14 @@ def apply_adjustments(
     adjustment_directives: Dict[str, Any],
     provenance: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """
-    Runtime adapter for Phase 4 Safe Adjustment.
-    """
-
-    result = apply_safe_adjustments(
+    """Runtime adapter for Phase 4 Safe Adjustment."""
+    result = apply_safe_adjustment(
         elements_skeleton=base_elements,
         adjustment_directives=adjustment_directives,
     )
 
-    # merge provenance flags
     provenance_out = dict(provenance)
-    provenance_out["safe_adjustment_applied"] = bool(
-        result.get("applied_adjustments")
-    )
+    provenance_out["safe_adjustment_applied"] = bool(result.get("applied_adjustments"))
 
     return {
         "elements_view": result["elements_view"],

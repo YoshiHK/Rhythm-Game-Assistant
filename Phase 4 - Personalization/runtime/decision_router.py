@@ -1,8 +1,7 @@
 from __future__ import annotations
-
 from typing import Any, Dict, List, Optional
 
-from ..decision import decide_personalization
+from decision.decision_engine import decide_personalization
 
 
 def run_personalization_decision(
@@ -18,10 +17,7 @@ def run_personalization_decision(
     opt_in: Optional[bool],
     decision_interface_version: str,
 ) -> Dict[str, Any]:
-    """
-    Runtime adapter for Phase 4 Personalization Decision.
-    """
-
+    """Runtime adapter for Phase 4 Personalization Decision."""
     return decide_personalization(
         canonical_payload=canonical_payload,
         canonical_row=canonical_row,
