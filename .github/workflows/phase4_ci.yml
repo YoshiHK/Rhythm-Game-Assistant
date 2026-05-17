@@ -34,14 +34,7 @@ jobs:
           python "Phase 4 - Personalization/ci/phase_4_ci_runner.py"
 
       # ✅ Pytest layer (non-blocking if no tests discovered)
-      - name: Run Phase 4 tests
+      - name: Run Phase 4 tests (fail-fast)
         run: |
-          pytest "Phase 4 - Personalization/ci/tests/" -q || {
-            code=$?;
-            if [ "$code" = "5" ]; then
-              echo "No pytest tests collected (allowed).";
-              exit 0;
-            else
-              exit $code;
-            fi
-          }
+          pytest "Phase 4 - Personalization/ci/tests/" \
+            -q -x --maxfail=1 --tb=short -rA
