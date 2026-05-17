@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_expert",
+  "template_id": "expert",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} 這反映出穩定的模式要求。", "placeholders": ["base_text"] },

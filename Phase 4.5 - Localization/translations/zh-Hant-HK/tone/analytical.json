@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_analytical",
+  "template_id": "analytical",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} 這顯示出持續性的壓力。", "placeholders": ["base_text"] },
