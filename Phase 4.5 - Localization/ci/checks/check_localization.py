@@ -1,72 +1,62 @@
+#!/usr/bin/env python3
 """
-CI Check: Localization Integrity (Phase 4.5)
+Phase 4.5 Localization — Directory Structure Integrity Check (CI-only)
 
-Purpose:
-- Validate that the translationsals:- Validate that the translations/ directory is structurally complete
-- Translation quality
-- Linguistic correctness
-- Narrative semantics
+Checks:
+- translations/_meta/ exists and contains required contract files
+- Each locale directory exists and contains _meta/ with required files
+- Each locale contains all required template layer folders
+- No legacy/unsupported folders present
+
+Exit codes:
+- 0: pass
+- 2: fail
 """
 
 from pathlib import Path
-import json
 import sys
 
+REQUIRED_META = ["locale_meta.json", "glossary.json", "pack_version.json", "debug.json"]
+REQUIRED_LAYERS = [
+    "chart_level",
+    "element_level",
+    "section_level",
+    "guidance_framing",
+    "tone",
+]
 
 def fail(msg: str) -> None:
     print(f"CI FAIL: {msg}")
-    sys.exit(1)
-
-
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
+    sys.exit(2)
 
 def main() -> int:
-    root = repo_root()
+    root = Path(__file__).resolve().parents[2]
     translations = root / "translations"
     meta = translations / "_meta"
 
     if not translations.exists():
-        fail("translations/ directory is missing")
+        fail("Missing translations/ directory")
+    if not meta.exists():
+        fail("Missing translations/_meta/ directory")
 
-    if not (translations / "README.md").exists():
-        fail("translations/README.md is missing")
+    # Check global contract files
+    for fname in ["locales.json", "locale_aliases.json", "template_registry.json", "sources.json"]:
+        if not (meta / fname).exists():
+            fail(f"Missing global contract file: {fname}")
 
-    required_meta = [
-        "locales.json",
-        "locale_aliases.json",
-        "sources.json",
-    ]
-
-    for f in required_meta:
-        p = meta / f
-        if not p.exists():
-            fail(f"translations/_meta/{f} is missing")
-
-    try:
-        locales = json.loads((meta / "locales.json").read_text(encoding="utf-8"))
-    except Exception as e:
-        fail(f"Failed to parse locales.json: {e}")
-
-    supported = set(locales.get("supported_locales", []))
-    if not supported:
-        fail("supported_locales is empty in locales.json")
-
-    for locale in supported:
-        loc_dir = translations / locale
-        if not loc_dir.exists():
-            fail(f"Locale directory missing: translations/{locale}")
-
-        for required in ["glossary", "variants", "templates", "locale_meta.json"]:
-            if not (loc_dir / required).exists():
-                fail(f"Missing {required} in locale: {locale}")
-
-    print("CI PASS: Localization directory integrity verified")
+    # Check each locale
+    for loc_dir in [d for d in translations.iterdir() if d.is_dir() and not d.name.startswith("_")]:
+        meta_dir = loc_dir / "_meta"
+        if not meta_dir.exists():
+            fail(f"Missing _meta/ in {loc_dir.name}")
+        for fname in REQUIRED_META:
+            if not (meta_dir / fname).exists():
+                fail(f"Missing {fname} in {loc_dir.name}/_meta/")
+        for layer in REQUIRED_LAYERS:
+            if not (loc_dir / layer).exists():
+                fail(f"Missing {layer}/ in {loc_dir.name}/")
+    print("PASS: check_localization.py")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
-- Enforce Phase 4.5 localization contract (structure only)
-

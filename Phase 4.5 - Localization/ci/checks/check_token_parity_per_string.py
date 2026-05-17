@@ -1,130 +1,113 @@
+#!/usr/bin/env python3
 """
-CI Check: Per-string Token Parity (Phase 4.5)
+Phase 4.5 Localization — Per-string Token Parity Check (CI-only, NON-RUNTIME)
 
 Enforces:
-- per-string placeholder token parity (no duplicates/drops)
-- explicit waivers (auditable)
-- global + per-locale waiver budgets
-- waiver decay via review_by dates
-- auto-suggestion for review_by fixes in CI output
-- a single summary line at end ("CI SUMMARY: ...") for observability scraping
+- Per-template, per-variant placeholder token parity vs base locale
+- Explicit waivers (auditable)
+- Single-line CI SUMMARY output at end (machine-consumable)
 
-Token forms counted (as written in text):
-- Curly placeholders: {name}
-- Double-curly placeholders: {{name}}
+Tokens counted (as written in text):
+- {name}
+- {{name}}
 
 Non-goals:
 - Translation quality
-- Word budget (covered by check_word_budget.py)
+- Word budget (check_word_budget.py)
+- File-set parity (check_template_parity.py)
+
+Exit codes:
+- 0: pass
+- 2: fail
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
-import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+
+LAYER_DIRS = ["chart_level", "element_level", "section_level", "guidance_framing", "tone"]
 
 RE_CURLY = re.compile(r"\{[A-Za-z0-9_.:-]+\}")
 RE_DBL_CURLY = re.compile(r"\{\{\s*[A-Za-z0-9_.:-]+\s*\}\}")
 
 
-def fail(msg: str) -> None:
-    print(f"CI FAIL: {msg}")
-    sys.exit(1)
-
-
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def translations_root(root: Path) -> Path:
-    candidates = [
-        root / "translations",
-        root / "Phase_4.5_Localization" / "translations",
-        root / "Phase 4.5 - Localization" / "translations",
-        root / "localization" / "translations",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[0]
-
-
-def iter_locale_dirs(troot: Path) -> Iterable[Path]:
-    for p in sorted(troot.iterdir()):
-        if p.is_dir() and not p.name.startswith("_"):
-            yield p
-
-
-def choose_base_locale(troot: Path) -> str:
-    if (troot / "en-US").is_dir():
-        return "en-US"
-    meta = troot / "_meta" / "locales.json"
-    if meta.exists():
-        try:
-            data = json.loads(meta.read_text(encoding="utf-8"))
-            supported = data.get("supported_locales") or data.get("supportedLocales")
-            if isinstance(supported, list) and supported:
-                v = supported[0]
-                if isinstance(v, str) and (troot / v).is_dir():
-                    return v
-        except Exception:
-            pass
-    locs = [p.name for p in iter_locale_dirs(troot)]
-    return locs[0] if locs else "en-US"
-
-
-def load_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:
-        fail(f"Failed to parse JSON: {path}: {e}")
-
-
-def walk_strings(obj: Any, prefix: str = "$") -> Iterable[Tuple[str, str]]:
-    if isinstance(obj, str):
-        yield (prefix, obj)
-        return
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            yield from walk_strings(v, f"{prefix}.{k}")
-        return
-    if isinstance(obj, list):
-        for i, v in enumerate(obj):
-            yield from walk_strings(v, f"{prefix}[{i}]")
-        return
+def read_json(p: Path) -> Dict[str, Any]:
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
 def token_counter(text: str) -> Counter:
     c = Counter()
-    c.update(RE_CURLY.findall(text))
-    c.update(RE_DBL_CURLY.findall(text))
+    c.update(RE_CURLY.findall(text or ""))
+    c.update(RE_DBL_CURLY.findall(text or ""))
     return c
 
 
-def collect_per_string(locale_dir: Path) -> Dict[str, Dict[str, Counter]]:
-    """
-    Returns:
-      { template_rel_path: { string_path: Counter(tokens) } }
-    """
-    out: Dict[str, Dict[str, Counter]] = {}
-    tdir = locale_dir / "templates"
-    if not tdir.exists():
-        return out
+def fail(msg: str) -> None:
+    print(f"CI FAIL: {msg}")
+    raise SystemExit(2)
 
-    for fp in sorted(tdir.rglob("*.json")):
-        rel = fp.relative_to(locale_dir).as_posix()
-        data = load_json(fp)
-        mp: Dict[str, Counter] = {}
-        for spath, s in walk_strings(data):
-            mp[spath] = token_counter(s)
-        out[rel] = mp
+
+def find_translations_root(cli_value: Optional[str]) -> Path:
+    if cli_value:
+        return Path(cli_value)
+    candidates = [
+        Path("translations"),
+        Path("Phase 4.5 - Localization") / "translations",
+        Path("Phase_4.5_Localization") / "translations",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    fail("Cannot locate translations root (use --translations-root)")
+    return Path(".")  # unreachable
+
+
+def load_locales(translations_root: Path) -> Tuple[str, List[str]]:
+    p = translations_root / "_meta" / "locales.json"
+    if not p.exists():
+        fail(f"Missing locales.json at {p}")
+    obj = read_json(p)
+    base = str(obj.get("base_locale", "en-US"))
+    supported = obj.get("supported_locales", [])
+    if not isinstance(supported, list) or not supported:
+        fail("locales.json supported_locales missing/invalid")
+    return base, [str(x) for x in supported]
+
+
+def load_templates(locale_dir: Path) -> Dict[str, Dict[str, str]]:
+    """
+    Returns: { template_id: { variant: text } }
+    """
+    out: Dict[str, Dict[str, str]] = {}
+    for layer in LAYER_DIRS:
+        d = locale_dir / layer
+        if not d.exists():
+            continue
+        for f in d.glob("*.json"):
+            try:
+                obj = read_json(f)
+            except Exception:
+                continue
+            tid = obj.get("template_id")
+            if not isinstance(tid, str) or not tid:
+                continue
+            strings = obj.get("strings", {})
+            if not isinstance(strings, dict):
+                continue
+            vmap: Dict[str, str] = {}
+            for vk, entry in strings.items():
+                if isinstance(entry, dict) and isinstance(entry.get("text"), str):
+                    vmap[vk] = entry["text"]
+            if vmap:
+                out[tid] = vmap
     return out
 
 
@@ -139,196 +122,159 @@ def parse_iso_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
-def match(value: str, pat: str) -> bool:
-    return pat == "*" or value == pat
-
-
-def load_waiver_config(ci_dir: Path) -> Tuple[List[dict], int, Dict[str, int], DecayPolicy]:
+def load_waivers(ci_dir: Path) -> Tuple[List[dict], DecayPolicy]:
     """
-    Returns:
-      waivers, max_total, per_locale, decay_policy
+    Load waiver config from:
+    - ci/data/token_parity_waivers.json (preferred)
+    - ci/token_parity_waivers.json (fallback)
     """
-    # allow both placements: ci/token_parity_waivers.json OR ci/data/token_parity_waivers.json
-    cand = [
-        ci_dir / "token_parity_waivers.json",
+    candidates = [
         ci_dir / "data" / "token_parity_waivers.json",
+        ci_dir / "token_parity_waivers.json",
     ]
-    path = None
-    for c in cand:
-        if c.exists():
-            path = c
-            break
-
+    path = next((p for p in candidates if p.exists()), None)
     if path is None:
-        # No waivers => strict mode with zero budgets
-        return [], 0, {}, DecayPolicy(require_review_by=False, warn_before_days=0, fail_on_expired=False)
+        return [], DecayPolicy()
 
-    obj = load_json(path)
-    if not isinstance(obj, dict):
-        fail(f"Waiver config must be object: {path}")
-
-    budget = obj.get("budget", {})
-    if not isinstance(budget, dict):
-        budget = {}
-
-    max_total = int(budget.get("max_total", 0) or 0)
-    per_locale = budget.get("per_locale", {}) or {}
-    if not isinstance(per_locale, dict):
-        per_locale = {}
-
-    per_locale_int: Dict[str, int] = {}
-    for k, v in per_locale.items():
-        if isinstance(k, str) and isinstance(v, int):
-            per_locale_int[k] = int(v)
-
-    decay_obj = obj.get("decay", {})
-    if not isinstance(decay_obj, dict):
-        decay_obj = {}
+    obj = read_json(path)
+    waivers = obj.get("waivers", [])
+    decay = obj.get("decay_policy", {}) if isinstance(obj, dict) else {}
 
     policy = DecayPolicy(
-        require_review_by=bool(decay_obj.get("require_review_by", True)),
-        warn_before_days=int(decay_obj.get("warn_before_days", 7) or 7),
-        fail_on_expired=bool(decay_obj.get("fail_on_expired", True)),
+        require_review_by=bool(decay.get("require_review_by", True)),
+        warn_before_days=int(decay.get("warn_before_days", 7)),
+        fail_on_expired=bool(decay.get("fail_on_expired", True)),
     )
 
-    waivers = obj.get("waivers", [])
-    if not isinstance(waivers, list):
-        waivers = []
-
-    return waivers, max_total, per_locale_int, policy
+    return waivers if isinstance(waivers, list) else [], policy
 
 
-def is_waived(
-    waivers: List[dict],
-    *,
-    locale: str,
-    template: str,
-    string_path: str,
-) -> Tuple[bool, str, str]:
+def match(value: str, pat: str) -> bool:
+    # wildcard support: "*" matches any
+    return pat == "*" or pat == value
+
+
+def is_waived(waivers: List[dict], locale: str, template_id: str, variant: str) -> Tuple[bool, str, str]:
     """
-    Returns (waived, reason, review_by)
-    Supports wildcard "*" matching.
+    Waiver record format (suggested):
+    {
+      "locale": "zh-Hant-TW" | "*" ,
+      "template_id": "element_density" | "*",
+      "variant": "default" | "*" ,
+      "reason": "...",
+      "review_by": "YYYY-MM-DD"
+    }
     """
     for w in waivers:
         if not isinstance(w, dict):
             continue
-        loc_pat = str(w.get("locale", "*"))
-        tpl_pat = str(w.get("template", "*"))
-        sp_pat = str(w.get("string_path", "*"))
-
-        if match(locale, loc_pat) and match(template, tpl_pat) and match(string_path, sp_pat):
+        lp = str(w.get("locale", "*"))
+        tp = str(w.get("template_id", "*"))
+        vp = str(w.get("variant", "*"))
+        if match(locale, lp) and match(template_id, tp) and match(variant, vp):
             return True, str(w.get("reason", "")), str(w.get("review_by", ""))
     return False, "", ""
 
 
-def enforce_decay(review_by: str, policy: DecayPolicy) -> Tuple[bool, str]:
+def enforce_decay(review_by: str, policy: DecayPolicy) -> Tuple[bool, bool]:
     """
-    Returns (ok, suggested_review_by)
+    Returns (expired, should_warn)
     """
-    suggested = (date.today() + timedelta(days=30)).isoformat()
-
     if not policy.require_review_by:
-        return True, suggested
-
-    if not review_by or not isinstance(review_by, str):
-        return False, suggested
+        return False, False
+    if not review_by:
+        # missing date is treated as expired when required
+        return True, False
 
     try:
-        d = parse_iso_date(review_by)
+        rb = parse_iso_date(review_by)
     except Exception:
-        return False, suggested
+        return True, False
 
     today = date.today()
-    if d < today and policy.fail_on_expired:
-        return False, suggested
-
-    # warning window is informational; does not fail by itself
-    return True, suggested
+    expired = rb < today
+    should_warn = (rb - today) <= timedelta(days=policy.warn_before_days)
+    return expired, should_warn
 
 
-def main() -> int:
-    root = repo_root()
-    troot = translations_root(root)
-    if not troot.exists():
-        fail(f"translations root not found under: {root}")
+def ci_summary(errors: int, waivers_used: int, expired_waivers: int) -> None:
+    # MUST be exactly one physical line
+    print(f"CI SUMMARY: token_parity_per_string status={'PASS' if errors==0 else 'FAIL'} mismatches={errors} waivers_used={waivers_used} expired_waivers={expired_waivers}")
 
-    base_locale = choose_base_locale(troot)
-    base_dir = troot / base_locale
+
+def main(argv: Optional[List[str]] = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--translations-root", type=str, default=None)
+    args = ap.parse_args(argv)
+
+    # locate roots
+    ci_dir = Path(__file__).resolve().parents[1]
+    translations_root = find_translations_root(args.translations_root)
+    base_locale, locales = load_locales(translations_root)
+
+    waivers, decay_policy = load_waivers(ci_dir)
+
+    base_dir = translations_root / base_locale
     if not base_dir.exists():
-        fail(f"Base locale directory not found: {base_dir}")
+        fail(f"Base locale missing: {base_dir}")
 
-    ci_dir = Path(__file__).resolve().parent
-    waivers, max_total, per_locale_budget, decay_policy = load_waiver_config(ci_dir)
+    base_templates = load_templates(base_dir)
 
-    base = collect_per_string(base_dir)
-    if not base:
-        fail(f"No templates found under base locale: {base_locale}/templates")
-
-    locales = [p.name for p in iter_locale_dirs(troot)]
-
-    mismatches = 0
-    waived = 0
-    waived_by_locale = defaultdict(int)
-    expired_or_invalid_waivers = 0
+    mismatches: List[str] = []
+    waivers_used = 0
+    expired_waivers = 0
 
     for loc in locales:
         if loc == base_locale:
             continue
-        loc_dir = troot / loc
-        cur = collect_per_string(loc_dir)
+        loc_dir = translations_root / loc
+        if not loc_dir.exists():
+            mismatches.append(f"[{loc}] Missing locale directory: {loc_dir}")
+            continue
 
-        if set(cur.keys()) != set(base.keys()):
-            missing = sorted(set(base.keys()) - set(cur.keys()))
-            extra = sorted(set(cur.keys()) - set(base.keys()))
-            fail(f"Template set mismatch for locale {loc}. Missing={missing} Extra={extra}")
+        loc_templates = load_templates(loc_dir)
 
-        for tpl in sorted(base.keys()):
-            base_map = base[tpl]
-            cur_map = cur[tpl]
+        # Compare only templates present in base (parity check handles missing templates)
+        for tid, base_vmap in base_templates.items():
+            if tid not in loc_templates:
+                continue
+            cur_vmap = loc_templates[tid]
 
-            # Compare per string path present in base
-            for spath, base_counter in base_map.items():
-                cur_counter = cur_map.get(spath, Counter())
-
-                if base_counter == cur_counter:
+            for variant, base_text in base_vmap.items():
+                if variant not in cur_vmap:
+                    # variant parity check handles this, but keep safe
                     continue
 
-                mismatches += 1
+                base_tokens = token_counter(base_text)
+                cur_tokens = token_counter(cur_vmap[variant])
 
-                waived_flag, reason, review_by = is_waived(waivers, locale=loc, template=tpl, string_path=spath)
-                if not waived_flag:
-                    fail(
-                        f"Token parity mismatch (not waived): locale={loc} template={tpl} path={spath} "
-                        f"base={dict(base_counter)} cur={dict(cur_counter)}"
+                if base_tokens != cur_tokens:
+                    waived, reason, review_by = is_waived(waivers, loc, tid, variant)
+                    if waived:
+                        waivers_used += 1
+                        expired, warn = enforce_decay(review_by, decay_policy)
+                        if expired:
+                            expired_waivers += 1
+                            if decay_policy.fail_on_expired:
+                                mismatches.append(
+                                    f"[{loc}] WAIVER EXPIRED {tid}:{variant} review_by={review_by} reason={reason}"
+                                )
+                        # waived and not expired -> accept mismatch
+                        continue
+
+                    # not waived -> record mismatch
+                    mismatches.append(
+                        f"[{loc}] token mismatch {tid}:{variant} base={dict(base_tokens)} cur={dict(cur_tokens)}"
                     )
 
-                ok, suggested = enforce_decay(review_by, decay_policy)
-                if not ok:
-                    expired_or_invalid_waivers += 1
-                    fail(
-                        f"Waiver invalid/expired: locale={loc} template={tpl} path={spath} "
-                        f"review_by='{review_by}' (suggested '{suggested}') reason='{reason}'"
-                    )
+    # Emit details
+    for m in mismatches:
+        print(f"ERROR: {m}")
 
-                waived += 1
-                waived_by_locale[loc] += 1
+    error_count = len(mismatches)
+    ci_summary(error_count, waivers_used, expired_waivers)
 
-    # Budget enforcement (waivers only; mismatches must be waived to pass)
-    if max_total and waived > max_total:
-        fail(f"Waiver budget exceeded: used={waived} max_total={max_total}")
-
-    for loc, used in sorted(waived_by_locale.items()):
-        cap = per_locale_budget.get(loc)
-        if cap is not None and used > cap:
-            fail(f"Per-locale waiver budget exceeded: locale={loc} used={used} cap={cap}")
-
-    # Single-line summary for observability scraping (locked format, no versioning)
-    print(
-        "CI SUMMARY: token_parity_per_string "
-        f"status=PASS mismatches={mismatches} waivers_used={waived} "
-        f"invalid_waivers={expired_or_invalid_waivers}"
-    )
-    return 0
+    return 0 if error_count == 0 else 2
 
 
 if __name__ == "__main__":

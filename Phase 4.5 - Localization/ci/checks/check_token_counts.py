@@ -1,27 +1,36 @@
-"""Asserts that localization does not change template token counts.
+#!/usr/bin/env python3
+"""
+Phase 4.5 Localization — Token Count Integrity Check (CI-only, NON-RUNTIME)
 
-We treat "tokens" as placeholder markers used for template substitution.
-This prevents translators from accidentally duplicating or dropping placeholders,
-which would change runtime binding behavior.
+Purpose:
+- Assert that placeholder token COUNTS do not drift across locales
+- Coarse-grained: aggregates token counts per template across all variants
 
-Counted token forms (as written in text):
-- Curly placeholders: {name}
-- Double-curly placeholders: {{name}}
+Tokens counted (as written in text):
+- {name}
+- {{name}}
 
 Non-goals:
 - Translation quality
-- Word budget (covered by check_word_budget.py)
+- Word budget (handled by check_word_budget.py)
+- Per-string parity (handled by check_token_parity_per_string.py)
+
+Exit codes:
+- 0: pass
+- 2: fail
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
-import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+
+LAYER_DIRS = ["chart_level", "element_level", "section_level", "guidance_framing", "tone"]
 
 RE_CURLY = re.compile(r"\{[A-Za-z0-9_.:-]+\}")
 RE_DBL_CURLY = re.compile(r"\{\{\s*[A-Za-z0-9_.:-]+\s*\}\}")
@@ -29,155 +38,136 @@ RE_DBL_CURLY = re.compile(r"\{\{\s*[A-Za-z0-9_.:-]+\s*\}\}")
 
 def fail(msg: str) -> None:
     print(f"CI FAIL: {msg}")
-    sys.exit(1)
+    raise SystemExit(2)
 
 
-def repo_root() -> Path:
-    # Works for both repo/ci/* and Phase_4.5_Localization/ci/* layouts
-    return Path(__file__).resolve().parents[2]
+def read_json(p: Path) -> Dict[str, Any]:
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
-def translations_root(root: Path) -> Path:
+def find_translations_root(cli_value: Optional[str]) -> Path:
+    if cli_value:
+        return Path(cli_value)
     candidates = [
-        root / "translations",
-        root / "Phase_4.5_Localization" / "translations",
-        root / "Phase 4.5 - Localization" / "translations",
-        root / "localization" / "translations",
+        Path("translations"),
+        Path("Phase 4.5 - Localization") / "translations",
+        Path("Phase_4.5_Localization") / "translations",
     ]
     for c in candidates:
         if c.exists():
             return c
-    return candidates[0]
+    fail("Cannot locate translations root (use --translations-root)")
+    return Path(".")  # unreachable
 
 
-def iter_locale_dirs(troot: Path) -> Iterable[Path]:
-    for p in sorted(troot.iterdir()):
-        if p.is_dir() and not p.name.startswith("_"):
-            yield p
-
-
-def choose_base_locale(troot: Path) -> str:
-    # Prefer explicit en-US
-    if (troot / "en-US").is_dir():
-        return "en-US"
-
-    meta = troot / "_meta" / "locales.json"
-    if meta.exists():
-        try:
-            data = json.loads(meta.read_text(encoding="utf-8"))
-            supported = data.get("supported_locales") or data.get("supportedLocales")
-            if isinstance(supported, list) and supported:
-                v = supported[0]
-                if isinstance(v, str) and (troot / v).is_dir():
-                    return v
-            for key in ("base_locale", "default_locale", "root_locale", "fallback_root"):
-                v = data.get(key)
-                if isinstance(v, str) and (troot / v).is_dir():
-                    return v
-        except Exception:
-            pass
-
-    locs = [p.name for p in iter_locale_dirs(troot)]
-    return locs[0] if locs else "en-US"
-
-
-def walk_strings(obj: Any, prefix: str = "$") -> Iterable[Tuple[str, str]]:
-    if isinstance(obj, str):
-        yield (prefix, obj)
-        return
-
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            kp = f"{prefix}.{k}"
-            yield from walk_strings(v, kp)
-        return
-
-    if isinstance(obj, list):
-        for i, v in enumerate(obj):
-            kp = f"{prefix}[{i}]"
-            yield from walk_strings(v, kp)
-        return
+def load_locales(translations_root: Path) -> Tuple[str, List[str]]:
+    p = translations_root / "_meta" / "locales.json"
+    if not p.exists():
+        fail(f"Missing locales.json at {p}")
+    obj = read_json(p)
+    base = str(obj.get("base_locale", "en-US"))
+    supported = obj.get("supported_locales", [])
+    if not isinstance(supported, list) or not supported:
+        fail("locales.json supported_locales missing/invalid")
+    return base, [str(x) for x in supported]
 
 
 def token_counter(text: str) -> Counter:
     c = Counter()
-    c.update(RE_CURLY.findall(text))
-    c.update(RE_DBL_CURLY.findall(text))
+    c.update(RE_CURLY.findall(text or ""))
+    c.update(RE_DBL_CURLY.findall(text or ""))
     return c
 
 
 def collect_template_token_counts(locale_dir: Path) -> Dict[str, Counter]:
+    """
+    Returns:
+    { template_id: Counter(token->count aggregated across all variants) }
+    """
     out: Dict[str, Counter] = {}
-    templates_dir = locale_dir / "templates"
-    if not templates_dir.exists():
-        return out
 
-    for fp in sorted(templates_dir.rglob("*.json")):
-        rel = fp.relative_to(locale_dir).as_posix()
-        try:
-            data = json.loads(fp.read_text(encoding="utf-8"))
-        except Exception as exc:
-            fail(f"Invalid JSON in {locale_dir.name}/{rel}: {exc}")
+    for layer in LAYER_DIRS:
+        d = locale_dir / layer
+        if not d.exists():
+            continue
+        for f in d.glob("*.json"):
+            try:
+                obj = read_json(f)
+            except Exception:
+                continue
+            tid = obj.get("template_id")
+            if not isinstance(tid, str) or not tid:
+                continue
+            strings = obj.get("strings", {})
+            if not isinstance(strings, dict):
+                continue
 
-        c = Counter()
-        for _, s in walk_strings(data):
-            c.update(token_counter(s))
-        out[rel] = c
+            agg = Counter()
+            for _, entry in strings.items():
+                if isinstance(entry, dict):
+                    txt = entry.get("text", "")
+                    if isinstance(txt, str):
+                        agg += token_counter(txt)
+
+            out[tid] = out.get(tid, Counter()) + agg
 
     return out
 
 
-def diff_counters(a: Counter, b: Counter) -> Dict[str, int]:
-    # returns items where counts differ (b - a)
-    out: Dict[str, int] = {}
-    keys = set(a.keys()) | set(b.keys())
+def diff_counters(base: Counter, other: Counter) -> Dict[str, Tuple[int, int]]:
+    """
+    Return tokens whose counts differ: {token: (base_count, other_count)}
+    """
+    out: Dict[str, Tuple[int, int]] = {}
+    keys = set(base.keys()) | set(other.keys())
     for k in sorted(keys):
-        da = int(a.get(k, 0))
-        db = int(b.get(k, 0))
-        if da != db:
-            out[k] = db - da
+        bc = int(base.get(k, 0))
+        oc = int(other.get(k, 0))
+        if bc != oc:
+            out[k] = (bc, oc)
     return out
 
 
-def main() -> int:
-    root = repo_root()
-    troot = translations_root(root)
-    if not troot.exists():
-        fail(f"translations root not found (checked common locations) under: {root}")
+def main(argv: Optional[List[str]] = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--translations-root", type=str, default=None)
+    args = ap.parse_args(argv)
 
-    base = choose_base_locale(troot)
-    base_dir = troot / base
+    translations_root = find_translations_root(args.translations_root)
+    base_locale, locales = load_locales(translations_root)
+
+    base_dir = translations_root / base_locale
     if not base_dir.exists():
-        fail(f"Base locale directory not found: {base_dir}")
+        fail(f"Base locale directory missing: {base_dir}")
 
     base_counts = collect_template_token_counts(base_dir)
-    if not base_counts:
-        fail(f"No templates found under base locale: {base}/templates")
 
-    locales = [p.name for p in iter_locale_dirs(troot)]
+    errors: List[str] = []
     for loc in locales:
-        if loc == base:
+        loc_dir = translations_root / loc
+        if not loc_dir.exists():
+            errors.append(f"[{loc}] Missing locale directory: {loc_dir}")
             continue
-        loc_dir = troot / loc
+
         cur_counts = collect_template_token_counts(loc_dir)
 
-        # Ensure same template set
-        if set(cur_counts.keys()) != set(base_counts.keys()):
-            missing = sorted(set(base_counts.keys()) - set(cur_counts.keys()))
-            extra = sorted(set(cur_counts.keys()) - set(base_counts.keys()))
-            fail(f"Template set mismatch for locale {loc}. Missing={missing} Extra={extra}")
+        # compare only templates present in base (parity handled elsewhere)
+        for tid, bc in base_counts.items():
+            oc = cur_counts.get(tid, Counter())
+            diffs = diff_counters(bc, oc)
+            if diffs:
+                errors.append(f"[{loc}] Token count drift in template '{tid}': {diffs}")
 
-        # Compare per template counter
-        for rel in sorted(base_counts.keys()):
-            d = diff_counters(base_counts[rel], cur_counts[rel])
-            if d:
-                fail(f"Token count mismatch: locale={loc} template={rel} diff(b-base)={d}")
+    if errors:
+        for e in errors:
+            print(f"ERROR: {e}")
+        print(f"LOCALIZATION_TOKEN_COUNTS errors={len(errors)} warnings=0")
+        return 2
 
-    print("CI PASS: Token count integrity verified across locales")
+    print("PASS: check_token_counts.py")
+    print("LOCALIZATION_TOKEN_COUNTS errors=0 warnings=0")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-CI Check: Token Count Integrity (Phase 4.5)
-

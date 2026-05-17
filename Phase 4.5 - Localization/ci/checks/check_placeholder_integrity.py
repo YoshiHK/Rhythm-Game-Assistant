@@ -1,85 +1,75 @@
+#!/usr/bin/env python3
 """
-CI Check: Placeholder Integrity (Phase 4.5)
+Phase 4.5 Localization — Placeholder Integrity Check (CI-only)
 
-Purpose:
-- Ensure placeholders are preserved across locales
-- Prevent runtime binding breakage due to missing/extra placeholders
+Checks:
+- All templates in all locales preserve placeholder sets per variant
+- Placeholders must match base locale (en-US) exactly
 
-Non-goals:
-- Translation quality
-- Linguistic correctness
+Exit codes:
+- 0: pass
+- 2: fail
 """
 
 from pathlib import Path
 import json
-import re
 import sys
 
-
-INLINE_RE = re.compile(r"{{\s*([a-zA-Z0-9_.:-]+)\s*}}")
-
-
-def fail(msg: str) -> None:
-    print(f"CI FAIL: {msg}")
-    sys.exit(1)
-
-
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def extract_placeholders(obj: dict) -> set[str]:
-    out = set()
-    strings = obj.get("strings", {})
-    default = strings.get("default", {})
-
-    declared = default.get("placeholders", [])
-    if isinstance(declared, list):
-        out.update(str(p) for p in declared)
-
-    text = default.get("text")
-    if isinstance(text, str):
-        out.update(INLINE_RE.findall(text))
-
+def extract_placeholders(strings: dict) -> dict:
+    out = {}
+    for variant, entry in strings.items():
+        ph = entry.get("placeholders", [])
+        out[variant] = tuple(sorted(ph))
     return out
 
-
 def main() -> int:
-    root = repo_root()
+    root = Path(__file__).resolve().parents[2]
     translations = root / "translations"
     meta = translations / "_meta"
-
     locales = json.loads((meta / "locales.json").read_text(encoding="utf-8"))
+    base_locale = locales.get("base_locale", "en-US")
     supported = locales.get("supported_locales", [])
+    errors = []
 
-    base_locale = supported[0]
+    # Load base locale templates
     base_dir = translations / base_locale
-    base_templates = list((base_dir / "templates" / "narrative_v3").rglob("*.json"))
+    base_templates = {}
+    for layer in ["chart_level", "element_level", "section_level", "guidance_framing", "tone"]:
+        layer_dir = base_dir / layer
+        if not layer_dir.exists():
+            continue
+        for f in layer_dir.glob("*.json"):
+            obj = json.loads(f.read_text(encoding="utf-8"))
+            base_templates[obj["template_id"]] = extract_placeholders(obj["strings"])
 
-    base_map = {}
-    for fp in base_templates:
-        obj = json.loads(fp.read_text(encoding="utf-8"))
-        base_map[str(fp.relative_to(base_dir))] = extract_placeholders(obj)
+    # Check all locales
+    for loc in supported:
+        if loc == base_locale:
+            continue
+        loc_dir = translations / loc
+        for layer in ["chart_level", "element_level", "section_level", "guidance_framing", "tone"]:
+            layer_dir = loc_dir / layer
+            if not layer_dir.exists():
+                continue
+            for f in layer_dir.glob("*.json"):
+                obj = json.loads(f.read_text(encoding="utf-8"))
+                tid = obj["template_id"]
+                if tid not in base_templates:
+                    continue
+                cur_ph = extract_placeholders(obj["strings"])
+                base_ph = base_templates[tid]
+                for variant, ph in base_ph.items():
+                    if variant not in cur_ph:
+                        errors.append(f"{loc}:{tid} missing variant '{variant}' (base has it)")
+                    elif cur_ph[variant] != ph:
+                        errors.append(f"{loc}:{tid}:{variant} placeholders {cur_ph[variant]} != base {ph}")
 
-    for locale in supported:
-        loc_dir = translations / locale
-        for rel, expected in base_map.items():
-            path = loc_dir / rel
-            if not path.exists():
-                fail(f"Missing template {rel} in locale {locale}")
-
-            obj = json.loads(path.read_text(encoding="utf-8"))
-            found = extract_placeholders(obj)
-
-            if found != expected:
-                fail(
-                    f"Placeholder mismatch in {locale}/{rel}: "
-                    f"expected={sorted(expected)}, found={sorted(found)}"
-                )
-
-    print("CI PASS: Placeholder integrity verified")
+    if errors:
+        for e in errors:
+            print(f"ERROR: {e}")
+        sys.exit(2)
+    print("PASS: check_placeholder_integrity.py")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

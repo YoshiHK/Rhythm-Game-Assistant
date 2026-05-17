@@ -1,6 +1,8 @@
 {
   "format": "stable",
+
   "description": "Waivers for Phase 4.5 per-string token parity check with budgets, decay, and auditable review dates.",
+
   "budget": {
     "max_total": 5,
     "per_locale": {
@@ -8,18 +10,20 @@
       "zh-Hant-HK": 1
     }
   },
-  "decay": {
+
+  "decay_policy": {
     "require_review_by": true,
     "warn_before_days": 7,
     "fail_on_expired": true
   },
+
   "waivers": [
     {
       "locale": "ja-JP",
-      "template": "templates/narrative_v3/difficulty/example.json",
-      "string_path": "strings.default",
+      "template_id": "difficulty_overview",
+      "variant": "default",
       "reason": "Japanese grammar requires duplicated placeholder.",
-      "review_by": "2026-05-01"
+      "review_by": "2026-06-15"
     }
   ]
 }

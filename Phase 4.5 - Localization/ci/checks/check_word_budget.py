@@ -1,157 +1,209 @@
-"""CI Check: Word Budget Validation (Phase 4.5)
+#!/usr/bin/env python3
+"""
+Phase 4.5 Localization — Word/Unit Budget Check (CI-only, NON-RUNTIME)
 
-Validates that localized Narrative Module v3 template strings respect per-variant word budgets.
+Checks that localized template strings do not exceed per-variant budgets.
 
-Design notes:
-- Phase 4.5 is presentation-only; this is a structural policy check.
-- Templates currently provide strings.default.text (baseline). Variants define max_words.
-- If a template later adds variant-specific strings (e.g., strings.casual.text), this script
-  will validate those too.
+Template discovery (new layout):
+- <locale>/chart_level/*.json
+- <locale>/element_level/*.json
+- <locale>/section_level/*.json
+- <locale>/guidance_framing/*.json
+- <locale>/tone/*.json
 
-Word counting heuristic (deterministic):
-- If the string contains whitespace-separated tokens, word_count = number of tokens.
-- Otherwise (CJK/no-spaces), token_count = number of non-space, non-punctuation characters.
-  This approximates "word" budget for languages without spaces.
+Budgets:
+- Prefer per-locale budgets in <locale>/_meta/pack_version.json under:
+    {
+      "word_budgets": { "<variant>": <int>, ... },
+      "unit_budgets": { "<variant>": <int>, ... }
+    }
+- If missing, fall back to deterministic defaults:
+    - default: 40
+    - other variants: 50
+  (CJK/no-space languages use unit_budgets; others use word_budgets)
 
-Run:
-  python ci/check_word_budget.py
-
-Exit code:
-  0 on pass, 1 on failure.
+Exit codes:
+- 0: pass
+- 2: fail
 """
 
+from __future__ import annotations
+
+import argparse
 import json
 import re
 import sys
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-ROOT = Path("translations")
-META = ROOT / "_meta"
-REQUIRED_TEMPLATE_ROOT = Path("templates") / "narrative_v3"
 
-# Basic punctuation set for CJK/no-space counting
-PUNCT_RE = re.compile(r"[\s\u200b\u3000\.,!\?;:\\-—–\(\)\[\]\{\}<>\"'“”‘’、。！，？；：·…～~]+")
+LAYER_DIRS = ["chart_level", "element_level", "section_level", "guidance_framing", "tone"]
+
+# basic punctuation removal for unit counting
+PUNCT_RE = re.compile(r"[\s\u200b\u3000.,!?;:\-—–()\[\]{}<>\"'“”‘’、。！，？；：·…～~]+")
 
 
 def fail(msg: str) -> None:
     print(f"CI FAIL: {msg}")
-    sys.exit(1)
+    raise SystemExit(2)
 
 
-def load_json(path: Path):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:
-        fail(f"Failed to parse JSON: {path} ({e})")
+def read_json(p: Path) -> Dict[str, Any]:
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
-def list_template_files(locale_dir: Path):
-    base = locale_dir / REQUIRED_TEMPLATE_ROOT
-    if not base.exists():
-        fail(f"Missing template root: {base}")
-    files = []
-    for p in base.rglob("*.json"):
-        if p.is_file():
-            files.append(p.relative_to(locale_dir).as_posix())
-    return sorted(files)
+def find_translations_root(cli_value: Optional[str]) -> Path:
+    if cli_value:
+        return Path(cli_value)
+    candidates = [
+        Path("translations"),
+        Path("Phase 4.5 - Localization") / "translations",
+        Path("Phase_4.5_Localization") / "translations",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    fail("Cannot locate translations root (use --translations-root)")
+    return Path(".")  # unreachable
+
+
+def load_locales(translations_root: Path) -> Tuple[str, List[str]]:
+    p = translations_root / "_meta" / "locales.json"
+    if not p.exists():
+        fail(f"Missing locales.json at {p}")
+    obj = read_json(p)
+    base = str(obj.get("base_locale", "en-US"))
+    supported = obj.get("supported_locales", [])
+    if not isinstance(supported, list) or not supported:
+        fail("locales.json supported_locales missing/invalid")
+    return base, [str(x) for x in supported]
+
+
+def is_cjk_locale(locale: str) -> bool:
+    # deterministic heuristic based on locale code
+    return locale.startswith("zh") or locale.startswith("ja") or locale.startswith("ko")
+
+
+def count_words(text: str) -> int:
+    if not isinstance(text, str):
+        return 0
+    s = text.strip()
+    if not s:
+        return 0
+    # whitespace token count
+    tokens = [t for t in s.split() if t]
+    return len(tokens)
 
 
 def count_units(text: str) -> int:
-    """Deterministic word/unit counter."""
     if not isinstance(text, str):
         return 0
-    stripped = text.strip()
-    if not stripped:
+    s = text.strip()
+    if not s:
         return 0
-    # If contains whitespace between tokens, count tokens.
-    if any(ch.isspace() for ch in stripped):
-        tokens = [t for t in stripped.split() if t]
-        return len(tokens)
-    # No spaces: count non-punctuation characters as units.
-    compact = PUNCT_RE.sub("", stripped)
+    compact = PUNCT_RE.sub("", s)
     return len(compact)
 
 
-def iter_variant_texts(template_obj: dict):
-    """Yield (variant_id, text, path_hint). Defaults to 'default'."""
-    strings = template_obj.get("strings")
-    if not isinstance(strings, dict):
-        return
-
-    # Always check strings.default.text if present
-    default = strings.get("default")
-    if isinstance(default, dict) and isinstance(default.get("text"), str):
-        yield ("default", default.get("text"), "strings.default.text")
-
-    # Optional variant keys may be present in the future
-    for variant_id in ("casual", "expert", "debug"):
-        v = strings.get(variant_id)
-        if isinstance(v, dict) and isinstance(v.get("text"), str):
-            yield (variant_id, v.get("text"), f"strings.{variant_id}.text")
+def default_budget(variant: str, *, cjk: bool) -> int:
+    # conservative defaults; adjust later if you introduce explicit budgets
+    if variant == "default":
+        return 40 if not cjk else 60
+    return 50 if not cjk else 80
 
 
-def main():
-    locales_path = META / "locales.json"
-    if not locales_path.exists():
-        fail("translations/_meta/locales.json is missing")
+def load_budgets(locale_dir: Path) -> Tuple[Dict[str, int], Dict[str, int]]:
+    """
+    Returns (word_budgets, unit_budgets).
+    Optional; if absent returns empty dicts.
+    """
+    pv = locale_dir / "_meta" / "pack_version.json"
+    if not pv.exists():
+        return {}, {}
+    try:
+        obj = read_json(pv)
+    except Exception:
+        return {}, {}
+    wb = obj.get("word_budgets", {})
+    ub = obj.get("unit_budgets", {})
+    word_budgets = {str(k): int(v) for k, v in wb.items()} if isinstance(wb, dict) else {}
+    unit_budgets = {str(k): int(v) for k, v in ub.items()} if isinstance(ub, dict) else {}
+    return word_budgets, unit_budgets
 
-    cfg = load_json(locales_path)
-    supported = cfg.get("supported_locales")
-    if not isinstance(supported, list) or not supported:
-        fail("supported_locales is missing or empty")
 
-    # Validate variants config exists per locale
-    for loc in supported:
-        loc_dir = ROOT / loc
+def iter_templates(locale_dir: Path) -> List[Path]:
+    files: List[Path] = []
+    for layer in LAYER_DIRS:
+        d = locale_dir / layer
+        if d.exists():
+            files.extend(sorted(d.glob("*.json"), key=lambda p: str(p)))
+    return files
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--translations-root", type=str, default=None)
+    args = ap.parse_args(argv)
+
+    translations_root = find_translations_root(args.translations_root)
+    _, locales = load_locales(translations_root)
+
+    errors: List[str] = []
+
+    for loc in locales:
+        loc_dir = translations_root / loc
         if not loc_dir.exists():
-            fail(f"Locale folder missing: {loc}")
+            errors.append(f"[{loc}] Missing locale directory: {loc_dir}")
+            continue
 
-        variants_dir = loc_dir / "variants"
-        if not variants_dir.exists():
-            fail(f"Missing variants directory: {loc}/variants")
+        cjk = is_cjk_locale(loc)
+        word_budgets, unit_budgets = load_budgets(loc_dir)
 
-        variant_budgets = {}
-        for vid in ("casual", "expert", "debug"):
-            p = variants_dir / f"{vid}.json"
-            if not p.exists():
-                fail(f"Missing variant file: {loc}/variants/{vid}.json")
-            vobj = load_json(p)
-            rules = vobj.get("rules") if isinstance(vobj, dict) else None
-            max_words = rules.get("max_words") if isinstance(rules, dict) else None
-            if not isinstance(max_words, int) or max_words <= 0:
-                fail(f"Invalid max_words in {loc}/variants/{vid}.json")
-            variant_budgets[vid] = max_words
+        for f in iter_templates(loc_dir):
+            try:
+                obj = read_json(f)
+            except Exception as e:
+                errors.append(f"[{loc}] Invalid JSON: {f} ({e})")
+                continue
 
-        # Templates
-        t_files = list_template_files(loc_dir)
-        if not t_files:
-            fail(f"No templates found for locale: {loc}")
+            strings = obj.get("strings", {})
+            if not isinstance(strings, dict):
+                continue
 
-        for rel in t_files:
-            tpath = loc_dir / rel
-            tobj = load_json(tpath)
-            if not isinstance(tobj, dict):
-                fail(f"Template must be an object: {tpath}")
+            for variant, entry in strings.items():
+                if not isinstance(entry, dict):
+                    continue
+                text = entry.get("text", "")
+                if not isinstance(text, str):
+                    continue
 
-            # Validate any variant-specific strings against its budget
-            for vid, text, hint in iter_variant_texts(tobj):
-                if vid == "default":
-                    # Default uses the strictest budget among casual/expert/debug, to keep baseline safe.
-                    budget = min(variant_budgets.values())
-                    budget_name = f"min(casual,expert,debug)={budget}"
+                if cjk:
+                    budget = unit_budgets.get(variant, default_budget(variant, cjk=True))
+                    units = count_units(text)
+                    if units > budget:
+                        errors.append(
+                            f"[{loc}] {obj.get('template_id')}:{variant} exceeds unit budget "
+                            f"{units}>{budget} file={f.name}"
+                        )
                 else:
-                    budget = variant_budgets.get(vid)
-                    budget_name = f"{vid}={budget}"
+                    budget = word_budgets.get(variant, default_budget(variant, cjk=False))
+                    wc = count_words(text)
+                    if wc > budget:
+                        errors.append(
+                            f"[{loc}] {obj.get('template_id')}:{variant} exceeds word budget "
+                            f"{wc}>{budget} file={f.name}"
+                        )
 
-                units = count_units(text)
-                if units > budget:
-                    fail(
-                        f"Word budget exceeded in {loc}/{rel} ({hint}). "
-                        f"Units={units} Budget({budget_name})."
-                    )
+    if errors:
+        for e in errors:
+            print(f"ERROR: {e}")
+        print(f"LOCALIZATION_WORD_BUDGET errors={len(errors)} warnings=0")
+        return 2
 
-    print("CI PASS: Word budgets verified")
+    print("PASS: check_word_budget.py")
+    print("LOCALIZATION_WORD_BUDGET errors=0 warnings=0")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
