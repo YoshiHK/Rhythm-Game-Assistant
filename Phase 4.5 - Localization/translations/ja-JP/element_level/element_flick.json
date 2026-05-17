@@ -2,9 +2,25 @@
   "template_id": "element_flick",
   "version": "v3",
   "strings": {
-    "default": { "text": "方向入力には正確な操作が求められます。", "placeholders": [] },
-    "consecutive": { "text": "連続フリックにより操作の要求が高まります。", "placeholders": [] },
-    "directional": { "text": "方向の変化が判定の安定性に影響します。", "placeholders": [] },
-    "embedded": { "text": "フリックが他のパターン内に組み込まれます。", "placeholders": [] }
+    "default": {
+      "text": "フリック方向に注意して入力ミスを防ぐ必要があります。",
+      "placeholders": []
+    },
+    "frequent": {
+      "text": "フリックが頻繁に現れ、方向入力の安定性が求められます。",
+      "placeholders": []
+    },
+    "direction_change": {
+      "text": "フリック方向の急な変化はリズムを崩す原因になります。",
+      "placeholders": []
+    },
+    "tight_timing": {
+      "text": "フリックの判定が厳しく、調整の余裕が少ないです。",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "繰り返しのフリック入力は手の疲労を蓄積させます。",
+      "placeholders": []
+    }
   }
 }
