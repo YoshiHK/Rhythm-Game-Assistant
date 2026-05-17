@@ -2,9 +2,10 @@
   "template_id": "element_density",
   "version": "v3",
   "strings": {
-    "default": { "text": "高音符密度会减少恢复空间。", "placeholders": [] },
-    "sustained": { "text": "各段落中密度持续维持在较高水平。", "placeholders": [] },
-    "spikes": { "text": "短时间密度上升会带来瞬时压力。", "placeholders": [] },
-    "mixed": { "text": "不同段落之间的密度变化会影响节奏。", "placeholders": [] }
+    "default": { "text": "音符密度很高，输入间隔很短。", "placeholders": [] },
+    "steady": { "text": "密度保持稳定，需要持续集中注意力。", "placeholders": [] },
+    "bursty": { "text": "密度以短爆发形式上升，反应时间被压缩。", "placeholders": [] },
+    "compressed": { "text": "输入被压进很紧的时间窗口，恢复余量减少。", "placeholders": [] },
+    "overload": { "text": "长时间高密度段落可能迅速累积疲劳。", "placeholders": [] }
   }
 }
