@@ -23,19 +23,25 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ✅ install minimal deps (Phase 4 must stay clean)
+      # ✅ Minimal dependency (keep Phase 4 clean)
       - name: Install dependencies
         run: |
           pip install pytest
 
-      # ✅ 🔒 Phase 4 CI runner (authoritative)
+      # 🔒 Phase 4 CI Runner (Authoritative Gate)
       - name: Run Phase 4 CI checks
         run: |
           python "Phase 4 - Personalization/ci/phase_4_ci_runner.py"
 
-      # ✅ deterministic regression / fixtures
-      
+      # ✅ Pytest layer (non-blocking if no tests discovered)
       - name: Run Phase 4 tests
         run: |
-          pytest "Phase 4 - Personalization/ci/tests/" || true
-
+          pytest "Phase 4 - Personalization/ci/tests/" -q || {
+            code=$?;
+            if [ "$code" = "5" ]; then
+              echo "No pytest tests collected (allowed).";
+              exit 0;
+            else
+              exit $code;
+            fi
+          }
