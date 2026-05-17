@@ -1,0 +1,22 @@
+{
+  "template_id": "player_affinity",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "You seem to be comfortable with {play_style}.",
+      "placeholders": ["play_style"]
+    },
+    "strength_emphasis": {
+      "text": "Your strengths lean toward {play_style}.",
+      "placeholders": ["play_style"]
+    },
+    "natural_tendency": {
+      "text": "You naturally gravitate toward {play_style}.",
+      "placeholders": ["play_style"]
+    },
+    "established_pattern": {
+      "text": "Your play style consistently reflects {play_style}.",
+      "placeholders": ["play_style"]
+    }
+  }
+}
