@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_casual",
+  "template_id": "casual",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} — it can feel quite demanding at times.", "placeholders": ["base_text"] },
