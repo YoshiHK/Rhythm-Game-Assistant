@@ -2,9 +2,25 @@
   "template_id": "element_flick",
   "version": "v3",
   "strings": {
-    "default": { "text": "방향 입력에는 정교한 조작이 필요합니다.", "placeholders": [] },
-    "consecutive": { "text": "연속 플릭 입력은 조작 부담을 증가시킵니다.", "placeholders": [] },
-    "directional": { "text": "방향 변화가 타이밍 안정성에 영향을 줍니다.", "placeholders": [] },
-    "embedded": { "text": "플릭이 다른 패턴 사이에 포함될 수 있습니다.", "placeholders": [] }
+    "default": {
+      "text": "플릭 방향을 주의하여 입력 누락을 방지해야 합니다.",
+      "placeholders": []
+    },
+    "frequent": {
+      "text": "플릭 노트가 자주 등장하여 방향 제어가 요구됩니다.",
+      "placeholders": []
+    },
+    "direction_change": {
+      "text": "플릭 방향이 빠르게 바뀌면 리듬이 흔들릴 수 있습니다.",
+      "placeholders": []
+    },
+    "tight_timing": {
+      "text": "플릭 판정 타이밍이 좁아 조정 여유가 적습니다.",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "반복적인 플릭 입력은 손 피로를 증가시킵니다.",
+      "placeholders": []
+    }
   }
 }
