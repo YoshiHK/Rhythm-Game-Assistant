@@ -93,7 +93,15 @@ def _populate_all_required_scripts(ci_dir: Path) -> None:
     These scripts do not test Phase 4; they only return exit code 0.
     """
     # Checks (policy)
-    for name in ("determinism_checks.py", "safety_checks.py", "explainability_checks.py"):
+    
+    for name in (
+        "determinism_checks.py",
+        "semantic_immutability_check.py",
+        "ordering_contract_check.py",
+        "safety_checks.py",
+        "explainability_checks.py",
+    ):
+
         _write_ok_script(ci_dir / "checks" / name)
 
     # Tests (structural / regression)
@@ -101,6 +109,7 @@ def _populate_all_required_scripts(ci_dir: Path) -> None:
         "test_deterministic_core_invariants.py",
         "test_personalization_decision_schema.py",
         "test_safe_adjustment_bounds.py",
+        "test_event_logging_contract.py",
         "test_fixture_determinism_regression.py",
         "test_personalized_fixture_bounds.py",
     ):
