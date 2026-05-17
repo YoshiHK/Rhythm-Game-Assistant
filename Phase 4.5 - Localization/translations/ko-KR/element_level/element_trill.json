@@ -2,9 +2,25 @@
   "template_id": "element_trill",
   "version": "v3",
   "strings": {
-    "default": { "text": "교차 입력이 빠르게 반복됩니다.", "placeholders": [] },
-    "simple": { "text": "안정적인 교차 패턴에는 정확한 타이밍이 필요합니다.", "placeholders": [] },
-    "extended": { "text": "긴 교차 구간은 지속적인 협응을 요구합니다.", "placeholders": [] },
-    "hybrid": { "text": "교차 입력이 다른 입력과 결합됩니다.", "placeholders": [] }
+    "default": {
+      "text": "빠른 교차 입력은 장시간 안정성을 시험합니다.",
+      "placeholders": []
+    },
+    "fast": {
+      "text": "빠른 트릴 구간은 안정적인 리듬 제어가 필요합니다.",
+      "placeholders": []
+    },
+    "extended": {
+      "text": "긴 트릴은 긴장 상태에서 안정성이 흔들릴 수 있습니다.",
+      "placeholders": []
+    },
+    "timing_sensitive": {
+      "text": "트릴은 타이밍에 민감하여 불규칙한 입력이 빠르게 누적됩니다.",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "지속적인 트릴은 피로를 축적하고 제어에 영향을 줍니다.",
+      "placeholders": []
+    }
   }
 }
