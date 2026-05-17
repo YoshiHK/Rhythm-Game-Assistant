@@ -1,24 +1,16 @@
 import json
 from pathlib import Path
 
-SCHEMA_FILE = "PHASE_4_EVENT_LOG.schema.json"
-
+def _phase4_root() -> Path:
+    # tests live under Phase 4 - Personalization/ci/tests
+    return Path(__file__).resolve().parents[2]
 
 def test_event_logging_schema_exists():
-    repo_root = Path(__file__).resolve().parents[2]
-    schema_path = repo_root / SCHEMA_FILE
-
-    assert schema_path.exists(), f"{SCHEMA_FILE} does not exist"
-
+    schema_path = _phase4_root() / "schemas" / "event_log.schema.json"
+    assert schema_path.exists(), f"event_log.schema.json does not exist at {schema_path}"
 
 def test_event_logging_schema_is_valid_json():
-    repo_root = Path(__file__).resolve().parents[2]
-    schema_path = repo_root / SCHEMA_FILE
-
+    schema_path = _phase4_root() / "schemas" / "event_log.schema.json"
     with open(schema_path, encoding="utf-8") as f:
-        try:
-            obj = json.load(f)
-        except Exception as e:
-            raise AssertionError(f"Invalid JSON schema: {e}")
-
+        obj = json.load(f)
     assert isinstance(obj, dict), "Schema root must be an object"
