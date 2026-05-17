@@ -1,0 +1,30 @@
+{
+  "template_id": "progression_hint",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "这有助于你逐步发展自己的优势。",
+      "placeholders": []
+    },
+    "encourage_exploration": {
+      "text": "多尝试不同风格可以帮助你建立更扎实的基础。",
+      "placeholders": []
+    },
+    "steady_growth": {
+      "text": "稳定的进步有助于提升你的整体一致性。",
+      "placeholders": []
+    },
+    "reinforce_strength": {
+      "text": "巩固你擅长的部分可以提升稳定性。",
+      "placeholders": []
+    },
+    "controlled_expansion": {
+      "text": "逐步扩展可以帮助你保持稳定。",
+      "placeholders": []
+    },
+    "optimization_focus": {
+      "text": "细微的调整可以进一步优化你的表现。",
+      "placeholders": []
+    }
+  }
+}

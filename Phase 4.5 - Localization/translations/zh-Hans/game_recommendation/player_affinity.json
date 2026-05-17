@@ -1,0 +1,22 @@
+{
+  "template_id": "player_affinity",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "你似乎对{play_style}比较熟悉。",
+      "placeholders": ["play_style"]
+    },
+    "strength_emphasis": {
+      "text": "你的优势更偏向于{play_style}。",
+      "placeholders": ["play_style"]
+    },
+    "natural_tendency": {
+      "text": "你自然会倾向于{play_style}的方式。",
+      "placeholders": ["play_style"]
+    },
+    "established_pattern": {
+      "text": "你的操作风格一直体现出{play_style}的特征。",
+      "placeholders": ["play_style"]
+    }
+  }
+}
