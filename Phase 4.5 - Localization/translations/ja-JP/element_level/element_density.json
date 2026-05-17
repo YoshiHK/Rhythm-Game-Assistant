@@ -2,9 +2,10 @@
   "template_id": "element_density",
   "version": "v3",
   "strings": {
-    "default": { "text": "高い密度により回復の余裕が少なくなります。", "placeholders": [] },
-    "sustained": { "text": "複数の区間で密度が高い状態が維持されます。", "placeholders": [] },
-    "spikes": { "text": "短い高密度区間が一時的な負荷を生みます。", "placeholders": [] },
-    "mixed": { "text": "区間ごとの密度変化がテンポに影響します。", "placeholders": [] }
+    "default": { "text": "ノーツ密度が高く、入力間隔が短くなります。", "placeholders": [] },
+    "steady": { "text": "密度が安定しており、継続的な注意が必要です。", "placeholders": [] },
+    "bursty": { "text": "短いスパイク的な高密度が現れ、反応の余裕が減ります。", "placeholders": [] },
+    "compressed": { "text": "入力が狭い時間窓に圧縮され、回復の余裕が小さくなります。", "placeholders": [] },
+    "overload": { "text": "高密度が長く続くと、疲労が蓄積しやすくなります。", "placeholders": [] }
   }
 }
