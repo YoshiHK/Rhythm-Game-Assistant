@@ -1,0 +1,35 @@
+{
+  "template_id": "progression_hint",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ Ĩt̃ c̃ãñ h̃ẽl̃p̃ d̃ẽṽẽl̃õp̃ ỹõũr̃ s̃t̃r̃ẽñg̃t̃h̃s̃ g̃r̃ãd̃ũãl̃l̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "encourage_exploration": {
+      "text": "⟦⟦ Ẽx̃p̃l̃õr̃ĩñg̃ d̃ĩf̃f̃ẽr̃ẽñt̃ s̃t̃ỹl̃ẽs̃ c̃ãñ h̃ẽl̃p̃ ỹõũ b̃ũĩl̃d̃ f̃õũñd̃ãt̃ĩõñs̃. ⟧⟧",
+      "placeholders": []
+    },
+
+    "steady_growth": {
+      "text": "⟦⟦ S̃t̃ẽãd̃ỹ p̃r̃õg̃r̃ẽs̃s̃ c̃ãñ h̃ẽl̃p̃ s̃t̃r̃ẽñg̃t̃h̃ẽñ ỹõũr̃ c̃õñs̃ĩs̃t̃ẽñc̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "reinforce_strength": {
+      "text": "⟦⟦ R̃ẽĩñf̃õr̃c̃ĩñg̃ w̃h̃ãt̃ ỹõũ d̃õ w̃ẽl̃l̃ c̃ãñ ĩm̃p̃r̃õṽẽ s̃t̃ãb̃ĩl̃ĩt̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "controlled_expansion": {
+      "text": "⟦⟦ Ẽx̃p̃ãñd̃ĩñg̃ g̃r̃ãd̃ũãl̃l̃ỹ c̃ãñ h̃ẽl̃p̃ m̃ãĩñt̃ãĩñ s̃t̃ãb̃ĩl̃ĩt̃ỹ. ⟧⟧",
+      "placeholders": []
+    },
+
+    "optimization_focus": {
+      "text": "⟦⟦ S̃m̃ãl̃l̃ ãd̃j̃ũs̃t̃m̃ẽñt̃s̃ c̃ãñ f̃ũr̃t̃h̃ẽr̃ r̃ẽf̃ĩñẽ ỹõũr̃ p̃ẽr̃f̃õr̃m̃ãñc̃ẽ. ⟧⟧",
+      "placeholders": []
+    }
+  }
+}

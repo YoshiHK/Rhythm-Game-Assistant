@@ -1,0 +1,22 @@
+{
+  "template_id": "player_affinity",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ Ỹõũ s̃ẽẽm̃ t̃õ b̃ẽ c̃õm̃f̃õr̃t̃ãb̃l̃ẽ w̃ĩt̃h̃ {play_style}. ⟧⟧",
+      "placeholders": ["play_style"]
+    },
+    "strength_emphasis": {
+      "text": "⟦⟦ Ỹõũr̃ s̃t̃r̃ẽñg̃t̃h̃s̃ l̃ẽãñ t̃õw̃ãr̃d̃ {play_style}. ⟧⟧",
+      "placeholders": ["play_style"]
+    },
+    "natural_tendency": {
+      "text": "⟦⟦ Ỹõũ ñãt̃ũr̃ãl̃l̃ỹ g̃r̃ãṽĩt̃ãt̃ẽ t̃õw̃ãr̃d̃ {play_style}. ⟧⟧",
+      "placeholders": ["play_style"]
+    },
+    "established_pattern": {
+      "text": "⟦⟦ Ỹõũr̃ p̃l̃ãỹ s̃t̃ỹl̃ẽ c̃õñs̃ĩs̃t̃ẽñt̃l̃ỹ r̃ẽf̃l̃ẽc̃t̃s̃ {play_style}. ⟧⟧",
+      "placeholders": ["play_style"]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "template_id": "recommendation_bridge",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "⟦⟦ {game_name} m̃ĩg̃h̃t̃ b̃ẽ ã g̃õõd̃ f̃ĩt̃ f̃õr̃ ỹõũ. ⟧⟧",
+      "placeholders": ["game_name"]
+    },
+
+    "strong_fit": {
+      "text": "⟦⟦ {game_name} s̃h̃õũl̃d̃ f̃ĩt̃ ỹõũ ṽẽr̃ỹ w̃ẽl̃l̃. ⟧⟧",
+      "placeholders": ["game_name"]
+    },
+
+    "suitable_match": {
+      "text": "⟦⟦ {game_name} c̃õũl̃d̃ b̃ẽ ã s̃ũĩt̃ãb̃l̃ẽ m̃ãt̃c̃h̃ f̃õr̃ ỹõũ. ⟧⟧",
+      "placeholders": ["game_name"]
+    },
+
+    "exploratory_fit": {
+      "text": "⟦⟦ {game_name} m̃ĩg̃h̃t̃ b̃ẽ ĩñt̃ẽr̃ẽs̃t̃ĩñg̃ t̃õ ẽx̃p̃l̃õr̃ẽ. ⟧⟧",
+      "placeholders": ["game_name"]
+    }
+  }
+}
