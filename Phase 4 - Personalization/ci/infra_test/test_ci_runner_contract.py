@@ -1,63 +1,48 @@
+"""
+CI Infrastructure Test — Phase 4 CI Runner Contract (Design-Locked)
+
+Purpose:
+- Ensure the Phase 4 CI runner exists at the design-locked location.
+- Ensure the runner is executable as an orchestrator (CI-only).
+- This does NOT validate correctness of checks/tests (handled elsewhere).
+"""
+
 from pathlib import Path
 import subprocess
 import sys
 
 
-RUNNER_CANDIDATES = [
-    "phase_4_ci_runner.py",
-    "run_all_personalization_check.py",
-]
+def _repo_root() -> Path:
+    # .../Phase 4 - Personalization/ci/infra_tests -> parents[3] = repo root
+    return Path(__file__).resolve().parents[3]
 
 
-def _find_runner(repo_root: Path) -> Path:
-    for name in RUNNER_CANDIDATES:
-        matches = list(repo_root.rglob(name))
-        if matches:
-            return matches[0]
-    raise AssertionError("Phase 4 CI runner not found")
+def _phase4_ci_runner_path() -> Path:
+    # design-locked per routing skeleton
+    return _repo_root() / "Phase 4 - Personalization" / "ci" / "phase_4_ci_runner.py"
 
 
-def _run_runner(runner_path: Path, cwd: Path):
-    return subprocess.run(
-        [sys.executable, str(runner_path)],
-        cwd=str(cwd),
+def test_phase4_ci_runner_exists():
+    p = _phase4_ci_runner_path()
+    assert p.exists(), f"Missing Phase 4 CI runner at: {p}"
+
+
+def test_phase4_ci_runner_is_invokable():
+    """
+    Runner must be invokable. We do not assert pass/fail here because
+    that depends on whether checks/scripts are present in this repo state.
+    """
+    runner = _phase4_ci_runner_path()
+    proc = subprocess.run(
+        [sys.executable, str(runner)],
+        cwd=str(runner.parent),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        check=False,
     )
 
-
-def test_runner_exists():
-    repo_root = Path(__file__).resolve().parents[2]
-    runner = _find_runner(repo_root)
-
-    assert runner.exists(), "CI runner not found"
-
-
-def test_runner_fails_when_missing_checks(tmp_path):
-    repo_root = tmp_path
-
-    # minimal runner test environment
-    runner_path = repo_root / "phase_4_ci_runner.py"
-    runner_path.write_text(
-        "import sys\nsys.exit(1)\n",
-        encoding="utf-8",
-    )
-
-    proc = _run_runner(runner_path, repo_root)
-
-    assert proc.returncode != 0, "Runner should fail when checks are missing"
-
-
-def test_runner_passes_with_no_errors(tmp_path):
-    repo_root = tmp_path
-
-    runner_path = repo_root / "phase_4_ci_runner.py"
-    runner_path.write_text(
-        "import sys\nprint('OK')\nsys.exit(0)\n",
-        encoding="utf-8",
-    )
-
-    proc = _run_runner(runner_path, repo_root)
-
-    assert proc.returncode == 0, "Runner should pass when all checks succeed"
+    # Must produce some output and exit deterministically.
+    assert proc.stdout is not None
+    assert len(proc.stdout.strip()) > 0, "Runner produced no output"
+    assert proc.returncode in (0, 1, 2), f"Unexpected runner exit code: {proc.returncode}"

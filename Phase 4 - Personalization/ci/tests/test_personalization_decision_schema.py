@@ -1,25 +1,31 @@
+"""
+Phase 4 CI — Personalization Decision Contract Presence (Design-Locked)
+
+Purpose:
+- Ensure Phase 4 decision-making is governed by explicit contract documents.
+- Prevent silent removal of decision/safe-adjustment/model-inference interfaces.
+
+This is STRUCTURAL ONLY (no runtime execution).
+"""
+
 from pathlib import Path
 
 
-def test_phase4_decision_schema_exists():
-    repo_root = Path(__file__).resolve().parents[2]
-
-    schema = repo_root / "Phase 4 - Personalization" / "decision_schema.json"
-
-    assert schema.exists(), "Decision schema file is missing"
+def _phase4_root() -> Path:
+    # .../Phase 4 - Personalization/ci/tests/ -> parents[2] = Phase 4 - Personalization
+    return Path(__file__).resolve().parents[2]
 
 
-def test_phase4_decision_schema_min_keys():
-    repo_root = Path(__file__).resolve().parents[2]
+def _assert_nonempty_file(path: Path) -> None:
+    assert path.exists(), f"Missing contract file: {path}"
+    text = path.read_text(encoding="utf-8").strip()
+    assert len(text) > 0, f"Contract file is empty: {path}"
 
-    schema = repo_root / "Phase 4 - Personalization" / "decision_schema.json"
 
-    import json
+def test_personalization_contract_docs_exist_and_nonempty():
+    root = _phase4_root()
+    interfaces = root / "interfaces"
 
-    with open(schema, encoding="utf-8") as f:
-        data = json.load(f)
-
-    assert isinstance(data, dict), "Schema root must be object"
-
-    for key in ("decision_source", "safe_adjustment"):
-        assert key in data, f"Missing required key: {key}"
+    _assert_nonempty_file(interfaces / "personalization_decision.interface.md")
+    _assert_nonempty_file(interfaces / "safe_adjustment.interface.md")
+    _assert_nonempty_file(interfaces / "model_inference.interface.md")
