@@ -1,0 +1,22 @@
+{
+  "template_id": "recommendation_bridge",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "{game_name} might be a good fit for you.",
+      "placeholders": ["game_name"]
+    },
+    "strong_fit": {
+      "text": "{game_name} should fit you very well.",
+      "placeholders": ["game_name"]
+    },
+    "suitable_match": {
+      "text": "{game_name} could be a suitable match for you.",
+      "placeholders": ["game_name"]
+    },
+    "exploratory_fit": {
+      "text": "{game_name} might be interesting to explore.",
+      "placeholders": ["game_name"]
+    }
+  }
+}
