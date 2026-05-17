@@ -11,11 +11,11 @@ This package enforces Phase 4 invariants (CI-only, NON-RUNTIME):
 CI checks are read-only and MUST NOT mutate runtime state.
 """
 
-from .determinism_checks import run_determinism_checks
-from .semantic_immutability_check import run_semantic_immutability_checks
-from .ordering_contract_check import run_ordering_contract_check
-from .safety_checks import run_safety_checks
-from .explainability_checks import run_explainability_checks
+from .checks.determinism_checks import run_determinism_checks
+from .checks.semantic_immutability_check import run_semantic_immutability_checks
+from .checks.ordering_contract_check import run_ordering_contract_check
+from .checks.safety_checks import run_safety_checks
+from .checks.explainability_checks import run_explainability_checks
 
 __all__ = [
     "run_determinism_checks",
