@@ -2,9 +2,25 @@
   "template_id": "element_trill",
   "version": "v3",
   "strings": {
-    "default": { "text": "Alternating inputs repeat in quick succession.", "placeholders": [] },
-    "simple": { "text": "Consistent alternating patterns require stable timing.", "placeholders": [] },
-    "extended": { "text": "Long trill sections increase sustained coordination demand.", "placeholders": [] },
-    "hybrid": { "text": "Alternating inputs combine with other input types.", "placeholders": [] }
+    "default": {
+      "text": "Rapid alternating inputs test consistency over time.",
+      "placeholders": []
+    },
+    "fast": {
+      "text": "Fast trill sections require stable rhythm control.",
+      "placeholders": []
+    },
+    "extended": {
+      "text": "Extended trill patterns can cause stability to drift if tension builds.",
+      "placeholders": []
+    },
+    "timing_sensitive": {
+      "text": "Trill timing is sensitive, where irregular inputs can quickly accumulate.",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "Continuous trills over long passages can build fatigue and affect control.",
+      "placeholders": []
+    }
   }
 }
