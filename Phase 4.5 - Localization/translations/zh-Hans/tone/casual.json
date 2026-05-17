@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_casual",
+  "template_id": "casual",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text}——有时可能会感觉有些吃力。", "placeholders": ["base_text"] },
