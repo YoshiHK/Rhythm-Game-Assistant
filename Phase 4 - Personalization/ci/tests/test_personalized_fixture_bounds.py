@@ -19,6 +19,7 @@ Run:
 from __future__ import annotations
 
 import json
+import pytest
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -449,6 +450,37 @@ def main() -> int:
     print("CI PASS: Bounded-safety assertions passed for personalized fixtures")
     return 0
 
-
 if __name__ == "__main__":
     raise SystemExit(main())
+    
+@pytest.mark.phase4_policy
+def test_personalized_fixture_bounds():
+    """
+    Pytest wrapper for Phase 4 bounded-safety assertions.
+
+    This converts the CLI-style test into pytest-compatible execution
+    while preserving all policy enforcement logic.
+    """
+    inputs = sorted(FIXTURES_DIR.glob("fixture_*_input.json"))
+
+    assert inputs, "No fixtures found"
+
+    ran = 0
+
+    for p in inputs:
+        fx = load_json(p)
+
+        if not is_personalized_fixture(fx):
+            continue
+
+        out = run_phase4(fx)
+
+        # ✅ 用 assert 包裝 SystemExit（fail() 會 raise）
+        try:
+            assert_no_semantic_mutation(fx, out)
+        except SystemExit:
+            raise AssertionError(f"Policy violation on fixture: {p.name}")
+
+        ran += 1
+
+    assert ran > 0, "No personalized fixtures executed (expected at least one)"

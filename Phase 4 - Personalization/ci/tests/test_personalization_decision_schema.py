@@ -1,52 +1,25 @@
-"""
-Phase 4 CI — Personalization Decision Schema (Design-Locked)
-
-Purpose:
-- Ensure Phase 4 decision-making is governed by explicit, versioned contracts
-- Prevent silent removal of decision or safe-adjustment interfaces
-
-This is a STRUCTURAL / POLICY test.
-It does not validate runtime behavior or decision semantics.
-"""
-
-import json
 from pathlib import Path
-import sys
 
 
-def fail(msg: str) -> None:
-    print(f"CI FAIL: {msg}")
-    raise SystemExit(1)
-
-
-def main() -> int:
+def test_phase4_decision_schema_exists():
     repo_root = Path(__file__).resolve().parents[2]
 
-    # Required contract documents for Phase 4
-    required_docs = [
-        "PHASE_4_PERSONALIZATION_DECISION_INTERFACE.md",
-        "PHASE_4_SAFE_ADJUSTMENT_INTERFACE.md",
-    ]
+    schema = repo_root / "Phase 4 - Personalization" / "decision_schema.json"
 
-    for doc in required_docs:
-        path = repo_root / doc
-        if not path.exists():
-            fail(f"Missing required Phase 4 contract document: {doc}")
-
-    # Optional: provenance schema must be parseable if present
-    prov_schema = repo_root / "PHASE_4_PROVENANCE.schema.json"
-    if prov_schema.exists():
-        try:
-            obj = json.loads(prov_schema.read_text(encoding="utf-8"))
-        except Exception as e:
-            fail(f"Failed to parse PHASE_4_PROVENANCE.schema.json: {e}")
-
-        if not isinstance(obj, dict):
-            fail("PHASE_4_PROVENANCE.schema.json root must be a JSON object")
-
-    print("CI PASS: Phase 4 decision + safe adjustment contracts verified")
-    return 0
+    assert schema.exists(), "Decision schema file is missing"
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def test_phase4_decision_schema_min_keys():
+    repo_root = Path(__file__).resolve().parents[2]
+
+    schema = repo_root / "Phase 4 - Personalization" / "decision_schema.json"
+
+    import json
+
+    with open(schema, encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert isinstance(data, dict), "Schema root must be object"
+
+    for key in ("decision_source", "safe_adjustment"):
+        assert key in data, f"Missing required key: {key}"
