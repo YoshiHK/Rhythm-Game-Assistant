@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 from .adjustment_constraints import validate_directives
 
 
-def apply_safe_adjustments(
+def apply_safe_adjustment(
     *,
     elements_skeleton: List[Dict[str, Any]],
     adjustment_directives: Dict[str, Any],
