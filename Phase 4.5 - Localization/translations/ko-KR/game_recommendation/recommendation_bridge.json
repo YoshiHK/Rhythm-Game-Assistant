@@ -1,0 +1,22 @@
+{
+  "template_id": "recommendation_bridge",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "{game_name}는 당신에게 잘 맞을 수 있습니다.",
+      "placeholders": ["game_name"]
+    },
+    "strong_fit": {
+      "text": "{game_name}는 당신에게 매우 잘 맞을 것입니다.",
+      "placeholders": ["game_name"]
+    },
+    "suitable_match": {
+      "text": "{game_name}는 좋은 선택이 될 수 있습니다.",
+      "placeholders": ["game_name"]
+    },
+    "exploratory_fit": {
+      "text": "{game_name}를 한 번 시도해 볼 만합니다.",
+      "placeholders": ["game_name"]
+    }
+  }
+}

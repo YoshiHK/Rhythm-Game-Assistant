@@ -1,0 +1,22 @@
+{
+  "template_id": "player_affinity",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "당신은 {play_style}에 익숙한 것으로 보입니다.",
+      "placeholders": ["play_style"]
+    },
+    "strength_emphasis": {
+      "text": "당신의 강점은 {play_style}에 있는 것으로 보입니다.",
+      "placeholders": ["play_style"]
+    },
+    "natural_tendency": {
+      "text": "당신은 자연스럽게 {play_style}에 끌리는 경향이 있습니다.",
+      "placeholders": ["play_style"]
+    },
+    "established_pattern": {
+      "text": "당신의 플레이 스타일은 {play_style}를 일관되게 반영합니다.",
+      "placeholders": ["play_style"]
+    }
+  }
+}

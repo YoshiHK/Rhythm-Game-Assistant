@@ -1,0 +1,22 @@
+{
+  "template_id": "soft_suggestion",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "자신의 속도에 맞춰 천천히 시도해 보시면 좋습니다.",
+      "placeholders": []
+    },
+    "light_encouragement": {
+      "text": "한번 시도해 볼 만합니다.",
+      "placeholders": []
+    },
+    "gentle_exploration": {
+      "text": "편하게 느껴진다면 천천히 접근해 보셔도 좋습니다.",
+      "placeholders": []
+    },
+    "soft_confirmation": {
+      "text": "자연스럽게 잘 맞을 가능성이 있습니다.",
+      "placeholders": []
+    }
+  }
+}
