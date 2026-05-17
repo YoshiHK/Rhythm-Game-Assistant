@@ -25,7 +25,7 @@ import sys
 from typing import Any
 
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
 # Fields that are allowed to vary across runs and MUST be scrubbed
 VOLATILE_KEY_TOKENS = (
