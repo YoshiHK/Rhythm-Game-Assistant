@@ -1,0 +1,49 @@
+{
+  "_meta": {
+    "description": "Debug and observability data for localization layer",
+    "scope": "Phase 4.5 - non-user-facing",
+    "visibility": "internal_only"
+  },
+
+  "template_trace": {
+    "enabled": true,
+    "include_template_id": true,
+    "include_variant_id": true,
+    "include_taxonomy_layer": true
+  },
+
+  "placeholder_trace": {
+    "enabled": true,
+    "show_expected_placeholders": true,
+    "show_actual_placeholders": true,
+    "flag_mismatch": true
+  },
+
+  "routing_trace": {
+    "enabled": true,
+    "show_locale": true,
+    "show_fallback_chain": true,
+    "show_selected_source": true
+  },
+
+  "taxonomy_trace": {
+    "enabled": true,
+    "show_layer": true,
+    "show_family": true,
+    "validate_registry_mapping": true
+  },
+
+  "ci_flags": {
+    "log_missing_templates": true,
+    "log_missing_glossary_terms": true,
+    "log_placeholder_violations": true,
+    "log_fallback_usage": true
+  },
+
+  "render_output": {
+    "attach_metadata": false,
+    "include_debug_suffix": false
+  },
+
+  "notes": "This file is used for CI validation, debugging, template tracing, and taxonomy verification. It must never affect runtime output semantics."
+}
