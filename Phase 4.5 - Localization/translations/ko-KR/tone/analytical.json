@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_analytical",
+  "template_id": "analytical",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} 이는 지속적인 부담을 시사합니다.", "placeholders": ["base_text"] },

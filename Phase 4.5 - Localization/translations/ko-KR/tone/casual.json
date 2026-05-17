@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_casual",
+  "template_id": "casual",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} — 상황에 따라 부담이 느껴질 수 있습니다.", "placeholders": ["base_text"] },
