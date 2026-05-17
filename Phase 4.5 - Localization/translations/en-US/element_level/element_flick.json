@@ -2,9 +2,26 @@
   "template_id": "element_flick",
   "version": "v3",
   "strings": {
-    "default": { "text": "Directional inputs require controlled movement.", "placeholders": [] },
-    "consecutive": { "text": "Consecutive flick inputs require sustained control.", "placeholders": [] },
-    "directional": { "text": "Changing flick directions affects timing consistency.", "placeholders": [] },
-    "embedded": { "text": "Flick inputs may appear within other patterns.", "placeholders": [] }
+    "default": {
+      "text": "Pay attention to flick directions to avoid missed inputs.",
+      "placeholders": []
+    },
+    "frequent": {
+      "text": "Flick notes appear frequently, requiring consistent directional control.",
+      "placeholders": []
+    },
+    "direction_change": {
+      "text": "Quick direction changes in flicks can disrupt rhythm if rushed.",
+      "placeholders": []
+    },
+    "tight_timing": {
+      "text": "Flick timing windows are tight, leaving little margin for adjustment.",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "Repeated flick inputs over time can increase hand fatigue.",
+      "placeholders": []
+    }
   }
 }
+``
