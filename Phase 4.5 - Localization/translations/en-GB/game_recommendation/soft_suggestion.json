@@ -1,0 +1,22 @@
+{
+  "template_id": "soft_suggestion",
+  "version": "v3",
+  "strings": {
+    "default": {
+      "text": "You might enjoy exploring it at your own pace.",
+      "placeholders": []
+    },
+    "light_encouragement": {
+      "text": "It could be worth giving it a try.",
+      "placeholders": []
+    },
+    "gentle_exploration": {
+      "text": "You can explore it gradually if it feels comfortable.",
+      "placeholders": []
+    },
+    "soft_confirmation": {
+      "text": "It should fit naturally into your playstyle.",
+      "placeholders": []
+    }
+  }
+}
