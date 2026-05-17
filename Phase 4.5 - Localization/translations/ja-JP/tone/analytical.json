@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_analytical",
+  "template_id": "analytical",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} これは持続的な負荷を示唆しています。", "placeholders": ["base_text"] },

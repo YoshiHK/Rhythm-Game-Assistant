@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_casual",
+  "template_id": "casual",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} — 状況によっては負荷を感じることがあります。", "placeholders": ["base_text"] },

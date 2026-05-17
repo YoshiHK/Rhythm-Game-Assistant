@@ -1,5 +1,5 @@
 {
-  "template_id": "tone_expert",
+  "template_id": "expert",
   "version": "v3",
   "strings": {
     "default": { "text": "{base_text} これはパターン要求の一貫性を示しています。", "placeholders": ["base_text"] },
