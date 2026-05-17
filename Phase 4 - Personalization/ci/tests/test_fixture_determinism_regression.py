@@ -116,38 +116,22 @@ def main() -> int:
     print("CI PASS: Phase 4 fixture determinism regression verified")
     return 0
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-    
 @pytest.mark.phase4_determinism
 def test_fixture_determinism_regression():
-    """
-    Pytest wrapper for fixture-based determinism regression.
-
-    Ensures:
-    - identical inputs produce identical outputs (after scrub)
-    - Phase 4 runtime is deterministic
-
-    This is the ONLY pytest test that executes Phase 4 runtime at scale.
-    """
-
     inputs = sorted(FIXTURES_DIR.glob("fixture_*_input.json"))
-
     assert inputs, "No Phase 4 fixture inputs found"
 
     for path in inputs:
-        with open(path, encoding="utf-8") as f:
-            fixture = json.load(f)
+        fixture = load_fixture(path)  # 依你現有函式
+        try:
+            out1 = run_fixture(fixture)
+            out2 = run_fixture(fixture)
+        except SystemExit:
+            raise AssertionError(f"Determinism runner exited on fixture: {path.name}")
 
-        # ✅ Run twice (determinism check)
-        out1 = run_fixture(fixture)
-        out2 = run_fixture(fixture)
-
-        # ✅ scrub volatile fields
-        s1 = scrub(out1)
-        s2 = scrub(out2)
-
-        h1 = stable_hash(s1)
-        h2 = stable_hash(s2)
-
+        h1 = stable_hash(scrub(out1))
+        h2 = stable_hash(scrub(out2))
         assert h1 == h2, f"Determinism violated for fixture: {path.name}"
+        
+if __name__ == "__main__":
+    raise SystemExit(main())
