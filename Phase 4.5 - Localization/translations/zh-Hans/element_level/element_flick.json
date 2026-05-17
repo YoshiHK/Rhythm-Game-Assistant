@@ -2,9 +2,25 @@
   "template_id": "element_flick",
   "version": "v3",
   "strings": {
-    "default": { "text": "方向性输入需要精确控制。", "placeholders": [] },
-    "consecutive": { "text": "连续flick会提高控制要求。", "placeholders": [] },
-    "directional": { "text": "方向变化会影响判定稳定性。", "placeholders": [] },
-    "embedded": { "text": "flick可能嵌入其他模式中出现。", "placeholders": [] }
+    "default": {
+      "text": "注意滑动方向以避免漏判输入。",
+      "placeholders": []
+    },
+    "frequent": {
+      "text": "滑动音出现频繁，需要保持方向控制。",
+      "placeholders": []
+    },
+    "direction_change": {
+      "text": "滑动中的方向快速变化可能打乱节奏。",
+      "placeholders": []
+    },
+    "tight_timing": {
+      "text": "滑动判定时间较短，调整空间有限。",
+      "placeholders": []
+    },
+    "fatigue": {
+      "text": "长时间重复滑动输入会增加手部疲劳。",
+      "placeholders": []
+    }
   }
 }
