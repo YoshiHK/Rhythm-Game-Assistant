@@ -1,11 +1,21 @@
 import importlib
 
 REQUIRED_RUNTIME_MODULES = [
-    "phase4_personalization_runtime",
-    "phase4_runtime_wrapper",
-    "safe_adjustment",
-    "narrative_module_v3",
+    "runtime.runtime_wrapper",
+    "runtime.personalization_core",
+    "runtime.decision_router",
+    "runtime.adjustment_router",
+    "safe_adjustment.apply_adjustment",
+    "safe_adjustment.adjustment_constraints",
+    "narrative.narrative_v3_bridge",
 ]
+
+def test_required_runtime_modules_importable():
+    for mod_name in REQUIRED_RUNTIME_MODULES:
+        try:
+            importlib.import_module(mod_name)
+        except Exception as e:
+            raise AssertionError(f"Failed to import required module '{mod_name}': {e}")
 
 
 def test_required_runtime_modules_importable():
