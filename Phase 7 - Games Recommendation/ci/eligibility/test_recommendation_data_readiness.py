@@ -11,8 +11,8 @@
 # - This test does NOT perform ranking.
 # - This test does NOT import Phase 6 or runtime logic.
 
-from rhythm_recommendation.phase7.registry import GameInfo, GameRegistry
-from rhythm_recommendation.phase7.eligibility import EXPLICIT_EXCLUSIONS
+from registry.registry import GameInfo, GameRegistry
+from eligibility.eligibility_policy import EXPLICIT_EXCLUSIONS
 
 
 def is_data_ready(game: GameInfo) -> bool:

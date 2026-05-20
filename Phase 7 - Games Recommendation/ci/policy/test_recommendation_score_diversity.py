@@ -16,11 +16,10 @@ Constraints:
 - Deterministic and CI-safe: does not call completed phase runtime.
 """
 
-from rhythm_recommendation.phase7.feature_flags import FeatureFlags
-from rhythm_recommendation.phase7.config import Phase7Config
-from rhythm_recommendation.phase7.registry_loader import load_registry_config, get_all_games
-from rhythm_recommendation.phase7.build import build_phase7_router, build_registry_from_dict
-from rhythm_recommendation.phase7.types import RecommendationContext, RunMode
+from contracts.feature_flags import FeatureFlags
+from contracts.config import Phase7Config
+from registry.registry_loader import load_registry_config, get_all_games
+from contracts.types import RecommendationContext, RunMode
 
 
 # Must match eligibility CI policy registry (keep empty unless you intentionally exclude)

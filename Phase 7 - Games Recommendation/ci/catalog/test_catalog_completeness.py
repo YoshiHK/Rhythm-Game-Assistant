@@ -1,6 +1,6 @@
 # test_catalog_completeness.py
 
-from rhythm_recommendation.phase7.catalog_loader import (
+from catalog.catalog_loader import (
     load_catalog_config_optional,
     get_all_catalog_entries,
 )

@@ -22,7 +22,7 @@ def _import_observability():
     Import observability primitives with strict expectation.
     This test MUST fail if observability layer disappears.
     """
-    from rhythm_recommendation.phase7.observability import (  # type: ignore
+    from observability.metrics_collector import (  # type: ignore
         Phase7Observation,
         collect_observation,
     )
@@ -30,7 +30,7 @@ def _import_observability():
 
 
 def _import_contract_item():
-    from rhythm_recommendation.phase7.contracts.types import RecommendationItem  # type: ignore
+    from contracts.types import RecommendationItem  # type: ignore
     return RecommendationItem
 
 

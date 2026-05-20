@@ -11,9 +11,9 @@ What it enforces:
 - explanation engine attaches bounded explanation fields to every item
 """
 
-from rhythm_recommendation.phase7.ranking import DeterministicRanker
-from rhythm_recommendation.phase7.explanation import ExplanationEngine
-from rhythm_recommendation.phase7.contracts.types import RecommendationItem
+from ranking.ranker import DeterministicRanker
+from explanation.explanation_engine import ExplanationEngine
+from contracts.types import RecommendationItem
 
 
 def _rank_items():

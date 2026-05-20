@@ -13,9 +13,9 @@ NOTE:
 
 import math
 
-from rhythm_recommendation.phase7.ranking import DeterministicRanker
-from rhythm_recommendation.phase7.registry import GameInfo, GameRegistry
-from rhythm_recommendation.phase7.eligibility import EXPLICIT_EXCLUSIONS
+from ranking.ranker import DeterministicRanker
+from registry.registry import GameInfo, GameRegistry
+from eligibility.eligibility_policy import EXPLICIT_EXCLUSIONS
 
 
 def test_scoring_availability_for_recommendable_games():

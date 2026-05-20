@@ -17,7 +17,7 @@ from datetime import datetime
 
 
 def _import_feedback():
-    from rhythm_recommendation.phase7.feedback import (  # type: ignore
+    from feedback.feedback_forwarder import (  # type: ignore
         Phase7FeedbackEvent,
         FeedbackAction,
         emit_feedback_event,
