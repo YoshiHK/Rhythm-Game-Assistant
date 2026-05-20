@@ -1,0 +1,44 @@
+name: Phase 7 CI — Game Recommendation Governance
+
+on:
+  push:
+    paths:
+      - "rhythm_recommendation/phase7/**"
+      - ".github/workflows/phase7_ci.yml"
+  pull_request:
+    paths:
+      - "rhythm_recommendation/phase7/**"
+
+jobs:
+  phase7-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      # ✅ Ensure Phase 7 module import works
+      - name: Set PYTHONPATH
+        run: |
+          export PYTHONPATH="$PYTHONPATH:$(pwd)"
+
+      # ✅ Fail-fast execution (much cleaner logs)
+      - name: Run Phase 7 CI tests (fail-fast)
+        run: |
+          pytest rhythm_recommendation/phase7/ -q -x --maxfail=1 --tb=short -rA
+
+      # ✅ Optional: show summary even if failure
+      - name: Pytest summary
+        if: always()
+        run: |
+          pytest rhythm_recommendation/phase7/ -q -rA || true
