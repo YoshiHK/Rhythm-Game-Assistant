@@ -3,11 +3,11 @@ name: Phase 7 CI — Game Recommendation Governance
 on:
   push:
     paths:
-      - "rhythm_recommendation/phase7/**"
+      - "Phase 7 - Games Recommendation/**"
       - ".github/workflows/phase7_ci.yml"
   pull_request:
     paths:
-      - "rhythm_recommendation/phase7/**"
+      - "Phase 7 - Games Recommendation/**"
 
 jobs:
   phase7-ci:
@@ -27,18 +27,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
 
-      # ✅ Ensure Phase 7 module import works
+      # Set PYTHONPATH to Phase 7 root
       - name: Set PYTHONPATH
         run: |
-          export PYTHONPATH="$PYTHONPATH:$(pwd)"
+          export PYTHONPATH="$PYTHONPATH:$(pwd)/Phase 7 - Games Recommendation"
 
-      # ✅ Fail-fast execution (much cleaner logs)
       - name: Run Phase 7 CI tests (fail-fast)
         run: |
-          pytest rhythm_recommendation/phase7/ -q -x --maxfail=1 --tb=short -rA
+          pytest "Phase 7 - Games Recommendation/ci/" -q -x --maxfail=1 --tb=short -rA
 
-      # ✅ Optional: show summary even if failure
       - name: Pytest summary
         if: always()
         run: |
-          pytest rhythm_recommendation/phase7/ -q -rA || true
+          pytest "Phase 7 - Games Recommendation/ci/" -q -rA || true
