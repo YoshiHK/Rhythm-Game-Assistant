@@ -14,7 +14,7 @@ if games_json_path.exists():
 # Create a Phase 7 registry module that directly supports the games.json schema.
 registry_code = from __future__ import annotations
 
-Phase 7 — Game Registry (games recommendation)
+Phase 7 - Game Registry (games recommendation)
 
 This module is the Phase 7 read-only adapter over the authoritative <File>games.json</File>
 registry used by ingestion.
