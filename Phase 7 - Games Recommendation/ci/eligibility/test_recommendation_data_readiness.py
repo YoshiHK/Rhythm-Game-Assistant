@@ -1,4 +1,4 @@
-from registry.registry import load_games_registry
+from registry import load_games_registry
 from eligibility.eligibility_policy import EXPLICIT_EXCLUSIONS
 
 

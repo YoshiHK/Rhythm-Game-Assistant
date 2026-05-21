@@ -22,7 +22,7 @@ from observability.metrics_collector import (
 )
 
 from ranking.ranker import DeterministicRanker
-from registry.registry import load_games_registry
+from registry import load_games_registry
 
 
 def _build_sample_observation():

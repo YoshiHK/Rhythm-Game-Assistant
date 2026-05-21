@@ -10,7 +10,7 @@ Non-semantic:
 """
 
 from ranking.ranker import DeterministicRanker
-from registry.registry import load_games_registry
+from registry import load_games_registry
 
 
 def _rank_scores():

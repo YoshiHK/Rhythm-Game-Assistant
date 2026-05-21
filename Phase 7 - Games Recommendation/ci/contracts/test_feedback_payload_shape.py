@@ -22,7 +22,7 @@ from feedback.feedback_forwarder import (
     emit_feedback_event,
 )
 
-from registry.registry import load_games_registry
+from registry import load_games_registry
 
 
 def _build_sample_event():

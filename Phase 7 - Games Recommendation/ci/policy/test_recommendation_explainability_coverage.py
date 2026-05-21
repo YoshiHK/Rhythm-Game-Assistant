@@ -11,7 +11,7 @@ Source of truth:
 
 from ranking.ranker import DeterministicRanker
 from explanation.explanation_engine import ExplanationEngine
-from registry.registry import load_games_registry
+from registry import load_games_registry
 
 
 def _rank_items():
