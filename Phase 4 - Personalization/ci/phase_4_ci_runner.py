@@ -22,5 +22,7 @@ def main() -> int:
     _run(python, checks_dir / "semantic_immutability_check.py", "immutability")
     _run(python, checks_dir / "safety_checks.py", "safety")
     _run(python, checks_dir / "explainability_checks.py", "explainability")
+    _run(python, checks_dir / "ordering_contract_check.py", "ordering")
+
 
     return 0
