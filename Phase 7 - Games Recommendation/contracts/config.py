@@ -1,23 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from contracts.feature_flags import FeatureFlags
-
-
-from __future__ import annotations
-from dataclasses import_flags import FeatureFlagsfrom dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class Phase7Config:
     """
-    Phase 7 configuration.
+    Phase 7 Configuration (CI-safe, non-semantic)
 
-    Note:
-    - Phase 7 does NOT support runtime ranker or explainer versioning.
-    - Evolution occurs through implementation updates, not config switches.
+    Design constraints:
+    - Must NOT affect ranking semantics
+    - Must NOT introduce runtime coupling
+    - Only used for optional tuning / feature flags
     """
-    feature_flags: FeatureFlags = FeatureFlags()
 
+    # max number of recommendations returned
+    max_results: int = 10
 
+    # enable explanation layer
+    enable_explanations: bool = True
+
+    # feature flags (optional, CI-safe)
+    feature_flags: Optional[FeatureFlags] = None
