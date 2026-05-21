@@ -19,6 +19,14 @@ def load_games_registry(path: str | Path = "games.json") -> GameRegistry:
 
     p = Path(path)
 
+    # ✅ fallback to Phase 7 directory
+    if not p.exists():
+        base_dir = Path(__file__).resolve().parent.parent
+        candidate = base_dir / "games.json"
+    
+    if candidate.exists():
+        p = candidate
+
     if not p.exists():
         raise FileNotFoundError(f"games.json not found at: {p}")
 
