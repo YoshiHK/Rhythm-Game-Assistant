@@ -1,0 +1,104 @@
+Phase_7_Games_Recommendations/
+├─ README.md
+│  # Phase 7 purpose, boundaries, and non-goals
+│  # - Presentation-safe only
+│  # - Additive · Downstream-only · Reversible
+│  # - No Phase 1–6 mutation
+│  # - Runtime entry via Phase 6 only
+│
+├─ PHASE_7_SPEC.md
+├─ PHASE_7_ARCHITECTURE.md
+│
+├─ boundaries/
+│  ├─ README.md
+│  │  # Boundary declarations are normative (architectural rules)
+│  │
+│  ├─ input_contract.md
+│  │  # Allowed inputs (presentation-safe metadata, player signals, locale context)
+│  │
+│  ├─ forbidden_dependencies.md
+│  │  # Explicit prohibitions (no Phase 1–6 imports / mutation, no bypass of Phase 6)
+│  │
+│  └─ output_guarantees.md
+│     # Output shape + explainability + deterministic + non-blocking guarantees
+│
+├─ contracts/                       # Canonical, versionless contract layer
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports (single-plane, versionless)
+│  ├─ types.py                     # Contract shapes (RecommendationItem/Response)
+│  ├─ config.py                    # Non-semantic tuning (thresholds/weights/limits)
+│  └─ feature_flags.py             # Behaviour toggles (NOT schema switching)
+│
+├─ registry/                        # Authoritative game enablement (read-only)
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports
+│  ├─ registry.py                  # GameRegistry + GameInfo (status, display_name, metadata)
+│  └─ registry_loader.py           # Load games.json (authoritative) into GameRegistry
+│
+├─ catalog/                         # Presentation metadata (optional, additive)
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports for catalog_loader helpers
+│  ├─ catalog_loader.py            # Load/normalize catalog.json (optional)
+│  ├─ catalog.py                   # DEMO / playground only (MUST NOT be imported by runtime)
+│  ├─ catalog_merge.py             # EXPERIMENTAL / UNUSED (avoid duplicating Phase 4.5 locale logic)
+│  └─ build.py                     # LEGACY / DEPRECATED (tooling only; no runtime wiring)
+│
+├─ eligibility/                     # CI-only governance: explicit exclusions
+│  ├─ README.md
+│  ├─ __init__.py                  # Exports EXPLICIT_EXCLUSIONS (CI-only)
+│  └─ eligibility_policy.py        # EXPLICIT_EXCLUSIONS dict (reasoned exclusions)
+│
+├─ routing/                         # Coordinator-only entrypoint (no learning, no versioning)
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports (Phase7Router, context, policy)
+│  ├─ routing_context.py           # Player context (player_id, locale, top_k, platform, source)
+│  ├─ routing_policy.py            # Declarative candidate shaping (platform/locale filters if available)
+│  └─ router.py                    # Single Phase 7 runtime entrypoint (called only via Phase 6)
+│
+├─ ranking/                         # Single authoritative ranker (deterministic, explainable, no I/O)
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports
+│  └─ ranker.py                    # DeterministicRanker + constraint codes + bounded diagnostics
+│
+├─ explanation/                     # Bounded explanation adapter (i18n-ready, no free-form required)
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports
+│  └─ explanation_engine.py        # Adds rationale['explanation'] (summary + why list)
+│
+├─ integration/                     # Invocation boundaries (Phase 6 gateway; SDK constraints)
+│  ├─ README.md
+│  ├─ __init__.py
+│  ├─ phase6_bridge.md             # How Phase 6 invokes Phase 7 (non-blocking, isolated failures)
+│  └─ sdk_contract.md              # Client/partner expectations (Phase 6-only exposure)
+│
+├─ feedback/                        # Observational only; forwarded to Phase 5 (no runtime impact)
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports
+│  └─ feedback_forwarder.py        # emit_feedback_event + Phase7FeedbackEvent payload (non-blocking)
+│
+├─ observability/                   # Semantic metrics only (Phase 6 owns transport/SLO/alerts)
+│  ├─ README.md
+│  ├─ __init__.py                  # Flat exports
+│  ├─ recommendation_metrics.md    # Metrics catalog (coverage, explainability completeness, etc.)
+│  └─ metrics_collector.py         # collect_observation + Phase7Observation payload (non-blocking)
+│
+├─ utils/                           # Pure utilities (no decisions; no phase leakage)
+│  ├─ README.md
+│  ├─ __init__.py
+│  ├─ time_utils.py                # now_utc_iso()
+│  ├─ validation_utils.py          # minimal defensive validators (mechanical only)
+│  └─ serialization_utils.py       # JSON-serializability assertion helper(s)
+│
+└─ ci/                           # Phase 7 CI tests (guardrails, not quality evaluators)
+   ├─ README.md                    # CI philosophy (contract-level + Wave 1/2/3 model)
+   ├─ test_catalog_completeness.py
+   ├─ test_catalog_presentation.py
+   ├─ test_ranker.py
+   ├─ test_ranker_regression.py
+   ├─ test_recommendation_eligibility.py
+   ├─ test_recommendation_data_readiness.py
+   ├─ test_recommendation_scoring_availability.py
+   ├─ test_recommendation_score_diversity.py
+   ├─ test_recommendation_explainability_coverage.py
+   ├─ test_observability_payload_shape.py      # Contract-level payload shape + non-blocking
+   └─ test_feedback_payload_shape.py           # Contract-level payload shape + non-blocking
