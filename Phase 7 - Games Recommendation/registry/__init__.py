@@ -1,9 +1,13 @@
-"""
-Phase 7 — Registry Layer
 
-Flat exports for the Phase 7 game registry.
-This package is read-only and deterministic.
 """
+Phase 7 — Registry package (flat exports)
+
+Design:
+- Read-only access to games.json
+- No runtime mutation
+- CI-safe loader
+"""
+
 
 from registry.registry import GameInfo, GameRegistry
 from registry.registry_loader import (

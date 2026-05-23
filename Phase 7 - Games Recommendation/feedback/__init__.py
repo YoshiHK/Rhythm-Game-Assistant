@@ -23,7 +23,7 @@ This guarantees that Phase 7 remains:
 - reversible
 """
 
-from .feedback_forwarder import (
+from feedback.feedback_forwarder import (
     Phase7FeedbackEvent,
     FeedbackAction,
     emit_feedback_event,

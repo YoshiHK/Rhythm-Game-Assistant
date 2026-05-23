@@ -91,5 +91,8 @@ def emit_feedback_event(
     if sink is not None:
         # Best-effort emission; failures must not affect runtime
         sink.emit(payload)
+        
+    if not registry.games:
+        pytest.skip("No games available")
 
     return payload

@@ -5,33 +5,26 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
+def _now_utc_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
 @dataclass(frozen=True)
 class Phase7Observation:
     """
-    Canonical observation event emitted by Phase 7.
+    Phase 7 — Observability payload (contract-level)
 
-    This structure is:
-    - versionless
-    - additive
-    - observational only
+    This is presentation/metrics only.
+    Must be JSON-serializable and non-blocking to emit.
     """
+    @dataclass(frozen=True)
     player_id: str
-    locale: Optional[str]
+    timestamp: str
+    recommendation_count: int
+    metadata: Dict[str, Any]
+    reason: Optional[str] = None
 
-    requested: int
-    returned: int
-
-    has_explanations: bool
-    avg_why_count: Optional[float]
-
-    distinct_game_count: int
-
-    degraded: bool
-    reason: Optional[str]
-
-    occurred_at_iso: str
-
-    def to_payload(self) -> Dict[str, Any]:
+    def to_dict(self):
         return asdict(self)
 
 
@@ -44,65 +37,30 @@ def collect_observation(
     sink: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
-    Collect a Phase 7 observation snapshot.
+    Collect a Phase 7 observation snapshot (non-blocking).
 
-    Parameters:
-    - items: list of RecommendationItem (or compatible objects)
-    - reason: optional degradation or empty reason
-    - sink: optional callable(payload: dict) -> None
-            (owned by Phase 6; e.g. metrics pipeline)
-
-    Behavior:
-    - Non-blocking
-    - Failures are swallowed
-    - Always returns payload for logging or debugging
+    Contract:
+    - Always returns a dict payload
+    - Never raises if sink fails
     """
-    returned = len(items or [])
-
-    # Explainability inspection (safe, shallow)
-    why_counts: List[int] = []
-    has_explanations = True
-
-    for it in items or []:
-        rationale = getattr(it, "rationale", None)
-        explanation = None
-        if isinstance(rationale, dict):
-            explanation = rationale.get("explanation")
-        if not isinstance(explanation, dict):
-            has_explanations = False
-            continue
-        why = explanation.get("why")
-        if isinstance(why, list):
-            why_counts.append(len(why))
-
-    avg_why = (
-        sum(why_counts) / len(why_counts)
-        if why_counts
-        else None
-    )
-
-    distinct_games = len({getattr(it, "game_id", None) for it in items or []})
-
     obs = Phase7Observation(
         player_id=str(player_id),
-        locale=str(locale) if locale else None,
-        requested=1,
-        returned=returned,
-        has_explanations=has_explanations,
-        avg_why_count=avg_why,
-        distinct_game_count=distinct_games,
-        degraded=bool(reason),
-        reason=str(reason) if reason else None,
-        occurred_at_iso=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        timestamp=_now_utc_iso(),
+        recommendation_count=len(items) if isinstance(items, list) else 0,
+        metadata={"locale": locale or "", "ci_safe": True},
+        reason=reason,
     )
 
-    payload = obs.to_payload()
+    payload = obs.to_dict()
 
+    # Non-blocking sink behavior
     if sink is not None:
         try:
             sink(payload)
         except Exception:
-            # Observability must never affect runtime
             pass
 
     return payload
+
+
+__all__ = ["Phase7Observation", "collect_observation"]

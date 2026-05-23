@@ -13,9 +13,9 @@ Design invariants:
 - No runtime version switching is permitted.
 """
 
-from .routing_context import Phase7RoutingContext
-from .routing_policy import Phase7RoutingPolicy
-from .router import Phase7Router
+from routing.routing_context import Phase7RoutingContext
+from routing.routing_policy import Phase7RoutingPolicy
+from routing.router import Phase7Router
 
 __all__ = [
     "Phase7RoutingContext",

@@ -1,28 +1,22 @@
 """
-Phase 7 — Games Recommendations
-Contracts Layer
+Phase 7 — Contracts package (flat exports)
 
-This package exposes the stable public contracts for Phase 7.
-
-Notes:
-- Phase 7 exposes a single authoritative recommendation contract.
-- No runtime versioning is supported.
-- Consumers should not depend on implementation details.
+Design:
+- Versionless contract surface
+- No runtime logic
+- Safe for CI import
 """
 
-from .types import (
-    RecommendationContext,
+from contracts.types import (
     RecommendationItem,
-    RecommendationResult,
     RunMode,
 )
-from .config import Phase7Config
-from .feature_flags import FeatureFlags
+
+from contracts.config import Phase7Config
+from contracts.feature_flags import FeatureFlags
 
 __all__ = [
-    "RecommendationContext",
     "RecommendationItem",
-    "RecommendationResult",
     "RunMode",
     "Phase7Config",
     "FeatureFlags",

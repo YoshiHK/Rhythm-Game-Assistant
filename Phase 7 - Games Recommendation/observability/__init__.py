@@ -1,7 +1,10 @@
 """
-Phase 7 — Observability Layer
+Phase 7 — Observability package (metrics only)
 
-Defines metrics and lightweight collectors for recommendation behavior.
+Design:
+- Collect semantic-safe observations
+- Must be non-blocking
+- Must NOT affect runtime decisions
 """
 
 from .metrics_collector import (

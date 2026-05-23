@@ -23,7 +23,7 @@ This guarantees that Phase 7 ranking remains:
 - reversible
 """
 
-from .ranker import (
+from ranking.ranker import (
     DeterministicRanker,
     RankDiagnostics,
     ScoreDelta,
