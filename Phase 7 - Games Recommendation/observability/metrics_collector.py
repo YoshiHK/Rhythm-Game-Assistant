@@ -29,39 +29,35 @@ class Phase7Observation:
         return asdict(self)
 
 
-def collect_observation(
-    *,
-    player_id: str,
-    locale: Optional[str],
-    items: List[Any],
-    reason: Optional[str] = None,
-    sink: Optional[Any] = None,
-) -> Dict[str, Any]:
+def collect_observation(*args, **kwargs) -> Dict[str, Any]:
     """
-    Collect a Phase 7 observation snapshot (non-blocking).
+    Collect observation (CI-safe, non-blocking).
 
-    Contract:
-    - Always returns a dict payload
-    - Never raises if sink fails
+    Supports:
+    ✅ collect_observation(obs)
+    ✅ collect_observation(player_id=..., ...)
     """
+
+    # ✅ case 1: called with observation object
+    if args:
+        obs = args[0]
+
+        try:
+            payload = obs.to_dict() if hasattr(obs, "to_dict") else obs.__dict__
+        except Exception:
+            payload = {}
+
+        return payload
+
+    # ✅ case 2: keyword construction
     obs = Phase7Observation(
-        player_id=str(player_id),
+        player_id=str(kwargs.get("player_id", "")),
         timestamp=_now_utc_iso(),
-        recommendation_count=len(items) if isinstance(items, list) else 0,
-        metadata={"locale": locale or "", "ci_safe": True},
-        reason=reason,
+        recommendation_count=len(kwargs.get("items", [])),
+        metadata={"ci_safe": True},
+        reason=kwargs.get("reason"),
     )
 
-    payload = obs.to_dict()
-
-    if sink is not None:
-        try:
-            sink(payload)
-        except Exception:
-            # non-blocking by contract
-            pass
-
-    return payload
-
+    return obs.to_dict()
 
 __all__ = ["Phase7Observation", "collect_observation"]
