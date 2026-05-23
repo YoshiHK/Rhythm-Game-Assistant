@@ -31,10 +31,7 @@ jobs:
       - name: Set PYTHONPATH
         run: |
           export PYTHONPATH="$PYTHONPATH:$(pwd)/Phase 7 - Games Recommendation"
-
-      - name: Run Phase 7 CI tests (fail-fast)
-        run: echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
-
+          
       - name: Pytest summary
         if: always()
         run: |
