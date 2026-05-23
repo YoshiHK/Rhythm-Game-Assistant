@@ -8,24 +8,24 @@ on:
   pull_request:
     paths:
       - "Phase 7 - Games Recommendation/**"
-  workflow_dispatch:  # ✅ allow manual trigger
+  workflow_dispatch:  # allow manual trigger
 
 jobs:
   phase7-ci:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Checkout repo
+      # Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Setup Python
+      # Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ✅ Cache pip (speed + stability)
+      # Cache pip (speed + stability)
       - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
@@ -34,17 +34,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # ✅ Install dependencies
+      # Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pytest
 
-      # ✅ Set PYTHONPATH globally (correct way)
+      # Set PYTHONPATH globally (correct way)
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
 
-      # ✅ Debug (optional but VERY useful)
+      # Debug (optional but VERY useful)
       - name: Debug environment
         run: |
           echo "Current directory:"
@@ -54,12 +54,12 @@ jobs:
           echo "PYTHONPATH:"
           echo $PYTHONPATH
 
-      # ✅ Run tests (main step)
+      # Run tests (main step)
       - name: Run Phase 7 CI tests
         run: |
           pytest "Phase 7 - Games Recommendation/ci/" -q -rA
 
-      # ✅ Always show summary (even if test fails)
+      # Always show summary (even if test fails)
       - name: Pytest summary
         if: always()
         run: |
