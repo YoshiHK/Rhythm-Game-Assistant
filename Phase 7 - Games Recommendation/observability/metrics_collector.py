@@ -12,19 +12,20 @@ def _now_utc_iso() -> str:
 @dataclass(frozen=True)
 class Phase7Observation:
     """
-    Phase 7 — Observability payload (contract-level)
+    Phase 7 — Observability payload (contract-level, CI-safe)
 
-    This is presentation/metrics only.
-    Must be JSON-serializable and non-blocking to emit.
+    Requirements:
+    - Must be JSON-serializable
+    - Must accept `timestamp` as an explicit field
+    - Must be non-blocking to emit (sink failures swallowed)
     """
-    @dataclass(frozen=True)
     player_id: str
     timestamp: str
     recommendation_count: int
     metadata: Dict[str, Any]
     reason: Optional[str] = None
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -53,11 +54,11 @@ def collect_observation(
 
     payload = obs.to_dict()
 
-    # Non-blocking sink behavior
     if sink is not None:
         try:
             sink(payload)
         except Exception:
+            # non-blocking by contract
             pass
 
     return payload
