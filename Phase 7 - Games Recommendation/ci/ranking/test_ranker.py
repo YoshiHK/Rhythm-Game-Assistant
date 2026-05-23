@@ -56,3 +56,4 @@ def test_ranker_handles_empty_candidates():
     )
 
     assert out == []
+    ``
