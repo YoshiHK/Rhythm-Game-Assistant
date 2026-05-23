@@ -8,18 +8,34 @@ from contracts.types import RecommendationItem
 
 
 def _stable_score(token: Any) -> float:
-    """Stable baseline score in [0,1)."""
+    """
+    Stable baseline score in [0, 1).
+    Deterministic across runs for same token.
+    """
     h = hashlib.sha256(str(token).encode("utf-8")).hexdigest()
     n = int(h[:12], 16)
     return (n % 1_000_000) / 1_000_000.0
 
 
+def _item_game_id(item: Any) -> str:
+    if isinstance(item, dict):
+        return str(item.get("game_id") or item.get("id") or "")
+    return str(getattr(item, "game_id", None) or getattr(item, "id", "") or "")
+
+
+def _item_score(item: Any) -> float:
+    if isinstance(item, dict):
+        s = item.get("score", 0.0)
+        return float(s) if isinstance(s, (int, float)) else 0.0
+    s = getattr(item, "score", 0.0)
+    return float(s) if isinstance(s, (int, float)) else 0.0
+
+
 def _make_item(game_id: str, score: float) -> Any:
     """
-    Try to construct a RecommendationItem in a contract-compatible way.
-    Falls back to dict if the contract shape differs.
+    Construct RecommendationItem when possible; fall back to dict otherwise.
+    This keeps CI tolerant to contract evolution.
     """
-    # Try dataclass fields first (most robust)
     fields = getattr(RecommendationItem, "__dataclass_fields__", None)
     if fields:
         kwargs: Dict[str, Any] = {}
@@ -30,6 +46,8 @@ def _make_item(game_id: str, score: float) -> Any:
 
         if "score" in fields:
             kwargs["score"] = float(score)
+
+        # optional contract fields (safe defaults)
         if "rationale" in fields:
             kwargs["rationale"] = {}
         if "constraints" in fields:
@@ -42,7 +60,7 @@ def _make_item(game_id: str, score: float) -> Any:
         except Exception:
             pass
 
-    # Try common constructor signatures
+    # common constructor shapes
     for kwargs in (
         {"game_id": game_id, "score": float(score)},
         {"id": game_id, "score": float(score)},
@@ -52,63 +70,52 @@ def _make_item(game_id: str, score: float) -> Any:
         except Exception:
             continue
 
-    # Fallback dict (tests in this repo were made tolerant)
     return {"game_id": game_id, "score": float(score)}
 
 
 class DeterministicRanker:
     """
-    Deterministic games recommendation ranker (CI baseline).
+    Phase 7 deterministic ranker (CI baseline)
 
-    Non-goals:
-    - no learning
+    Properties:
+    - deterministic: same inputs => same outputs
     - no I/O
-    - no free-form generation
+    - no runtime learning
+    - bounded, auditable output
     """
 
-    
-    def rank(self, *, candidate_game_ids, ctx, player_profile, player_history, game_profiles=None):
-    if not candidate_game_ids:
-        return []
-
+    def rank(
+        self,
+        *,
+        candidate_game_ids: List[str],
+        ctx: Dict[str, Any],
+        player_profile: Dict[str, Any],
+        player_history: Dict[str, Any],
+        game_profiles: Optional[Dict[str, Any]] = None,
+    ) -> List[Any]:
+        if not candidate_game_ids:
+            return []
 
         recent = set(player_history.get("recent_games") or [])
-        out = []
+        out: List[Any] = []
 
-        
-        for i, gid in enumerate(candidate_game_ids):
-        score = float(len(candidate_game_ids) - i)
+        for gid in candidate_game_ids:
+            base = _stable_score(gid)
 
-            
-        try:
-            item = RecommendationItem(game_id=gid, score=score)
-        except Exception:
-            item = {"game_id": gid, "score": score}
-
-
-            # Small deterministic penalties/bonuses (still non-semantic)
+            # deterministic, non-semantic nudges
             if gid in recent:
-                base = base - 0.10
+                base -= 0.10
             else:
-                base = base + 0.05
+                base += 0.05
 
             score = max(0.0, min(1.0, base))
             if not math.isfinite(score):
                 score = 0.0
 
-            out.append(item)
+            out.append(_make_item(str(gid), score))
 
-        # Sort deterministically: score desc, game_id asc
-        def key_fn(x: Any):
-            if isinstance(x, dict):
-                gid = x.get("game_id") or x.get("id") or ""
-                sc = x.get("score", 0.0)
-            else:
-                gid = getattr(x, "game_id", None) or getattr(x, "id", "") or ""
-                sc = getattr(x, "score", 0.0)
-            return (-float(sc), str(gid))
-
-        out.sort(key=key_fn)
+        # deterministic ordering
+        out.sort(key=lambda x: (-_item_score(x), _item_game_id(x)))
         return out
 
 
