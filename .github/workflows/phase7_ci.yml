@@ -28,9 +28,8 @@ jobs:
           pip install pytest
 
       # Set PYTHONPATH to Phase 7 root
-      - name: Set PYTHONPATH
-        run: |
-          export PYTHONPATH="$PYTHONPATH:$(pwd)/Phase 7 - Games Recommendation"
+      - name: Set PYTHONPATH (global)
+        run: echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
           
       - name: Pytest summary
         if: always()
