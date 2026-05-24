@@ -9,8 +9,8 @@ Invariant:
 
 from __future__ import annotations
 
-from song_recommendations.catalog_loader import load_catalog_from_artifacts
-from song_recommendations.catalog_selector import make_catalog_selector, SelectorConfig
+from song_recommendations.catalog.catalog_loader import load_catalog_from_artifacts
+from song_recommendations.catalog.catalog_selector import make_catalog_selector, SelectorConfig
 from song_recommendations.game_capability_resolver import resolve_game_capability
 from song_recommendations.song_rec_coordinator import Target
 
