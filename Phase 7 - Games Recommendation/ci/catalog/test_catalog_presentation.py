@@ -9,7 +9,7 @@ Non-goals:
 - Does NOT validate UI fields correctness
 """
 
-from catalog.catalog_loader import (
+from Phase 7 - Games Recommendation.ci.catalog.catalog_loader import (
     load_catalog_config_optional,
     get_all_catalog_entries,
     get_catalog_entry,
