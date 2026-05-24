@@ -84,7 +84,7 @@ jobs:
       # =====================================
       - name: Run Phase 6 Integration Tests
         run: |
-          pytest pytest "phase6/song_recommendation/tests/" -q -rA
+          pytest pytest "Phase 6 - Hardening and Scaling/song_recommendations/tests/" -q -rA
 
       # =====================================
       # Full Pipeline Smoke Tests
