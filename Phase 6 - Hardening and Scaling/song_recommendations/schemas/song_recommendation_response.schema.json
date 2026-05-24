@@ -42,14 +42,15 @@
         "level": { "type": "number" },
         "rationale": { "$ref": "#/$defs/Rationale" },
         "is_active": { "type": "boolean" },
-        "bookmarked": { "type": "boolean" }	
+        "bookmarked": { "type": "boolean" },
 		"set_id": { "type": "string" },
 			"items": {
 			  "type": "array",
 			  "items": {
 				"$ref": "recommendation_item.schema.json"
-
-      }
+			    }
+            }
+	    }
     },
     "Rationale": {
       "type": "object",
