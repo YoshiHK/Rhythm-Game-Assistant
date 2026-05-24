@@ -9,7 +9,7 @@ Non-goals:
 - Does NOT validate catalog content quality
 """
 
-from Phase 7 - Games Recommendations.ci.catalog.catalog_loader import (
+from Phase 7 - Games Recommendation.catalog.catalog_loader import (
     load_catalog_config_optional,
     get_all_catalog_entries,
 )
