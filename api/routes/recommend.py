@@ -2,24 +2,28 @@
 recommend.py
 Phase-safe recommendation API entrypoint.
 
-Phase alignment:
+Phase alignment (authoritative intent):
 - Phase 6: External trigger surface (auth, trigger envelope, observability hooks).
 - Phase 5: Read-only response assembly (no learning / no mutation).
 - Phase 3+: Execution is invoked ONLY via orchestrator_ext.bridge (OrchestratorBridge).
 - Phase 7 (optional): Games recommendation may be wired in via injection (no imports).
 
-Non-negotiable:
+Non-negotiable (authoritative intent):
 - No runtime version switching.
 - No direct imports of Phase 1/2/4/5/6/7 logic here (wiring only).
+
+Routing discipline:
+- No backward-compatibility guarantees; deprecated paths are removed (not archived).
+- This module exposes a single Phase 6 surface: POST /api/v1/recommend
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence
+from typing import Any, Dict, List, Optional, Protocol
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..auth import auth_header, require_softr_bearer
@@ -28,16 +32,15 @@ from ..auth import auth_header, require_softr_bearer
 from rhythm_ingestion.orchestrator_ext.bridge import OrchestratorBridge
 
 
+# -----------------------------------------------------------------------------
+# Router (single source)
+# -----------------------------------------------------------------------------
 router = APIRouter(prefix="/api/v1", tags=["recommend"])
 
-# Optional backwards-compatibility router (can be removed later)
-_proseka_router = APIRouter(prefix="/api/v1/proseka", tags=["proseka"])
 
-
-# ------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Helpers (Phase 6)
-# ------------------------------------------------------------
-
+# -----------------------------------------------------------------------------
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -51,79 +54,64 @@ def _phase6_trigger_envelope(*, source: str = "softr", surface: str = "recommend
     }
 
 
-# ------------------------------------------------------------
-# Song Catalog (read-only contract)
-# ------------------------------------------------------------
+def _stable_request_id(req: "RecommendRequest", trigger: Dict[str, Any]) -> str:
+    rid = (req.request_id or "").strip()
+    return rid or str(trigger.get("trigger_id") or uuid4())
 
+
+# -----------------------------------------------------------------------------
+# Song Catalog (read-only contract; injection only)
+# -----------------------------------------------------------------------------
 class SongCatalog(Protocol):
     """Read-only catalog produced by Phase 3 (or loaded from a stable store)."""
-
-    def list_song_ids(self, *, game_id: str) -> List[str]: ...
-    def chart_ref(self, *, game_id: str, song_id: str) -> Optional[str]: ...
-    def metadata(self, *, game_id: str, song_id: str) -> Dict[str, Any]: ...
-
-
-class InMemorySongCatalog:
-    """
-    Minimal in-memory catalog for development / tests.
-
-    Expected shape:
-    {
-      "<game_id>": {
-         "<song_id>": {
-            "chart_ref": "...path-or-ref...",
-            "title": "...",
-            ... any extra metadata ...
-         },
-         ...
-      }
-    }
-    """
-
-    def __init__(self, catalog: Optional[Dict[str, Any]] = None):
-        self._catalog: Dict[str, Any] = dict(catalog or {})
-
-    def list_song_ids(self, *, game_id: str) -> List[str]:
-        node = self._catalog.get(str(game_id), {})
-        if not isinstance(node, dict):
-            return []
-        return sorted([str(k) for k in node.keys()])
-
-    def chart_ref(self, *, game_id: str, song_id: str) -> Optional[str]:
-        node = self._catalog.get(str(game_id), {})
-        if not isinstance(node, dict):
-            return None
-        entry = node.get(str(song_id))
-        if not isinstance(entry, dict):
-            return None
-        ref = entry.get("chart_ref")
-        return str(ref) if isinstance(ref, str) and ref.strip() else None
-
-    def metadata(self, *, game_id: str, song_id: str) -> Dict[str, Any]:
-        node = self._catalog.get(str(game_id), {})
-        if not isinstance(node, dict):
-            return {}
-        entry = node.get(str(song_id))
-        return dict(entry) if isinstance(entry, dict) else {}
+    # Keep protocol minimal. Implementations may provide one of:
+    # def get_chart_ref(self, game_id: str, song_id: str) -> str: ...
+    # def chart_ref_for(self, game_id: str, song_id: str) -> str: ...
 
 
-SONG_CATALOG: SongCatalog = InMemorySongCatalog()
+_SONG_CATALOG: Optional[SongCatalog] = None
 
 
 def set_song_catalog(cat: SongCatalog) -> None:
-    global SONG_CATALOG
-    SONG_CATALOG = cat
+    """Startup hook: inject a read-only catalog implementation."""
+    global _SONG_CATALOG
+    _SONG_CATALOG = cat
 
 
-# ------------------------------------------------------------
+def _resolve_chart_ref(*, game_id: str, song_id: str) -> str:
+    """
+    Resolve chart reference safely.
+
+    Priority:
+      1) Injected SongCatalog (if present and provides a compatible method)
+      2) Deterministic fallback: charts/<game_id>/<song_id>.json
+
+    This supports 'short-circuit loop protection': explicit song_ids always win.
+    """
+    cat = _SONG_CATALOG
+    if cat is not None:
+        for attr in ("get_chart_ref", "chart_ref_for", "chart_ref", "resolve_chart_ref"):
+            fn = getattr(cat, attr, None)
+            if callable(fn):
+                try:
+                    ref = fn(game_id, song_id)
+                    if isinstance(ref, str) and ref.strip():
+                        return ref
+                except Exception:
+                    # Do not let catalog issues break the Phase 6 surface
+                    break
+
+    return f"charts/{game_id}/{song_id}.json"
+
+
+# -----------------------------------------------------------------------------
 # Orchestrator wiring (injected)
-# ------------------------------------------------------------
-
+# -----------------------------------------------------------------------------
 _ORCHESTRATOR: Optional[OrchestratorBridge] = None
 
 
 def set_orchestrator(orch: OrchestratorBridge) -> None:
-    """Application startup hook."""
+    """Startup hook: configure the only execution dependency."""
     global _ORCHESTRATOR
     _ORCHESTRATOR = orch
 
@@ -134,10 +122,9 @@ def _get_orchestrator() -> OrchestratorBridge:
     return _ORCHESTRATOR
 
 
-# ------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Optional injected recommenders (no imports)
-# ------------------------------------------------------------
-
+# -----------------------------------------------------------------------------
 class GamesRecommender(Protocol):
     def recommend_games(
         self,
@@ -159,10 +146,9 @@ def set_games_recommender(rec: GamesRecommender) -> None:
     _GAMES_RECOMMENDER = rec
 
 
-# ------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # API models (Phase-safe)
-# ------------------------------------------------------------
-
+# -----------------------------------------------------------------------------
 class UserInfo(BaseModel):
     user_id: str = Field(..., description="Opaque user id from Softr")
     email: Optional[str] = Field(None, description="User email from Softr (optional)")
@@ -192,36 +178,32 @@ class Evidence(BaseModel):
 class RecommendRequest(BaseModel):
     """
     Unified request envelope.
+
     - game_id is required and drives downstream routing.
     - mode selects song-level vs game-level recommendation.
     """
-
-    request_id: Optional[str] = None
-    source: str = "softr_workflow"
-
-    game_id: str
-    locale: str = "zh-HK"
-    max_items: int = Field(5, ge=1, le=20)
-
-    # Mode:
-    # - "songs": return song recommendations with tips payload (if available)
-    # - "games": return game discovery recommendations (Phase 7; optional injection)
-    mode: str = "songs"
-
-    # Optional list of songs the client wants tips for (stable, explicit).
-    song_ids: Optional[List[str]] = None
+    request_id: Optional[str] = Field(None, description="Optional caller-provided stable request id")
+    mode: str = Field("song", description="'song' or 'game'")
+    game_id: str = Field(..., description="Game identifier, e.g. 'proseka'")
+    locale: str = Field("en-US", description="BCP-47 locale, e.g. 'zh-HK'")
 
     user: Optional[UserInfo] = None
+
+    # Short-circuit loop protection: explicit song_ids override any catalog enumeration.
+    song_ids: List[str] = Field(default_factory=list, description="Explicit song ids to evaluate")
+
     player_signals: PlayerSignals = Field(default_factory=PlayerSignals)
     preferences: Preferences = Field(default_factory=Preferences)
     evidence: Evidence = Field(default_factory=Evidence)
 
-    # Client metadata (non-semantic)
-    client: Dict[str, Any] = Field(default_factory=dict)
+    # Optional, phase-safe bags for injected recommenders
+    player_profile: Dict[str, Any] = Field(default_factory=dict)
+    player_history: Dict[str, Any] = Field(default_factory=dict)
+
+    max_items: int = Field(1, ge=1, le=25, description="Maximum items to return")
 
 
 class RecommendItem(BaseModel):
-    # Unified item shape (song or game)
     item_id: str
     kind: str  # "song" | "game"
     title: Optional[str] = None
@@ -238,16 +220,9 @@ class RecommendResponse(BaseModel):
     items: List[RecommendItem]
 
 
-# ------------------------------------------------------------
-# Internal execution helpers
-# ------------------------------------------------------------
-
-def _stable_request_id(req: RecommendRequest, trigger: Dict[str, Any]) -> str:
-    # Prefer caller-provided request_id; else use trigger_id.
-    rid = (req.request_id or "").strip()
-    return rid or str(trigger.get("trigger_id") or uuid4())
-
-
+# -----------------------------------------------------------------------------
+# Internal execution helpers (defensive)
+# -----------------------------------------------------------------------------
 def _run_tips_for_song(
     *,
     orch: OrchestratorBridge,
@@ -259,11 +234,9 @@ def _run_tips_for_song(
 ) -> Dict[str, Any]:
     """
     Execute Phase 3+ pipeline via OrchestratorBridge (the only execution dependency).
-    This function is intentionally defensive: it returns diagnostics instead of raising.
+    Defensive: return diagnostics instead of raising.
     """
     try:
-        # We keep kwargs minimal and phase-safe.
-        # OrchestratorBridge wraps underlying orchestrator and accepts **kwargs.
         return orch.run(
             game_id=game_id,
             chart_path=chart_ref,
@@ -278,33 +251,34 @@ def _run_tips_for_song(
 
 def _extract_tips_payload(run_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
-    Best-effort extraction of tips payload.
-    The orchestrator output shape may evolve; this stays defensive.
+    Best-effort extraction of tips payload. Output shape may evolve; stay defensive.
     """
     if not isinstance(run_result, dict):
         return None
 
-    # Common candidate keys (keep loose; do not assume)
-    for key in ("tips_output", "tips", "output", "result"):
-        val = run_result.get(key)
-        if isinstance(val, dict):
-            return val
-
-    # Sometimes tips are nested
-    nested = run_result.get("payload")
-    if isinstance(nested, dict):
-        for key in ("tips_output", "tips"):
-            val = nested.get(key)
-            if isinstance(val, dict):
-                return val
+    for path in (
+        ("tips_payload",),
+        ("result", "tips_payload"),
+        ("payload", "tips_payload"),
+        ("tips",),
+    ):
+        cur: Any = run_result
+        ok = True
+        for key in path:
+            if isinstance(cur, dict) and key in cur:
+                cur = cur[key]
+            else:
+                ok = False
+                break
+        if ok and isinstance(cur, dict):
+            return cur
 
     return None
 
 
-# ------------------------------------------------------------
-# Endpoints
-# ------------------------------------------------------------
-
+# -----------------------------------------------------------------------------
+# Endpoint (single source)
+# -----------------------------------------------------------------------------
 @router.post("/recommend", response_model=RecommendResponse)
 def recommend(
     req: RecommendRequest,
@@ -312,71 +286,48 @@ def recommend(
 ) -> RecommendResponse:
     """
     Unified recommendation endpoint (Phase 6 surface).
-
-    - Auth + trigger envelope (Phase 6)
-    - Delegates execution via OrchestratorBridge only (Phase 3+)
-    - Optional Phase 7 game recommendations via injected recommender (no imports)
-    - Response is phase-safe and read-only
     """
+
+    # Phase 6 security boundary
     require_softr_bearer(authorization)
 
-    trigger = _phase6_trigger_envelope(source=req.source, surface="recommend_api")
+    trigger = _phase6_trigger_envelope(source="softr", surface="recommend_api")
     request_id = _stable_request_id(req, trigger)
 
     response_id = str(uuid4())
     provenance_id = str(uuid4())
 
-    items: List[RecommendItem] = []
+    mode = (req.mode or "song").strip().lower()
 
-    mode = (req.mode or "songs").strip().lower()
-
-    # --------------------------
-    # Mode: Games recommendations (Phase 7, optional)
-    # --------------------------
-    if mode == "games":
+    # -----------------------------
+    # GAME recommendation (optional injection)
+    # -----------------------------
+    if mode == "game":
         if _GAMES_RECOMMENDER is None:
-            # Non-blocking: return empty list with diagnostics rationale
-            return RecommendResponse(
-                request_id=request_id,
-                response_id=response_id,
-                provenance_id=provenance_id,
-                trigger=trigger,
-                items=[],
-            )
+            raise HTTPException(status_code=501, detail="Games recommender not configured")
 
-        player_id = req.user.user_id if req.user else ""
-        # Build profile/history payloads from envelope (phase-safe, presentation-only)
-        player_profile = {
-            "signals": req.player_signals.model_dump(),
-            "preferences": req.preferences.model_dump(),
-            "evidence": req.evidence.model_dump(),
-            "client": dict(req.client or {}),
-        }
-        player_history: Dict[str, Any] = {}  # kept empty unless client supplies later
-
+        player_id = (req.user.user_id if req.user else "").strip() or "anonymous"
         recs = _GAMES_RECOMMENDER.recommend_games(
             player_id=player_id,
             locale=req.locale,
             max_items=req.max_items,
-            player_profile=player_profile,
-            player_history=player_history,
+            player_profile=req.player_profile,
+            player_history=req.player_history,
             trigger=trigger,
         )
 
-        for idx, r in enumerate(recs or []):
-            if not isinstance(r, dict):
-                continue
-            gid = str(r.get("game_id", "")).strip()
-            if not gid:
+        items: List[RecommendItem] = []
+        for r in recs[: req.max_items]:
+            item_id = str(r.get("item_id") or r.get("game_id") or "")
+            if not item_id:
                 continue
             items.append(
                 RecommendItem(
-                    item_id=gid,
+                    item_id=item_id,
                     kind="game",
-                    title=str(r.get("title") or r.get("display_name") or "") or None,
-                    payload=dict(r.get("payload") or {}),
-                    tips_payload=None,
-                    rationale=dict(r.get("rationale") or {"rank": idx + 1}),
+                    title=r.get("title"),
+                    payload={k: v for k, v in r.items() if k not in ("title",)},
+                    rationale=r.get("rationale") or {},
                 )
             )
 
@@ -385,46 +336,35 @@ def recommend(
             response_id=response_id,
             provenance_id=provenance_id,
             trigger=trigger,
-            items=items[: req.max_items],
+            items=items,
         )
 
-    # --------------------------
-    # Default Mode: Song recommendations (tips)
-    # --------------------------
-    orch = _get_orchestrator()
+    # -----------------------------
+    # SONG recommendation (default)
+    # -----------------------------
+    song_ids = list(req.song_ids or [])
 
-    # Determine which songs to process:
-    if req.song_ids:
-        song_ids = [str(s) for s in req.song_ids if s is not None and str(s).strip()]
-        rationale_base = {"source": "request:song_ids"}
-    else:
-        # Stable default: use catalog order (sorted)
-        song_ids = SONG_CATALOG.list_song_ids(game_id=req.game_id)
-        rationale_base = {"source": "catalog:default_order"}
+    # Short-circuit loop protection:
+    # If explicit song_ids are not provided, do NOT enumerate a full catalog here.
+    if not song_ids:
+        return RecommendResponse(
+            request_id=request_id,
+            response_id=response_id,
+            provenance_id=provenance_id,
+            trigger=trigger,
+            items=[],
+        )
 
-    # Produce items up to max_items
-    for song_id in song_ids:
-        if len(items) >= req.max_items:
-            break
+    try:
+        orch = _get_orchestrator()
+    except RuntimeError as e:
+        # Endpoint-level friendliness while still enforcing configuration
+        raise HTTPException(status_code=503, detail=str(e))
 
-        meta = SONG_CATALOG.metadata(game_id=req.game_id, song_id=song_id) or {}
-        title = meta.get("title")
-        title = str(title) if isinstance(title, str) and title.strip() else None
+    items: List[RecommendItem] = []
 
-        chart_ref = SONG_CATALOG.chart_ref(game_id=req.game_id, song_id=song_id)
-        if not chart_ref:
-            items.append(
-                RecommendItem(
-                    item_id=song_id,
-                    kind="song",
-                    title=title,
-                    payload={"metadata": meta},
-                    tips_payload=None,
-                    rationale={**rationale_base, "skip": "no_chart_ref"},
-                )
-            )
-            continue
-
+    for song_id in song_ids[: req.max_items]:
+        chart_ref = _resolve_chart_ref(game_id=req.game_id, song_id=song_id)
         run_result = _run_tips_for_song(
             orch=orch,
             game_id=req.game_id,
@@ -433,24 +373,19 @@ def recommend(
             chart_ref=chart_ref,
             trigger=trigger,
         )
-
         tips_payload = _extract_tips_payload(run_result)
 
         items.append(
             RecommendItem(
                 item_id=song_id,
                 kind="song",
-                title=title,
                 payload={
-                    "metadata": meta,
+                    "game_id": req.game_id,
                     "chart_ref": chart_ref,
+                    "diagnostics": run_result.get("diagnostics") if isinstance(run_result, dict) else None,
                 },
                 tips_payload=tips_payload,
-                rationale={
-                    **rationale_base,
-                    "executed": True,
-                    "diagnostics": dict(run_result.get("diagnostics") or {}) if isinstance(run_result, dict) else {},
-                },
+                rationale={"source": "orchestrator", "short_circuit": True},
             )
         )
 
@@ -461,27 +396,3 @@ def recommend(
         trigger=trigger,
         items=items,
     )
-
-
-# ------------------------------------------------------------
-# Backwards-compatible alias (optional)
-# ------------------------------------------------------------
-
-@_proseka_router.post("/recommend", response_model=RecommendResponse)
-def proseka_recommend_alias(
-    req: RecommendRequest,
-    authorization: Optional[str] = Depends(auth_header),
-) -> RecommendResponse:
-    """
-    Compatibility alias for legacy clients that used /api/v1/proseka/recommend.
-
-    This endpoint enforces game_id='proseka' and delegates to /api/v1/recommend.
-    Safe to remove once clients migrate.
-    """
-    # Force proseka routing (compat only)
-    req.game_id = "proseka"
-    return recommend(req=req, authorization=authorization)
-
-
-# Expose compatibility router for app.py to include if desired
-compat_routers: List[APIRouter] = [_proseka_router]
