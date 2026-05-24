@@ -42,4 +42,3 @@ def test_capability_registry_ladder_invariants():
         cap_map[gid] = data
 
     assert cap_map, "No capability fixtures found"
-``
