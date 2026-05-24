@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 """
 Phase 6 Song Recommendations — Persistence Policy (save/refresh + rotation plan)
 
-Purpose
--------
-Produce a persistence plan (create payloads + delete IDs) without performing I/O.
+Purpose:
+- Produce a persistence plan (create payloads + delete IDs) without performing I/O.
 
 Design constraints:
 - deterministic
@@ -11,13 +12,11 @@ Design constraints:
 - no database writes here
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
-from request_normalizer import NormalizedSongRecRequest, RecentRecommendation
+from .request_normalizer import NormalizedSongRecRequest, RecentRecommendation
 
 
 @dataclass(frozen=True)
@@ -48,52 +47,48 @@ def build_rotation_deletions(
     Compute which record_ids to delete to keep history within max_history.
 
     Rules:
-    - Only delete non-bookmarked entries
-    - Delete oldest first (created_at)
-    - Deterministic tie-break by record_id
-    - Skip entries without record_id
+    - Never delete bookmarked items
+    - Delete oldest first (created_at), stable tie-break by record_id
     """
-    if max_history <= 0:
+    if incoming_count <= 0:
         return []
 
-    total_after = len(recent) + incoming_count
-    if total_after <= max_history:
-        return []
-
-    candidates: List[Tuple[float, str]] = []
+    keep_limit = max(0, int(max_history))
+    # if we are going to add incoming_count items, ensure total <= keep_limit
+    # delete_count = max(0, (len(existing_non_bookmarked) + incoming_count) - keep_limit)
+    candidates = []
     for r in recent:
-        if r.bookmarked:
+        if getattr(r, "bookmarked", False):
             continue
-        if not r.record_id:
+        rid = getattr(r, "record_id", None)
+        if not rid:
             continue
-        candidates.append((_parse_iso(r.created_at), r.record_id))
+        created = _parse_iso(getattr(r, "created_at", None))
+        candidates.append((created, str(rid)))
 
-    candidates.sort(key=lambda x: (x[0], x[1]))
-    to_delete = min(len(candidates), total_after - max_history)
-    return [rid for _, rid in candidates[:to_delete]]
+    candidates.sort(key=lambda x: (x[0], x[1]))  # deterministic
+
+    delete_count = max(0, (len(candidates) + int(incoming_count)) - keep_limit)
+    if delete_count <= 0:
+        return []
+    return [rid for _, rid in candidates[:delete_count]]
 
 
-def build_create_payloads(req: NormalizedSongRecRequest, items: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_create_payloads(
+    req: NormalizedSongRecRequest,
+    items: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """
-    Build store-agnostic create payloads.
-
-    A storage adapter can map these fields to Softr/Airtable IDs later.
+    Build store-agnostic create payloads (no I/O).
     """
     out: List[Dict[str, Any]] = []
     for it in items:
         out.append(
             {
-                "game_id": req.game_id,
                 "player_id_hash": req.player_id_hash,
+                "game_id": req.game_id,
                 "song_id": it.get("song_id"),
-                "song_name": it.get("song_name"),
-                "producer_name": it.get("producer_name"),
-                "difficulty": it.get("difficulty"),
-                "level": it.get("level"),
-                "recommendation_type": it.get("recommendation_type"),
-                "rationale": it.get("rationale"),
-                "is_active": True,
-                "bookmarked": False,
+                "created_at": datetime.utcnow().isoformat() + "Z",
             }
         )
     return out
@@ -106,18 +101,28 @@ def compute_persistence_plan(
     max_history: int = 10,
 ) -> PersistencePlan:
     """
-    action="refresh" → no persistence
-    action="save"    → return create payloads + rotation deletion plan
+    action="refresh" -> no persistence
+    action="save"    -> return create payloads + rotation deletion plan
     """
     if req.action != "save":
         return PersistencePlan(did_save=False, create_records=[], delete_ids=[], delete_count=0)
 
     create_records = build_create_payloads(req, items)
-    delete_ids = build_rotation_deletions(req.recent_recommendations, incoming_count=len(create_records), max_history=max_history)
-
+    delete_ids = build_rotation_deletions(
+        req.recent_recommendations,
+        incoming_count=len(create_records),
+        max_history=max_history,
+    )
     return PersistencePlan(
         did_save=True,
         create_records=create_records,
         delete_ids=delete_ids,
         delete_count=len(delete_ids),
     )
+
+
+__all__ = [
+    "PersistencePlan",
+    "compute_persistence_plan",
+    "build_rotation_deletions",
+]
