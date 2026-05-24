@@ -13,7 +13,7 @@ from song_recommendations.game_capability_resolver import resolve_game_capabilit
 
 
 def test_game_capability_fixtures_load_and_validate():
-    root = Path(__file__).parents[4] / "song_recommendations" / "tests" / "capability" / "fixtures" / "game_capability"
+    root = Path(__file__).resolve().parent / "fixtures" / "game_capability"
 
     cap_map = {}
     for path in root.glob("*.json"):
