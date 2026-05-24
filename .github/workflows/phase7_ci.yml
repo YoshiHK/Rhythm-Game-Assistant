@@ -58,7 +58,7 @@ jobs:
           echo $PYTHONPATH
 
       # =====================================
-      # ✅ Phase 7 Governance CI
+      # Phase 7 Governance CI
       # =====================================
       - name: Run Phase 7 CI tests
         run: |
