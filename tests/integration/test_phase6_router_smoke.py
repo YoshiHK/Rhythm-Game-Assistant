@@ -1,28 +1,26 @@
 from __future__ import annotations
+
 import pytest
 
 
 def _try_import(module_path: str):
     try:
-        module = __import__(module_path, fromlist=["*"])
-        return module
+        return __import__(module_path, fromlist=["*"])
     except Exception as e:
         return e
 
 
 def _import_phase6_router_or_skip():
     """
-    Try multiple valid import paths for Phase 6 router.
-    Compatible with router-layer architecture.
+    Router-layer aligned import:
+    - Do NOT assume song_recommendations.phase6_router exists.
     """
-
     candidates = [
-        "router.phase6_router",               # correct architecture
-        "phase6_router",                      # fallback (flat)
+        "router.phase6_router",  # ✅ router layer (preferred)
+        "phase6_router",         # ✅ flat fallback
     ]
 
     last_error = None
-
     for path in candidates:
         result = _try_import(path)
         if not isinstance(result, Exception):
@@ -43,14 +41,14 @@ def test_phase6_router_smoke_modes_if_callable_exists():
 
     router_cls = getattr(m, "Phase6Router", None)
     if router_cls is None:
-        pytest.skip("Phase6Router not defined")
+        pytest.skip("Phase6Router not defined in router module")
 
     try:
         router = router_cls()
     except Exception as e:
         pytest.skip(f"Phase6Router not constructable: {e}")
 
-    # minimal functional smoke (real pass, not just import)
+    # minimal functional smoke: ensure it returns a dict and has mode
     try:
         resp = router.handle({"mode": "songs"})
         assert isinstance(resp, dict)
