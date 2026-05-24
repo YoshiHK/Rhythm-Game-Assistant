@@ -8,11 +8,6 @@ on:
       - "Phase 4 - Personalization/**"
       - "Phase 4.5 - Localization/**"
       - ".github/workflows/phase7_ci.yml"
-  pull_request:
-    paths:
-      - "Phase 7 - Games Recommendation/**"
-      - "Phase 6 - Hardening and Scaling/**"
-  workflow_dispatch:  # allow manual trigger
 
 jobs:
   phase7-ci:
@@ -28,15 +23,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      # Cache pip
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
 
       # Install dependencies
       - name: Install dependencies
@@ -80,11 +66,11 @@ jobs:
           python "Phase 4.5 - Localization/ci/run_all_localization_checks.py"
 
       # =====================================
-      # Phase 6 Integration Audit (KEY)
+      # Phase 6 Song Recommendation CI
       # =====================================
-      - name: Run Phase 6 Integration Tests
+      - name: Run Phase 6 Song Recommendation Tests
         run: |
-          pytest pytest "Phase 6 - Hardening and Scaling/song_recommendations/tests/" -q -rA
+          pytest "Phase 6 - Hardening and Scaling/song_recommendations/tests" -q -rA
 
       # =====================================
       # Full Pipeline Smoke Tests
