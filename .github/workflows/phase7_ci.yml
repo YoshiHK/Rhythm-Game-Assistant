@@ -33,7 +33,7 @@ jobs:
       # Set PYTHONPATH (CRITICAL)
       - name: Set PYTHONPATH
         run: |
-          echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 6 - Platform Hardening & Runtime Routing" >> $GITHUB_ENV
+          echo "PYTHONPATH=$(pwd)/Phase 6 - Hardening and Scaling:$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 4 - Personalization" >> $GITHUB_ENV
 
       # Debug (useful for CI issues)
       - name: Debug environment
