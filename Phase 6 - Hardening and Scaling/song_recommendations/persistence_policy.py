@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from .request_normalizer import NormalizedSongRecRequest, RecentRecommendation
 
+FIXED_TIMESTAMP = "1970-01-01T00:00:00Z"
 
 @dataclass(frozen=True)
 class PersistencePlan:
@@ -88,7 +89,7 @@ def build_create_payloads(
                 "player_id_hash": req.player_id_hash,
                 "game_id": req.game_id,
                 "song_id": it.get("song_id"),
-                "created_at": datetime.utcnow().isoformat() + "Z",
+                "created_at": FIXED_TIMESTAMP
             }
         )
     return out
