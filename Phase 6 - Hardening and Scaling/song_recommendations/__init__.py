@@ -1,33 +1,51 @@
 """
-Phase 6 — Song Recommendation Domain
+Phase 6 — Song Recommendations package
 
-This package implements runtime orchestration for song recommendations
-(mode="songs") under Phase 6 governance.
-
-Contract (Non-Negotiable):
-- Runtime behavior is deterministic and non-semantic.
-- No learning or adaptation occurs at runtime.
-- Selection logic MUST NOT depend on feedback outcomes.
-- All learning is offline (Phase 5) and introduced via deployment only.
-
-Responsibilities:
-- Coordinate song recommendation flow
-- Invoke catalog loading and deterministic selection
-- Shape API-safe responses
-- Emit forward-only feedback and observability signals
-
-Non-Responsibilities:
-- Gameplay analysis or tips generation
-- Ranking or learning logic
-- Runtime experimentation or model updates
+CI-safe export surface:
+- Avoid importing coordinator at import-time (prevents pytest collection blow-ups)
+- Expose small, stable primitives that are safe to import
 """
 
-from .song_rec_coordinator import SongRecommendationCoordinator
-from .request_normalizer import NormalizedSongRecRequest
-from .response_shaper import shape_song_recommendation_response
+# Safe, low-level contracts (no side effects)
+from .request_normalizer import (
+    NormalizedSongRecRequest,
+    RecentRecommendation,
+    normalize_song_recommendation_request,
+)
+
+from .game_capability_resolver import (
+    GameCapability,
+    CapabilityError,
+    resolve_game_capability,
+    canonicalize_tier_id,
+    canonicalize_completion_id,
+)
+
+from .persistence_policy import (
+    PersistencePlan,
+    compute_persistence_plan,
+    build_rotation_deletions,
+)
+
+from .response_shaper import (
+    shape_song_recommendation_response,
+)
 
 __all__ = [
-    "SongRecommendationCoordinator",
+    # request normalization
     "NormalizedSongRecRequest",
+    "RecentRecommendation",
+    "normalize_song_recommendation_request",
+    # capabilities
+    "GameCapability",
+    "CapabilityError",
+    "resolve_game_capability",
+    "canonicalize_tier_id",
+    "canonicalize_completion_id",
+    # persistence
+    "PersistencePlan",
+    "compute_persistence_plan",
+    "build_rotation_deletions",
+    # response
     "shape_song_recommendation_response",
 ]
