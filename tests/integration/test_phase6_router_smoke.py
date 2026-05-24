@@ -19,7 +19,6 @@ def _import_phase6_router_or_skip():
     candidates = [
         "router.phase6_router",               # correct architecture
         "phase6_router",                      # fallback (flat)
-        "song_recommendations.phase6_router", # legacy (keep for compatibility)
     ]
 
     last_error = None
