@@ -56,3 +56,6 @@ def test_save_rotation_deletes_oldest_non_bookmarked_only():
             "submission": {"difficulty_progress": {"tiers": [{"tier_id": "expert", "counts": {"clear": 5}}]}},
             "recent_recommendations": [
                 {"song_id": "A", "bookmarked": False, "created_at": "2026-01-01T00:00:00Z", "record_id": "R-old"},
+        }  
+    )
+                
