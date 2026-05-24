@@ -18,6 +18,7 @@
   },
   "$defs": {
     "Rationale": {
+	  "$ref": "rationale.schema.json"
       "type": "object",
       "additionalProperties": true,
       "required": ["summary", "why"],

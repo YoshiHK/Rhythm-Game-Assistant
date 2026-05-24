@@ -42,7 +42,13 @@
         "level": { "type": "number" },
         "rationale": { "$ref": "#/$defs/Rationale" },
         "is_active": { "type": "boolean" },
-        "bookmarked": { "type": "boolean" }
+        "bookmarked": { "type": "boolean" }	
+		"set_id": { "type": "string" },
+			"items": {
+			  "type": "array",
+			  "items": {
+				"$ref": "recommendation_item.schema.json"
+
       }
     },
     "Rationale": {
@@ -77,6 +83,19 @@
         "delete_ids": { "type": "array", "items": { "type": "string" } },
         "delete_count": { "type": "integer", "minimum": 0 }
       }
-    }
+    },
+	"recommendation_set": {
+	  "type": "object",
+	  "properties": {
+		"set_id": { "type": "string" },
+		"items": {
+		  "type": "array",
+		  "items": {
+			"$ref": "recommendation_item.schema.json"
+		  }
+		}
+	  },
+	  "required": ["set_id", "items"]
+	}
   }
 }
