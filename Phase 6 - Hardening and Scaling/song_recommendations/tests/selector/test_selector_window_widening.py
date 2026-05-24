@@ -16,17 +16,17 @@ import pytest
 
 def _imports():
     try:
-        from phase6.song_recommendation.catalog_loader import load_catalog_from_artifacts
-        from phase6.song_recommendation.catalog_selector import (
+        from .song_recommendations.catalog_loader import load_catalog_from_artifacts
+        from .song_recommendations.catalog_selector import (
             make_catalog_selector,
             SelectorConfig,
         )
-        from phase6.song_recommendation.song_rec_coordinator import Target
+        from .song_recommendations.song_rec_coordinator import Target
         return load_catalog_from_artifacts, make_catalog_selector, SelectorConfig, Target
     except Exception:
-        from catalog_loader import load_catalog_from_artifacts
-        from catalog_selector import make_catalog_selector, SelectorConfig
-        from song_rec_coordinator import Target
+        from .catalog_loader import load_catalog_from_artifacts
+        from .catalog_selector import make_catalog_selector, SelectorConfig
+        from .song_rec_coordinator import Target
         return load_catalog_from_artifacts, make_catalog_selector, SelectorConfig, Target
 
 

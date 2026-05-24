@@ -28,10 +28,10 @@ import pytest
 
 def _imports():
     try:
-        from phase6.song_recommendation.game_capability_resolver import resolve_game_capability
+        from .song_recommendations.game_capability_resolver import resolve_game_capability
         return resolve_game_capability
     except Exception:
-        from game_capability_resolver import resolve_game_capability
+        from .game_capability_resolver import resolve_game_capability
         return resolve_game_capability
 
 

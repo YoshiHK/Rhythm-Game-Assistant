@@ -15,12 +15,12 @@ import pytest
 
 def _imports():
     try:
-        from phase6.song_recommendation.request_normalizer import normalize_song_recommendation_request
-        from phase6.song_recommendation.persistence_policy import compute_persistence_plan
+        from .song_recommendations.request_normalizer import normalize_song_recommendation_request
+        from .song_recommendations.persistence_policy import compute_persistence_plan
         return normalize_song_recommendation_request, compute_persistence_plan
     except Exception:
-        from request_normalizer import normalize_song_recommendation_request
-        from persistence_policy import compute_persistence_plan
+        from .request_normalizer import normalize_song_recommendation_request
+        from .persistence_policy import compute_persistence_plan
         return normalize_song_recommendation_request, compute_persistence_plan
 
 
@@ -56,7 +56,7 @@ def test_save_rotation_deletes_oldest_non_bookmarked_only():
             "submission": {"difficulty_progress": {"tiers": [{"tier_id": "expert", "counts": {"clear": 5}}]}},
             "recent_recommendations": [
                 {"song_id": "A", "bookmarked": False, "created_at": "2026-01-01T00:00:00Z", "record_id": "R-old"},
-            ]
+                ]
         }  
     )
                 

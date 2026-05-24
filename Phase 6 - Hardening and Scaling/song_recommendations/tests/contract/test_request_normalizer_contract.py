@@ -10,7 +10,7 @@ import pytest
 
 def _imports():
     try:
-        from phase6.song_recommendation.request_normalizer import (
+        from .song_recommendations.request_normalizer import (
             normalize_song_recommendation_request,
             ContractError,
         )

@@ -13,16 +13,16 @@ import pytest
 # Flexible imports: package or flat
 def _imports():
     try:
-        from phase6.song_recommendation.catalog_loader import load_catalog_from_artifacts
-        from phase6.song_recommendation.catalog_selector import make_catalog_selector
-        from phase6.song_recommendation.game_capability_resolver import resolve_game_capability
-        from phase6.song_recommendation.song_rec_coordinator import Target
+        from .song_recommendations.catalog_loader import load_catalog_from_artifacts
+        from .song_recommendations.catalog_selector import make_catalog_selector
+        from .song_recommendations.game_capability_resolver import resolve_game_capability
+        from .song_recommendations.song_rec_coordinator import Target
         return load_catalog_from_artifacts, make_catalog_selector, resolve_game_capability, Target
     except Exception:
-        from catalog_loader import load_catalog_from_artifacts
-        from catalog_selector import make_catalog_selector
-        from game_capability_resolver import resolve_game_capability
-        from song_rec_coordinator import Target
+        from .catalog_loader import load_catalog_from_artifacts
+        from .catalog_selector import make_catalog_selector
+        from .game_capability_resolver import resolve_game_capability
+        from .song_rec_coordinator import Target
         return load_catalog_from_artifacts, make_catalog_selector, resolve_game_capability, Target
 
 

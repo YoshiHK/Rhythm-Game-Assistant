@@ -28,17 +28,17 @@ import pytest
 def _imports():
     """
     Support both:
-    - package layout: phase6.song_recommendation.*
+    - package layout: phase6.song_recommendations.*
     - flat layout: modules in current PYTHONPATH
     """
     try:
-        from phase6.song_recommendation.request_normalizer import normalize_song_recommendation_request
-        from phase6.song_recommendation.game_capability_resolver import resolve_game_capability
-        from phase6.song_recommendation.catalog_loader import load_catalog_from_artifacts
-        from phase6.song_recommendation.catalog_selector import make_catalog_selector
-        from phase6.song_recommendation.song_rec_coordinator import generate_recommendation_items
-        from phase6.song_recommendation.persistence_policy import compute_persistence_plan
-        from phase6.song_recommendation.response_shaper import shape_song_recommendation_response
+        from .song_recommendations.request_normalizer import normalize_song_recommendation_request
+        from .song_recommendations.game_capability_resolver import resolve_game_capability
+        from .song_recommendations.catalog_loader import load_catalog_from_artifacts
+        from .song_recommendations.catalog_selector import make_catalog_selector
+        from .song_recommendations.song_rec_coordinator import generate_recommendation_items
+        from .song_recommendations.persistence_policy import compute_persistence_plan
+        from .song_recommendations.response_shaper import shape_song_recommendation_response
         return (
             normalize_song_recommendation_request,
             resolve_game_capability,
@@ -49,13 +49,13 @@ def _imports():
             shape_song_recommendation_response,
         )
     except Exception:
-        from request_normalizer import normalize_song_recommendation_request
-        from game_capability_resolver import resolve_game_capability
-        from catalog_loader import load_catalog_from_artifacts
-        from catalog_selector import make_catalog_selector
-        from song_rec_coordinator import generate_recommendation_items
-        from persistence_policy import compute_persistence_plan
-        from response_shaper import shape_song_recommendation_response
+        from .request_normalizer import normalize_song_recommendation_request
+        from .game_capability_resolver import resolve_game_capability
+        from .catalog_loader import load_catalog_from_artifacts
+        from .catalog_selector import make_catalog_selector
+        from .song_rec_coordinator import generate_recommendation_items
+        from .persistence_policy import compute_persistence_plan
+        from .response_shaper import shape_song_recommendation_response
         return (
             normalize_song_recommendation_request,
             resolve_game_capability,

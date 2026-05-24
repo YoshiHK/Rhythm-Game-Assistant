@@ -12,14 +12,14 @@ import pytest
 
 def _imports():
     try:
-        from phase6.song_recommendation.request_normalizer import normalize_song_recommendation_request
-        from phase6.song_recommendation.persistence_policy import compute_persistence_plan
-        from phase6.song_recommendation.response_shaper import shape_song_recommendation_response
+        from .song_recommendations.request_normalizer import normalize_song_recommendation_request
+        from .song_recommendations.persistence_policy import compute_persistence_plan
+        from .song_recommendations.response_shaper import shape_song_recommendation_response
         return normalize_song_recommendation_request, compute_persistence_plan, shape_song_recommendation_response
     except Exception:
-        from request_normalizer import normalize_song_recommendation_request
-        from persistence_policy import compute_persistence_plan
-        from response_shaper import shape_song_recommendation_response
+        from .request_normalizer import normalize_song_recommendation_request
+        from .persistence_policy import compute_persistence_plan
+        from .response_shaper import shape_song_recommendation_response
         return normalize_song_recommendation_request, compute_persistence_plan, shape_song_recommendation_response
 
 

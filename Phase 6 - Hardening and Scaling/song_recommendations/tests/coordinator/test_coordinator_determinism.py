@@ -22,14 +22,14 @@ def _imports():
     Adjust these paths if you place modules under a package.
     """
     try:
-        from phase6.song_recommendation.request_normalizer import normalize_song_recommendation_request
-        from phase6.song_recommendation.game_capability_resolver import resolve_game_capability
-        from phase6.song_recommendation.song_rec_coordinator import generate_recommendation_items
+        from .song_recommendations.request_normalizer import normalize_song_recommendation_request
+        from .song_recommendations.game_capability_resolver import resolve_game_capability
+        from .song_recommendations.song_rec_coordinator import generate_recommendation_items
         return normalize_song_recommendation_request, resolve_game_capability, generate_recommendation_items
     except Exception:
-        from request_normalizer import normalize_song_recommendation_request
-        from game_capability_resolver import resolve_game_capability
-        from song_rec_coordinator import generate_recommendation_items
+        from .request_normalizer import normalize_song_recommendation_request
+        from .game_capability_resolver import resolve_game_capability
+        from .song_rec_coordinator import generate_recommendation_items
         return normalize_song_recommendation_request, resolve_game_capability, generate_recommendation_items
 
 
