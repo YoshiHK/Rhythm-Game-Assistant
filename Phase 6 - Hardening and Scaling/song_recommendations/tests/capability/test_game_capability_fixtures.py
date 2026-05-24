@@ -1,36 +1,29 @@
 """
 CI Test — Game Capability Fixtures Validity
 
-Ensures fixture JSON files are valid and resolvable by game_capability_resolver.
+Ensures ALL fixture JSON files are valid and resolvable by game_capability_resolver.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-import pytest
 
-
-def _imports():
-    try:
-        from phase6.song_recommendation.game_capability_resolver import resolve_game_capability
-        return resolve_game_capability
-    except Exception:
-        from game_capability_resolver import resolve_game_capability
-        return resolve_game_capability
+from song_recommendations.game_capability_resolver import resolve_game_capability
 
 
 def test_game_capability_fixtures_load_and_validate():
-    resolve_game_capability = _imports()
-
     root = Path(__file__).parent / "fixtures" / "game_capability"
-    proseka = json.loads((root / "proseka.json").read_text(encoding="utf-8"))
-    arcaea = json.loads((root / "arcaea.json").read_text(encoding="utf-8"))
 
-    cap_map = {
-        proseka["game_id"]: proseka,
-        arcaea["game_id"]: arcaea,
-    }
+    cap_map = {}
+    for path in root.glob("*.json"):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        game_id = data.get("game_id")
+        assert game_id, f"{path.name} missing game_id"
+        cap_map[game_id] = data
 
-    assert resolve_game_capability("proseka", capabilities=cap_map).game_id == "proseka"
-    assert resolve_game_capability("arcaea", capabilities=cap_map).game_id == "arcaea"
+    assert cap_map, f"No capability fixtures found in {root}"
+
+    for game_id in cap_map:
+        resolved = resolve_game_capability(game_id, capabilities=cap_map)
+        assert resolved.game_id == game_id

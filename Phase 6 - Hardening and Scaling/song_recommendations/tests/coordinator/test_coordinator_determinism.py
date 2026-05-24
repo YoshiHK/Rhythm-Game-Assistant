@@ -11,68 +11,56 @@ Non-goals:
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
+from song_recommendations.request_normalizer import normalize_song_recommendation_request
+from song_recommendations.game_capability_resolver import resolve_game_capability
+from song_recommendations.song_rec_coordinator import generate_recommendation_items
 
-def _imports():
+
+def _deterministic_selector_factory():
     """
-    Support both flat imports (same folder) and package imports.
-    Adjust these paths if you place modules under a package.
+    Deterministic selector stub:
+    returns a stable song dict derived from (tier_id, completion_id).
+    Excluded ids are respected.
     """
-    try:
-        from .song_recommendations.request_normalizer import normalize_song_recommendation_request
-        from .song_recommendations.game_capability_resolver import resolve_game_capability
-        from .song_recommendations.song_rec_coordinator import generate_recommendation_items
-        return normalize_song_recommendation_request, resolve_game_capability, generate_recommendation_items
-    except Exception:
-        from .request_normalizer import normalize_song_recommendation_request
-        from .game_capability_resolver import resolve_game_capability
-        from .song_rec_coordinator import generate_recommendation_items
-        return normalize_song_recommendation_request, resolve_game_capability, generate_recommendation_items
+    def selector(target, excluded_song_ids):
+        song_id = f"{target.tier_id}-{target.completion_id}-seed"
+        if song_id in excluded_song_ids:
+            return None
+        return {
+            "song_id": song_id,
+            "title": song_id,
+            "tier_id": target.tier_id,
+            "target_completion": target.completion_id,
+        }
+    return selector
 
 
 def test_song_rec_is_deterministic_for_identical_input():
-    normalize_song_recommendation_request, resolve_game_capability, generate_recommendation_items = _imports()
-
     payload = {
-        "game_id": "proseka",
         "mode": "songs",
-        "locale": "en-US",
+        "game_id": "proseka",
+        "locale": "en",
         "max_items": 3,
         "action": "refresh",
-        "player_id_hash": "p123",
+        "player_id_hash": "p1",
         "submission": {
-            "difficulty_progress": {
-                "tiers": [
-                    {"tier_id": "expert", "counts": {"clear": 30, "fc": 12, "ap": 4}},
-                    {"tier_id": "master", "counts": {"clear": 10, "fc": 2, "ap": 0}},
-                ]
-            }
+            "tiers": [
+                {"tier_id": "Expert", "counts": {"Clear": 10, "FC": 3, "AP": 1}},
+            ]
         },
-        "recent_recommendations": [{"song_id": "S-OLD", "bookmarked": False, "record_id": "R1"}],
-        "client": {"source": "pytest"},
+        "recent_recommendations": [],
+        "client": {"platform": "ci"},
     }
 
     req = normalize_song_recommendation_request(payload)
     cap = resolve_game_capability(req.game_id)
 
-    # Deterministic selector stub:
-    # - chooses a song_id purely from target fields (tier_id, completion_id, target_count)
-    # - respects exclusions deterministically
-    def selector(target, excluded):
-        base = f"{target.tier_id}:{target.completion_id}:{target.target_count}"
-        sid = "S-" + str(abs(hash(base)) % 10000)
-        if sid in excluded:
-            sid = "S-" + str((abs(hash(base)) + 1) % 10000)
-        return {
-            "song_id": sid,
-            "song_name": f"Song {sid}",
-            "producer_name": "Producer X",
-            "difficulty": target.tier_id,
-            "level": float(target.target_count),  # deterministic placeholder
-            "rationale": {"summary": "test", "why": ["deterministic"]},
-        }
+    selector = _deterministic_selector_factory()
 
-    items1, diag1 = generate_recommendation_items(req, cap, selector=selector)
+    out1, diag1 = generate_recommendation_items(req, cap, selector=selector)
+    out2, diag2 = generate_recommendation_items(req, cap, selector=selector)
+
+    assert out1 == out2
+    assert diag1 == diag2
