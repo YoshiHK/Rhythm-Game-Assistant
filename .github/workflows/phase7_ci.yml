@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - "Phase 7 - Games Recommendation/**"
+      - "Phase 6 - Platform Hardening & Runtime Routing/**"
+      - "Phase 4 - Personalization/**"
+      - "Phase 4.5 - Localization/**"
       - ".github/workflows/phase7_ci.yml"
   pull_request:
     paths:
       - "Phase 7 - Games Recommendation/**"
+      - "Phase 6 - Platform Hardening & Runtime Routing/**"
   workflow_dispatch:  # allow manual trigger
 
 jobs:
@@ -25,7 +29,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Cache pip (speed + stability)
+      # Cache pip
       - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
@@ -40,27 +44,57 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
 
-      # Set PYTHONPATH globally (correct way)
+      # Set PYTHONPATH (CRITICAL)
       - name: Set PYTHONPATH
-        run: echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
+        run: |
+          echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 6 - Platform Hardening & Runtime Routing" >> $GITHUB_ENV
 
-      # Debug (optional but VERY useful)
+      # Debug (useful for CI issues)
       - name: Debug environment
         run: |
-          echo "Current directory:"
+          echo "PWD:"
           pwd
-          echo "Files:"
-          ls -R
           echo "PYTHONPATH:"
           echo $PYTHONPATH
 
-      # Run tests (main step)
+      # =====================================
+      # ✅ Phase 7 Governance CI
+      # =====================================
       - name: Run Phase 7 CI tests
         run: |
           pytest "Phase 7 - Games Recommendation/ci/" -q -rA
 
-      # Always show summary (even if test fails)
-      - name: Pytest summary
+      # =====================================
+      # Phase 4 CI
+      # =====================================
+      - name: Run Phase 4 CI tests
+        run: |
+          export PYTHONPATH="$PYTHONPATH:$(pwd)/Phase 4 - Personalization"
+          pytest "Phase 4 - Personalization/" -q
+
+      # =====================================
+      # Phase 4.5 CI
+      # =====================================
+      - name: Run Phase 4.5 Localization CI
+        run: |
+          python "Phase 4.5 - Localization/ci/run_all_localization_checks.py"
+
+      # =====================================
+      # Phase 6 Integration Audit (KEY)
+      # =====================================
+      - name: Run Phase 6 Integration Tests
+        run: |
+          pytest "Phase 6 - Platform Hardening & Runtime Routing/song_recommendation/tests/" -q -rA
+
+      # =====================================
+      # Full Pipeline Smoke Tests
+      # =====================================
+      - name: Run Pipeline Smoke Tests
+        run: |
+          pytest "tests/integration/" -q -rA
+
+      # Always print summary
+      - name: CI Summary
         if: always()
         run: |
-          echo "Tests completed"
+          echo " Phase 7 Governance CI Completed"
