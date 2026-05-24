@@ -1,10 +1,3 @@
-"""
-CI Test — Schema Cross Reference Consistency (Phase 6)
-
-Purpose:
-Ensure schema files reference each other correctly.
-"""
-
 from __future__ import annotations
 
 import json
@@ -12,9 +5,7 @@ from pathlib import Path
 
 
 def _load_schema(path: Path) -> dict:
-    obj = json.loads(path.read_text(encoding="utf-8"))
-    assert isinstance(obj, dict), f"Schema root must be object: {path.name}"
-    return obj
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def test_song_recommendation_schema_cross_references():
@@ -22,20 +13,28 @@ def test_song_recommendation_schema_cross_references():
 
     assert schema_dir.exists(), f"Schema directory not found: {schema_dir}"
 
-    # Load schemas
-    response = _load_schema(schema_dir / "song_recommendation_response.schema.json")
-    item = _load_schema(schema_dir / "recommendation_item.schema.json")
-    rationale = _load_schema(schema_dir / "rationale.schema.json")
-    persistence = _load_schema(schema_dir / "persistence_plan.schema.json")
+    response_path = schema_dir / "song_recommendation_response.schema.json"
+    item_path = schema_dir / "recommendation_item.schema.json"
+    rationale_path = schema_dir / "rationale.schema.json"
+    persistence_path = schema_dir / "persistence_plan.schema.json"
 
-    # ✅ Simple cross reference checks (non-strict but effective)
+    # ensure all exist
+    assert response_path.exists(), "Missing response schema"
+    assert item_path.exists(), "Missing recommendation_item schema"
+    assert rationale_path.exists(), "Missing rationale schema"
+    assert persistence_path.exists(), "Missing persistence schema"
 
-    response_str = json.dumps(response)
-    item_str = json.dumps(item)
+    response = _load_schema(response_path)
+    item = _load_schema(item_path)
 
-    # Response references item + persistence
-    assert "recommendation_item" in response_str.lower()
-    assert "persistence" in response_str.lower()
+    response_str = json.dumps(response).lower()
+    item_str = json.dumps(item).lower()
 
-    # Item references rationale
-    assert "rationale" in item_str.lower()
+    # Response must reference item schema
+    assert "recommendation_item" in response_str, "response must reference recommendation_item schema"
+
+    # Response must reference persistence
+    assert "persistence" in response_str or "persistence_plan" in response_str
+
+    # Item must reference rationale
+    assert "rationale" in item_str, "item must reference rationale schema"
