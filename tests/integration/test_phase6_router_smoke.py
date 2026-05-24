@@ -20,7 +20,9 @@ def test_phase6_router_constructable_via_factory():
         pytest.skip(f"No router factory available: {e}")
 
     router = build_default_router()
+
     assert router is not None
+    assert hasattr(router, "handle") or hasattr(router, "route")
 
 
 @pytest.mark.integration
@@ -35,14 +37,16 @@ def test_phase6_router_smoke_modes():
     # ✅ songs route
     try:
         resp = r.handle({"mode": "songs"})
-        assert isinstance(resp, dict)
-        assert resp.get("mode") in ("songs", "games") or "mode" in resp
     except Exception as e:
         pytest.skip(f"Router not ready for songs: {e}")
+
+    assert isinstance(resp, dict)
+    assert "mode" in resp
 
     # ✅ games route
     try:
         resp = r.handle({"mode": "games"})
-        assert isinstance(resp, dict)
     except Exception as e:
         pytest.skip(f"Router not ready for games: {e}")
+
+    assert isinstance(resp, dict)
