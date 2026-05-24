@@ -1,0 +1,16 @@
+{
+  "game_id": "cytus_ii",
+  "difficulty_tiers": ["easy", "hard", "chaos", "glitch"],
+  "completion_ladder": ["clear", "mm"],
+  "tier_aliases": {
+    "Easy": "easy",
+    "Hard": "hard",
+    "Chaos": "chaos",
+    "Glitch": "glitch"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "MM": "mm",
+    "MillionMaster": "mm"
+  }
+}

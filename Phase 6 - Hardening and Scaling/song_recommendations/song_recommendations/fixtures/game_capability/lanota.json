@@ -1,0 +1,15 @@
+{
+  "game_id": "lanota",
+  "difficulty_tiers": ["whisper", "acoustic", "ultra", "master"],
+  "completion_ladder": ["clear", "fc"],
+  "tier_aliases": {
+    "Whisper": "whisper",
+    "Acoustic": "acoustic",
+    "Ultra": "ultra",
+    "Master": "master"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "FC": "fc"
+  }
+}

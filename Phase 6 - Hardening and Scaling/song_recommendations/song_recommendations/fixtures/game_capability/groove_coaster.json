@@ -1,0 +1,15 @@
+{
+  "game_id": "groove_coaster",
+  "difficulty_tiers": ["simple", "normal", "hard", "extra"],
+  "completion_ladder": ["clear", "fc"],
+  "tier_aliases": {
+    "Simple": "simple",
+    "Normal": "normal",
+    "Hard": "hard",
+    "Extra": "extra"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "FC": "fc"
+  }
+}

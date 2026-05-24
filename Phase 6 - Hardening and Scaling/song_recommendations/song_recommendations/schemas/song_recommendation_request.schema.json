@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "song_recommendation_request.schema.json",
+  "title": "SongRecommendationRequest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["game_id", "mode", "submission"],
+  "properties": {
+    "game_id": { "type": "string", "minLength": 1 },
+    "mode": { "type": "string", "const": "songs" },
+    "locale": { "type": "string" },
+    "max_items": { "type": "integer", "minimum": 1, "default": 3 },
+    "action": { "type": "string", "enum": ["refresh", "save"], "default": "refresh" },
+    "player_id_hash": { "type": "string" },
+    "submission": { "$ref": "#/$defs/Submission" },
+    "recent_recommendations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/RecentRecommendation" }
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "Submission": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["difficulty_progress"],
+      "properties": {
+        "email": { "type": "string" },
+        "difficulty_progress": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["tiers"],
+          "properties": {
+            "tiers": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/TierProgress" }
+            }
+          }
+        }
+      }
+    },
+    "TierProgress": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["tier_id", "counts"],
+      "properties": {
+        "tier_id": { "type": "string", "minLength": 1 },
+        "counts": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "RecentRecommendation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "song_id": { "type": "string" },
+        "bookmarked": { "type": "boolean", "default": false },
+        "created_at": { "type": "string" },
+        "record_id": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rationale.schema.json",
+  "title": "SongRecommendationRationale",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["summary", "why"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short, user-facing explanation of why this song was recommended."
+    },
+    "why": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Bullet-style reasons that justify the recommendation."
+    },
+    "related_provenance_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Optional provenance identifiers linking to tips, chart analysis, or pipeline outputs."
+    },
+    "taxonomy_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Optional taxonomy-aligned reasons (e.g. rhythm_density, hand_independence)."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Optional confidence score for internal diagnostics (not required for UI)."
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "game_id": "sound_voltex",
+  "difficulty_tiers": ["novice", "advanced", "exhaust", "infinite"],
+  "completion_ladder": ["clear", "uc", "puc"],
+  "tier_aliases": {
+    "NOV": "novice",
+    "ADV": "advanced",
+    "EXH": "exhaust",
+    "INF": "infinite"
+  },
+  "completion_aliases": {
+    "Clear": "clear",
+    "UC": "uc",
+    "PUC": "puc"
+  }
+}
