@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 """
 Immutable Routing Context for Phase 6.
 
-This context is the single source of truth passed through:
+Single source of truth passed through:
 - trigger router
 - guards
 - routing policy
 - lifecycle routers
 - observability
-- integration
+- domain dispatch / integration
 """
-from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -17,18 +18,16 @@ from typing import Any, Dict, Optional
 
 @dataclass(frozen=True)
 class RoutingContext:
-    # Trigger (normalized)
-    trigger_type: str                 # scheduled | manual | external
-    source: Optional[str] = None      # cli | scheduler | partner | ci
+    # ✅ Primary routing selector
+    mode: str
 
-    # Dispatch (non-semantic)
-    mode: Optional[str] = None        # songs | games (opaque routing signal)
+    # ✅ Immutable copy of incoming payload
+    payload: Dict[str, Any]
 
-    # Request envelope (opaque)
-    request_id: Optional[str] = None
+    # ✅ Optional identifiers (non-semantic)
     game_id: Optional[str] = None
-    locale: Optional[str] = None
-    action: Optional[str] = None      # refresh | save (policy signal)
+    request_id: Optional[str] = None
 
-    # Raw payload preserved as-is (router must not interpret)
-    payload: Optional[Dict[str, Any]] = None
+    # ✅ Trigger (normalized)
+    trigger_type: str = "manual"      # scheduled | manual | external
+    source: Optional[str] = None      # cli | scheduler | partner | ci
