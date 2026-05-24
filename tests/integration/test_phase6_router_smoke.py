@@ -1,4 +1,5 @@
 from __future__ import annotations
+from router import build_default_route
 
 import pytest
 
@@ -49,9 +50,10 @@ def test_phase6_router_smoke_modes_if_callable_exists():
         pytest.skip(f"Phase6Router not constructable: {e}")
 
     # minimal functional smoke: ensure it returns a dict and has mode
-    try:
+    try:       
+        router = build_default_router()
         resp = router.handle({"mode": "songs"})
         assert isinstance(resp, dict)
-        assert "mode" in resp
+        assert resp.get("mode") == "songs"
     except Exception as e:
         pytest.skip(f"Router not fully wired yet: {e}")
