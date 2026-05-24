@@ -16,7 +16,7 @@ from song_recommendations.game_capability_resolver import resolve_game_capabilit
 
 
 def test_all_fixture_capabilities_resolve():
-    root = Path(__file__).parent / "fixtures" / "game_capability"
+    root = Path(__file__).parents[4] / "song_recommendations" / "tests" / "capability" / "fixtures" / "game_capability"
     fixtures = sorted(root.glob("*.json"))
     assert fixtures, f"No capability fixtures found in {root}"
 

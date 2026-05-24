@@ -89,4 +89,5 @@ def test_song_rec_integration_is_deterministic_and_respects_exclusions():
 
     assert resp1 == resp2
     json.dumps(resp1)  # must not raise
-    assert "recommendation_set_id" in resp1 or "set_id" in resp1
+    assert "recommendation_set" in resp1
+    assert "set_id" in resp1["recommendation_set"]

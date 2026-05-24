@@ -36,7 +36,7 @@ def _assert_string_list(name: str, xs):
 
 
 def test_capability_registry_ladder_invariants():
-    root = Path(__file__).parent / "fixtures" / "game_capability"
+    root = Path(__file__).parents[4] / "song_recommendations" / "tests" / "cap
     cap_map = {}
 
     for p in root.glob("*.json"):
