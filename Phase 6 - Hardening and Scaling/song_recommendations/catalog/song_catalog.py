@@ -1,3 +1,4 @@
+
 """
 Phase 6 Song Recommendations — SongCatalog (read-only)
 
@@ -10,17 +11,12 @@ Key constraints:
 - Deterministic iteration and tie-break (stable ordering)
 - Multi-game safe (tier ids and completion labels are opaque to this layer)
 
-This catalog replaces Softr workflow record-dumps:
-- Song DB
-- Producer DB
-- Difficulty DB
-
 The catalog is built from canonical artifacts produced offline (Phase 3 / UMI).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
@@ -34,8 +30,7 @@ class Song:
     name: str
     producer_id: Optional[str] = None
     producer_name: Optional[str] = None
-    # optional metadata passthrough
-    meta: Dict[str, Any] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -43,7 +38,7 @@ class Producer:
     producer_id: str
     name: str
     avg_difficulty: Optional[float] = None
-    meta: Dict[str, Any] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -51,9 +46,9 @@ class DifficultyRecord:
     """
     DifficultyRecord connects a song to a difficulty tier with a numeric metric.
 
-    The metric can be either:
+    metric can be:
     - 'level' (preferred): chart level / numeric difficulty
-    - 'count' (legacy): count-based bucket from Softr workflow
+    - 'count' (legacy): count-based bucket from older workflows
 
     tier_id is game-scoped (e.g., 'expert', 'master', 'append', or other games).
     """
@@ -62,7 +57,7 @@ class DifficultyRecord:
     metric: float
     producer_id: Optional[str] = None
     producer_name: Optional[str] = None
-    meta: Dict[str, Any] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
 
 
 def _as_str(x: Any) -> Optional[str]:
@@ -74,7 +69,7 @@ def _as_str(x: Any) -> Optional[str]:
     return str(x).strip() or None
 
 
-def _as_float(x: Any, default: float = 0.0) -> float:
+def _as_float(x: Any, default: Optional[float] = 0.0) -> Optional[float]:
     try:
         return float(x)
     except Exception:
@@ -86,30 +81,37 @@ class SongCatalog:
     Read-only catalog. Provides stable lookups for:
     - songs
     - producers
-    - per-tier difficulty records
+    - per-tier difficulty records (sorted deterministically)
     """
 
     def __init__(
         self,
         *,
         game_id: str,
-        songs: Dict[str, Song],
-        producers: Dict[str, Producer],
-        difficulty_records: List[DifficultyRecord],
+        fingerprint: str = "",
+        songs: Optional[Dict[str, Song]] = None,
+        producers: Optional[Dict[str, Producer]] = None,
+        difficulty_records: Optional[List[DifficultyRecord]] = None,
+        rows: Optional[List[Dict[str, Any]]] = None,
         source_meta: Optional[Dict[str, Any]] = None,
     ) -> None:
+        # Keep compatibility with CI loader stub that may pass rows-only
         self.game_id = game_id
-        self._songs = songs
-        self._producers = producers
-        self._difficulty_records = difficulty_records
+        self.fingerprint = fingerprint
         self.source_meta = source_meta or {}
 
-        # Build indexes
+        self._songs: Dict[str, Song] = songs or {}
+        self._producers: Dict[str, Producer] = producers or {}
+        self._difficulty_records: List[DifficultyRecord] = difficulty_records or []
+
+        # Optional "rows" passthrough for simpler selectors/tests
+        self.rows: List[Dict[str, Any]] = rows or []
+
+        # Index difficulty by tier for deterministic retrieval
         self._difficulty_by_tier: Dict[str, List[DifficultyRecord]] = {}
         for dr in self._difficulty_records:
             self._difficulty_by_tier.setdefault(dr.tier_id, []).append(dr)
 
-        # Deterministic order: sort by (metric, song_id)
         for tier_id, arr in self._difficulty_by_tier.items():
             arr.sort(key=lambda r: (r.metric, r.song_id))
 
@@ -122,22 +124,21 @@ class SongCatalog:
         *,
         game_id: str,
         songs_artifact: Dict[str, Any],
-        producers_artifact: Dict[str, Any],
-        difficulty_artifact: Dict[str, Any],
+        producers_artifact: Optional[Dict[str, Any]] = None,
+        difficulty_artifact: Optional[Dict[str, Any]] = None,
+        fingerprint: str = "",
         source_meta: Optional[Dict[str, Any]] = None,
     ) -> "SongCatalog":
         """
         Build catalog from canonical artifacts.
 
-        Supported artifact shapes (flexible):
-        - songs_artifact may contain:
-            {"songs":[{id,name,producer_id/producer_name,...}]}
-          or {"items":[...]} or {"data":[...]}
-        - producers_artifact may contain:
-            {"producers":[{id,name,avg_difficulty,...}]}
-        - difficulty_artifact may contain:
-            {"difficulty":[{song_id,tier_id,level/count,producer_id/producer_name,...}]}
-          or {"items":[...]}
+        Supported shapes (flexible):
+        - songs_artifact:
+            {"songs":[{id/name/...}]}, or {"items":[...]}, or {"data":[...]}
+        - producers_artifact:
+            {"producers":[...]}, or {"items":[...]}, or {"data":[...]}
+        - difficulty_artifact:
+            {"difficulty":[...]}, or {"items":[...]}, or {"data":[...]}
         """
         if not isinstance(songs_artifact, dict):
             raise CatalogError("songs_artifact must be an object")
@@ -151,7 +152,7 @@ class SongCatalog:
         if not isinstance(songs_list, list) or not songs_list:
             raise CatalogError("songs artifact has no songs list (songs/items/data)")
 
-        # producers
+        # Producers
         producers_map: Dict[str, Producer] = {}
         if isinstance(producers_artifact, dict):
             prod_list = (
@@ -168,15 +169,18 @@ class SongCatalog:
                     name = _as_str(p.get("name") or p.get("producer_name"))
                     if not pid or not name:
                         continue
+
+                    avg_val = p.get("avg_difficulty") or p.get("avg") or p.get("Lr3Rr")
                     producers_map[pid] = Producer(
                         producer_id=pid,
                         name=name,
-                        avg_difficulty=_as_float(p.get("avg_difficulty") or p.get("avg") or p.get("Lr3Rr"), default=None)  # legacy key support
-                        if (p.get("avg_difficulty") or p.get("avg") or p.get("Lr3Rr")) is not None else None,
-                        meta={k: v for k, v in p.items() if k not in {"id", "producer_id", "name", "producer_name", "avg", "avg_difficulty", "Lr3Rr"}},
+                        avg_difficulty=_as_float(avg_val, default=None) if avg_val is not None else None,
+                        meta={k: v for k, v in p.items() if k not in {
+                            "id", "producer_id", "name", "producer_name", "avg", "avg_difficulty", "Lr3Rr"
+                        }},
                     )
 
-        # songs
+        # Songs
         songs_map: Dict[str, Song] = {}
         for s in songs_list:
             if not isinstance(s, dict):
@@ -196,22 +200,21 @@ class SongCatalog:
                 name=name,
                 producer_id=pid,
                 producer_name=pname,
-                meta={k: v for k, v in s.items() if k not in {"id", "song_id", "name", "song_name", "producer_id", "producer_name"}},
+                meta={k: v for k, v in s.items() if k not in {
+                    "id", "song_id", "name", "song_name", "producer_id", "producer_name"
+                }},
             )
 
-        # difficulty records
-        dr_list = (
-            difficulty_artifact.get("difficulty")
-            if isinstance(difficulty_artifact, dict) else None
-        ) or (
-            difficulty_artifact.get("items")
-            if isinstance(difficulty_artifact, dict) else None
-        ) or (
-            difficulty_artifact.get("data")
-            if isinstance(difficulty_artifact, dict) else None
-        ) or []
-
+        # Difficulty records
         difficulty_records: List[DifficultyRecord] = []
+        dr_list: List[Any] = []
+        if isinstance(difficulty_artifact, dict):
+            dr_list = (
+                difficulty_artifact.get("difficulty")
+                or difficulty_artifact.get("items")
+                or difficulty_artifact.get("data")
+                or []
+            )
         if isinstance(dr_list, list):
             for d in dr_list:
                 if not isinstance(d, dict):
@@ -221,18 +224,16 @@ class SongCatalog:
                 if not song_id or not tier_id:
                     continue
 
-                # metric: prefer level, else count
                 metric_val = d.get("level")
                 if metric_val is None:
                     metric_val = d.get("count")
-                metric = _as_float(metric_val, default=0.0)
+                metric = float(_as_float(metric_val, default=0.0) or 0.0)
 
                 pid = _as_str(d.get("producer_id"))
                 pname = _as_str(d.get("producer_name"))
                 if pid and not pname and pid in producers_map:
                     pname = producers_map[pid].name
                 if not pid:
-                    # try derive from song record
                     srec = songs_map.get(song_id)
                     pid = srec.producer_id if srec else None
                     pname = pname or (srec.producer_name if srec else None)
@@ -244,15 +245,19 @@ class SongCatalog:
                         metric=metric,
                         producer_id=pid,
                         producer_name=pname,
-                        meta={k: v for k, v in d.items() if k not in {"song_id", "id", "tier_id", "difficulty", "level", "count", "producer_id", "producer_name"}},
+                        meta={k: v for k, v in d.items() if k not in {
+                            "song_id", "id", "tier_id", "difficulty", "level", "count", "producer_id", "producer_name"
+                        }},
                     )
                 )
 
         return SongCatalog(
             game_id=game_id,
+            fingerprint=fingerprint,
             songs=songs_map,
             producers=producers_map,
             difficulty_records=difficulty_records,
+            rows=[],  # optional; can be filled by loader if needed
             source_meta=source_meta or {},
         )
 
@@ -267,12 +272,10 @@ class SongCatalog:
         return self._producers.get(producer_id)
 
     def iter_songs(self) -> Iterable[Song]:
-        # deterministic order by song_id
         for sid in sorted(self._songs.keys()):
             yield self._songs[sid]
 
     def iter_difficulty(self, tier_id: str) -> List[DifficultyRecord]:
-        # returns a deterministic sorted list (metric, song_id)
         return list(self._difficulty_by_tier.get(tier_id, []))
 
     def has_tier(self, tier_id: str) -> bool:
@@ -291,19 +294,6 @@ class SongCatalog:
         excluded_song_ids: Optional[set] = None,
         window: float = 2.0,
     ) -> Optional[Dict[str, Any]]:
-        """
-        Deterministic selection helper for Phase 6 coordinator selector injection.
-
-        Picks the best candidate by:
-        (abs(metric - target_metric), song_id) tie-break
-        and respects:
-        - tier_id
-        - optional producer whitelist (producer_id)
-        - excluded_song_ids (song_id)
-        - window around target metric
-
-        Returns a dict payload suitable for song_rec_coordinator selector output.
-        """
         excluded = excluded_song_ids or set()
         wl = set(producer_whitelist) if producer_whitelist else None
 
@@ -328,10 +318,19 @@ class SongCatalog:
             "song_id": sid,
             "song_name": song.name if song else sid,
             "producer_name": dr.producer_name or (song.producer_name if song else None) or "Unknown Producer",
-            "difficulty": tier_id,
-            "level": dr.metric,
+            "tier_id": tier_id,
+            "metric": dr.metric,
             "rationale": {
                 "summary": "Deterministic selection from catalog window",
                 "why": [f"tier={tier_id}", f"target≈{target_metric}", f"metric={dr.metric}"],
             },
         }
+
+
+__all__ = [
+    "CatalogError",
+    "Song",
+    "Producer",
+    "DifficultyRecord",
+    "SongCatalog",
+]
