@@ -37,6 +37,7 @@ def _deterministic_selector_factory():
     return selector
 
 
+
 def test_song_rec_is_deterministic_for_identical_input():
     payload = {
         "mode": "songs",
@@ -46,13 +47,16 @@ def test_song_rec_is_deterministic_for_identical_input():
         "action": "refresh",
         "player_id_hash": "p1",
         "submission": {
-            "tiers": [
-                {"tier_id": "Expert", "counts": {"Clear": 10, "FC": 3, "AP": 1}},
-            ]
+            "difficulty_progress": {
+                "tiers": [
+                    {"tier_id": "Expert", "counts": {"Clear": 10, "FC": 3, "AP": 1}}
+                ]
+            }
         },
         "recent_recommendations": [],
         "client": {"platform": "ci"},
     }
+
 
     req = normalize_song_recommendation_request(payload)
     cap = resolve_game_capability(req.game_id)

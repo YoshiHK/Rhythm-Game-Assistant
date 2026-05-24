@@ -48,13 +48,19 @@ def test_song_rec_integration_is_deterministic_and_respects_exclusions():
         "action": "save",
         "player_id_hash": "p1",
         "submission": {
-            "tiers": [
-                {"tier_id": "Expert", "counts": {"Clear": 10, "FC": 3, "AP": 1}},
-            ]
+            "difficulty_progress": {  # ✅ FIX HERE
+                "tiers": [
+                    {"tier_id": "Expert", "counts": {"Clear": 10, "FC": 3, "AP": 1}},
+                ]
+            }
         },
         "recent_recommendations": [
-            # Exclude the AP seed item
-            {"song_id": "expert-ap-seed", "bookmarked": False, "created_at": None, "record_id": "r1"},
+            {
+                "song_id": "expert-ap-seed",
+                "bookmarked": False,
+                "created_at": None,
+                "record_id": "r1",
+            },
         ],
         "client": {"platform": "ci"},
     }
