@@ -4,14 +4,14 @@ on:
   push:
     paths:
       - "Phase 7 - Games Recommendation/**"
-      - "Phase 6 - Platform Hardening & Runtime Routing/**"
+      - "Phase 6 - Hardening and Scaling/**"
       - "Phase 4 - Personalization/**"
       - "Phase 4.5 - Localization/**"
       - ".github/workflows/phase7_ci.yml"
   pull_request:
     paths:
       - "Phase 7 - Games Recommendation/**"
-      - "Phase 6 - Platform Hardening & Runtime Routing/**"
+      - "Phase 6 - Hardening and Scaling/**"
   workflow_dispatch:  # allow manual trigger
 
 jobs:
@@ -84,7 +84,7 @@ jobs:
       # =====================================
       - name: Run Phase 6 Integration Tests
         run: |
-          pytest "Phase 6 - Platform Hardening & Runtime Routing/song_recommendation/tests/" -q -rA
+          pytest pytest "phase6/song_recommendation/tests/" -q -rA
 
       # =====================================
       # Full Pipeline Smoke Tests
