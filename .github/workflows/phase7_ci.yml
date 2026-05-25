@@ -29,8 +29,9 @@ jobs:
           echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
 
       - name: Run Phase 7 CI tests
+        working-directory: Phase 7 - Games Recommendation
         run: |
-          pytest "Phase 7 - Games Recommendation/ci/" -q -rA
+          pytest ci/ -q -rA
 
       - name: CI Summary
         if: always()
