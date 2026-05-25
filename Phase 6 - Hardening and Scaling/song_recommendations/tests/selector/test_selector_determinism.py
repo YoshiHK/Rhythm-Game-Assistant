@@ -27,4 +27,3 @@ def test_selector_is_deterministic():
     out2 = selector(target, excluded)
 
     assert out1 == out2
-  ``
