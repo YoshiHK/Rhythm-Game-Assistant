@@ -63,3 +63,4 @@ def test_catalog_entries_keyed_by_game_id():
     for k, v in entries.items():
         assert isinstance(k, str)
         assert isinstance(v, dict)
+``
