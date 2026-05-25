@@ -1,72 +1,53 @@
-# Phase 7 — Recommendation Metrics Catalog
+"""
+Phase 7 — Recommendation Metrics Catalog
 
-This document defines the **canonical set of metrics**
-emitted by Phase 7 for observability and analysis.
+Defines the canonical metric names used by Phase 7.
+"""
 
----
 
-## 1. Volume & Coverage
+# ✅ Volume & Coverage
+VOLUME_METRICS = [
+    "recommendation.requested",
+    "recommendation.returned",
+    "recommendation.empty",
+    "recommendation.coverage_ratio",
+]
 
-- `recommendation.requested`
-  - Number of Phase 7 recommendation requests
 
-- `recommendation.returned`
-  - Number of recommendations returned
+# ✅ Explainability Quality
+EXPLAINABILITY_METRICS = [
+    "explanation.present_ratio",
+    "explanation.why_count",
+    "explanation.summary_present",
+]
 
-- `recommendation.empty`
-  - Requests returning zero recommendations
 
-- `recommendation.coverage_ratio`
-  - returned / requested
+# ✅ Ranking Health
+RANKING_METRICS = [
+    "ranking.score_distribution",
+    "ranking.diversity.game_id",
+]
 
----
 
-## 2. Explainability Quality
+# ✅ Latency (semantic)
+LATENCY_METRICS = [
+    "phase7.execution_time_ms",
+]
 
-- `explanation.present_ratio`
-  - % of items with explanation attached
 
-- `explanation.why_count`
-  - Number of “why” signals per recommendation item
+# ✅ Failure & Degradation
+FAILURE_METRICS = [
+    "phase7.disabled",
+    "phase7.no_candidates",
+    "phase7.degraded",
+]
 
-- `explanation.summary_present`
-  - Whether a summary explanation is present
 
----
-
-## 3. Ranking Health
-
-- `ranking.score_distribution`
-  - Distribution of recommendation scores (binned)
-
-- `ranking.diversity.game_id`
-  - Count of distinct game_ids per response
-
----
-
-## 4. Latency (Semantic)
-
-- `phase7.execution_time_ms`
-  - End-to-end Phase 7 execution time
-  - (Measured by Phase 6; Phase 7 only emits timestamps)
-
----
-
-## 5. Failure & Degradation Signals
-
-- `phase7.disabled`
-  - Phase 7 disabled by config or lifecycle
-
-- `phase7.no_candidates`
-  - No recommendable games available
-
-- `phase7.degraded`
-  - Fallback behavior triggered (e.g. no ranker)
-
----
-
-## Notes
-
-- These metrics are **semantic**, not infrastructural.
-- Alerting thresholds are defined by Phase 6.
-- Experiment interpretation belongs to Phase 5.
+# ✅ Full catalog (flat)
+ALL_METRICS = (
+    VOLUME_METRICS
+    + EXPLAINABILITY_METRICS
+    + RANKING_METRICS
+    + LATENCY_METRICS
+    + FAILURE_METRICS
+)
