@@ -33,7 +33,8 @@ jobs:
       # 🔒 Phase 7 isolated environment (CRITICAL)
       - name: Set PYTHONPATH (Phase 7 only)
         run: |
-          echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
+          PHASE7_PATH="$(pwd)/Phase 7 - Games Recommendation"
+          echo "PYTHONPATH=$PHASE7_PATH" >> $GITHUB_ENV
 
       # ✅ Phase 7 CI (single responsibility)
       - name: Run Phase 7 CI tests
