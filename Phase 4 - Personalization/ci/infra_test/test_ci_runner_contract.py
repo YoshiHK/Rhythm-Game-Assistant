@@ -46,4 +46,4 @@ def test_phase4_ci_runner_is_invokable():
     assert proc.stdout is not None
     assert len(proc.stdout.strip()) > 0, "Runner produced no output"
     assert proc.returncode in (0, 1, 2), f"Unexpected runner exit code: {proc.returncode}"
-    ``
+    
