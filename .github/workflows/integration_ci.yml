@@ -1,7 +1,12 @@
-name: Integration CI — Pipeline Smoke
+name: Integration CI — Pipeline Validation
 
 on:
   push:
+    paths:
+      - "api/**"
+      - "tests/integration/**"
+      - ".github/workflows/integration_ci.yml"
+  pull_request:
     paths:
       - "api/**"
       - "tests/integration/**"
@@ -12,20 +17,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # -------------------------------------
+      # Checkout repo
+      # -------------------------------------
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      # -------------------------------------
+      # Setup Python
+      # -------------------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: |
+      # -------------------------------------
+      # Install dependencies
+      # -------------------------------------
+      - name: Install dependencies
+        run: |
           python -m pip install --upgrade pip
           pip install pytest
 
-      - name: Set PYTHONPATH
+      # -------------------------------------
+      # Full pipeline environment (ONLY here)
+      # -------------------------------------
+      - name: Run integration tests (full pipeline)
         run: |
-          echo "PYTHONPATH=$(pwd)/Phase 6 - Hardening and Scaling:$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 4 - Personalization" >> $GITHUB_ENV
+          # ✅ Only Integration CI combines phases
+          export PYTHONPATH="$(pwd)/Phase 6 - Hardening and Scaling:$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 4 - Personalization"
 
-      - name: Run integration tests
-        run: |
+          echo "Integration CI PYTHONPATH:"
+          echo $PYTHONPATH
+
           pytest "tests/integration/" -q -rA
+
+      # -------------------------------------
+      # Summary
+      # -------------------------------------
+      - name: CI Summary
+        if: always()
+        run: |
+          echo "✅ Integration pipeline validation completed"
