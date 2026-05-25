@@ -145,3 +145,4 @@ def test_pseudo_matches_base_templates(tmp_path: Path) -> None:
     pseudo_ids = get_template_ids(pseudo_dir)
 
     assert base_ids == pseudo_ids, "Pseudo locale must match base templates exactly"
+    ``
