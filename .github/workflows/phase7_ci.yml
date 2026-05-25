@@ -56,4 +56,4 @@ jobs:
       - name: CI Summary
         if: always()
         run: |
-          echo "✅ Phase 7 CI completed"
+          echo "CI SUMMARY: phase=phase7 status=ok"
