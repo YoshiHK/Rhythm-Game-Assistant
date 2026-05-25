@@ -60,3 +60,4 @@ def test_all_fixture_capabilities_resolve():
     for gid in cap_map:
         resolved = resolve_game_capability(gid, capabilities=cap_map)
         assert resolved.game_id == gid
+        ``
