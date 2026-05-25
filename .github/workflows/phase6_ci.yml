@@ -41,4 +41,3 @@ jobs:
             echo "CI SUMMARY: phase=phase6 status=FAIL reason=phase6_tests_failed"
             exit 1
           fi
-``
