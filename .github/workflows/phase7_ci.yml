@@ -5,35 +5,38 @@ on:
     paths:
       - "Phase 7 - Games Recommendation/**"
       - ".github/workflows/phase7_ci.yml"
+  pull_request:
+    paths:
+      - "Phase 7 - Games Recommendation/**"
+      - ".github/workflows/phase7_ci.yml"
 
 jobs:
   phase7-ci:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      # ✅ Checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
+      # ✅ Setup Python (same as Phase 4)
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # ✅ Minimal dependencies
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install pytest
 
-      - name: Set PYTHONPATH
+      # 🔒 Phase 7 isolated environment (CRITICAL)
+      - name: Set PYTHONPATH (Phase 7 only)
         run: |
-          echo "PYTHONPATH=$(pwd)" >> $GITHUB_ENV
+          echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
 
+      # ✅ Phase 7 CI (single responsibility)
       - name: Run Phase 7 CI tests
-        working-directory: Phase 7 - Games Recommendation
         run: |
-          pytest ci/ -q -rA
+          pytest "Phase 7 - Games Recommendation/ci/" -q -rA
 
-      - name: CI Summary
-        if: always()
-        run: |
-          echo "✅ Phase 7 CI completed"
