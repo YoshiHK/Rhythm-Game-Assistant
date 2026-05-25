@@ -38,4 +38,3 @@ def test_song_recommendation_schema_cross_references():
 
     # Item must reference rationale
     assert "rationale" in item_str, "item must reference rationale schema"
-    ``
