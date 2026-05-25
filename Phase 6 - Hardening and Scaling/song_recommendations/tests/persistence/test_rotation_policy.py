@@ -57,3 +57,4 @@ def test_save_rotation_deletes_oldest_non_bookmarked_only():
 
     # ✅ must not delete bookmarked item
     assert "r2" not in plan.delete_ids
+    ``
