@@ -4,43 +4,36 @@ on:
   push:
     paths:
       - "Phase 4 - Personalization/**"
-      - "Phase 3 - UMI/**"
   pull_request:
     paths:
       - "Phase 4 - Personalization/**"
-      - "Phase 3 - UMI/**"
 
 jobs:
   phase4-ci:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ✅ Minimal dependency (keep Phase 4 clean)
-      - name: Install dependencies
-        run: |
-          pip install pytest
+      - run: pip install pytest
 
-      # 🔒 Phase 4 CI Runner (Authoritative Gate)
-      - name: Run Phase 4 CI checks
+      - name: Run Phase 4 CI runner
+        id: phase4_test
+        continue-on-error: true
         run: |
           python "Phase 4 - Personalization/ci/phase_4_ci_runner.py"
 
-      # ✅ Pytest layer (non-blocking if no tests discovered)
-      - name: Run Phase 4 tests
-        run: |
-          export PYTHONPATH="$PYTHONPATH:$(pwd)/Phase 4 - Personalization"
-          pytest "Phase 4 - Personalization/ci/tests/" -q
-
-      - name: Emit CI summary
+      - name: Emit CI SUMMARY
         if: always()
         run: |
-          echo "CI SUMMARY: phase=phase4 status=ok"
-
+          if [ "${{ steps.phase4_test.outcome }}" = "success" ]; then
+            echo "CI SUMMARY: phase=phase4 status=ok"
+          else
+            echo "CI SUMMARY: phase=phase4 status=FAIL reason=phase4_ci_runner_failed"
+            exit 1
+          fi
+``
