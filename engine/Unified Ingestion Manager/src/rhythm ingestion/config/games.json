@@ -23,7 +23,7 @@
       "display_name": "BanG Dream!",
       "supported_extensions": {
         "schema": [".json"],
-        "adapter": [".json"]
+        "adapter": [".json", ".PNG"]
       },
       "capabilities": {
         "adapter": "enabled",
