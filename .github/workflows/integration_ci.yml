@@ -40,34 +40,28 @@ jobs:
           pip install pytest
 
       # -------------------------------------
-      # Full pipeline environment (ONLY here)
+      # Run integration tests (controlled pipeline)
       # -------------------------------------
-      - name: Run integration tests (full pipeline)
+      - name: Run integration tests
         id: integration_test
+        continue-on-error: true
         run: |
           export PYTHONPATH="$(pwd)/Phase 6 - Hardening and Scaling:$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 4 - Personalization"
 
           echo "Integration CI PYTHONPATH:"
-          echo $PYTHONPATH
+          echo "$PYTHONPATH"
 
           pytest "tests/integration/" -q -rA
-        continue-on-error: true
 
-      # ✅ ALWAYS emit structured CI SUMMARY
+      # -------------------------------------
+      # Emit structured CI SUMMARY (CRITICAL)
+      # -------------------------------------
       - name: Emit CI SUMMARY
         if: always()
-        run: | 
-          if: [ "${{ steps.integration_test.outcome }}" = "success" ]; then
+        run: |
+          if [ "${{ steps.integration_test.outcome }}" = "success" ]; then
             echo "CI SUMMARY: phase=integration status=ok"
           else
             echo "CI SUMMARY: phase=integration status=FAIL reason=integration_tests_failed"
             exit 1
           fi
-
-      # -------------------------------------
-      # Summary
-      # -------------------------------------
-      - name: CI Summary
-        if: always()
-        run: |
-          echo "CI SUMMARY: phase=integration status=ok"
