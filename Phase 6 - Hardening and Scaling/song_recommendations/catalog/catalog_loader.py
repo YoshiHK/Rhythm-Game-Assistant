@@ -247,3 +247,4 @@ __all__ = [
     "load_catalog_from_dir",
     "load_catalog_from_artifacts",
 ]
+``
