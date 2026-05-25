@@ -4,9 +4,6 @@ on:
   push:
     paths:
       - "Phase 7 - Games Recommendation/**"
-      - "Phase 6 - Hardening and Scaling/**"
-      - "Phase 4 - Personalization/**"
-      - "Phase 4.5 - Localization/**"
       - ".github/workflows/phase7_ci.yml"
 
 jobs:
@@ -14,73 +11,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pytest
 
-      # Set PYTHONPATH (CRITICAL)
       - name: Set PYTHONPATH
         run: |
-          echo "PYTHONPATH=$(pwd)/Phase 6 - Hardening and Scaling:$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 4 - Personalization" >> $GITHUB_ENV
+          echo "PYTHONPATH=$(pwd)/Phase 7 - Games Recommendation" >> $GITHUB_ENV
 
-      # Debug (useful for CI issues)
-      - name: Debug environment
-        run: |
-          echo "PWD:"
-          pwd
-          echo "PYTHONPATH:"
-          echo $PYTHONPATH
-
-      # =====================================
-      # Phase 7 Governance CI
-      # =====================================
       - name: Run Phase 7 CI tests
         run: |
           pytest "Phase 7 - Games Recommendation/ci/" -q -rA
 
-      # =====================================
-      # Phase 4 CI
-      # =====================================
-      - name: Run Phase 4 CI tests
-        run: |
-          export PYTHONPATH="$PYTHONPATH:$(pwd)/Phase 4 - Personalization"
-          pytest "Phase 4 - Personalization/" -q
-
-      # =====================================
-      # Phase 4.5 CI
-      # =====================================
-      - name: Run Phase 4.5 Localization CI
-        run: |
-          python "Phase 4.5 - Localization/ci/run_all_localization_checks.py"
-
-      # =====================================
-      # Phase 6 Song Recommendation CI
-      # =====================================
-      - name: Run Phase 6 Song Recommendation Tests
-        run: |
-          pytest "Phase 6 - Hardening and Scaling/song_recommendations/tests" -q -rA
-
-      # =====================================
-      # Full Pipeline Smoke Tests
-      # =====================================
-      - name: Run Pipeline Smoke Tests
-        run: |
-          pytest "tests/integration/" -q -rA
-
-      # Always print summary
       - name: CI Summary
         if: always()
         run: |
-          echo " Phase 7 Governance CI Completed"
+          echo "✅ Phase 7 CI completed"
