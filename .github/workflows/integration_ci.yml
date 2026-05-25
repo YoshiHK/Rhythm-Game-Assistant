@@ -43,14 +43,26 @@ jobs:
       # Full pipeline environment (ONLY here)
       # -------------------------------------
       - name: Run integration tests (full pipeline)
+        id: integration_test
         run: |
-          # ✅ Only Integration CI combines phases
           export PYTHONPATH="$(pwd)/Phase 6 - Hardening and Scaling:$(pwd)/Phase 7 - Games Recommendation:$(pwd)/Phase 4 - Personalization"
 
           echo "Integration CI PYTHONPATH:"
           echo $PYTHONPATH
 
           pytest "tests/integration/" -q -rA
+        continue-on-error: true
+
+      # ✅ ALWAYS emit structured CI SUMMARY
+      - name: Emit CI SUMMARY
+        if: always()
+        run: | 
+          if: [ "${{ steps.integration_test.outcome }}" = "success" ]; then
+            echo "CI SUMMARY: phase=integration status=ok"
+          else
+            echo "CI SUMMARY: phase=integration status=FAIL reason=integration_tests_failed"
+            exit 1
+          fi
 
       # -------------------------------------
       # Summary
