@@ -68,3 +68,4 @@ def test_song_rec_is_deterministic_for_identical_input():
 
     assert out1 == out2
     assert diag1 == diag2
+    ``
