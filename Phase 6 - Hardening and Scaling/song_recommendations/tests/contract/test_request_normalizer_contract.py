@@ -50,3 +50,4 @@ def test_invalid_mode_rejected():
                 },
             }
         )
+        ``
