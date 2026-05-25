@@ -39,5 +39,6 @@ jobs:
       # ✅ Phase 7 CI (single responsibility)
       - name: Run Phase 7 CI tests
         run: |
+          export PYTHONPATH="$(pwd)/Phase 7 - Games Recommendation"
           pytest "Phase 7 - Games Recommendation/ci/" -q -rA
 
