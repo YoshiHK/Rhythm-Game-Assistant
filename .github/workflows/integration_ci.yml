@@ -58,4 +58,4 @@ jobs:
       - name: CI Summary
         if: always()
         run: |
-          echo "✅ Integration pipeline validation completed"
+          echo "CI SUMMARY: phase=integration status=ok"
