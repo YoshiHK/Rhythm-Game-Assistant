@@ -4,56 +4,41 @@ on:
   push:
     paths:
       - "Phase 6 - Hardening and Scaling/**"
-      - ".github/workflows/phase6_ci.yml"
   pull_request:
     paths:
       - "Phase 6 - Hardening and Scaling/**"
-      - ".github/workflows/phase6_ci.yml"
 
 jobs:
   phase6-ci:
     runs-on: ubuntu-latest
 
     steps:
-      # -------------------------------------
-      # Checkout repo
-      # -------------------------------------
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # -------------------------------------
-      # Setup Python
-      # -------------------------------------
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # -------------------------------------
-      # Minimal dependencies (align Phase 4)
-      # -------------------------------------
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest
+      - run: pip install pytest
 
-      # -------------------------------------
-      # Phase 6 tests (isolated environment)
-      # -------------------------------------
       - name: Run Phase 6 tests
+        id: phase6_test
+        continue-on-error: true
         run: |
-          # ✅ CRITICAL: isolate Phase 6 root
           export PYTHONPATH="$(pwd)/Phase 6 - Hardening and Scaling"
 
-          echo "Running Phase 6 CI with PYTHONPATH:"
-          echo $PYTHONPATH
+          echo "Phase 6 PYTHONPATH:"
+          echo "$PYTHONPATH"
 
           pytest "Phase 6 - Hardening and Scaling/song_recommendations/tests" -q -rA
 
-      # -------------------------------------
-      # Summary
-      # -------------------------------------
-      - name: CI Summary
+      - name: Emit CI SUMMARY
         if: always()
         run: |
-          echo "CI SUMMARY: phase=phase6 status=ok"
+          if [ "${{ steps.phase6_test.outcome }}" = "success" ]; then
+            echo "CI SUMMARY: phase=phase6 status=ok"
+          else
+            echo "CI SUMMARY: phase=phase6 status=FAIL reason=phase6_tests_failed"
+            exit 1
+          fi
+``
