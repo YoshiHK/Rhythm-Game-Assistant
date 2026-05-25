@@ -1,127 +1,154 @@
-# CI Observability & Alerting
+# CI Observability Layer — Design Overview
 
-**Status:** Design‑Locked ✅  
-**Scope:** CI‑only, Phase‑agnostic  
-**Execution Context:** Non‑runtime
+## Purpose
 
----
+This layer provides **phase-agnostic CI observability** for the repository.
 
-## 1. Purpose
-
-This directory defines the **CI observability and alerting layer**.
-
-It consumes **CI SUMMARY** signals emitted by individual Phase CI layers
-(Phase 4, Phase 4.5, Phase 7, etc.), and transforms them into:
-
-- structured artifacts,
-- dashboards inputs,
-- alerting decisions.
-
-This layer is **explicitly NOT part of any single Phase CI**.
+It operates strictly on the **CI SUMMARY log contract** and does not:
+- evaluate business logic
+- invoke runtime code
+- enforce Phase semantics
 
 ---
 
-## 2. What This Layer IS
+## Role in System Architecture
 
-CI Observability:
+CI Observability sits **outside all Phases**:
 
-- ✅ consumes log‑level CI SUMMARY signals,
-- ✅ aggregates CI health across runs and phases,
-- ✅ enforces alerting thresholds on governance signals,
-- ✅ produces machine‑consumable artifacts.
-
----
-
-## 3. What This Layer is NOT
-
-CI Observability does **NOT**:
-
-- ❌ participate in runtime execution,
-- ❌ evaluate gameplay, model, or localization semantics,
-- ❌ mutate or gate Phase logic directly,
-- ❌ replace Phase‑level CI checks or tests,
-- ❌ infer business or product quality.
-
-This layer operates strictly on **log‑level contracts**.
+```
+Phase 4 / 4.5 / 6 / 7 CI
+          ↓
+CI SUMMARY (log-level signals)
+          ↓
+Observability Layer (this module)
+          ↓
+Alerting / Dashboard / External Gate
+```
 
 ---
 
-## 4. CI SUMMARY Contract
+## CI SUMMARY Contract (v1)
 
-This layer relies on the **CI SUMMARY v1** contract:
+Each Phase CI job should emit:
 
-CI SUMMARY: key=value key=value ...
+CI SUMMARY: phase=<phase_id> status=<ok|FAIL> ...
 
-Properties:
-- single‑line only,
-- space‑delimited `key=value` tokens,
-- no embedded newlines,
-- values must not contain spaces.
+### Required fields
 
-Each Phase CI is responsible for emitting valid CI SUMMARY lines.
-This layer only **consumes** them.
+- `phase` — logical phase identifier  
+  e.g. `phase4`, `phase6`, `phase7`, `integration`
 
----
+- `status` — CI result  
+  - `ok`
+  - `FAIL`
 
-## 5. Components
+### Optional fields
 
-ci/observability/
-├─ README.md
-├─ init.py
-├─ scrape_ci_summaries.py
-├─ alert_ci_summary.py
-└─ artifacts/        # generated only (never committed)
-
-### `scrape_ci_summaries.py`
-- Scans CI logs for `CI SUMMARY:` lines
-- Emits:
-  - `ci_summary_events.jsonl`
-  - `ci_summary_aggregate.json`
-- Pure observability wiring (no semantics)
-
-### `alert_ci_summary.py`
-- Consumes `ci_summary_aggregate.json`
-- Fails CI when:
-  - latest CI status == FAIL
-  - waiver budgets approach exhaustion
-- Non‑semantic alert rule
+- `reason=...`
+- `waived_total=used/budget`
 
 ---
 
-## 6. Relationship to Phase CI Layers
+## Aggregation Model
 
-| Layer | Responsibility |
-|---|---|
-| Phase 4 CI | Personalization invariants |
-| Phase 4.5 CI | Localization invariants |
-| Phase 7 CI | Recommendation invariants |
-| **CI Observability** | Cross‑Phase signal aggregation |
+The scraper produces:
 
-This layer **never replaces** Phase CI.
-It only aggregates and alerts.
+```
+{
+  "total": 4,
+  "by_phase": {
+    "phase4": {"status": "ok"},
+    "phase6": {"status": "ok"},
+    "phase7": {"status": "ok"},
+    "integration": {"status": "ok"}
+  },
+  "by_status": {
+    "ok": 4
+  },
+  "latest": {...}
+}
+```
+
+### Alerting Model
+Alert rules operate on:
+
+✅ Phase-aware health
+Fail when:
+
+```
+any phase.status == FAIL
+```
+
+✅ Budget thresholds (optional)
+Fail when:
+
+```
+used / budget >= threshold
+```
 
 ---
 
-## 7. Generated Artifacts
+###Design Principles
+1. Phase-agnostic
 
-Artifacts under `ci/observability/artifacts/` are:
+- The layer does NOT understand Phase logic
+- It only processes CI signals
 
-- ✅ generated during CI runs,
-- ✅ machine‑consumable,
-- ❌ never committed to source control.
+2. Non-semantic
+
+- No gameplay, ranking, or personalization logic
+- Pure infrastructure signal processing
+
+3. CI-only
+
+- Never used in runtime paths
+- Never imported by API or engine layers
+
+4. Deterministic
+
+- Same input logs → same output aggregate
 
 ---
 
-## 8. Design‑Locked Statement
+### What This Layer Guarantees
 
-As of this revision:
+✅ Unified CI health view
+✅ Phase-level visibility
+✅ External alerting readiness
+✅ Scalable architecture (new phases require no change)
 
-> **CI Observability & Alerting is Design‑Locked ✅**
+---
 
-Future changes must:
-- preserve the CI SUMMARY v1 contract,
-- remain Phase‑agnostic,
-- remain non‑runtime and non‑semantic.
+### What This Layer Does NOT Do
 
-If you are unsure whether logic belongs here,
-it probably belongs in a Phase CI instead.
+❌ Does not validate Phase correctness
+❌ Does not run tests
+❌ Does not replace CI pipelines
+❌ Does not interpret business meaning
+
+---
+
+### Future Extensions
+
+Possible improvements:
+
+- CI health dashboard JSON export
+- GitHub Check annotations
+- Slack / webhook alerts
+- Historical CI trend analysis
+
+---
+
+### Summary
+
+This layer elevates CI from:
+
+```
+pass / fail logs
+```
+
+to:
+
+```
+structured system observability
+```

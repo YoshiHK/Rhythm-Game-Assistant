@@ -1,143 +1,275 @@
-# CI Architecture Overview
+# CI Architecture Overview — Rhythm Game Assistant
 
-**Status:** Design‑Locked ✅  
-**Scope:** Repository‑level CI structure  
-**Audience:** Maintainers, reviewers, future contributors
+## Purpose
 
----
+This document defines the **CI architecture of the repository**.
 
-## 1. Purpose
-
-This directory defines the **repository‑level CI architecture**.
-
-It exists to clarify:
-- where CI logic lives,
-- what belongs to a Phase,
-- what must remain Phase‑agnostic,
-- and why this repository intentionally avoids a monolithic `ci/` folder.
-
-This file is **architectural documentation**, not a how‑to guide.
+It ensures:
+- ✅ Phase isolation
+- ✅ Deterministic testing
+- ✅ Clean runtime boundaries
+- ✅ Scalable observability
 
 ---
 
-## 2. Core Principle
+## High-Level CI Structure
 
-> **All Phase‑specific CI lives inside its Phase.  
-> The repo‑level `ci/` directory contains only Phase‑agnostic CI infrastructure.**
+The CI system is split into **three distinct layers**:
 
-This rule is non‑negotiable.
-
----
-
-## 3. Phase‑Specific CI (Where It Lives)
-
-Each Phase owns its own CI governance layer:
-
-| Phase | CI Location | Responsibility |
-|---|---|---|
-| Phase 4 | `Phase_4_Personalization/ci/` | Personalization invariants (determinism, safety, explainability) |
-| Phase 4.5 | `Phase_4.5_Localization/ci/` | Localization structure, parity, token budgets |
-| Phase 7 | `Phase_7_Games_Recommendations/ci/phase7/` | Recommendation policies, ranking, contracts |
-
-These CI layers:
-- understand Phase semantics,
-- directly constrain Phase runtime,
-- are authoritative for that Phase only.
-
-They **must not** be moved to repo‑level `ci/`.
+```
+Phase CI (isolated)
+↓
+Integration CI (orchestrator)
+↓
+External CI Observability (signal aggregation + alerting)
+```
 
 ---
 
-## 4. Repo‑Level CI (What Belongs Here)
+## 1. Phase-Level CI (Primary Gatekeepers)
 
-The repo‑level `ci/` directory contains **only Phase‑agnostic CI infrastructure**.
+Each Phase has its **own independent CI workflow**.
 
-Current structure:
-
-ci/
-└─ observability/
-   ├─ scrape_ci_summaries.py
-   ├─ alert_ci_summary.py
-   ├─ README.md
-   └─ artifacts/        # generated only (never committed)
-
-This layer:
-- does NOT import Phase runtime,
-- does NOT evaluate gameplay, localization, or recommendation logic,
-- operates strictly on **CI signals**, not product semantics.
+### Design principles
+- ✅ Runs only its own Phase code
+- ✅ No cross-phase imports
+- ✅ Minimal dependencies
+- ✅ Deterministic environment
 
 ---
 
-## 5. CI Observability Layer
+### Active Phase CI Workflows
 
-The `ci/observability/` layer is responsible for:
-
-- consuming **CI SUMMARY v1** log‑level signals,
-- aggregating CI health across runs and Phases,
-- producing machine‑consumable artifacts,
-- enforcing alerting thresholds on CI governance signals.
-
-It is a **signal consumer**, not a CI gate for any single Phase.
+| Phase | Responsibility | CI Scope |
+|------|----------------|---------|
+| Phase 4 | Personalization | Determinism, semantic safety |
+| Phase 4.5 | Localization | String integrity, token constraints |
+| Phase 6 | Song Recommendation | Runtime selector & ranking |
+| Phase 7 | Game Recommendation | Policy, ranking governance |
 
 ---
 
-## 6. CI SUMMARY Contract
+### Key Rule
 
-All Phase CI layers may emit log lines following the contract:
-
-CI SUMMARY: key=value key=value ...
-
-Properties:
-- single‑line only,
-- space‑delimited `key=value` tokens,
-- no embedded newlines,
-- values must not contain spaces.
-
-Phase CI layers **emit** CI SUMMARY signals.  
-Repo‑level CI **consumes** them.
+> ❗ Each Phase CI must behave as if it is the only phase in the system.
 
 ---
 
-## 7. What Must NOT Appear Here
+## 2. Integration CI (Pipeline Validator)
 
-The following are explicitly forbidden at repo‑level `ci/`:
+Integration CI is the **only place where phases are combined**.
 
-- ❌ Phase‑specific checks or tests
-- ❌ Runtime logic
-- ❌ Feature heuristics
-- ❌ Product semantics
-- ❌ Localization or recommendation rules
+### Responsibilities
 
-If CI logic understands a Phase’s semantics, it belongs **inside that Phase**.
-
----
-
-## 8. Why This Structure Is Intentional
-
-This repository intentionally avoids a monolithic CI folder.
-
-Benefits:
-- clear ownership boundaries,
-- reduced accidental coupling,
-- safer Phase evolution,
-- predictable CI behavior,
-- easier long‑term maintenance.
-
-This structure reflects a **platform‑level CI architecture**, not a feature‑level one.
+- ✅ Validate cross-phase compatibility
+- ✅ Validate API + orchestrator wiring
+- ✅ Validate import graph across phases
+- ✅ Run integration tests only
 
 ---
 
-## 9. Design‑Locked Statement
+### Environment
 
-As of this revision:
+PYTHONPATH = Phase 4 + Phase 6 + Phase 7
 
-> **The repository‑level CI architecture is Design‑Locked ✅**
+---
 
-Future CI additions at repo‑level must be:
-- Phase‑agnostic,
-- non‑runtime,
-- signal‑oriented,
-- explicitly documented.
+### Constraints
 
-If you are unsure whether CI logic belongs here,
-it almost certainly belongs inside a Phase instead.
+Integration CI MUST NOT:
+- ❌ run Phase-specific CI logic
+- ❌ duplicate Phase tests
+- ❌ mutate Phase environments
+
+---
+
+### Conceptual Role
+
+Phase correctness  → Phase CI
+System correctness → Integration CI
+
+---
+
+## 3. External CI Observability Layer
+
+Located under:
+
+ci/observability/
+
+### Role
+
+This layer provides:
+
+- ✅ CI signal aggregation
+- ✅ Phase-aware health tracking
+- ✅ Alerting and dashboards
+
+---
+
+### Data Source: CI SUMMARY
+
+Each CI workflow emits log-level signals:
+
+CI SUMMARY: phase=<phase_id> status=<ok|FAIL>
+
+---
+
+### Aggregation Output
+
+```
+{
+  "total": 4,
+  "by_phase": {
+    "phase4": { "status": "ok" },
+    "phase6": { "status": "ok" },
+    "phase7": { "status": "ok" },
+    "integration": { "status": "ok" }
+  },
+  "by_status": {
+    "ok": 4
+  },
+  "latest": {...}
+}
+```
+
+---
+
+### Alerting Rules
+
+Fail CI when:
+
+- Any phase fails:
+
+```
+any phase.status == FAIL
+```
+
+- Budget thresholds exceeded (optional)
+
+---
+
+### Design Principles
+
+- ✅ Phase-agnostic
+- ✅ Non-semantic (no gameplay logic)
+- ✅ CI-only (never runtime)
+- ✅ Deterministic
+
+---
+
+### Phase 5 Consideration (Important)
+
+Phase 5 (Productionization / Learning):
+
+- ✅ Has CI tests
+- ❌ Does NOT have a standalone CI workflow
+
+#### Why?
+
+Because Phase 5 is:
+
+- Offline (non-runtime)
+- Data / model oriented
+- Independent of API execution
+
+---
+
+Phase 5 CI covers:
+
+- ✅ Training determinism
+- ✅ Aggregation correctness
+- ✅ Feature safety
+- ✅ Evaluation metrics
+- ✅ Regression guards
+
+---
+
+Enforcement rule
+
+|❗ Phase 5 MUST NOT depend on Phase 6 runtime
+
+---
+
+### CI Isolation Model
+
+#### Phase CI (strict isolation)
+
+```
+Phase 4 CI → Phase 4 only
+Phase 6 CI → Phase 6 only
+Phase 7 CI → Phase 7 only
+```
+
+---
+
+#### Integration CI (controlled mixing)
+
+```
+Phase 4 + Phase 6 + Phase 7
+```
+
+---
+
+#### Observability Layer
+
+```
+Consumes CI output
+Does NOT run logic
+```
+
+---
+
+### What This Architecture Prevents
+
+✅ Cross-phase import leakage
+✅ Non-deterministic test execution
+✅ Hidden dependency chains
+✅ CI environment pollution
+
+---
+
+### What This Architecture Enables
+
+✅ Scalable phase system
+✅ Fast debugging (localized failures)
+✅ Reliable CI signals
+✅ Structured observability
+✅ Future Phase expansion (no refactor needed)
+
+---
+
+### Future Extensions
+
+Possible improvements:
+
+- ✅ CI dependency graph (Phase 6 → Phase 7 → integration)
+- ✅ Dashboard UI for CI health
+- ✅ Slack / webhook alerts
+- ✅ Historical CI trend analysis
+- ✅ Strict CI policies (e.g. forbid legacy imports)
+
+---
+
+### Summary
+
+This CI system transforms the repository from:
+
+```
+ad-hoc testing
+```
+
+into:
+
+```
+a structured, phase-isolated, observability-driven system
+```
+
+---
+
+Final Principle
+
+| CI is not just testing — it is system governance
+
+
+
+

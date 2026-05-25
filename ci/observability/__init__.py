@@ -1,10 +1,21 @@
 """
-CI Observability & Alerting (Design-Locked)
+CI Observability Layer — Public Interface
 
-This package defines Phase-agnostic CI observability tooling.
+This module provides a stable import surface for CI observability tools.
 
-It consumes CI SUMMARY signals emitted by Phase CI layers and
-produces aggregated artifacts and alerting outcomes.
+Design principles:
+- Phase-agnostic
+- CI-only (never used at runtime)
+- Safe imports (no side effects)
+- Structured signal processing
 
-Non-runtime. Non-semantic.
+Key responsibilities:
+- Scrape CI SUMMARY signals
+- Aggregate CI health
+- Support external alerting
 """
+
+__all__ = [
+    "scrape_ci_summaries",
+    "alert_ci_summary",
+]
