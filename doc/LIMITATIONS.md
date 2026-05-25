@@ -5,6 +5,18 @@ This system is intentionally constrained to preserve:
 
 These limitations are **by design**, not gaps.
 
+### Why These Limitations Exist
+
+These constraints enforce the following system-level guarantees:
+
+- deterministic outputs (same input → same result)
+- strict phase boundary isolation (no cross-layer semantic leakage)
+- auditability and reproducibility of all recommendations
+- long-term evolvability without breaking existing behavior
+
+These are not implementation constraints, but **platform invariants**.
+Violating them breaks the architectural contract of the system.
+
 ---
 
 ### Hard Prohibitions (Authoritative)

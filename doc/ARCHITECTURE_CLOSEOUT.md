@@ -38,6 +38,20 @@ Recommend songs for rhythm‑game players with **algorithmically generated gamep
 - **Phase 4.5:** Localization (✅ active)
 - **Phase 5–7:** Productionization, platform hardening, and recommendations (✅ planned / active)
 
+#### System Capability Definition
+
+The system is formally recognized as:
+
+> A deterministic, phase-governed, multi-domain recommendation platform
+
+It supports:
+- multi-game recommendation flows,
+- explainable tip generation,
+- personalization and localization pipelines,
+- and offline learning integration,
+
+without violating sealed semantic guarantees.
+
 ---
 
 ## 2. Completed Architectural Audits (Authoritative)

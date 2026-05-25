@@ -55,6 +55,19 @@ Phase 6 responsibilities:
 
 Direct invocation of internal phases is not supported.
 
+#### Clarification: API vs System
+
+Phase 6 exposes the runtime API surface, but does not implement all system behavior.
+
+- Phase 6 = orchestration and boundary enforcement
+- Downstream phases = implementation of logic (tips, personalization, localization)
+
+Clients should treat the API as:
+- a stable entrypoint,
+- not a logic container
+
+This distinction ensures long-term evolvability without breaking integrations.
+
 ---
 
 ## 4. Tips Generation Flow (Songs)

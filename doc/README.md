@@ -1,3 +1,45 @@
+## What is RGA?
+
+Rhythm Game Assistant (RGA) is a **deterministic, multi-phase recommendation platform**  
+for rhythm game players.
+
+It provides:
+
+- 🎯 Song-level recommendations with actionable tips
+- 🎮 Game-level discovery across multiple rhythm games
+- 🧠 Personalized advice based on player signals
+- 🌍 Localized output across multiple languages
+- 🔁 Offline learning loop for continuous improvement
+
+---
+
+## System vs API (Important)
+
+RGA is composed of two layers:
+
+### ✅ API (Phase 6)
+- Single entrypoint: `/api/v1/recommend`
+- Handles authentication, routing, and response assembly
+- Does NOT implement recommendation logic
+
+### ✅ System (Phase 1–7)
+- Multi-phase pipeline:
+  - analysis → personalization → localization → recommendation
+- Deterministic and explainable
+- Governed by strict phase boundaries
+
+👉 The API orchestrates the system — it does not replace it.
+
+---
+
+## Core Guarantees
+
+- ✅ Deterministic outputs (same input → same result)
+- ✅ Phase isolation (no cross-boundary logic leaks)
+- ✅ Explainable recommendations
+- ✅ Multi-game capability expansion via configuration
+- ✅ Observability-driven governance (CI + telemetry)
+
 # Repository Documentation
 
 This directory contains the **authoritative documentation** for the

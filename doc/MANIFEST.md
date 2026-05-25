@@ -6,19 +6,32 @@ Each wave represents a completed or design‑locked milestone.
 
 Note: Phase 4, Phase 4.5, and Phase 7 CI governance layers are design-locked and enforced separately.
 
+### Purpose of This Manifest
+
+This manifest defines the **authoritative origin of the system**.
+
+It ensures:
+
+- every architectural decision can be traced to a specific wave artifact
+- semantic phases are grounded in immutable source documents
+- no undocumented logic is introduced outside defined waves
+- the system remains auditable and historically consistent
+
+This file establishes **provenance integrity** across all phases.
+
 ---
 
 ### Wave 1 — Phase 1 Baseline
-- SYSTEM_ARCHITECTURE.md
-- SPEC_INDEX.md
-- ULTIMATE_TIPS_PRODUCTION_GUIDE.txt
+- PHASE_1_ARCHITECTURE.md
+- PHASE_1_SPEC.md
+- PHASE_1_TIPS_PRODUCTION_GUIDE.txt
 
 ---
 
 ### Wave 2 — Phase 2 Enhancement (Tracks A–D)
-- ADVANCED_SYSTEM_ARCHITECTURE_v2.md
-- ADVANCED_SPEC_INDEX_v2.md
-- ULTIMATE_TIPS_PRODUCTION_GUIDE_v2.md
+- PHASE_2_ARCHITECTURE.md
+- PHASE_2_SPEC.md
+- PHASE_2_TIPS_PRODUCTION_GUIDE_v2.md
 
 ---
 
@@ -71,3 +84,12 @@ Note: Phase 4, Phase 4.5, and Phase 7 CI governance layers are design-locked and
 - `rhythm_ingestion/orchestrator_ext/reason_codes.py`
 - `rhythm_ingestion/orchestrator_ext/README.md`
 - `games.json`
+
+### Interpretation Rules
+
+- Later waves may extend earlier ones, but MUST NOT contradict sealed semantics
+- Missing modules MUST NOT be invented outside these artifacts
+- Runtime behavior must always align with a corresponding wave definition
+
+If a behavior cannot be traced to a wave artifact, it is **invalid by design**.
+``

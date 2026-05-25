@@ -37,6 +37,35 @@ Phase 6 owns:
 
 No other phase may be invoked directly at runtime.
 
+### Platform Capabilities (Explicit)
+
+The platform provides the following system-level capabilities:
+
+#### Recommendation Layer
+- Song-level recommendations via deterministic pipelines
+- Game-level discovery via Phase 7 (optional, injected)
+- Structured tips generation with explanation support
+
+#### Intelligence Layer
+- Multi-vector personalization (Phase 4)
+- Multi-vector localization (Phase 4.5)
+- Offline learning loop (Phase 5, non-runtime)
+
+#### Platform Layer
+- Multi-game support via centralized registry (games.json)
+- Capability gating per game (enablement & learning readiness)
+- Orchestrated execution via OrchestratorBridge
+- Deterministic and reproducible outputs
+
+#### Operational Layer
+- Single-entry runtime surface (Phase 6)
+- Secure request boundary with traceability
+- CI-governed structure and regression protection
+- Structured observability signals (CI SUMMARY)
+
+These capabilities span multiple phases and are enforced at the platform level.
+
+
 ---
 
 ## 3. Routing Truth (Authoritative)

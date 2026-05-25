@@ -20,6 +20,22 @@ Its core guarantees are:
 - explainability,
 - and long‑term evolvability without regression.
 
+### Deterministic System Guarantee
+
+The system enforces a strict determinism contract:
+
+- Identical inputs MUST produce identical outputs
+- Ordering of input events MUST NOT affect results
+- All randomness is prohibited in runtime execution
+- Determinism is enforced via CI validation
+
+This guarantees:
+- reproducibility,
+- debuggability,
+- and long-term system stability
+
+across all supported phases.
+
 ---
 
 ## 2. Phase Model (High‑Level)

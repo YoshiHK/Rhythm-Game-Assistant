@@ -229,5 +229,37 @@ This API spec guarantees:
 - ✅ safe expansion via Phase 7,
 - ✅ long‑term maintainability.
 
+### 13. System Capabilities (Formalized)
+
+While this specification defines the **API surface**, the system as a whole provides the following capabilities:
+
+#### Core Recommendation
+- Song-level recommendations (Phase 6 runtime orchestration)
+- Game-level discovery (Phase 7, injected)
+- Structured tips generation (multi-phase pipeline)
+
+#### Intelligence Layer
+- Multi-vector personalization (Phase 4, deterministic)
+- Multi-vector localization (Phase 4.5, presentation-only)
+- Offline learning loop (Phase 5, non-runtime)
+
+#### Platform Architecture
+- Multi-game support via centralized registry (games.json)
+- Capability-governed feature enablement per game
+- Orchestrated execution via OrchestratorBridge
+- Deterministic, reproducible outputs for identical inputs
+
+#### Runtime & API
+- Single unified entrypoint (/api/v1/recommend)
+- Secure request boundary with traceability
+- Stable contract (no runtime version branching)
+
+#### Operations & Governance
+- Phase-isolated execution model
+- CI-driven validation across phases
+- Structured observability via CI SUMMARY signals
+
+These capabilities are **system-level guarantees** and may span multiple phases. The API itself is responsible only for orchestration, not implementation.
+
 For routing behavior,  
 **`Repo_Routing_Skeleton.txt` is authoritative.**
