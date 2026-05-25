@@ -38,3 +38,9 @@ jobs:
         run: |
           export PYTHONPATH="$PYTHONPATH:$(pwd)/Phase 4 - Personalization"
           pytest "Phase 4 - Personalization/ci/tests/" -q
+
+      - name: Emit CI summary
+        if: always()
+        run: |
+          echo "CI SUMMARY: phase=phase4 status=ok"
+
