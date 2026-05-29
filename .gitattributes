@@ -1,0 +1,66 @@
+# -------------------------------------------------
+# Global default
+# -------------------------------------------------
+# Let Git normalize text files automatically
+* text=auto
+
+# -------------------------------------------------
+# Source code / scripts
+# -------------------------------------------------
+*.py           text eol=lf
+*.sh           text eol=lf
+
+# PowerShell / Windows shell scripts
+*.ps1          text eol=crlf
+*.psm1         text eol=crlf
+*.cmd          text eol=crlf
+*.bat          text eol=crlf
+
+# -------------------------------------------------
+# Documentation / configs
+# -------------------------------------------------
+*.md           text eol=lf
+*.txt          text eol=lf
+*.json         text eol=lf
+*.jsonc        text eol=lf
+*.yaml         text eol=lf
+*.yml          text eol=lf
+*.toml         text eol=lf
+*.ini          text eol=lf
+
+# Explicit project meta files
+.env.example   text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+
+# -------------------------------------------------
+# Data / chart-related text formats
+# -------------------------------------------------
+*.html         text eol=lf
+*.htm          text eol=lf
+*.svg          text eol=lf
+*.xml          text eol=lf
+*.aff          text eol=lf
+*.sus          text eol=lf
+*.c2s          text eol=lf
+
+# -------------------------------------------------
+# Binary assets (never normalize line endings)
+# -------------------------------------------------
+*.png          binary
+*.jpg          binary
+*.jpeg         binary
+*.gif          binary
+*.webp         binary
+*.ico          binary
+*.pdf          binary
+*.zip          binary
+*.7z           binary
+*.rar          binary
+*.db           binary
+*.sqlite       binary
+*.xlsx         binary
+*.xls          binary
+*.docx         binary
+*.pptx         binary
+*.mht          binary
