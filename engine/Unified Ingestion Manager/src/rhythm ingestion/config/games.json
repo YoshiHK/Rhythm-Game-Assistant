@@ -1,21 +1,17 @@
 {
   "_meta": {
-    "description": "Single source of truth for game-specific capability panel.",
-    "version": "v3",
-    "status_priority": [
-      "rulebook",
-      "anchor",
-      "enabled",
-      "disabled",
-      "future"
-    ],
-    "notes": "All listed games passed multi-game audit (soft pass). Tips generation may be degraded at runtime.",
+    "description": "Single source of truth for game capability, recommendation enablement, and learning readiness.",
+    "version": "v4",
+    "status_priority": ["rulebook", "anchor", "enabled", "disabled", "future"],
+    "notes": "Capabilities describe enablement and learning readiness only. No runtime semantics or parameters.",
     "game_id_aliases": [
       {
         "canonical": "ユメステ",
         "aliases": ["yumesute", "Yumesute"]
       }
-    ]
+    ],
+    "fallback_extensions": [".html", ".mht"],
+    "fallback_notes": "Fallback extensions are treated as non-exclusive. Routing must be resolved by folder structure or filename matching (file_scan_scenarios)."
   },
   "games": [
     {
@@ -23,7 +19,7 @@
       "display_name": "BanG Dream!",
       "supported_extensions": {
         "schema": [".json"],
-        "adapter": [".json", ".mht", ".html"]
+        "adapter": [".json", ".html", ".mht"]
       },
       "capabilities": {
         "adapter": "enabled",
@@ -31,7 +27,8 @@
         "schema": "enabled",
         "personalization": "enabled",
         "localization": "enabled",
-        "game_recommendation": "anchor"
+        "song_recommendation": { "enabled": true, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "anchor"
     },
@@ -40,7 +37,7 @@
       "display_name": "Project SEKAI",
       "supported_extensions": {
         "schema": [".json"],
-        "adapter": [".html", ".htm"]
+        "adapter": [".html", ".mht"]
       },
       "capabilities": {
         "adapter": "enabled",
@@ -48,160 +45,143 @@
         "schema": "enabled",
         "personalization": "enabled",
         "localization": "enabled",
-        "game_recommendation": "anchor"
+        "song_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "anchor"
     },
     {
       "game_id": "arcaea",
       "display_name": "Arcaea",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".aff"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".aff"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "disabled",
         "localization": "disabled",
-        "game_recommendation": "anchor"
+        "song_recommendation": { "enabled": true, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "anchor"
     },
     {
       "game_id": "maimai",
       "display_name": "maimai",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".maidata.txt"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".maidata.txt"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "disabled",
         "localization": "disabled",
-        "game_recommendation": "anchor"
+        "song_recommendation": { "enabled": true, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "anchor"
     },
     {
       "game_id": "dynamix",
       "display_name": "Dynamix",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".xml"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".xml"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "disabled",
         "localization": "disabled",
-        "game_recommendation": "enabled"
+        "song_recommendation": { "enabled": true, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "enabled"
     },
     {
       "game_id": "chunithm",
       "display_name": "CHUNITHM",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".c2s"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".c2s"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "disabled",
         "localization": "disabled",
-        "game_recommendation": "enabled"
+        "song_recommendation": { "enabled": true, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "enabled"
     },
     {
       "game_id": "d4dj",
       "display_name": "D4DJ Groovy Mix",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".txt"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".txt"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "enabled",
         "localization": "enabled",
-        "game_recommendation": "enabled"
+        "song_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "enabled"
     },
     {
       "game_id": "ユメステ",
       "display_name": "夢のステラリウム",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".sus"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".sus"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "ready",
         "localization": "future",
-        "game_recommendation": "enabled"
+        "song_recommendation": { "enabled": true, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "enabled"
     },
     {
       "game_id": "phigros",
       "display_name": "Phigros",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".json"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".json"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "disabled",
         "localization": "disabled",
-        "game_recommendation": "enabled"
+        "song_recommendation": { "enabled": true, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "enabled"
     },
     {
       "game_id": "lanota",
       "display_name": "Lanota",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".json"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".json"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "disabled",
         "localization": "disabled",
-        "game_recommendation": "disabled"
+        "song_recommendation": { "enabled": false, "learning_loop": false },
+        "game_recommendation": { "enabled": false, "learning_loop": false }
       },
       "overall_status": "enabled"
     },
     {
       "game_id": "ongeki",
       "display_name": "オンゲキ",
-      "supported_extensions": {
-        "schema": [".json"],
-        "adapter": [".html", ".htm", ".ogkr"]
-      },
+      "supported_extensions": { "schema": [".json"], "adapter": [".html", ".htm", ".ogkr"] },
       "capabilities": {
         "adapter": "enabled",
         "validator": "enabled",
         "schema": "enabled",
         "personalization": "future",
         "localization": "future",
-        "game_recommendation": "enabled"
+        "song_recommendation": { "enabled": false, "learning_loop": false },
+        "game_recommendation": { "enabled": true, "learning_loop": true, "learning_phase": "offline_only" }
       },
       "overall_status": "enabled"
     },
@@ -214,7 +194,8 @@
         "schema": "future",
         "personalization": "future",
         "localization": "future",
-        "game_recommendation": "future"
+        "song_recommendation": { "enabled": false, "learning_loop": false },
+        "game_recommendation": { "enabled": false, "learning_loop": false }
       },
       "overall_status": "future"
     },
@@ -227,7 +208,8 @@
         "schema": "future",
         "personalization": "future",
         "localization": "future",
-        "game_recommendation": "future"
+        "song_recommendation": { "enabled": false, "learning_loop": false },
+        "game_recommendation": { "enabled": false, "learning_loop": false }
       },
       "overall_status": "future"
     },
@@ -240,7 +222,8 @@
         "schema": "future",
         "personalization": "future",
         "localization": "future",
-        "game_recommendation": "future"
+        "song_recommendation": { "enabled": false, "learning_loop": false },
+        "game_recommendation": { "enabled": false, "learning_loop": false }
       },
       "overall_status": "future"
     },
@@ -253,7 +236,8 @@
         "schema": "future",
         "personalization": "future",
         "localization": "future",
-        "game_recommendation": "future"
+        "song_recommendation": { "enabled": false, "learning_loop": false },
+        "game_recommendation": { "enabled": false, "learning_loop": false }
       },
       "overall_status": "future"
     }
