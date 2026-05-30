@@ -1,60 +1,108 @@
+from __future__ import annotations
+
 """
 rhythm_ingestion.pipeline.tips
 
 Public exports for the Phase 3 tips pipeline wiring layer.
 
 This package is expected to contain (Phase 3):
-- element_inference.py  : Stage 4.2–4.3 (tag -> element candidates)
-- severity_engine.py    : Stage 5.1 (Track A wrapper / elements_skeleton)
-- tips_generator.py     : Stage 5.2–7 (Track B/C/D + summaries + batch)
+- element_inference.py  : Stage 4.2–4.3
+- severity_engine.py    : Stage 5.1
+- tips_generator.py     : Stage 5.2–7
 
 Design goals:
-- Keep imports lightweight (avoid importing heavy modules at import time)
-- Provide a stable import surface for multi_ingest.py and orchestrator.py
+- Keep imports lightweight
+- Avoid importing heavy modules at import time
+- Provide a stable import surface for orchestrator.py and related callers
 """
 
-from __future__ import annotations
+from typing import Any
 
-# Lightweight re-exports.
-# Import errors are allowed to surface at call time rather than import time,
-# which keeps package import fast and avoids circular imports during development.
 
-# Stage 4.2–4.3
-from .element_inference import (  # noqa: F401
-    ElementCandidate,
-    load_tips_training_mapping,
-    infer_element_candidates,
-    attach_candidates_to_payload,
-)
+# ---------------------------------------------------------------------
+# Lazy wrappers: only import concrete implementations at call time
+# ---------------------------------------------------------------------
 
-# Stage 5.1 (Track A)
-from .severity_engine import (  # noqa: F401
-    run_track_a_proseka,
-    merge_candidate_metadata,
-    build_elements_skeleton,
-)
+def build_batch_summary(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for the batch summary builder in tips_generator.
+    """
+    from .tips_generator import build_batch_summary as _impl
+    return _impl(*args, **kwargs)
 
-# Stage 5.2–7 (Tracks B/C/D + summaries)
-from .tips_generator import (  # noqa: F401
-    run_for_chart,
-    run_for_batch,
-    build_chart_summary,
-    build_batch_summary,
-)
+
+def build_chart_summary(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for the chart summary builder in tips_generator.
+    """
+    from .tips_generator import build_chart_summary as _impl
+    return _impl(*args, **kwargs)
+
+
+def run_for_chart(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for chart-level execution in tips_generator.
+    """
+    from .tips_generator import run_for_chart as _impl
+    return _impl(*args, **kwargs)
+
+
+def run_track_a_proseka(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for severity_engine Track A surface.
+    """
+    from .severity_engine import run_track_a_proseka as _impl
+    return _impl(*args, **kwargs)
+
+
+def build_elements_skeleton(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for elements skeleton construction.
+    """
+    from .severity_engine import build_elements_skeleton as _impl
+    return _impl(*args, **kwargs)
+
+
+def merge_candidate_metadata(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for candidate metadata merge.
+    """
+    from .severity_engine import merge_candidate_metadata as _impl
+    return _impl(*args, **kwargs)
+
+
+def infer_element_candidates(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for element candidate inference.
+    """
+    from .element_inference import infer_element_candidates as _impl
+    return _impl(*args, **kwargs)
+
+
+def attach_candidates_to_payload(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for candidate attachment.
+    """
+    from .element_inference import attach_candidates_to_payload as _impl
+    return _impl(*args, **kwargs)
+
+
+def load_tips_training_mapping(*args: Any, **kwargs: Any) -> Any:
+    """
+    Lazy wrapper for training mapping loader.
+    """
+    from .element_inference import load_tips_training_mapping as _impl
+    return _impl(*args, **kwargs)
+
 
 __all__ = [
-    # element_inference
-    "ElementCandidate",
-    "load_tips_training_mapping",
+    "build_batch_summary",
+    "build_chart_summary",
+    "run_for_chart",
+    "run_track_a_proseka",
+    "build_elements_skeleton",
+    "merge_candidate_metadata",
     "infer_element_candidates",
     "attach_candidates_to_payload",
-    # severity_engine
-    "run_track_a_proseka",
-    "merge_candidate_metadata",
-    "build_elements_skeleton",
-    # tips_generator
-    "run_for_chart",
-    "run_for_batch",
-    "build_chart_summary",
-    "build_batch_summary",
+    "load_tips_training_mapping",
 ]
