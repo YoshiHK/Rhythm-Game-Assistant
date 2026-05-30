@@ -68,13 +68,7 @@ from .paired_integrity import compute_content_hash_sha256, stamp_integrity  # ty
 DEFAULT_CHART_ROOT = Path(r"C:\Users\edfwh\OneDrive\Desktop\Rhythm Game Assistant\Chart File")
 DEFAULT_STATE_BASE_DIR = Path(r"C:\Users\edfwh\OneDrive\Desktop\Rhythm Game Assistant\Tips Output Meta")
 
-DEFAULT_ALLOWED_EXTENSIONS: Set[str] = {
-    ".html",
-    ".htm",
-    ".svg",
-    ".json",
-    ".txt",
-}
+DEFAULT_ALLOWED_EXTENSIONS = set()  # empty by default
 
 # Scanner-level hygiene (still adapter-agnostic)
 SYSTEM_BASENAMES = {
@@ -147,7 +141,10 @@ def scan_many(roots: Sequence[Path], **kwargs) -> List[Path]:
         all_candidates.extend(scan_directory(r, **kwargs))
 
     # Deduplicate deterministically by string path
-    uniq = sorted({str(p): p for p in all_candidates}.items(), key=lambda kv: kv[0].casefold())
+    uniq = sorted(
+        {_normalize_key(p): p for p in all_candidates}.items(),
+        key=lambda kv: kv[0].casefold()
+    )
     return [p for _, p in uniq]
 
 
@@ -545,6 +542,31 @@ def cli_main(argv: Optional[List[str]] = None) -> int:
 
     parser.print_help()
     return 1
+    
+def scan_directory_using_games_json(
+    root: Path,
+    *,
+    config_path: Optional[Path] = None,
+    ignore_hidden: bool = True,
+    follow_symlinks: bool = False,
+    drop_system_files: bool = True,
+) -> List[Path]:
+    """
+    Convenience wrapper (control-plane only):
+    - Loads games.json via game_router
+    - Scans using allowed_extensions union across enabled games
+    """
+    from .game_router import build_routing, DEFAULT_CONFIG_PATH  # local import to avoid cycles
+
+    routing = build_routing(config_path or DEFAULT_CONFIG_PATH)
+
+    return scan_directory(
+        root,
+        allowed_extensions=routing.allowed_extensions,
+        ignore_hidden=ignore_hidden,
+        follow_symlinks=follow_symlinks,
+        drop_system_files=drop_system_files,
+    )
 
 
 if __name__ == "__main__":

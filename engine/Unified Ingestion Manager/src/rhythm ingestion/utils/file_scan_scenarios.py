@@ -925,25 +925,23 @@ def scan_directory_and_match(
 ) -> List[ScanResult]:
     """
     Convenience wrapper:
-    - Calls Phase-3 scanner (file_scan_paired_runid.scan_directory)
+    - Calls Phase-3 scanner (file_scan.scan_directory)
     - Then matches each candidate file path using FileScanScenarioEngine
     - Returns list of ScanResult in deterministic candidate order
     """
     engine = engine or FileScanScenarioEngine()
 
     # Import inside function to avoid circular dependency / optional wiring
-    from . import file_scan_paired_runid as scanner  # type: ignore
-
+    from . import file_scan as scanner
+    
     root_p = Path(root)
     candidates = scanner.scan_directory(
         root_p,
         allowed_extensions=allowed_extensions,
         ignore_hidden=ignore_hidden,
         follow_symlinks=follow_symlinks,
+        drop_system_files=drop_system_files,
     )
-
-    if drop_system_files:
-        candidates = [p for p in candidates if p.name.casefold() not in SYSTEM_BASENAMES and not p.name.startswith("._")]
 
     results: List[ScanResult] = []
     for p in candidates:
