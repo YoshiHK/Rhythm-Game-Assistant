@@ -1,36 +1,34 @@
+from __future__ import annotations
+
 """
 rhythm_ingestion.pipeline.section_metrics
 
 Section-level metric definitions and aggregation helpers.
 
-This module defines the *semantic contract* for SectionMetrics produced
+This module defines the semantic contract for SectionMetrics produced
 during Phase 2 (visual detection and analysis), and provides utilities
 to aggregate per-section metrics into chart-level feature representations.
 
-This package is responsible for:
-- defining the canonical SectionMetrics shape
-- aggregating section metrics across a chart
-- exposing stable feature vectors for downstream analysis
+Responsibilities:
+- define the canonical SectionMetrics shape
+- aggregate section metrics across a chart
+- expose stable feature vectors for downstream analysis
   (batch summaries, difficulty profiling, recommendation engine)
 
-This package MUST NOT:
+This module MUST NOT:
 - perform pattern tagging
 - generate tips or narrative
 - depend on ingestion orchestration
 - perform file I/O
 """
 
-from __future__ import annotations
-
-from typing import Dict, Any, List
-
+from typing import Any, Dict, List
 
 # ---------------------------------------------------------------------
 # Versioning
 # ---------------------------------------------------------------------
 
 SECTION_METRICS_VERSION = "section_metrics_v1"
-
 
 # ---------------------------------------------------------------------
 # Canonical SectionMetrics contract
@@ -64,6 +62,57 @@ Expected keys (produced by Phase 2 detectors, not enforced here):
 - fake_end_flag
 """
 
+# ---------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------
+
+_NUMERIC_KEYS = [
+    "duration_sec",
+    "bpm",
+    "npb",
+    "nps",
+    "avg_npb_chart",
+    "avg_nps_chart",
+    "peak_npb_chart",
+    "peak_nps_chart",
+    "rest_ratio",
+    "hold_coverage",
+    "notes_during_hold_ratio",
+    "slide_cross_lane_rate",
+    "trace_flick_count",
+    "flick_density",
+    "overlap_ratio",
+    "lane_cross_rate",
+    "spacing_variance",
+    "bpm_delta_ratio",
+    "bpm_shift_count",
+    "chart_stop_count",
+]
+
+_BOOL_KEYS = [
+    "fake_end_flag",
+]
+
+
+def _safe_float(x: Any, default: float = 0.0) -> float:
+    try:
+        if x is None:
+            return default
+        return float(x)
+    except Exception:
+        return default
+
+
+def _safe_bool(x: Any) -> bool:
+    if isinstance(x, bool):
+        return x
+    if isinstance(x, (int, float)):
+        return bool(x)
+    if isinstance(x, str):
+        s = x.strip().lower()
+        return s in {"1", "true", "yes", "y", "on"}
+    return False
+
 
 # ---------------------------------------------------------------------
 # Aggregation helpers
@@ -73,39 +122,29 @@ def aggregate_sections(sections: List[SectionMetrics]) -> Dict[str, Any]:
     """
     Aggregate a list of SectionMetrics into chart-level statistics.
 
-    This function performs *lightweight, deterministic aggregation* only.
-    It does NOT apply game-specific logic or normalization.
-
-    Returns a dict of aggregated values suitable for or
-    as input to feature extraction.
+    Behavior:
+    - numeric keys are averaged across sections
+    - boolean keys are OR-reduced
+    - section_count is always included
     """
     if not sections:
-        return {}
+        out: Dict[str, Any] = {"section_count": 0}
+        for k in _NUMERIC_KEYS:
+            out[k] = 0.0
+        for k in _BOOL_KEYS:
+            out[k] = False
+        return out
 
-    def _avg(key: str) -> float:
-        vals = [s.get(key) for s in sections if isinstance(s.get(key), (int, float))]
-        return sum(vals) / len(vals) if vals else 0.0
+    out: Dict[str, Any] = {"section_count": len(sections)}
 
-    def _max(key: str) -> float:
-        vals = [s.get(key) for s in sections if isinstance(s.get(key), (int, float))]
-        return max(vals) if vals else 0.0
+    for key in _NUMERIC_KEYS:
+        values = [_safe_float(s.get(key, 0.0)) for s in sections]
+        out[key] = sum(values) / len(values) if values else 0.0
 
-    return {
-        "sections_count": len(sections),
-        "avg_nps": _avg("nps"),
-        "avg_npb": _avg("npb"),
-        "peak_nps": _max("peak_nps_chart"),
-        "peak_npb": _max("peak_npb_chart"),
-        "avg_hold_coverage": _avg("hold_coverage"),
-        "avg_lane_cross_rate": _avg("lane_cross_rate"),
-        "avg_spacing_variance": _avg("spacing_variance"),
-        "bpm_shift_count": sum(
-            s.get("bpm_shift_count", 0) for s in sections if isinstance(s.get("bpm_shift_count"), int)
-        ),
-        "chart_stop_count": sum(
-            s.get("chart_stop_count", 0) for s in sections if isinstance(s.get("chart_stop_count"), int)
-        ),
-    }
+    for key in _BOOL_KEYS:
+        out[key] = any(_safe_bool(s.get(key, False)) for s in sections)
+
+    return out
 
 
 # ---------------------------------------------------------------------
@@ -118,34 +157,24 @@ def build_section_feature_vector(
     """
     Convert SectionMetrics into a normalized chart-level feature vector.
 
-    This function defines the *semantic bridge* between raw metrics
-    and higher-level reasoning (difficulty profiling, recommendations).
-
-    No thresholds or interpretation logic are applied here.
+    Current contract:
+    - returns averaged numeric aggregation fields as float values
+    - encodes boolean flags as 0.0 / 1.0
+    - includes section_count as float
     """
     agg = aggregate_sections(sections)
 
-    if not agg:
-        return {}
-
-    return {
-        # Density & speed
-        "avg_nps": float(agg.get("avg_nps", 0.0)),
-        "peak_nps": float(agg.get("peak_nps", 0.0)),
-
-        # Rhythm stability
-        "avg_npb": float(agg.get("avg_npb", 0.0)),
-        "peak_npb": float(agg.get("peak_npb", 0.0)),
-
-        # Technique load
-        "hold_ratio": float(agg.get("avg_hold_coverage", 0.0)),
-        "lane_cross_rate": float(agg.get("avg_lane_cross_rate", 0.0)),
-        "spacing_variance": float(agg.get("avg_spacing_variance", 0.0)),
-
-        # Structural volatility
-        "bpm_shift_count": float(agg.get("bpm_shift_count", 0)),
-        "chart_stop_count": float(agg.get("chart_stop_count", 0)),
+    feature_vector: Dict[str, float] = {
+        "section_count": float(agg.get("section_count", 0)),
     }
+
+    for key in _NUMERIC_KEYS:
+        feature_vector[key] = _safe_float(agg.get(key, 0.0))
+
+    for key in _BOOL_KEYS:
+        feature_vector[key] = 1.0 if _safe_bool(agg.get(key, False)) else 0.0
+
+    return feature_vector
 
 
 __all__ = [
