@@ -1,21 +1,27 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5SafetyEvent",
+  "description": "Safety and anti-abuse event tracking violations, flags, and automated/manual actions",
   "type": "object",
 
   "required": [
     "event_id",
     "event_type",
-    "timestamp"
+    "timestamp",
+    "severity"
   ],
 
   "properties": {
 
-    "event_id": { "type": "string" },
+    "event_id": { 
+      "type": "string",
+      "description": "Unique event identifier"
+    },
 
     "timestamp": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When event occurred"
     },
 
     "event_type": {
@@ -27,38 +33,55 @@
         "content_flagged",
         "account_action",
         "safety_review_required"
-      ]
+      ],
+      "description": "Type of safety event"
     },
 
     "severity": {
       "type": "string",
-      "enum": ["low", "medium", "high", "critical"]
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Severity level of safety concern"
     },
 
     "provenance_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Phase 4 provenance identifier if event relates to recommendation"
     },
 
-    "player_id": { "type": "string" },
+    "player_id": { 
+      "type": "string",
+      "description": "Player/user identifier"
+    },
 
     "context": {
       "type": "object",
+      "description": "Contextual information about the safety event",
       "properties": {
-        "game_id": { "type": "string" },
-        "song_id": { "type": "string" },
-        "session_id": { "type": "string" }
+        "game_id": { 
+          "type": "string",
+          "description": "Game context"
+        },
+        "song_id": { 
+          "type": "string",
+          "description": "Song/content identifier"
+        },
+        "session_id": { 
+          "type": "string",
+          "description": "Session identifier"
+        }
       },
       "additionalProperties": true
     },
 
     "signal": {
       "type": "object",
-      "description": "raw detection signals",
+      "description": "Raw detection signals from safety systems",
       "additionalProperties": true
     },
 
     "decision": {
       "type": "object",
+      "description": "Safety action decision (automated or manual)",
       "properties": {
         "action": {
           "type": "string",
@@ -68,29 +91,48 @@
             "restrict",
             "temporary_block",
             "permanent_ban"
-          ]
+          ],
+          "description": "Action taken in response to safety signal"
         },
-        "automated": { "type": "boolean" }
-      }
+        "automated": { 
+          "type": "boolean",
+          "description": "Whether action was automated or manual"
+        }
+      },
+      "additionalProperties": false
     },
 
     "review": {
       "type": "object",
+      "description": "Manual review status and requirements",
       "properties": {
-        "required": { "type": "boolean" },
+        "required": { 
+          "type": "boolean",
+          "description": "Whether manual review is required"
+        },
         "status": {
           "type": "string",
-          "enum": ["pending", "reviewed", "resolved"]
+          "enum": ["pending", "reviewed", "resolved"],
+          "description": "Review status"
         }
-      }
+      },
+      "additionalProperties": false
     },
 
     "experiment": {
       "type": "object",
+      "description": "Experiment assignment if safety detection is being tested",
       "properties": {
-        "experiment_id": { "type": "string" },
-        "variant": { "type": "string" }
-      }
+        "experiment_id": { 
+          "type": "string",
+          "description": "Experiment identifier"
+        },
+        "variant": { 
+          "type": "string",
+          "description": "Variant assigned"
+        }
+      },
+      "additionalProperties": false
     }
 
   },
