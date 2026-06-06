@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -21,6 +22,8 @@ def _norm_str(x: Any) -> Optional[str]:
 
 def _norm_int(x: Any) -> Optional[int]:
     try:
+        if x is None or x == "":
+            return None
         return int(x)
     except Exception:
         return None
@@ -28,6 +31,8 @@ def _norm_int(x: Any) -> Optional[int]:
 
 def _norm_float(x: Any) -> Optional[float]:
     try:
+        if x is None or x == "":
+            return None
         return float(x)
     except Exception:
         return None
@@ -39,6 +44,18 @@ def _norm_bool(x: Any) -> Optional[bool]:
     return None
 
 
+def _require_str(name: str, value: Any) -> str:
+    s = _norm_str(value)
+    if not s:
+        raise ValueError(f"{name} is required")
+    return s
+
+
+def _make_event_id(prefix: str, key: str) -> str:
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}_{digest}"
+
+
 # -----------------------------------------------------------------------------
 # Builder
 # -----------------------------------------------------------------------------
@@ -46,7 +63,9 @@ def _norm_bool(x: Any) -> Optional[bool]:
 def build_telemetry_event(
     *,
     event_type: str,
-    provenance_id: Optional[str] = None,
+    provenance_id: str,
+    event_id: Optional[str] = None,
+    timestamp: Optional[str] = None,
     player_id: Optional[str] = None,
     session_id: Optional[str] = None,
     game_id: Optional[str] = None,
@@ -75,13 +94,10 @@ def build_telemetry_event(
 ) -> Dict[str, Any]:
     """
     Build telemetry_event aligned with telemetry_events.schema.json
-
-    Key guarantees:
-    - non-semantic (no reason / labels)
-    - aggregation-ready (metrics structure)
-    - experiment-compatible
-    - traceable (via provenance_id)
     """
+    normalized_provenance_id = _require_str("provenance_id", provenance_id)
+    normalized_event_type = _require_str("event_type", event_type)
+    normalized_timestamp = _norm_str(timestamp) or _now_iso()
 
     context = {
         "game_id": _norm_str(game_id),
@@ -125,25 +141,29 @@ def build_telemetry_event(
             "message": _norm_str(error_message),
         }
 
+    context = {k: v for k, v in context.items() if v is not None}
+    if extra_context:
+        context.update(extra_context)
+
+    normalized_event_id = _norm_str(event_id) or _make_event_id(
+        "tel",
+        f"{normalized_provenance_id}:{normalized_event_type}:{normalized_timestamp}"
+    )
+
     event = {
-        "event_id": f"tel_{hash(str(provenance_id) + str(_now_iso()))}",
-        "event_type": event_type,
-        "timestamp": _now_iso(),
-        "provenance_id": _norm_str(provenance_id),
+        "event_id": normalized_event_id,
+        "event_type": normalized_event_type,
+        "timestamp": normalized_timestamp,
+        "provenance_id": normalized_provenance_id,
         "player_id": _norm_str(player_id),
         "session_id": _norm_str(session_id),
-        "context": {k: v for k, v in context.items() if v is not None},
+        "context": context,
         "metrics": {k: v for k, v in metrics.items() if v is not None},
         "decision": {k: v for k, v in decision.items() if v is not None},
         "experiment": experiment,
         "error": error,
     }
 
-    if extra_context:
-        event["context"].update(extra_context)
-
-    # remove None fields
     return {k: v for k, v in event.items() if v is not None}
-
-
-__all__ = ["build_telemetry_event"]
+    
+__all__ = ["build_telemetry_event"]    
