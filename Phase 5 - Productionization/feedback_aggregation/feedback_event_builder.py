@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -21,9 +22,29 @@ def _norm_str(x: Any) -> Optional[str]:
 
 def _norm_int(x: Any) -> Optional[int]:
     try:
+        if x is None or x == "":
+            return None
         return int(x)
     except Exception:
         return None
+
+
+def _norm_bool(x: Any) -> Optional[bool]:
+    if isinstance(x, bool):
+        return x
+    return None
+
+
+def _require_str(name: str, value: Any) -> str:
+    s = _norm_str(value)
+    if not s:
+        raise ValueError(f"{name} is required")
+    return s
+
+
+def _make_event_id(prefix: str, key: str) -> str:
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}_{digest}"
 
 
 # -----------------------------------------------------------------------------
@@ -35,6 +56,8 @@ def build_feedback_event(
     event_type: str,
     source_type: str,
     provenance_id: str,
+    event_id: Optional[str] = None,
+    timestamp: Optional[str] = None,
     player_id: Optional[str] = None,
     session_id: Optional[str] = None,
     game_id: Optional[str] = None,
@@ -72,6 +95,10 @@ def build_feedback_event(
     - NO reasoning
     - raw payload only
     """
+    normalized_provenance_id = _require_str("provenance_id", provenance_id)
+    normalized_event_type = _require_str("event_type", event_type)
+    normalized_source_type = _require_str("source_type", source_type)
+    normalized_timestamp = _norm_str(timestamp) or _now_iso()
 
     context = {
         "player_id": _norm_str(player_id),
@@ -98,10 +125,14 @@ def build_feedback_event(
     if extra_payload:
         payload.update(extra_payload)
 
+    payload = {k: v for k, v in payload.items() if v is not None}
+    if not payload:
+        payload = {}
+
     system_context = {
         "selector_used": _norm_str(selector_used),
-        "fallback_triggered": fallback_triggered,
-        "degraded_mode": degraded_mode,
+        "fallback_triggered": _norm_bool(fallback_triggered),
+        "degraded_mode": _norm_bool(degraded_mode),
         "execution_stage": _norm_str(execution_stage),
         "error_code": _norm_str(error_code),
     }
@@ -119,14 +150,19 @@ def build_feedback_event(
         "ingestion_source": _norm_str(ingestion_source),
     }
 
+    normalized_event_id = _norm_str(event_id) or _make_event_id(
+        "fb",
+        f"{normalized_provenance_id}:{normalized_event_type}:{normalized_source_type}:{normalized_timestamp}"
+    )
+
     event = {
-        "event_id": f"fb_{hash(str(provenance_id) + str(_now_iso()))}",
-        "provenance_id": _norm_str(provenance_id),
-        "event_type": event_type,
-        "source_type": source_type,
-        "timestamp": _now_iso(),
+        "event_id": normalized_event_id,
+        "provenance_id": normalized_provenance_id,
+        "event_type": normalized_event_type,
+        "source_type": normalized_source_type,
+        "timestamp": normalized_timestamp,
         "context": {k: v for k, v in context.items() if v is not None},
-        "payload": {k: v for k, v in payload.items() if v is not None},
+        "payload": payload,
         "system_context": {k: v for k, v in system_context.items() if v is not None},
         "experiment": experiment,
         "ingestion_metadata": {k: v for k, v in ingestion_metadata.items() if v is not None},
