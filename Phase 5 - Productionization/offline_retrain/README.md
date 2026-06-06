@@ -1,10 +1,10 @@
-### Phase 5 — Offline Retrain & Model Ops
+## Phase 5 — Offline Retrain & Model Ops
 
 This layer defines how the system **learns from curated data**.
 
 ---
 
-### Purpose
+## 🔷 Purpose
 
 - Train models using curator gold labels
 - Evaluate models using:
@@ -15,13 +15,15 @@ This layer defines how the system **learns from curated data**.
 
 ---
 
-### Learning Loop (UPDATED)
+## 🔷 Learning Loop (UPDATED)
 
-feedback → aggregation → features → training → evaluation → validation → registry → Phase 6
+```
+feedback → aggregation → curation → features → training → evaluation → validation → registry → Phase 6
+```
 
 ---
 
-### What This Layer Does
+## 🔷 What This Layer Does
 
 - Construct versioned training datasets
 - Execute offline training
@@ -33,40 +35,58 @@ feedback → aggregation → features → training → evaluation → validation
 
 ---
 
-### What This Layer Does NOT Do
+## 🔷 What This Layer Does NOT Do
 
-- Does NOT affect runtime behavior
-- Does NOT select active models
-- Does NOT deploy or rollback models
-- Does NOT bypass Phase 6 governance
+- ❌ Does NOT affect runtime behavior
+- ❌ Does NOT select active models
+- ❌ Does NOT deploy or rollback models
+- ❌ Does NOT bypass Phase 6 governance
 
 ---
 
-### Data Contract (UPDATED)
+## 🔷 Data Contract (UPDATED)
 
 Primary schema:
-- training_dataset.schema.json
+- `training_dataset.schema.json`
 
 Generated via:
-- dataset_builder.py
+- `dataset_builder.py`
+
+Key objects:
+- `samples` (features + labels)
+- `gold_labels` (curator truth)
+- `model_reason` (baseline hypothesis)
+- `curator_metadata` (comparison data)
 
 ---
 
-### Relationship to Other Components
+## 🔷 Dataset Structure
 
-Consumes:
-- Curator Gold (human truth)
-- Feedback aggregation outputs
-- Evaluation metrics
+Each training sample includes:
 
-Produces:
-- training datasets
-- model artifacts
-- evaluation reports
+| Component | Source | Role |
+|-----------|--------|------|
+| `provenance_id` | Phase 4 runtime | traceability |
+| `features` | deterministic computation | model inputs |
+| `gold_labels` | human curation | learning signal |
+| `model_reason` | baseline predictor | evaluation baseline |
+| `curator_metadata` | comparison analysis | quality metrics |
 
 ---
 
-### Invariants
+## 🔷 Relationship to Other Components
+
+| Component | Role |
+|-----------|------|
+| Curator Gold | upstream (human truth) |
+| Feedback Aggregation | upstream (signals) |
+| Model Training | outputs (trained model) |
+| Model Registry | outputs (artifacts) |
+| Phase 6 | downstream (deployment) |
+
+---
+
+## 🔷 Invariants
 
 - All artifacts are versioned and immutable
 - All datasets are schema-valid
@@ -76,5 +96,20 @@ Produces:
 
 ---
 
-Phase 5 exists to:
-> earn the right to improve the model — not to deploy it
+## 🔷 Design Intent
+
+Offline Retrain exists to:
+
+✅ Earn the right to improve the model
+✅ Ensure safe, measurable learning
+✅ Validate improvements before deployment
+
+NOT:
+
+❌ Deploy models directly
+❌ Bypass Phase 6 governance
+❌ Auto-select active models
+
+---
+
+**Offline Retrain: Earning the right to improve — not deploying it.**

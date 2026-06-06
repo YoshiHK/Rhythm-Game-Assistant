@@ -1,4 +1,4 @@
-### Phase 5 — Curator Gold & Labeling
+## Phase 5 — Curator Gold & Labeling
 
 This layer defines how the system produces **human-validated ground truth**.
 
@@ -6,7 +6,7 @@ It is the **only layer allowed to assign meaning** to feedback.
 
 ---
 
-### Pipeline Role
+## 🔷 Pipeline Role
 
 ```
 feedback → aggregation → curator_queue → curator_label → dataset → training
@@ -16,7 +16,7 @@ Curator outputs directly define the learning signal.
 
 ---
 
-### Purpose
+## 🔷 Purpose
 
 - Transform aggregated signals into structured, human-labeled truth
 - Align all labels with reason_taxonomy_v1
@@ -24,7 +24,7 @@ Curator outputs directly define the learning signal.
 
 ---
 
-### Key Principles
+## 🔷 Key Principles
 
 - ✅ Human judgment defines truth
 - ✅ Labels must be deterministic and reproducible
@@ -33,48 +33,75 @@ Curator outputs directly define the learning signal.
 
 ---
 
-### Data Contract (NEW)
-
-### Data Contract (NEW)
+## 🔷 Data Contract (NEW)
 
 Primary schema:
-- curator_label.schema.json 
+- `curator_label.schema.json`
 
 Generated via:
-- build_curator_label()
+- `build_curator_label()`
 
 Key objects:
-- model_reason (machine hypothesis)
-- curator_reason (human truth)
-- judgement (comparison)
-
-
----
-
-### Relationship to Other Layers
-
-Upstream:
-- Feedback Aggregation (raw, uninterpreted signals)
-
-Parallel:
-- model_reason (machine hypothesis)
-
-Downstream:
-- dataset_builder
-- training
-- evaluation
-- validation
+- `model_reason` (machine hypothesis)
+- `curator_reason` (human truth with taxonomy)
+- `judgement` (comparison and severity)
 
 ---
 
-### Invariants
+## 🔷 What This Layer Does
+
+- Accept aggregated feedback units
+- Apply human judgment and expertise
+- Assign taxonomy-aligned reason codes
+- Compare model predictions with human labels
+- Produce deterministic, auditable curation records
+
+---
+
+## 🔷 What This Layer Does NOT Do
+
+- ❌ Does NOT auto-label feedback
+- ❌ Does NOT modify runtime behavior
+- ❌ Does NOT filter or delete data
+- ❌ Does NOT perform semantic reasoning beyond taxonomy
+
+---
+
+## 🔷 Relationship to Other Layers
+
+| Layer | Role |
+|-------|------|
+| Feedback Aggregation | upstream (raw signals) |
+| Model Interpreter | parallel (machine hypothesis) |
+| Dataset Builder | downstream (features + labels) |
+| Training | downstream (learning signal) |
+
+---
+
+## 🔷 Invariants
 
 - Curator labels are authoritative
 - All labels are auditable and traceable
-- No feedback is auto-labeled
+- No feedback is auto-labeled without human review
 - Absence of label ≠ correctness
+- Labels must align with taxonomy enums
 
 ---
 
+## 🔷 Design Intent
+
 Curator Gold exists to:
-> define truth for learning, not to automate judgment
+
+✅ Define truth for learning
+✅ Validate model hypotheses
+✅ Provide quality supervision
+
+NOT:
+
+❌ Automate judgment
+❌ Bypass human oversight
+❌ Enforce runtime decisions
+
+---
+
+**Curator Gold: Where meaning enters the learning loop.**

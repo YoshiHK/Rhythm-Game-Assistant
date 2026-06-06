@@ -10,7 +10,7 @@ The Marketplace Layer defines how:
 
 ---
 
-### Pipeline Role
+## 🔷 Pipeline Role
 
 ```
 content / creator / interaction
@@ -21,7 +21,7 @@ content / creator / interaction
 
 ---
 
-### Core Model
+## 🔷 Core Model
 
 ```
 content lifecycle
@@ -32,17 +32,18 @@ content lifecycle
 
 ---
 
-### What This Layer Does
+## 🔷 What This Layer Does
 
-- manage content lifecycle
-- record marketplace interactions
-- enable creator participation
-- support monetization flows
-- produce marketplace_events
+- Manage content lifecycle
+- Record marketplace interactions
+- Enable creator participation
+- Support monetization flows
+- Produce marketplace_events
+- Track engagement metrics
 
 ---
 
-### What This Layer Does NOT Do
+## 🔷 What This Layer Does NOT Do
 
 - ❌ Does NOT perform recommendation logic
 - ❌ Does NOT enforce penalties (delegated to safety)
@@ -51,20 +52,26 @@ content lifecycle
 
 ---
 
-### Data Contract
+## 🔷 Data Contract (NEW)
 
 Primary schema:
-- marketplace_events.schema.json
+- `marketplace_event.schema.json`
 
 Generated via:
-- build_marketplace_event()
+- `build_marketplace_event()`
+
+Key objects:
+- `content` (metadata)
+- `interaction` (user actions)
+- `transaction` (economic flow)
+- `metrics` (engagement)
 
 ---
 
-### Key Entities
+## 🔷 Key Entities
 
 | Entity | Description |
-|--------|------------|
+|--------|-------------|
 | content | player-facing assets |
 | creator | content producers |
 | player | consumers |
@@ -72,39 +79,40 @@ Generated via:
 
 ---
 
-### Relationship to Other Layers
+## 🔷 Relationship to Other Layers
 
 | Layer | Role |
-|------|------|
-| telemetry | behavior |
-| feedback | player reaction |
-| safety | abuse detection |
-| marketplace | content + economy |
+|-------|------|
+| Telemetry | behavior |
+| Feedback | player reaction |
+| Safety | abuse detection |
+| Marketplace | content + economy |
 
 ---
 
-### Invariants
+## 🔷 Invariants
 
-- all events are auditable
-- all transactions are reversible
-- no hidden monetization
-- creator attribution must be preserved
+- All events are auditable
+- All transactions are reversible
+- No hidden monetization
+- Creator attribution must be preserved
+- Content lifecycle must be traceable
 
 ---
 
-### Design Intent
+## 🔷 Design Intent
 
 Marketplace exists to:
 
-✅ grow content ecosystem  
-✅ reward creators  
-✅ enable discovery  
+✅ Grow content ecosystem
+✅ Reward creators
+✅ Enable discovery
 
 WITHOUT:
 
-❌ breaking fairness  
-❌ enabling abuse  
-❌ leaking semantics into learning  
+❌ Breaking fairness
+❌ Enabling abuse
+❌ Leaking semantics into learning
 
 ---
 

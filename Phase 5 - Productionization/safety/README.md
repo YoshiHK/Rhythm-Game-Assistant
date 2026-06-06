@@ -1,4 +1,4 @@
-### Phase 5 — Safety, Legal, and Anti‑Cheat
+## Phase 5 — Safety, Legal, and Anti-Cheat
 
 This layer defines how the system:
 
@@ -8,7 +8,7 @@ This layer defines how the system:
 
 ---
 
-### Pipeline Role (UPDATED)
+## 🔷 Pipeline Role
 
 ```
 telemetry / feedback / marketplace
@@ -19,15 +19,16 @@ telemetry / feedback / marketplace
 
 ---
 
-### Purpose
+## 🔷 Purpose
 
 - Protect system integrity
 - Preserve fairness in learning
 - Ensure legal and compliance alignment
+- Support evidence-based enforcement
 
 ---
 
-### What This Layer Does
+## 🔷 What This Layer Does
 
 - Detect risk signals (anti-cheat / misuse)
 - Structure signals into safety_events
@@ -37,7 +38,7 @@ telemetry / feedback / marketplace
 
 ---
 
-### What This Layer Does NOT Do
+## 🔷 What This Layer Does NOT Do
 
 - ❌ Does NOT block runtime execution
 - ❌ Does NOT apply penalties
@@ -46,7 +47,7 @@ telemetry / feedback / marketplace
 
 ---
 
-### Core Model (NEW)
+## 🔷 Core Model (NEW)
 
 ```
 signal → classification → decision → safety_event → escalation
@@ -54,53 +55,82 @@ signal → classification → decision → safety_event → escalation
 
 ---
 
-### Data Contract (NEW)
+## 🔷 Data Contract (NEW)
 
 Primary schema:
-- safety_events.schema.json
+- `safety_events.schema.json`
 
 Generated via:
-- build_safety_event()
+- `build_safety_event()`
 
-Core fields:
-- severity
-- signal
-- decision
-
-### Relationship to Other Layers
-
-| Layer | Role |
-|------|------|
-| telemetry | system behavior |
-| feedback | user reaction |
-| marketplace | economic signals |
-| safety | risk detection |
+Key objects:
+- `severity` (low/medium/high/critical)
+- `signal` (raw detection signals)
+- `decision` (action + automation flag)
+- `review` (manual review status)
 
 ---
 
-### Invariants
+## 🔷 Severity Classification
 
-- Signals are probabilistic
+| Level | Risk Score | Action |
+|-------|------------|--------|
+| low | < 0.4 | monitor |
+| medium | 0.4–0.7 | flag |
+| high | 0.7–0.9 | restrict |
+| critical | ≥ 0.9 | temporary_block |
+
+---
+
+## 🔷 Event Types
+
+| Event | Trigger |
+|-------|----------|
+| abuse_detected | pattern matching |
+| anti_cheat_flag | anomaly detection |
+| policy_violation | rule breach |
+| content_flagged | harmful content |
+| account_action | enforcement |
+| safety_review_required | manual escalation |
+
+---
+
+## 🔷 Relationship to Other Layers
+
+| Layer | Role |
+|-------|------|
+| Telemetry | system behavior |
+| Feedback | user reaction |
+| Marketplace | economic signals |
+| Safety | risk detection |
+| Phase 6 | enforcement |
+
+---
+
+## 🔷 Invariants
+
+- Signals are probabilistic (not definitive)
 - No automatic punishment
 - All events are auditable
 - All decisions are reversible
-- Phase 6 is the only enforcement authority 
+- Phase 6 is the only enforcement authority
 
 ---
 
-### Design Intent
+## 🔷 Design Intent
 
 Safety defines:
 
-✅ what is risky  
-✅ what needs escalation  
+✅ what is risky
+✅ what needs escalation
+✅ evidence for enforcement
 
 NOT:
 
-❌ what punishment is  
-❌ what truth is  
+❌ what punishment is
+❌ what truth is
+❌ runtime control
 
 ---
 
-Safety exists to:
-> detect and structure risk, not enforce it
+**Safety: Detecting and structuring risk, not enforcing it.**
