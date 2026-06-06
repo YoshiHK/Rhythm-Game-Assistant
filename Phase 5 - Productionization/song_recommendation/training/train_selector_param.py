@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Config / Report
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class TrainingConfig:
@@ -18,9 +18,15 @@ class TrainingConfig:
     This is NOT a model trainer.
     It produces static selector parameters suitable for deployment.
 
-    Defaults mirror the Phase 6 selector defaults:
-    - widen_steps: (2,4,6,10)
+    Defaults mirror the intended Phase 6 selector defaults:
+    - widen_steps: (2, 4, 6, 10)
     - top_producers: 5
+
+    Design constraints:
+    - offline only
+    - deterministic
+    - non-semantic
+    - deployment-safe
     """
     # Default fallback parameters (used when features are missing)
     default_widen_steps: Tuple[float, ...] = (2.0, 4.0, 6.0, 10.0)
@@ -28,7 +34,7 @@ class TrainingConfig:
     default_rank_decay_alpha: float = 0.15  # mild decay
 
     # Outcome score mapping (must align with feature layer)
-    outcome_score: Dict[str, int] = None  # filled if None
+    outcome_score: Optional[Dict[str, int]] = None
 
     # If True, drop rows with forbidden semantic keys
     strict_semantic_guard: bool = True
@@ -39,6 +45,13 @@ class TrainingConfig:
     # Cap for rank used in rank-decay fitting (avoid long tails)
     max_rank_for_fit: int = 30
 
+    # Versioning / metadata
+    training_schema_version: str = "v1_song_selector_params"
+    expected_feature_schema_version: Optional[str] = "v1_selection_features"
+
+    # If True, include lightweight data/fit diagnostics in report
+    include_fit_diagnostics: bool = True
+
 
 @dataclass(frozen=True)
 class TrainingReport:
@@ -48,30 +61,59 @@ class TrainingReport:
     used_defaults: bool
     learned_fields: List[str]
     metrics: Dict[str, Any]
+    feature_schema_version: Optional[str]
+    training_schema_version: str
 
 
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Safety guards (no semantics allowed)
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 _FORBIDDEN_SEMANTIC_KEYS = {
+    # Raw gameplay / semantic content should never drive selector param fitting
     "tips", "tip", "guidance", "narrative",
     "taxonomy", "severity", "pattern_tags", "elements",
     "analysis", "inference", "section_metrics", "sections",
 }
 
+# Safe / expected feature keys (others are ignored, not rejected)
 _ALLOWED_KEYS_HINT = {
     # identity / join keys
-    "player_id", "game_id", "recommendation_set_id", "song_id", "difficulty", "rank",
+    "event_id",
+    "provenance_id",
+    "player_id",
+    "game_id",
+    "recommendation_set_id",
+    "song_id",
+    "difficulty",
+    "rank",
+
     # selection context
-    "tier_id", "target_metric", "catalog_fingerprint", "locale",
+    "tier_id",
+    "target_metric",
+    "catalog_fingerprint",
+    "locale",
+    "session_id",
+
     # outcomes
-    "final_outcome", "outcome_score",
-    "count_ignore", "count_accept", "count_played", "count_completed",
-    "any_accept_or_better", "any_played_or_better", "any_completed",
+    "final_outcome",
+    "outcome_score",
+    "count_ignore",
+    "count_accept",
+    "count_played",
+    "count_completed",
+    "any_accept_or_better",
+    "any_played_or_better",
+    "any_completed",
     "exposure_span_seconds",
-    # optional selection diagnostics (may be present if features layer includes them later)
-    "window_used", "widen_step_index", "producer_rank",
+
+    # optional selection diagnostics (if feature layer includes them later)
+    "window_used",
+    "widen_step_index",
+    "producer_rank",
+
+    # optional metadata from feature layer wrapper
+    "feature_schema_version",
 }
 
 
@@ -110,9 +152,9 @@ def _semantic_guard(row: Dict[str, Any]) -> None:
             raise ValueError(f"Semantic leakage detected: forbidden key '{bad}' present")
 
 
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Core learning utilities (deterministic, explainable)
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 def _mean(xs: List[float]) -> Optional[float]:
     if not xs:
@@ -124,26 +166,31 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return lo if x < lo else hi if x > hi else x
 
 
-def _fit_rank_decay_alpha(pairs: List[Tuple[int, float]], *, default_alpha: float) -> float:
+def _fit_rank_decay_alpha(
+    pairs: List[Tuple[int, float]],
+    *,
+    default_alpha: float,
+) -> float:
     """
     Fit a simple rank decay alpha using a deterministic heuristic.
 
     We model expected score as:
-      expected ≈ base - alpha * log(1 + rank)
+        expected ≈ base - alpha * log(1 + rank)
 
-    This is NOT statistical regression—just a bounded calibration.
+    This is NOT statistical regression; it is a bounded calibration heuristic.
 
     Returns alpha in [0.0, 1.0].
     """
     if len(pairs) < 20:
         return default_alpha
 
-    # bucket by rank to reduce noise
+    import math
+
+    # Bucket by rank to reduce noise
     buckets: Dict[int, List[float]] = {}
     for r, s in pairs:
         buckets.setdefault(r, []).append(s)
 
-    # compute mean per rank
     pts: List[Tuple[int, float]] = []
     for r in sorted(buckets.keys()):
         m = _mean(buckets[r])
@@ -153,7 +200,6 @@ def _fit_rank_decay_alpha(pairs: List[Tuple[int, float]], *, default_alpha: floa
     if len(pts) < 10:
         return default_alpha
 
-    # approximate slope between low ranks and higher ranks
     low = pts[:3]
     high = pts[-3:]
 
@@ -162,15 +208,12 @@ def _fit_rank_decay_alpha(pairs: List[Tuple[int, float]], *, default_alpha: floa
     if low_mean is None or high_mean is None:
         return default_alpha
 
-    # use log distance
-    import math
     r_low = _mean([math.log(1.0 + float(r)) for r, _ in low]) or 0.0
     r_high = _mean([math.log(1.0 + float(r)) for r, _ in high]) or 1.0
 
     denom = (r_high - r_low) if (r_high - r_low) != 0 else 1.0
     alpha = (low_mean - high_mean) / denom
 
-    # bound alpha to reasonable range
     return _clamp(float(alpha), 0.0, 1.0)
 
 
@@ -179,7 +222,7 @@ def _learn_top_producers(rows: List[Dict[str, Any]], default_top: int) -> int:
     Learn a bounded top_producers value using producer_rank coverage if available.
 
     Heuristic:
-    - If producer_rank exists and many successes come from deeper ranks,
+    - If producer_rank exists and many positive outcomes come from deeper ranks,
       increase top_producers modestly.
     - Otherwise keep default.
     """
@@ -187,7 +230,6 @@ def _learn_top_producers(rows: List[Dict[str, Any]], default_top: int) -> int:
     for r in rows:
         pr = _norm_int(r.get("producer_rank"))
         if pr is not None:
-            # consider only positive outcomes
             score = _norm_int(r.get("outcome_score"))
             if score is not None and score >= 1:
                 ranks.append(pr)
@@ -195,11 +237,9 @@ def _learn_top_producers(rows: List[Dict[str, Any]], default_top: int) -> int:
     if len(ranks) < 50:
         return default_top
 
-    # if median producer_rank is near the cap, widen candidate producer pool slightly
     ranks_sorted = sorted(ranks)
-    mid = ranks_sorted[len(ranks_sorted)//2]
+    mid = ranks_sorted[len(ranks_sorted) // 2]
 
-    # simple bounded adjustment
     if mid >= default_top:
         return int(_clamp(default_top + 2, 3, 15))
     if mid <= max(1, default_top // 2):
@@ -207,13 +247,17 @@ def _learn_top_producers(rows: List[Dict[str, Any]], default_top: int) -> int:
     return default_top
 
 
-def _learn_widen_steps(rows: List[Dict[str, Any]], default_steps: Tuple[float, ...]) -> Tuple[float, ...]:
+def _learn_widen_steps(
+    rows: List[Dict[str, Any]],
+    default_steps: Tuple[float, ...],
+) -> Tuple[float, ...]:
     """
     Learn widen steps using widen_step_index success distribution if available.
 
     Heuristic:
-    - If many positive outcomes occur only at late widen steps, make earlier steps slightly larger.
-    - If most successes occur at early steps, keep defaults.
+    - If many positive outcomes occur only at late widen steps,
+      make earlier steps slightly larger.
+    - Otherwise keep defaults.
     """
     idx_scores: List[Tuple[int, int]] = []
     for r in rows:
@@ -226,20 +270,17 @@ def _learn_widen_steps(rows: List[Dict[str, Any]], default_steps: Tuple[float, .
     if len(idx_scores) < 80:
         return default_steps
 
-    # success means accept or better (score >= 1)
     success_idxs = [idx for idx, sc in idx_scores if sc >= 1]
     if len(success_idxs) < 40:
         return default_steps
 
-    # compute fraction of successes that required late widening
+    # Fraction of successes that required the latest available step index
     max_idx = max(success_idxs)
     late = sum(1 for i in success_idxs if i >= max_idx)
     late_frac = late / float(len(success_idxs))
 
-    # deterministic adjustment
     steps = list(default_steps)
     if late_frac >= 0.25 and len(steps) >= 2:
-        # bump early windows slightly (bounded)
         steps[0] = float(_clamp(steps[0] + 0.5, 1.0, 6.0))
         steps[1] = float(_clamp(steps[1] + 0.5, steps[0], 10.0))
         return tuple(steps)
@@ -247,17 +288,50 @@ def _learn_widen_steps(rows: List[Dict[str, Any]], default_steps: Tuple[float, .
     return default_steps
 
 
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Inputs normalization
+# -----------------------------------------------------------------------------
+
+def _extract_rows_and_feature_version(
+    feature_rows: Iterable[Dict[str, Any]] | Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Accept either:
+    - an iterable of feature row dicts
+    - or a wrapper object from build_selection_feature_rows():
+      {
+          "rows": [...],
+          "summary": {...},
+          "feature_schema_version": "..."
+      }
+    """
+    if isinstance(feature_rows, dict):
+        rows = feature_rows.get("rows")
+        version = feature_rows.get("feature_schema_version")
+        if isinstance(rows, list):
+            clean_rows = [r for r in rows if isinstance(r, dict)]
+            return clean_rows, _norm_str(version) or None
+        return [], _norm_str(version) or None
+
+    rows_list = [r for r in feature_rows if isinstance(r, dict)]
+    return rows_list, None
+
+
+# -----------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 def train_song_selector_params(
-    feature_rows: Iterable[Dict[str, Any]],
+    feature_rows: Iterable[Dict[str, Any]] | Dict[str, Any],
     *,
     config: TrainingConfig = TrainingConfig(),
 ) -> Dict[str, Any]:
     """
     Train (calibrate) static selector parameters from selection feature rows.
+
+    Accepts:
+    - plain iterable of feature rows
+    - OR feature builder wrapper object with rows + feature_schema_version
 
     Returns:
       {
@@ -270,13 +344,16 @@ def train_song_selector_params(
     cfg = config
     outcome_score = _default_outcome_score() if cfg.outcome_score is None else dict(cfg.outcome_score)
 
+    incoming_rows, detected_feature_schema_version = _extract_rows_and_feature_version(feature_rows)
+
     total_in = 0
     used = 0
     dropped = 0
 
     rows: List[Dict[str, Any]] = []
-    for row in feature_rows:
+    for row in incoming_rows:
         total_in += 1
+
         if not isinstance(row, dict):
             dropped += 1
             continue
@@ -288,24 +365,23 @@ def train_song_selector_params(
             dropped += 1
             continue
 
-        # minimal requirements
-        if not _norm_str(row.get("final_outcome")):
+        # Minimal requirements
+        final_outcome = _norm_str(row.get("final_outcome")).lower()
+        if not final_outcome:
             dropped += 1
             continue
 
-        # ensure outcome_score exists; if not, derive from final_outcome
-        if row.get("outcome_score") is None:
-            fo = _norm_str(row.get("final_outcome")).lower()
-            row = dict(row)
-            row["outcome_score"] = int(outcome_score.get(fo, 0))
+        # Ensure outcome_score exists; if not, derive from final_outcome
+        normalized = dict(row)
+        if normalized.get("outcome_score") is None:
+            normalized["outcome_score"] = int(outcome_score.get(final_outcome, 0))
 
-        rows.append(row)
+        rows.append(normalized)
         used += 1
 
     used_defaults = True
     learned_fields: List[str] = []
 
-    # Default params
     widen_steps = cfg.default_widen_steps
     top_producers = cfg.default_top_producers
     rank_decay_alpha = cfg.default_rank_decay_alpha
@@ -313,12 +389,21 @@ def train_song_selector_params(
     metrics: Dict[str, Any] = {
         "mean_outcome_score": None,
         "rows_for_fit": used,
+        "feature_schema_version_detected": detected_feature_schema_version,
+        "feature_schema_version_expected": cfg.expected_feature_schema_version,
+        "feature_schema_version_match": (
+            detected_feature_schema_version == cfg.expected_feature_schema_version
+            if (detected_feature_schema_version and cfg.expected_feature_schema_version)
+            else None
+        ),
     }
+
+    fit_diagnostics: Dict[str, Any] = {}
 
     if used >= cfg.min_rows:
         used_defaults = False
 
-        # Learn rank decay alpha from (rank, outcome_score)
+        # Learn rank_decay_alpha from (rank, outcome_score)
         pairs: List[Tuple[int, float]] = []
         for r in rows:
             rank = _norm_int(r.get("rank"))
@@ -327,9 +412,15 @@ def train_song_selector_params(
                 continue
             if rank <= cfg.max_rank_for_fit:
                 pairs.append((rank, float(sc)))
+
         if pairs:
-            rank_decay_alpha = _fit_rank_decay_alpha(pairs, default_alpha=cfg.default_rank_decay_alpha)
+            rank_decay_alpha = _fit_rank_decay_alpha(
+                pairs,
+                default_alpha=cfg.default_rank_decay_alpha,
+            )
             learned_fields.append("rank_decay_alpha")
+            if cfg.include_fit_diagnostics:
+                fit_diagnostics["rank_decay_pairs"] = len(pairs)
 
         # Learn top_producers (only if producer_rank present)
         top_producers2 = _learn_top_producers(rows, cfg.default_top_producers)
@@ -345,18 +436,25 @@ def train_song_selector_params(
 
     # Metrics
     scores = [float(_norm_int(r.get("outcome_score")) or 0) for r in rows]
-    metrics["mean_outcome_score"] = (_mean(scores) if scores else None)
+    metrics["mean_outcome_score"] = _mean(scores) if scores else None
+
+    if cfg.include_fit_diagnostics and fit_diagnostics:
+        metrics["fit_diagnostics"] = fit_diagnostics
 
     params = {
-        "schema_version": "v1",
+        "schema_version": cfg.training_schema_version,
         "domain": "song_recommendation",
         "learning_phase": "offline_only",
+        "feature_schema_version": detected_feature_schema_version,
         "selector_params": {
             "widen_steps": [float(x) for x in widen_steps],
             "top_producers": int(top_producers),
             "rank_decay_alpha": float(rank_decay_alpha),
         },
-        "notes": "Static parameters calibrated offline (Phase 5). Must be introduced via deployment only.",
+        "notes": (
+            "Static selector parameters calibrated offline (Phase 5). "
+            "Must be introduced via deployment only."
+        ),
     }
 
     report = TrainingReport(
@@ -366,6 +464,8 @@ def train_song_selector_params(
         used_defaults=used_defaults,
         learned_fields=learned_fields,
         metrics=metrics,
+        feature_schema_version=detected_feature_schema_version,
+        training_schema_version=cfg.training_schema_version,
     )
 
     return {
@@ -380,7 +480,18 @@ def export_song_selector_params_json(params: Dict[str, Any], path: str | Path) -
 
     NOTE:
     - Phase 6 runtime MUST NOT load artifacts dynamically.
-    - This file is meant for deployment pipelines.
+    - This function is intended for deployment / artifact pipelines only.
     """
     p = Path(path)
-    p.write_text(json.dumps(params, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    p.write_text(
+        json.dumps(params, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+__all__ = [
+    "TrainingConfig",
+    "TrainingReport",
+    "train_song_selector_params",
+    "export_song_selector_params_json",
+]

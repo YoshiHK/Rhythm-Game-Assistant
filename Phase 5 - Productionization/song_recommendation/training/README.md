@@ -1,54 +1,105 @@
-# Phase 5 — Song Recommendation Training Layer
+## Phase 5 — Song Recommendation Training Layer
 
-## Purpose
+### Purpose
 
 This layer performs **heuristic calibration** for Song Recommendations.
 
-It consumes **selection-level feature rows** (built offline in Phase 5) and produces
-**static selector parameters** intended for **deployment only**.
+It consumes **selection-level feature rows** produced in Phase 5 and generates
+**static selector parameters** for deployment.
 
-This is not a model training system. It is a deterministic calibration layer.
+This is NOT a model training system.
+It is a deterministic, explainable calibration layer.
 
 ---
 
-## Phase Boundary
+### Pipeline Role
+
+```
+aggregation → features → training → evaluation → artifact export → deployment
+```
+
+This layer transforms behavior signals into **deployment-safe selector parameters**.
+
+---
+
+### Phase Boundary
 
 - **Upstream:** Features Layer output (selection-level feature rows)
-- **Downstream:** Deployment artifacts (static parameters) + evaluation reports
+- **Downstream:** Deployment artifacts + evaluation
 - **Runtime impact:** None (deployment only)
 
-Phase 6 runtime MUST NOT load these artifacts dynamically.
+Phase 6 runtime MUST NOT load or adapt these artifacts dynamically.
 
 ---
 
-## Non‑Negotiable Boundaries
+### Non‑Negotiable Boundaries
 
 This layer MUST:
 
 - operate offline (Phase 5 only)
-- remain deterministic and auditable
-- calibrate only selection heuristics (windows, rank decay, diversity knobs)
+- be deterministic and auditable
+- calibrate only selection heuristics
 - produce static, bounded parameters
+- preserve traceability to feature inputs
 
 This layer MUST NOT:
 
-- consume tips content, taxonomy, severity, or narrative fields
+- consume tips content, taxonomy, severity, or narrative
 - perform gameplay inference
 - introduce runtime adaptation
-- depend on Phase 6 routing modules
+- depend on Phase 6 runtime modules
 
 ---
 
-## Inputs
+### Inputs
 
-Inputs are feature rows containing safe, selection-level signals such as:
+Inputs are selection-level feature rows containing:
 
-- identity: `game_id`, `song_id`, `recommendation_set_id`, `rank`
-- outcomes: `final_outcome`, `outcome_score`, action counts
-- context: `tier_id`, `target_metric`, `catalog_fingerprint`, `locale`
-- optional selection diagnostics: `widen_step_index`, `producer_rank`
+#### Identity / Traceability
+- player_id
+- game_id
+- recommendation_set_id
+- song_id
+- provenance_id (recommended)
 
-Any gameplay semantic fields are forbidden.
+#### Selection Signals
+- rank
+- outcome_score
+- final_outcome
+
+#### Engagement Features
+- count_* fields
+- any_* flags
+
+#### Optional Diagnostics
+- widen_step_index
+- producer_rank
+
+---
+
+### Feature Schema Alignment (NEW)
+
+This layer supports inputs from:
+
+```
+build_selection_feature_rows(...)
+```
+
+including wrapper format:
+
+```python
+{
+  "rows": [...],
+  "summary": {...},
+  "feature_schema_version": "..."
+}
+```
+
+Training MUST:
+
+- detect feature_schema_version
+- report compatibility
+- remain backward-safe
 
 ---
 
@@ -56,14 +107,23 @@ Any gameplay semantic fields are forbidden.
 
 This layer produces:
 
-1) **Static selector parameters** (JSON-friendly), such as:
-- widen steps
-- top producers
-- rank decay alpha
+1. Static Selector Parameters
 
-2) **Training report**:
-- row counts, defaults used, learned fields
-- basic outcome statistics for QA and regression checks
+Deployment-safe JSON:
+
+- widen_steps
+- top_producers
+- rank_decay_alpha
+
+2. Training Report
+
+Includes:
+
+- row counts (input / used / dropped)
+- whether defaults were used
+- learned fields
+- outcome statistics
+- feature schema alignment
 
 ---
 
@@ -71,15 +131,32 @@ This layer produces:
 
 - No randomness
 - No time-based tuning
-- Stable output for the same input rows
-- Explicit, bounded parameter ranges
+- Stable outputs for identical inputs
+- Explicit bounded parameter ranges
+
+---
+
+## Relationship to Evaluation
+
+Outputs are used for:
+
+- regression guard validation
+- performance comparison vs baseline
+- deployment eligibility checks
 
 ---
 
 ## Design Intent
 
-The training layer exists to let Phase 5 learn:
+This layer exists to let Phase 5 learn:
 
-✅ “Which selection heuristics perform better?”  
-without learning:  
-❌ “What gameplay means” or “What tips should say”.
+✅ “Which selection heuristics perform better?”
+
+without learning:
+
+❌ “What gameplay means”
+❌ “What tips should say”
+
+---
+
+**Training calibrates decision knobs — it never defines meaning.**

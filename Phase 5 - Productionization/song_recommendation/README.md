@@ -1,159 +1,160 @@
-# Phase 5 — Song Recommendation Learning
-
-This directory defines the **offline learning system** for
+## Phase 5 — Song Recommendation Learning
 Song Recommendations in the Rhythm Game Assistant.
 
-Phase 5 exists to close the learning loop:
-from observed user behavior to calibrated selection heuristics,
-**without changing gameplay semantics or runtime determinism**.
+Phase 5 closes the loop:
 
-This layer is **offline only**, **auditable**, and **deployment‑driven**.
+```
+runtime behavior → feedback → learning → validated improvement → deployment
+```
 
 ---
 
-## Positioning
+## 🔷 Pipeline Overview
 
-Song Recommendation learning is part of **Phase 5 (Productionization)**.
-
-It operates strictly **downstream of runtime execution** and **upstream of deployment**:
-
+```
 Phase 6 (Runtime)
-└─ Deterministic song selection
-└─ Exposure metadata + feedback emission
+↓
+feedback events (forward-only)
 ↓
 Phase 5 (Offline Learning)
-└─ Aggregate feedback
-└─ Build features
-└─ Calibrate heuristics
-└─ Evaluate & guard regressions
+aggregation
+→ features
+→ training
+→ evaluation
+→ artifacts
+→ deployment_gate ✅
 ↓
 Deployment
-└─ Static parameter rollout
-
-At no point does feedback influence runtime behavior directly.
-
----
-
-## Scope
-
-Phase 5 Song Recommendation learning is responsible for:
-
-- aggregating forward‑only feedback emitted by Phase 6,
-- constructing selection‑level features,
-- calibrating deterministic selector heuristics,
-- evaluating learning outcomes and guarding regressions,
-- producing **static, deployment‑safe artifacts**.
-
-Phase 5 is **not** responsible for:
-- runtime recommendation decisions,
-- gameplay analysis or tips generation,
-- personalization inference at request time,
-- UI or presentation logic.
+↓
+Phase 6 (Next Version)
+```
 
 ---
 
-## Non‑Negotiable Boundaries
+## 🔷 Purpose
+
+Phase 5 exists to:
+
+- improve **selection quality**
+- calibrate deterministic heuristics
+- validate improvements safely
+- produce deployable outputs
+
+WITHOUT:
+
+- changing gameplay meaning
+- breaking runtime determinism
+- introducing semantic drift
+
+---
+
+## 🔷 Scope
+
+### ✅ Responsibilities
+
+- Aggregate feedback signals
+- Construct selection-level features
+- Calibrate heuristic parameters
+- Evaluate learning outcomes
+- Guard regressions
+- Produce deployment-safe artifacts
+- Enforce deployment eligibility
+
+---
+
+### ❌ Non-Responsibilities
+
+- Runtime recommendation logic
+- Gameplay interpretation
+- Tips / narrative / taxonomy
+- Real-time adaptation
+- UI / presentation
+
+---
+
+## 🔷 Non‑Negotiable Boundaries
 
 This layer MUST:
 
-- operate offline only,
-- remain deterministic and auditable,
-- avoid gameplay semantics entirely,
-- produce static artifacts introduced via deployment,
-- preserve all contracts of Completed Phases.
+- be offline only
+- be deterministic
+- be auditable
+- be reversible
+- preserve all completed phase contracts
 
 This layer MUST NOT:
 
-- import or depend on Phase 6 runtime code,
-- consume tips, taxonomy, severity, or narrative content,
-- perform runtime learning or adaptation,
-- dynamically load artifacts at runtime,
-- modify behavior of any completed phase.
-
-Violating any of these rules invalidates the learning loop.
+- import Phase 6 runtime logic
+- modify completed phases
+- introduce semantics
+- dynamically load artifacts in runtime
 
 ---
 
-## Directory Structure Overview
+## 🔷 Determinism (Hard Contract)
 
-The Song Recommendation learning pipeline is structured as follows:
+- identical inputs → identical outputs
+- no randomness
+- no time-based effects
+- enforced by CI
 
-- **aggregation/**  
-  Aggregates Phase 6 feedback into selection‑level records.
-
-- **features/**  
-  Transforms aggregated records into training‑ready features
-  (selection‑level only, no semantics).
-
-- **training/**  
-  Calibrates deterministic selector parameters
-  (heuristics, not models).
-
-- **evaluation/**  
-  Computes acceptance / play / completion metrics,
-  compares against baselines, and enforces regression guards.
-
-- **artifacts/**  
-  Writes static, auditable artifacts for deployment
-  (selector params, reports, baselines).
-
-- **utils/**  
-  Offline orchestration helpers to run the full learning pipeline end‑to‑end.
-
-- **tests/**  
-  Contract‑level CI tests enforcing determinism,
-  semantic isolation, and deployment safety.
+Violation = pipeline invalid.
 
 ---
 
-## Determinism as a Hard Contract
+## 🔷 Key Subsystems
 
-All Phase 5 Song Recommendation learning outputs **MUST be deterministic**.
-
-Determinism is not a quality goal.
-It is a **hard contract enforced by CI**.
-
-Specifically:
-- Determinism tests are marked as hard‑gate checks
-- Any determinism violation fails the CI pipeline
-- No learning artifact may be promoted if determinism is broken
-
-This guarantees that Phase 5 learning remains:
-- reproducible,
-- reviewable,
-- and safe to deploy without runtime uncertainty.
-
-Violating determinism invalidates the learning loop by definition.
+| Layer | Purpose |
+|------|--------|
+| aggregation | behavior → structured signals |
+| features | signals → model-ready data |
+| training | calibration (heuristics only) |
+| evaluation | metrics + regression guards |
+| artifacts | deployment outputs |
+| deployment | promotion decision |
 
 ---
 
-## Relationship to Other Phases
+## 🔷 Deployment Safety (NEW)
 
-- **Upstream:** Phase 6 (Song Recommendation runtime & feedback emission)
-- **Parallel:** Other Phase 5 learning systems (tips, practice, marketplace, etc.)
-- **Downstream:** Deployment and Phase 6 configuration
+Artifacts are NOT automatically deployable.
 
-Phase 5 learning may evolve independently,
-as long as it preserves Phase 6 runtime determinism
-and respects completed phase boundaries.
+Deployment requires:
 
----
-
-## Design Intent
-
-This layer exists to let the system learn:
-
-✅ which **selection heuristics** work better over time  
-
-without learning:
-
-❌ what gameplay means  
-❌ what tips should say  
-❌ how runtime decisions should adapt dynamically  
-
-Phase 5 makes learning **safe** by making it:
-offline, deterministic, auditable, and reversible.
+```
+evaluation.guard_pass == True
+AND
+deployment_gate.allowed == True
+```
 
 ---
 
-**If Phase 5 Song Recommendation learning fails CI,  the learning loop must stop.**
+## 🔷 Relationship to Other Phases
+
+- Upstream: Phase 6 runtime feedback
+- Downstream: Deployment → Phase 6 config
+- Parallel: Other Phase 5 learning systems
+
+---
+
+## 🔷 Design Intent
+
+Phase 5 enables the system to learn:
+
+✅ which recommendations perform better  
+
+WITHOUT learning:
+
+❌ gameplay meaning  
+❌ tips content  
+❌ runtime logic  
+
+---
+
+**Phase 5 makes learning safe by making it:**
+- offline  
+- deterministic  
+- governed  
+- auditable  
+
+

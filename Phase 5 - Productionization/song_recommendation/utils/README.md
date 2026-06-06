@@ -1,71 +1,117 @@
-# Phase 5 — Song Recommendation Orchestrator Helper (Utils)
+## Phase 5 — Song Recommendation Utils Layer
 
-## Purpose
+### Purpose
 
-This helper runs the **offline learning dataflow** for Song Recommendations:
+The Utils Layer defines **offline orchestration helpers**
+for the Song Recommendation learning pipeline.
 
+It coordinates the full Phase 5 learning loop:
+
+```
 feedback → aggregation → features → training → evaluation → artifacts
-
-It exists for:
-- reproducible offline runs
-- CI/QA checks
-- generating deployment-safe artifacts
-
-Phase 5 routing is explicitly **NOT a runtime decision engine**. [1](https://onedrive.live.com/?id=1e428acc-4a68-416e-9d6d-c8692b153f2c&cid=d5d62a1ef303ba22&web=1)
+```
 
 ---
 
-## Non‑Negotiable Boundaries
+### Role in Pipeline (UPDATED)
 
-This helper MUST:
-- run offline only (Phase 5)
-- be deterministic and auditable
-- never modify completed phases
-- output only deployment artifacts (no runtime coupling) [2](https://onedrive.live.com?cid=D5D62A1EF303BA22&id=D5D62A1EF303BA22!sb2f7c783c4344d509f43af7f127b6c89)
+This layer provides:
 
-This helper MUST NOT:
-- be imported by Phase 6 runtime
-- consume tips/taxonomy/severity/narrative content
-- create any runtime learning loop
-- load artifacts dynamically in runtime (deployment only) [2](https://onedrive.live.com?cid=D5D62A1EF303BA22&id=D5D62A1EF303BA22!sb2f7c783c4344d509f43af7f127b6c89)
+- pipeline entrypoints
+- dataflow coordination
+- artifact orchestration
 
----
+It does NOT implement:
 
-## Inputs
-
-- A list of feedback event dicts emitted by Phase 6 Song Recommendation feedback layer.
-- Optional: events loaded from JSON / JSONL files (offline convenience).
+- aggregation logic
+- feature logic
+- training logic
+- evaluation logic
 
 ---
 
-## Outputs
+### What This Layer Does
 
-Artifacts written to an artifact directory:
-- song_selector_params.json
-- song_selector_training_report.json
-- song_selector_evaluation_report.json
-- optional baseline snapshot (for future deltas)
-
-Artifacts are intended for **deployment only**. [2](https://onedrive.live.com?cid=D5D62A1EF303BA22&id=D5D62A1EF303BA22!sb2f7c783c4344d509f43af7f127b6c89)
+- Execute the full offline learning pipeline
+- Connect pipeline stages in correct order
+- Handle I/O for offline runs (loading/writing)
+- Manage baseline comparison flow
+- Produce deployment-ready outputs
 
 ---
 
-## Typical Usage (Offline)
+### What This Layer Does NOT Do
 
-1) Load feedback events (JSONL/JSON array)
-2) Run pipeline
-3) Inspect evaluation guards
-4) Deploy static selector params if approved
-
-This helper supports baseline comparisons and optional baseline snapshot updates.
+- ❌ Does NOT run in runtime (Phase 6)
+- ❌ Does NOT affect recommendation decisions
+- ❌ Does NOT introduce semantics
+- ❌ Does NOT perform model learning itself
 
 ---
 
-## Design Intent
+### Data Contracts (NEW)
 
-This helper makes Phase 5 Song Recommendation learning:
-✅ repeatable  
-✅ reviewable  
-✅ reversible  
+Pipeline stages must propagate:
 
-without making Phase 6 runtime unsafe.
+- feature_schema_version
+- training_schema_version
+- evaluation outputs
+
+This layer MUST preserve:
+
+- version traceability
+- deterministic execution
+- strict input/output contracts
+
+---
+
+### Failure Semantics (NEW)
+
+Pipeline result statuses:
+
+| Status | Meaning |
+|------|--------|
+| OK | Safe to deploy |
+| GUARD_FAIL | Regression guard failed (do NOT deploy) |
+| NO_DATA | No usable data |
+
+Strict mode:
+
+- `strict=True` → raise on failure
+- `strict=False` → return status only
+
+---
+
+### Determinism Guarantees
+
+- Same inputs → same outputs
+- No randomness or sampling
+- No runtime dependencies
+
+---
+
+### Relationship to Other Layers
+
+| Layer | Role |
+|------|------|
+| aggregation | behavior aggregation |
+| features | signal construction |
+| training | parameter calibration |
+| evaluation | quality checks |
+| artifacts | deployment output |
+
+Utils connects them — it does not replace them.
+
+---
+
+### Design Intent
+
+This layer exists to:
+
+✅ execute the learning pipeline safely  
+✅ ensure reproducibility  
+✅ enforce evaluation before deployment  
+
+---
+
+**Utils orchestrates the pipeline. It never defines logic.**

@@ -1,141 +1,345 @@
-Phase 5 — Productionization & Offline Learning Routing Skeleton
-===============================================================
+Phase 5 — Productionization & Offline Learning Routing Skeleton (FINAL)
 
+=====================================================================
 Purpose:
-- Define the **offline learning dataflow order** across Phase 5 systems.
-- Provide governance for how learning-facing layers connect.
-- This is NOT a runtime decision engine.
+- Define the OFFLINE learning architecture and dataflow for Phase 5
+- Provide a unified contract across schemas, builders, and pipelines
+- Act as the authoritative routing reference for all Phase 5 layers
 
-Non-Negotiable Rules:
-- Phase 5 operates offline only.
-- Phase 5 MUST NOT modify any Completed Phases.
-- Phase 5 outputs are introduced via deployment only.
+NOTE:
+This is NOT a runtime decision engine.
+Phase 6 remains the sole runtime authority.
 
-------------------------------------------------
-Directory Structure
-------------------------------------------------
+---------------------------------------------------------------------
+Non-Negotiable Rules
+---------------------------------------------------------------------
+- Phase 5 operates OFFLINE ONLY
+- Phase 5 MUST NOT modify any Completed Phases
+- Phase 5 outputs MUST be introduced via deployment only
+- All outputs MUST be deterministic and auditable
+- Phase 6 MUST remain the only runtime execution authority
+
+---------------------------------------------------------------------
+Core System Model (UPDATED)
+---------------------------------------------------------------------
+
+Phase 5 transforms:
+
+raw signals
+    → structured events
+    → aggregated signals
+    → features / datasets
+    → learning artifacts
+    → deployment decisions
+
+Core Pattern:
+
+signal → builder → schema → pipeline → artifact → deployment_gate
+
+---------------------------------------------------------------------
+Directory Structure (UPDATED)
+---------------------------------------------------------------------
 
 phase5/
-├─ README.md
-├─ PHASE_5_SPEC.md
-├─ PHASE_5_ARCHITECTURE.md
+├── README.md
+├── Phase_5_Routing_Skeleton.txt
+├── Phase_5_SPEC.md
+├── Phase_5_ARCHITECTURE.md
 │
-├─ routing/
-│  ├─ README.md
-│  │   # Phase 5 routing overview:
-│  │   # defines dataflow order between learning-facing layers
-│  │   # NOT a runtime decision engine
-│  │
-│  └─ learning_flow.md
-│      # Declarative description of Phase 5 learning pipelines:
-│      #
-│      # 1) Song Recommendation learning (offline only)
-│      #    feedback → aggregation → features → training → evaluation → artifacts → deployment
-│      #
-│      # 2) Other Phase 5 learning flows (curator-backed, domain-specific)
-│      #    feedback → curator → retrain → recommendation → practice → marketplace → safety
+├── feedback_aggregation/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── feedback_events.schema.json
+│   ├── feedback_event_builder.py
+│   ├── curator_queue.md
+│   └── feedback_collector.md
 │
-├─ song_recommendation/                 # ✅ Phase 5 Song Recommendation Learning (Offline)
-│  ├─ README.md                         # Main contract & boundaries
-│  ├─ PHASE_5_SONG_RECOMMENDATION_LEARNING_SPEC.md
-│  │
-│  ├─ aggregation/                      # Feedback → selection-level records
-│  │  ├─ README.md
-│  │  ├─ __init__.py
-│  │  └─ aggregate_song_feedback.py
-│  │
-│  ├─ features/                         # Selection-level feature construction
-│  │  ├─ README.md
-│  │  ├─ __init__.py
-│  │  └─ selection_features.py
-│  │
-│  ├─ training/                         # Heuristic calibration (no models)
-│  │  ├─ README.md
-│  │  ├─ __init__.py
-│  │  └─ train_selector_params.py
-│  │
-│  ├─ evaluation/                       # Metrics, deltas, regression guards
-│  │  ├─ README.md
-│  │  ├─ __init__.py
-│  │  └─ evaluate_selection_quality.py
-│  │
-│  ├─ artifacts/                        # Deployment-safe static artifacts
-│  │  ├─ README.md
-│  │  ├─ __init__.py
-│  │  └─ song_selector_params.json
-│  │
-│  ├─ utils/                            # Offline orchestration helpers
-│  │  ├─ README.md
-│  │  ├─ __init__.py
-│  │  └─ song_rec_learning_orchestrator.py
-│  │
-│  └─ tests/                            # CI hard-gated learning invariants
-│     ├─ README.md
-│     └─ (determinism, semantic isolation, regression guard tests)
+├── curator_gold/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── curator_label.schema.json
+│   ├── curator_label_builder.py
+│   ├── labeling_guidlines.md
+│   └── review_workflow.md
 │
-├─ feedback_aggregation/                # Generic Phase 5 feedback ingestion
-│  ├─ README.md
-│  ├─ feedback_events.schema.json
-│  ├─ feedback_collector.md
-│  └─ curator_queue.md
+├── offline_retrain/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── training_dataset.schema.json
+│   ├── dataset_builder.py
+│   ├── model_registry.md
+│   ├── model_validation.md
+│   └── promotion_and_rollback.md
 │
-├─ curator_gold/
-│  ├─ README.md
-│  ├─ curator_label.schema.json
-│  ├─ labeling_guidelines.md
-│  └─ review_workflow.md
+├── observability_experiments/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── telemetry_events.schema.json
+│   ├── telemetry_event_builder.py
+│   ├── metrics_catalog.md
+│   ├── experiment_design.md
+│   └── feature_flags.md
 │
-├─ offline_retrain/
-│  ├─ README.md
-│  ├─ training_dataset.schema.json
-│  ├─ model_registry.md
-│  ├─ model_validation.md
-│  └─ promotion_and_rollback.md
+├── practice_integration/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── practice_telemetry.schema.json
+│   ├── practice_telemetry_event_builder.py
+│   ├── in_session_hints.md
+│   ├── pratice_mapping.md
+│   └── user_controls.md
 │
-├─ observability_experiments/
-│  ├─ README.md
-│  ├─ telemetry_events.schema.json
-│  ├─ metrics_catalog.md
-│  ├─ experiment_design.md
-│  └─ feature_flags.md
+├── recommendation/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── recommendation_request.schema.json
+│   ├── recommendation_response.schema.json
+│   ├── recommendation_request_builder.py
+│   ├── recommendation_response_builder.py
+│   ├── api_contract.md
+│   └── rationale_mapping.md
 │
-├─ practice_integration/
-│  ├─ README.md
-│  ├─ in_session_hints.md
-│  ├─ practice_mapping.md
-│  ├─ practice_telemetry.schema.json
-│  └─ user_controls.md
+├── marketplace/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── marketplace_events.schema.json
+│   ├── marketplace_event_builder.py
+│   ├── content_catalog.md
+│   ├── creator_program.md
+│   ├── monetization rules.md
+│   └── partner_constraints.md
 │
-├─ recommendation/
-│  ├─ README.md
-│  ├─ recommendation_request.schema.json
-│  ├─ recommendation_response.schema.json
-│  ├─ rationale_mapping.md
-│  └─ api_contract.md
+├── safety/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── safety_events.schema.json
+│   ├── safety_event_builder.py
+│   ├── anti_cheat_signals.md
+│   ├── acceptable_use.md
+│   ├── escalation_policy.md
+│   └── legal_compliance.md
 │
-├─ marketplace/
-│  ├─ README.md
-│  ├─ creator_program.md
-│  ├─ content_catalog.md
-│  ├─ monetization_rules.md
-│  ├─ partner_constraints.md
-│  └─ marketplace_events.schema.json
-│
-└─ safety/
-   ├─ README.md
-   ├─ acceptable_use.md
-   ├─ anti_cheat_signals.md
-   ├─ legal_compliance.md
-   ├─ escalation_policy.md
-   └─ safety_events.schema.json
+└── song_recommendation/
+    ├── __init__.py
+    ├── README.md
+	├── SONG_RECOMMENDATION_LEARNING_CONTRACT.md
+    ├── aggregation/
+    ├── features/
+    ├── training/
+    ├── evaluation/
+    ├── artifacts/
+    ├── utils/
+    ├── deployment/   ← deployment_gate
+    └── tests/
 
-------------------------------------------------
-Notes
-------------------------------------------------
+---------------------------------------------------------------------
+Global Event Layer (NEW)
+---------------------------------------------------------------------
 
-- Song Recommendation learning is a **fully offline, deterministic Phase 5 pipeline**.
-- It does not replace or bypass curator-backed learning flows.
-- It produces static artifacts that are introduced via deployment only.
-- Phase 6 runtime MUST NOT load or adapt learning artifacts dynamically.
+All Phase 5 pipelines MUST begin with structured events.
 
-End of Phase 5 Routing Skeleton
+Event types:
+
+- feedback_event
+- telemetry_event
+- marketplace_event
+- safety_event
+
+Each event MUST be produced via a builder:
+
+- build_feedback_event()
+- build_telemetry_event()
+- build_marketplace_event()
+- build_safety_event()
+
+All events MUST:
+
+- include provenance_id
+- be append-only
+- be deterministic
+- remain non-semantic (except curator labels)
+- conform strictly to their schema
+
+---------------------------------------------------------------------
+Primary Learning Flow
+---------------------------------------------------------------------
+
+Song Recommendation Learning:
+
+1) Event Ingestion
+    raw signals → event_builders
+
+2) Feedback Aggregation
+    feedback_events → aggregated rows
+
+3) Interpretation Bridge (optional)
+    derived_reason (MUST NOT mutate raw events)
+
+4) Feature Construction
+    aggregated rows → features
+    NO semantic leakage
+
+5) Training
+    features → calibrated parameters
+
+6) Evaluation
+    metrics + regression guards
+
+7) Artifact Generation
+    selector_params
+    training_report
+    evaluation_report
+    baseline metrics
+
+8) Deployment Gate (NEW)
+    IF:
+        guard_pass == True
+        output valid
+    THEN:
+        allowed
+    ELSE:
+        blocked
+
+9) Deployment (Phase 6)
+    external to Phase 5
+
+---------------------------------------------------------------------
+Secondary Phase 5 Pipelines
+---------------------------------------------------------------------
+
+Curator + Retrain Flow:
+
+feedback → curator_gold
+    → dataset_builder
+    → offline_retrain
+    → evaluation
+    → registry
+    → deployment
+
+Practice Flow:
+
+practice signals → practice_event_builder
+    → telemetry
+    → feedback loop
+
+Marketplace Flow:
+
+content/creator/transaction
+    → marketplace_event
+    → telemetry + safety + learning
+
+Safety Flow:
+
+signals → safety_event
+    → escalation → Phase 6
+
+---------------------------------------------------------------------
+Layer Responsibilities (Aligned)
+---------------------------------------------------------------------
+
+feedback_aggregation:
+    raw feedback ingestion (no interpretation)
+
+curator_gold:
+    human ground truth labeling
+
+observability:
+    telemetry + experiment signals
+
+practice_integration:
+    practice behavior capture
+
+recommendation:
+    request/response normalization
+
+marketplace:
+    content + creator + economy system
+
+safety:
+    risk detection + escalation (no enforcement)
+
+offline_retrain:
+    dataset + training + validation
+
+song_recommendation:
+    full closed-loop learning pipeline
+
+---------------------------------------------------------------------
+Data Contract Rules (NEW)
+---------------------------------------------------------------------
+
+Every layer MUST define:
+
+- schema
+- builder
+- output structure
+
+Example:
+
+feedback:
+    schema → feedback_events.schema.json
+    builder → build_feedback_event()
+
+telemetry:
+    schema → telemetry_events.schema.json
+    builder → build_telemetry_event()
+
+---------------------------------------------------------------------
+CI Hard Gates (RETAINED + UPDATED)
+---------------------------------------------------------------------
+
+ALL Phase 5 outputs MUST pass:
+
+1) Determinism Check
+    identical input → identical output
+
+2) Schema Validation
+    all events conform to schema
+
+3) Semantic Isolation
+    no gameplay meaning leakage
+
+4) Regression Guard
+    no degradation vs baseline
+
+5) Artifact Integrity
+    versioned, auditable outputs
+
+6) Deployment Gate Check (NEW)
+    allowed == True
+
+IF ANY FAILS:
+    ❌ DO NOT PROMOTE
+
+---------------------------------------------------------------------
+Boundary Guarantees
+---------------------------------------------------------------------
+
+Phase 5:
+    learns
+    evaluates
+    prepares artifacts
+
+Phase 6:
+    executes
+    enforces
+    deploys
+
+STRICT SEPARATION REQUIRED
+
+---------------------------------------------------------------------
+Final Principle
+---------------------------------------------------------------------
+
+Phase 5 transforms:
+
+real behavior
+    → structured signals
+    → validated learning
+    → safe deployment
+
+WITHOUT:
+
+- modifying runtime directly
+- introducing semantic drift
+- bypassing governance
