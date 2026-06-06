@@ -1,58 +1,100 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5RecommendationRequest",
+  "description": "Recommendation request from client with context and personalization parameters",
   "type": "object",
 
   "required": [
     "request_id",
     "player_id",
-    "timestamp"
+    "timestamp",
+    "request_type"
   ],
 
   "properties": {
 
-    "request_id": { "type": "string" },
+    "request_id": { 
+      "type": "string",
+      "description": "Unique request identifier for tracking"
+    },
 
-    "player_id": { "type": "string" },
+    "player_id": { 
+      "type": "string",
+      "description": "Player/user requesting recommendations"
+    },
 
-    "provenance_id": { "type": "string" },
+    "provenance_id": { 
+      "type": "string",
+      "description": "Phase 4 provenance identifier for linkage to telemetry and feedback"
+    },
 
     "timestamp": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When request was made"
     },
 
     "request_type": {
       "type": "string",
-      "enum": ["song", "practice", "game"]
+      "enum": ["song", "practice", "game"],
+      "description": "Type of recommendation being requested"
     },
 
     "context": {
       "type": "object",
+      "description": "Request context and state",
+      "required": ["game_id"],
       "properties": {
-        "game_id": { "type": "string" },
-        "locale": { "type": "string" },
-        "player_level": { "type": "string" },
-        "recent_activity": { "type": "string" }
+        "game_id": { 
+          "type": "string",
+          "description": "Game context identifier"
+        },
+        "locale": { 
+          "type": "string",
+          "description": "Player locale/language preference"
+        },
+        "player_level": { 
+          "type": "string",
+          "description": "Overall player level/tier"
+        },
+        "recent_activity": { 
+          "type": "string",
+          "description": "Summary of recent player activity"
+        }
       },
       "additionalProperties": true
     },
 
     "personalization": {
       "type": "object",
+      "description": "Personalization parameters and preferences",
       "properties": {
-        "capability_tier": { "type": "string" },
-        "recommended_focus": { "type": "string" }
+        "capability_tier": { 
+          "type": "string",
+          "description": "Capability-based difficulty tier"
+        },
+        "recommended_focus": { 
+          "type": "string",
+          "description": "Recommended training focus area"
+        }
       },
       "additionalProperties": true
     },
 
     "experiment": {
       "type": "object",
+      "description": "Experiment assignment at request time",
       "properties": {
-        "experiment_id": { "type": "string" },
-        "variant": { "type": "string" }
-      }
+        "experiment_id": { 
+          "type": "string",
+          "description": "Experiment identifier"
+        },
+        "variant": { 
+          "type": "string",
+          "description": "Variant assigned to player"
+        }
+      },
+      "additionalProperties": false
     }
   },
 

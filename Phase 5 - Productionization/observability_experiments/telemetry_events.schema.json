@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "TelemetryEvent",
+  "description": "System telemetry event capturing execution metrics, decisions, and experiment exposure",
   "type": "object",
 
   "required": [
@@ -12,12 +13,14 @@
   "properties": {
 
     "event_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique event identifier"
     },
 
     "timestamp": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When event occurred"
     },
 
     "event_type": {
@@ -30,35 +33,63 @@
         "latency_measurement",
         "error_event",
         "experiment_exposure"
-      ]
+      ],
+      "description": "Type of telemetry event"
     },
 
     "provenance_id": {
       "type": "string",
-      "description": "Link to runtime and feedback pipeline"
+      "description": "Link to Phase 4 provenance record and feedback pipeline"
     },
 
     "session_id": {
-      "type": "string"
+      "type": "string",
+      "description": "User session identifier"
     },
 
     "player_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Player/user identifier"
     },
 
     "context": {
       "type": "object",
+      "description": "Runtime context (raw linkage without interpretation)",
 
       "properties": {
-        "game_id": { "type": "string" },
-        "song_id": { "type": "string" },
-        "recommendation_set_id": { "type": "string" },
-        "rank": { "type": "integer" },
-        "difficulty": { "type": "string" },
+        "game_id": { 
+          "type": "string",
+          "description": "Game context"
+        },
+        "song_id": { 
+          "type": "string",
+          "description": "Song/content identifier"
+        },
+        "recommendation_set_id": { 
+          "type": "string",
+          "description": "Recommendation set identifier"
+        },
+        "rank": { 
+          "type": "integer",
+          "description": "Recommendation rank"
+        },
+        "difficulty": { 
+          "type": "string",
+          "description": "Difficulty level"
+        },
 
-        "surface": { "type": "string" },
-        "mode": { "type": "string" },
-        "locale": { "type": "string" }
+        "surface": { 
+          "type": "string",
+          "description": "UI surface/component"
+        },
+        "mode": { 
+          "type": "string",
+          "description": "Game mode"
+        },
+        "locale": { 
+          "type": "string",
+          "description": "Player locale"
+        }
       },
 
       "additionalProperties": true
@@ -66,14 +97,33 @@
 
     "metrics": {
       "type": "object",
-      "description": "Numeric metrics for aggregation",
+      "description": "Numeric metrics for aggregation and monitoring",
 
       "properties": {
-        "latency_ms": { "type": "number" },
-        "execution_time_ms": { "type": "number" },
-        "retry_count": { "type": "integer" },
-        "success": { "type": "boolean" },
-        "cost": { "type": "number" }
+        "latency_ms": { 
+          "type": "number",
+          "minimum": 0,
+          "description": "End-to-end latency in milliseconds"
+        },
+        "execution_time_ms": { 
+          "type": "number",
+          "minimum": 0,
+          "description": "Pipeline execution time in milliseconds"
+        },
+        "retry_count": { 
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of retries needed"
+        },
+        "success": { 
+          "type": "boolean",
+          "description": "Whether operation succeeded"
+        },
+        "cost": { 
+          "type": "number",
+          "minimum": 0,
+          "description": "Computational cost/tokens"
+        }
       },
 
       "additionalProperties": true
@@ -81,13 +131,25 @@
 
     "decision": {
       "type": "object",
-      "description": "System decisions (non-semantic)",
+      "description": "System decisions made (non-semantic, factual)",
 
       "properties": {
-        "selector_used": { "type": "string" },
-        "fallback_triggered": { "type": "boolean" },
-        "model_version": { "type": "string" },
-        "feature_version": { "type": "string" }
+        "selector_used": { 
+          "type": "string",
+          "description": "Which selector/strategy was used"
+        },
+        "fallback_triggered": { 
+          "type": "boolean",
+          "description": "Whether fallback was activated"
+        },
+        "model_version": { 
+          "type": "string",
+          "description": "Version of model used"
+        },
+        "feature_version": { 
+          "type": "string",
+          "description": "Version of feature pipeline"
+        }
       },
 
       "additionalProperties": true
@@ -95,11 +157,22 @@
 
     "experiment": {
       "type": "object",
+      "description": "Experiment assignment if applicable",
 
+      "required": ["experiment_id"],
       "properties": {
-        "experiment_id": { "type": "string" },
-        "variant": { "type": "string" },
-        "exposed": { "type": "boolean" }
+        "experiment_id": { 
+          "type": "string",
+          "description": "Experiment identifier"
+        },
+        "variant": { 
+          "type": "string",
+          "description": "Variant assigned"
+        },
+        "exposed": { 
+          "type": "boolean",
+          "description": "Whether user was exposed to variant"
+        }
       },
 
       "additionalProperties": false
@@ -107,11 +180,21 @@
 
     "error": {
       "type": "object",
+      "description": "Error details if event_type is error_event",
 
       "properties": {
-        "error_code": { "type": "string" },
-        "stage": { "type": "string" },
-        "message": { "type": "string" }
+        "error_code": { 
+          "type": "string",
+          "description": "Error code/identifier"
+        },
+        "stage": { 
+          "type": "string",
+          "description": "Pipeline stage where error occurred"
+        },
+        "message": { 
+          "type": "string",
+          "description": "Human-readable error message"
+        }
       },
 
       "additionalProperties": false
@@ -119,10 +202,17 @@
 
     "ingestion_metadata": {
       "type": "object",
+      "description": "Metadata about data ingestion",
 
       "properties": {
-        "platform": { "type": "string" },
-        "client_version": { "type": "string" }
+        "platform": { 
+          "type": "string",
+          "description": "Client platform (iOS, Android, Web)"
+        },
+        "client_version": { 
+          "type": "string",
+          "description": "Client application version"
+        }
       },
 
       "additionalProperties": false

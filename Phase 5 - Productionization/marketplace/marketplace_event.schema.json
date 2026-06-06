@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5MarketplaceEvent",
+  "description": "Event representing marketplace activity (content creation, consumption, transactions)",
   "type": "object",
 
   "required": [
@@ -11,11 +12,15 @@
 
   "properties": {
 
-    "event_id": { "type": "string" },
+    "event_id": { 
+      "type": "string",
+      "description": "Unique event identifier"
+    },
 
     "timestamp": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When event occurred"
     },
 
     "event_type": {
@@ -28,59 +33,111 @@
         "content_rated",
         "creator_rewarded",
         "transaction"
-      ]
+      ],
+      "description": "Type of marketplace event"
     },
 
     "provenance_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Phase 4 provenance identifier for linkage to recommendation execution"
     },
 
-    "player_id": { "type": "string" },
+    "player_id": { 
+      "type": "string",
+      "description": "Player/user involved in event"
+    },
 
-    "creator_id": { "type": "string" },
+    "creator_id": { 
+      "type": "string",
+      "description": "Creator identifier if applicable"
+    },
 
     "content": {
       "type": "object",
+      "description": "Content metadata",
       "properties": {
-        "content_id": { "type": "string" },
-        "content_type": { "type": "string" },
-        "version": { "type": "string" }
-      }
+        "content_id": { 
+          "type": "string",
+          "description": "Unique content identifier"
+        },
+        "content_type": { 
+          "type": "string",
+          "description": "Type of content (song, playlist, etc.)"
+        },
+        "version": { 
+          "type": "string",
+          "description": "Content version"
+        }
+      },
+      "additionalProperties": false
     },
 
     "interaction": {
       "type": "object",
+      "description": "User interaction details",
       "properties": {
-        "action": { "type": "string" },
-        "rating": { "type": "number" }
-      }
+        "action": { 
+          "type": "string",
+          "description": "Action taken (play, share, rate, etc.)"
+        },
+        "rating": { 
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Rating given if applicable"
+        }
+      },
+      "additionalProperties": false
     },
 
     "transaction": {
       "type": "object",
+      "description": "Transaction details if event_type is transaction",
       "properties": {
-        "amount": { "type": "number" },
-        "currency": { "type": "string" },
+        "amount": { 
+          "type": "number",
+          "description": "Transaction amount"
+        },
+        "currency": { 
+          "type": "string",
+          "description": "Currency code (USD, EUR, etc.)"
+        },
         "type": {
           "type": "string",
-          "enum": ["purchase", "reward", "refund"]
+          "enum": ["purchase", "reward", "refund"],
+          "description": "Transaction type"
         }
-      }
+      },
+      "additionalProperties": false
     },
 
     "metrics": {
       "type": "object",
+      "description": "Event metrics and measurements",
       "properties": {
-        "engagement_score": { "type": "number" }
-      }
+        "engagement_score": { 
+          "type": "number",
+          "minimum": 0,
+          "description": "Calculated engagement score"
+        }
+      },
+      "additionalProperties": true
     },
 
     "experiment": {
       "type": "object",
+      "description": "Experiment assignment if applicable",
       "properties": {
-        "experiment_id": { "type": "string" },
-        "variant": { "type": "string" }
-      }
+        "experiment_id": { 
+          "type": "string",
+          "description": "Experiment identifier"
+        },
+        "variant": { 
+          "type": "string",
+          "description": "Variant assigned"
+        }
+      },
+      "additionalProperties": false
     }
 
   },

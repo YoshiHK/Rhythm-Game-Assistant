@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5PracticeTelemetryEvent",
+  "description": "Telemetry event from practice mode capturing user interactions and metrics",
   "type": "object",
 
   "required": [
@@ -13,7 +14,10 @@
 
   "properties": {
 
-    "event_id": { "type": "string" },
+    "event_id": { 
+      "type": "string",
+      "description": "Unique event identifier"
+    },
 
     "event_type": {
       "type": "string",
@@ -24,54 +28,92 @@
         "section_replayed",
         "session_started",
         "session_ended"
-      ]
+      ],
+      "description": "Type of practice event"
     },
 
     "timestamp": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When event occurred"
     },
 
     "provenance_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Phase 4 provenance identifier linking to recommendation"
     },
 
     "player_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Player identifier"
     },
 
     "session_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Practice session identifier"
     },
 
     "practice_context": {
       "type": "object",
+      "description": "Practice-specific context",
       "required": ["mode"],
       "properties": {
-        "mode": { "type": "string" },
-        "game_id": { "type": "string" },
-        "song_id": { "type": "string" },
-        "difficulty": { "type": "string" },
-        "section_id": { "type": "string" }
+        "mode": { 
+          "type": "string",
+          "description": "Practice mode (e.g., single-section, full-song)"
+        },
+        "game_id": { 
+          "type": "string",
+          "description": "Game identifier"
+        },
+        "song_id": { 
+          "type": "string",
+          "description": "Song/content being practiced"
+        },
+        "difficulty": { 
+          "type": "string",
+          "description": "Difficulty level"
+        },
+        "section_id": { 
+          "type": "string",
+          "description": "Section being practiced if applicable"
+        }
       },
       "additionalProperties": true
     },
 
     "metrics": {
       "type": "object",
+      "description": "Practice metrics",
       "properties": {
-        "duration_ms": { "type": "number" },
-        "retry_count": { "type": "integer" }
+        "duration_ms": { 
+          "type": "number",
+          "minimum": 0,
+          "description": "Duration in milliseconds"
+        },
+        "retry_count": { 
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of retries"
+        }
       },
       "additionalProperties": true
     },
 
     "experiment": {
       "type": "object",
+      "description": "Experiment assignment if applicable",
       "properties": {
-        "experiment_id": { "type": "string" },
-        "variant": { "type": "string" }
-      }
+        "experiment_id": { 
+          "type": "string",
+          "description": "Experiment identifier"
+        },
+        "variant": { 
+          "type": "string",
+          "description": "Variant assigned"
+        }
+      },
+      "additionalProperties": false
     }
   },
 

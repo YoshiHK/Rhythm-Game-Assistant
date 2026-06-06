@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5FeedbackEvent",
+  "description": "Raw feedback event from player or system with no interpretation, for aggregation pipeline",
   "type": "object",
 
   "required": [
@@ -15,7 +16,8 @@
   "properties": {
 
     "event_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique feedback event identifier"
     },
 
     "provenance_id": {
@@ -30,7 +32,8 @@
         "player_completion",
         "player_dismissal",
         "system_observation"
-      ]
+      ],
+      "description": "Category of feedback signal"
     },
 
     "source_type": {
@@ -38,34 +41,66 @@
       "enum": [
         "player",
         "system"
-      ]
+      ],
+      "description": "Whether feedback comes from player action or system observation"
     },
 
     "timestamp": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When feedback was generated"
     },
 
     "context": {
       "type": "object",
-      "description": "Runtime context (no interpretation, only raw linkage)",
+      "description": "Runtime context (no interpretation, only raw linkage to execution)",
 
       "properties": {
-        "player_id": { "type": "string" },
-        "session_id": { "type": "string" },
+        "player_id": { 
+          "type": "string",
+          "description": "Player identifier"
+        },
+        "session_id": { 
+          "type": "string",
+          "description": "Session identifier"
+        },
 
-        "game_id": { "type": "string" },
-        "song_id": { "type": "string" },
+        "game_id": { 
+          "type": "string",
+          "description": "Game context"
+        },
+        "song_id": { 
+          "type": "string",
+          "description": "Song/content identifier"
+        },
 
-        "recommendation_set_id": { "type": "string" },
+        "recommendation_set_id": { 
+          "type": "string",
+          "description": "Recommendation set identifier"
+        },
 
-        "difficulty": { "type": "string" },
-        "rank": { "type": "integer" },
+        "difficulty": { 
+          "type": "string",
+          "description": "Difficulty level"
+        },
+        "rank": { 
+          "type": "integer",
+          "description": "Rank in recommendation set"
+        },
 
-        "locale": { "type": "string" },
+        "locale": { 
+          "type": "string",
+          "description": "Player locale/region"
+        },
 
-        "surface": { "type": "string" },
-        "mode": { "type": "string" }
+        "surface": { 
+          "type": "string",
+          "description": "UI surface/component"
+        },
+        "mode": { 
+          "type": "string",
+          "description": "Game mode"
+        }
       },
 
       "additionalProperties": true
@@ -73,32 +108,40 @@
 
     "payload": {
       "type": "object",
-      "description": "Raw, uninterpreted feedback payload",
+      "description": "Raw, uninterpreted feedback payload without semantic processing",
 
       "properties": {
 
         "action": {
-          "type": "string"
+          "type": "string",
+          "description": "Action taken by player (e.g., click, share, play)"
         },
 
         "reaction_type": {
-          "type": "string"
+          "type": "string",
+          "description": "Type of reaction (e.g., emoji, thumbs up/down)"
         },
 
         "completion_status": {
-          "type": "string"
+          "type": "string",
+          "description": "Completion outcome (e.g., success, failed, quit)"
         },
 
         "dismiss_reason": {
-          "type": "string"
+          "type": "string",
+          "description": "Reason given for dismissal"
         },
 
         "duration_ms": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0,
+          "description": "Duration of interaction in milliseconds"
         },
 
         "retry_count": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of retries before success or abandonment"
         }
       },
 
@@ -107,15 +150,30 @@
 
     "system_context": {
       "type": "object",
-      "description": "System-level signals (non-interpretive)",
+      "description": "System-level signals for non-semantic context (errors, fallbacks, modes)",
 
       "properties": {
-        "selector_used": { "type": "string" },
-        "fallback_triggered": { "type": "boolean" },
-        "degraded_mode": { "type": "boolean" },
+        "selector_used": { 
+          "type": "string",
+          "description": "Which selector/strategy generated recommendation"
+        },
+        "fallback_triggered": { 
+          "type": "boolean",
+          "description": "Whether fallback strategy was activated"
+        },
+        "degraded_mode": { 
+          "type": "boolean",
+          "description": "Whether system was in degraded mode"
+        },
 
-        "execution_stage": { "type": "string" },
-        "error_code": { "type": "string" }
+        "execution_stage": { 
+          "type": "string",
+          "description": "Pipeline stage during feedback"
+        },
+        "error_code": { 
+          "type": "string",
+          "description": "Error code if error occurred"
+        }
       },
 
       "additionalProperties": true
@@ -123,19 +181,38 @@
 
     "experiment": {
       "type": "object",
+      "description": "Experiment assignment at time of feedback",
+      "required": ["experiment_id"],
       "properties": {
-        "experiment_id": { "type": "string" },
-        "variant": { "type": "string" }
+        "experiment_id": { 
+          "type": "string",
+          "description": "Experiment identifier"
+        },
+        "variant": { 
+          "type": "string",
+          "description": "Variant assigned to player"
+        }
       },
       "additionalProperties": false
     },
 
     "ingestion_metadata": {
       "type": "object",
+      "description": "Metadata about event ingestion",
+      "required": ["platform"],
       "properties": {
-        "client_version": { "type": "string" },
-        "platform": { "type": "string" },
-        "ingestion_source": { "type": "string" }
+        "client_version": { 
+          "type": "string",
+          "description": "Client application version"
+        },
+        "platform": { 
+          "type": "string",
+          "description": "Client platform (iOS, Android, Web)"
+        },
+        "ingestion_source": { 
+          "type": "string",
+          "description": "How event was ingested (event queue, webhook, etc.)"
+        }
       },
       "additionalProperties": false
     }
