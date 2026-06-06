@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CuratorLabel",
-
+  "description": "Ground truth label provided by human curator with comprehensive reasoning taxonomy",
   "type": "object",
 
   "required": [
@@ -16,59 +16,74 @@
   "properties": {
 
     "event_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique identifier for this curation event"
     },
 
     "provenance_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Phase 4 provenance identifier linking to runtime execution"
     },
 
     "curation_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique identifier for this curation task"
     },
 
     "timestamp": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When this curation was performed"
     },
 
     "curator_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Identifier of human curator who performed labeling"
     },
 
     "model_reason": {
       "type": "object",
       "description": "Output from feedback_interpreter (machine hypothesis)",
+      "required": ["reason_codes", "primary_reason"],
       "properties": {
         "reason_codes": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "List of applicable reason codes from model"
         },
         "primary_reason": {
-          "type": "string"
+          "type": "string",
+          "description": "Single primary reason predicted by model"
         },
         "confidence": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Model confidence score"
         }
-      }
+      },
+      "additionalProperties": false
     },
 
     "curator_reason": {
       "type": "object",
-      "description": "Human-labeled ground truth aligned with taxonomy",
+      "description": "Human-labeled ground truth aligned with comprehensive taxonomy",
+      "required": ["reason_codes", "primary_reason", "category", "plane"],
       "properties": {
 
         "reason_codes": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "List of applicable reason codes from taxonomy"
         },
 
         "primary_reason": {
-          "type": "string"
+          "type": "string",
+          "description": "Single primary reason from taxonomy"
         },
 
         "category": {
@@ -80,11 +95,13 @@
             "LOCALIZATION",
             "API",
             "CONTROL"
-          ]
+          ],
+          "description": "High-level recommendation category"
         },
 
         "layer": {
-          "type": "string"
+          "type": "string",
+          "description": "Logical layer where decision occurred"
         },
 
         "plane": {
@@ -94,7 +111,8 @@
             "orchestration",
             "api_surface",
             "control"
-          ]
+          ],
+          "description": "System plane of decision"
         },
 
         "decision_type": {
@@ -104,7 +122,8 @@
             "fallback",
             "override",
             "normalization"
-          ]
+          ],
+          "description": "Type of decision made"
         },
 
         "cause_type": {
@@ -115,7 +134,8 @@
             "semantic",
             "numerical",
             "environment"
-          ]
+          ],
+          "description": "Root cause category"
         },
 
         "signal_type": {
@@ -125,18 +145,21 @@
             "missing_output",
             "fallback_used",
             "baseline_gap"
-          ]
+          ],
+          "description": "Type of signal detected"
         }
-      }
+      },
+      "additionalProperties": false
     },
 
     "judgement": {
       "type": "object",
-      "description": "Comparison between model and human",
+      "description": "Comparison between model prediction and human label",
       "properties": {
 
         "is_correct": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether model prediction matches ground truth"
         },
 
         "agreement_type": {
@@ -145,7 +168,8 @@
             "exact_match",
             "partial_match",
             "mismatch"
-          ]
+          ],
+          "description": "Level of agreement between model and human"
         },
 
         "severity": {
@@ -154,14 +178,19 @@
             "low",
             "medium",
             "high"
-          ]
+          ],
+          "description": "Severity of any mismatch"
         }
-      }
+      },
+      "additionalProperties": false
     },
 
     "notes": {
-      "type": "string"
+      "type": "string",
+      "description": "Optional curator notes for context or clarification"
     }
 
-  }
+  },
+
+  "additionalProperties": false
 }
