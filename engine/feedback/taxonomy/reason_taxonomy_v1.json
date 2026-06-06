@@ -1,0 +1,226 @@
+{
+  "description": "Reason taxonomy v1 (full registry aligned with feedback_interpreter)",
+  "version": "v1",
+
+  "fields": [
+    "reason_code",
+    "category",
+    "layer",
+    "plane",
+    "decision_type",
+    "cause_type",
+    "signal_type",
+    "affects_training",
+    "affects_product",
+    "explainable"
+  ],
+
+  "enums": {
+    "category": [
+      "EXECUTION",
+      "SELECTION",
+      "PERSONALIZATION",
+      "LOCALIZATION",
+      "API",
+      "CONTROL"
+    ],
+    "plane": [
+      "execution",
+      "orchestration",
+      "api_surface",
+      "control"
+    ],
+    "decision_type": [
+      "primary",
+      "fallback",
+      "override",
+      "normalization"
+    ],
+    "cause_type": [
+      "integration",
+      "control",
+      "semantic",
+      "numerical",
+      "environment"
+    ],
+    "signal_type": [
+      "observed_error",
+      "missing_output",
+      "fallback_used",
+      "baseline_gap"
+    ]
+  },
+
+  "reason_codes": [
+
+    {
+      "reason_code": "EXEC_FAILURE",
+      "category": "EXECUTION",
+      "layer": "execution",
+      "plane": "execution",
+      "decision_type": "primary",
+      "cause_type": "integration",
+      "signal_type": "observed_error",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "PARTIAL_OUTPUT",
+      "category": "EXECUTION",
+      "layer": "execution",
+      "plane": "execution",
+      "decision_type": "primary",
+      "cause_type": "integration",
+      "signal_type": "missing_output",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "PAYLOAD_EXTRACTION_FAIL",
+      "category": "EXECUTION",
+      "layer": "tips",
+      "plane": "execution",
+      "decision_type": "primary",
+      "cause_type": "integration",
+      "signal_type": "missing_output",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "SELECTOR_FALLBACK_USED",
+      "category": "SELECTION",
+      "layer": "selection",
+      "plane": "execution",
+      "decision_type": "fallback",
+      "cause_type": "control",
+      "signal_type": "fallback_used",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "CAPABILITY_MISCLASSIFIED",
+      "category": "PERSONALIZATION",
+      "layer": "personalization",
+      "plane": "execution",
+      "decision_type": "primary",
+      "cause_type": "semantic",
+      "signal_type": "baseline_gap",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "PERS_FALLBACK_LEGACY",
+      "category": "PERSONALIZATION",
+      "layer": "personalization",
+      "plane": "execution",
+      "decision_type": "fallback",
+      "cause_type": "control",
+      "signal_type": "fallback_used",
+      "affects_training": false,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "LOCALE_FALLBACK_USED",
+      "category": "LOCALIZATION",
+      "layer": "localization",
+      "plane": "api_surface",
+      "decision_type": "fallback",
+      "cause_type": "control",
+      "signal_type": "fallback_used",
+      "affects_training": false,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "LOCALIZATION_ENGINE_FAIL",
+      "category": "LOCALIZATION",
+      "layer": "localization",
+      "plane": "api_surface",
+      "decision_type": "primary",
+      "cause_type": "integration",
+      "signal_type": "observed_error",
+      "affects_training": false,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "RATIONALE_DEFAULT_USED",
+      "category": "API",
+      "layer": "rationale",
+      "plane": "api_surface",
+      "decision_type": "fallback",
+      "cause_type": "control",
+      "signal_type": "fallback_used",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "REQUEST_NORMALIZATION_ERROR",
+      "category": "API",
+      "layer": "api_surface",
+      "plane": "api_surface",
+      "decision_type": "normalization",
+      "cause_type": "integration",
+      "signal_type": "observed_error",
+      "affects_training": false,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "RESOURCE_RESOLUTION_FAIL",
+      "category": "API",
+      "layer": "resolution",
+      "plane": "orchestration",
+      "decision_type": "primary",
+      "cause_type": "integration",
+      "signal_type": "observed_error",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "DEGRADED_MODE_TRIGGERED",
+      "category": "CONTROL",
+      "layer": "control",
+      "plane": "control",
+      "decision_type": "fallback",
+      "cause_type": "environment",
+      "signal_type": "fallback_used",
+      "affects_training": false,
+      "affects_product": true,
+      "explainable": true
+    },
+
+    {
+      "reason_code": "FALLBACK_OVERUSE",
+      "category": "CONTROL",
+      "layer": "control",
+      "plane": "control",
+      "decision_type": "fallback",
+      "cause_type": "control",
+      "signal_type": "fallback_used",
+      "affects_training": true,
+      "affects_product": true,
+      "explainable": true
+    }
+
+  ]
+}
