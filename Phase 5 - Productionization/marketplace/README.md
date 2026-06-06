@@ -1,59 +1,111 @@
-## Phase 5 — Marketplace Layer
+## Phase 5 — Marketplace and Creator System
 
-The Marketplace Layer defines how recommendation capabilities
-are exposed for **creator participation, content surfacing,
-and monetization** during Phase 5 (Productionization).
+### Purpose
 
----
+The Marketplace Layer defines how:
 
-## Purpose
-
-- Enable creator and partner participation
-- Surface content through recommendation outputs
-- Support monetization without semantic interference
+- content is created and distributed
+- creators participate and are rewarded
+- economic interactions are recorded and governed
 
 ---
 
-## What This Layer Does
+### Pipeline Role
 
-- Defines marketplace eligibility rules
-- Governs creator and content participation
-- Emits marketplace-related telemetry
-
----
-
-## What This Layer Does NOT Do
-
-- It does NOT alter recommendation ranking
-- It does NOT change model behavior
-- It does NOT bypass Phase 6 enforcement
-- It does NOT introduce learning logic
+```
+content / creator / interaction
+→ marketplace_events
+→ telemetry / feedback / safety
+→ learning / monetization
+```
 
 ---
 
-## Relationship to Other Phases
+### Core Model
 
-- **Upstream**  
-  Consumes stable outputs from the Phase 5 Recommendation Layer,
-  executed under Phase 6 governance.
-
-- **Downstream**  
-  Emits signals for:
-  - Phase 5 Observability
-  - Phase 6 compliance and audit
-
-Marketplace participation is downstream of intelligence,
-and upstream of business value.
+```
+content lifecycle
+→ interaction
+→ transaction
+→ metrics
+```
 
 ---
 
-## Invariants
+### What This Layer Does
 
-- All participation is opt‑in
-- All monetization is transparent
-- All enforcement remains external
-- All semantics remain unchanged
+- manage content lifecycle
+- record marketplace interactions
+- enable creator participation
+- support monetization flows
+- produce marketplace_events
 
 ---
 
-The Marketplace Layer exists to **exchange value**, not to create it.
+### What This Layer Does NOT Do
+
+- ❌ Does NOT perform recommendation logic
+- ❌ Does NOT enforce penalties (delegated to safety)
+- ❌ Does NOT define gameplay semantics
+- ❌ Does NOT modify runtime decisions
+
+---
+
+### Data Contract
+
+Primary schema:
+- marketplace_events.schema.json
+
+Generated via:
+- build_marketplace_event()
+
+---
+
+### Key Entities
+
+| Entity | Description |
+|--------|------------|
+| content | player-facing assets |
+| creator | content producers |
+| player | consumers |
+| transaction | economic actions |
+
+---
+
+### Relationship to Other Layers
+
+| Layer | Role |
+|------|------|
+| telemetry | behavior |
+| feedback | player reaction |
+| safety | abuse detection |
+| marketplace | content + economy |
+
+---
+
+### Invariants
+
+- all events are auditable
+- all transactions are reversible
+- no hidden monetization
+- creator attribution must be preserved
+
+---
+
+### Design Intent
+
+Marketplace exists to:
+
+✅ grow content ecosystem  
+✅ reward creators  
+✅ enable discovery  
+
+WITHOUT:
+
+❌ breaking fairness  
+❌ enabling abuse  
+❌ leaking semantics into learning  
+
+---
+
+**Marketplace defines participation and value — not truth.**

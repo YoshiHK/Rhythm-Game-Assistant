@@ -1,25 +1,45 @@
-## Content Catalog (Phase 5 Marketplace)
+### Content Catalog
 
-The Content Catalog defines how marketplace content
-is registered and referenced.
+Defines how content is created, stored, and distributed.
 
-### Content Types
+---
 
-- Songs
-- Practice packs
-- Creator-curated playlists
+### Content Lifecycle
 
-### Catalog Properties
+```
+draft → published → updated → consumed → deprecated
+```
 
-Each catalog entry MUST:
-- Reference stable content identifiers
-- Be versioned and auditable
-- Include eligibility metadata
+---
 
-### Non‑Goals
+### Mapping to Events
 
-- The catalog does NOT score content
-- The catalog does NOT rank content
-- The catalog does NOT filter recommendations
+Each stage MUST emit:
 
-The catalog is a **lookup registry**, not a decision engine.
+| Stage | Event |
+|------|------|
+| created | content_created |
+| updated | content_updated |
+| published | content_published |
+| consumed | content_consumed |
+
+---
+
+### Requirements
+
+- content_id MUST be stable
+- versioning MUST be tracked
+- provenance_id MUST link to interaction
+
+---
+
+### Invariants
+
+- content is immutable per version
+- changes produce new version
+- consumption does not alter content
+
+---
+
+Content catalog ensures:
+> structured and traceable content lifecycle

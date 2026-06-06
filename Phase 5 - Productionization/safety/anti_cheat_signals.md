@@ -1,24 +1,61 @@
-## Anti‑Cheat Signals (Phase 5)
+### Anti‑Cheat Signals (Phase 5)
 
-This document defines **signals that may indicate abuse or cheating**.
+Defines signals indicating potential abuse or cheating.
 
-### Example Signals
+---
 
-- Repeated identical submissions across sessions
-- Impossibly consistent performance patterns
-- High‑frequency retries inconsistent with human play
-- Coordinated manipulation of feedback or marketplace signals
+### Signal Types
 
-### Signal Characteristics
+Examples:
 
-- Signals are probabilistic, not definitive
-- Single signals are insufficient for action
-- Correlation over time is required
+- repeated identical submissions
+- impossible performance patterns
+- abnormal retry behavior
+- coordinated manipulation
+
+---
+
+### Signal Model (UPDATED)
+
+Signals are:
+
+- probabilistic
+- weak individually
+- meaningful only when aggregated
+
+---
+
+### Signal → Safety Event Mapping (NEW)
+
+Each signal MUST be mapped into:
+
+```
+safety_event:
+event_type = "anti_cheat_flag"
+signal = {...}
+severity = derived
+```
+
+---
+
+### Severity Guidelines (NEW)
+
+| Level | Meaning |
+|------|--------|
+| low | anomaly |
+| medium | suspicious |
+| high | strong abuse signal |
+| critical | systemic abuse |
+
+---
 
 ### Non‑Goals
 
-- Signals do NOT prove guilt
-- Signals do NOT trigger automatic bans
-- Signals do NOT affect runtime behavior
+- ❌ Signals do NOT prove guilt 
+- ❌ Signals do NOT trigger bans 
+- ❌ Signals do NOT affect runtime  
 
-Anti‑cheat signals exist to **flag risk**, not to conclude intent.
+---
+
+Anti-cheat signals:
+> flag risk, not conclude intent

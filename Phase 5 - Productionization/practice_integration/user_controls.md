@@ -1,25 +1,67 @@
-## User Controls (Phase 5 Practice Integration)
+### User Controls
 
-Users retain full control over practice assistance features.
+Defines how players interact with recommendations and hints.
 
-### Available Controls
+---
 
-- Enable / disable in‑session hints
-- Adjust hint frequency
-- Dismiss individual hints
-- Reset practice assistance settings
+### Purpose
 
-### Principles
+- Allow players to customize experience
+- Maintain user autonomy
+- Provide opt-in / opt-out controls
 
-- Assistance is opt‑in or easily disabled
-- Defaults must be conservative
-- No penalty for disabling assistance
+---
 
-### Non‑Goals
+### Supported Controls
 
-- User controls do NOT affect model behavior
-- User controls do NOT influence recommendations
-- User controls do NOT bypass Phase 6 enforcement
+- enable/disable hints
+- adjust frequency of guidance
+- dismiss recommendations
+- reset personalization
 
-User control ensures practice support remains **supportive, not coercive**.
-``
+---
+
+### Constraints (CRITICAL)
+
+User controls MUST:
+
+- affect only presentation
+- NOT affect:
+  - model outputs
+  - taxonomy reasoning
+  - dataset generation
+
+---
+
+### Feedback Capture (NEW)
+
+Actions MUST be recorded:
+
+- dismiss → feedback event
+- skip → behavior signal
+- retry → practice telemetry
+
+---
+
+### Safety Rules
+
+User controls MUST NOT:
+
+- bypass system safeguards
+- manipulate evaluation outcomes
+- distort learning signals
+
+---
+
+### Observability (NEW)
+
+All control interactions MUST:
+
+- emit telemetry events
+- be traceable to session_id
+- support experiment analysis
+
+---
+
+User controls exist to:
+> empower players without breaking system integrity

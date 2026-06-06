@@ -1,24 +1,51 @@
-## Monetization Rules (Phase 5 Marketplace)
+### Monetization Rules
 
-This document defines monetization boundaries
-for marketplace participation.
+Defines economic interactions in marketplace.
 
-### Allowed Monetization
+---
 
-- Sponsored placement disclosure
-- Creator attribution
-- Revenue sharing on accepted interactions
+### Transaction Types
 
-### Prohibited Monetization
+- purchase
+- reward
+- refund
 
-- Pay-to-rank mechanisms
-- Hidden prioritization
-- Semantic manipulation of recommendations
+---
 
-### Principles
+### Mapping to Events (NEW)
 
-- Monetization must be explicit
-- Monetization must be auditable
-- Monetization must not affect learning signals
+Each transaction MUST emit:
 
-Revenue exists downstream of trust, not instead of it.
+```
+marketplace_event:
+event_type = "transaction"
+```
+
+---
+
+### Economic Constraints
+
+- all transactions MUST be auditable
+- must support reversal
+- must be transparent to users
+
+---
+
+### Anti-Abuse Integration (NEW)
+
+Suspicious transactions MUST:
+
+```
+→ trigger safety_event
+```
+
+Examples:
+
+- abnormal purchase patterns
+- reward farming
+- coordinated manipulation
+
+---
+
+Monetization ensures:
+> fair and transparent economic system

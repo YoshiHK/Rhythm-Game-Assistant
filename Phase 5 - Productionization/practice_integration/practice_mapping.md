@@ -1,29 +1,64 @@
-## Practice Mapping (Phase 5)
+### Practice Mapping
 
-Practice Mapping defines how generated tips and elements
-are translated into practice‑time guidance.
+Defines how recommendations map into gameplay/practice flows.
 
-### Responsibilities
+---
 
-- Map tip elements to practice contexts
-- Preserve original semantic meaning
-- Adjust phrasing for immediacy and clarity
+### Purpose
 
-### Constraints
+- Connect recommendation outputs to gameplay elements
+- Align system decisions with actionable practice steps
 
-- Mapping MUST NOT introduce new elements
-- Mapping MUST NOT reinterpret severity
-- Mapping MUST NOT prioritize or suppress tips
+---
 
-### Examples
+### Mapping Inputs
 
-- A timing‑related tip → early‑measure reminder
-- A pattern‑related tip → section‑level focus hint
+- recommendation_response
+- contextual metadata (rank, difficulty)
 
-### Invariants
+---
 
-- Mapping is deterministic
-- Mapping is reversible
-- Mapping preserves provenance references
+### Mapping Outputs
 
-Practice Mapping adapts **presentation**, not **meaning**.
+- practice segments
+- target actions (retry, replay, focus area)
+
+---
+
+### Mapping Rules
+
+Mappings MUST:
+
+- preserve original recommendation intent
+- maintain alignment with reason_codes
+- be deterministic
+
+Mappings MUST NOT:
+
+- ❌ introduce new semantic interpretations
+- ❌ alter recommendation ranking
+- ❌ inject subjective scoring
+
+---
+
+### Traceability (NEW)
+
+Each mapping MUST link:
+
+- item_id → gameplay context
+- provenance_id → session usage
+
+---
+
+### Integration with Telemetry (NEW)
+
+Mappings must support:
+
+- replay tracking
+- retry actions
+- completion signals
+
+---
+
+Practice Mapping exists to:
+> translate recommendations into playable actions

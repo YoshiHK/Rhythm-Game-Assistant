@@ -1,18 +1,43 @@
-## Partner Constraints (Phase 5 Marketplace)
+### Partner Constraints
 
-Defines constraints for external partners
-participating in the marketplace.
+Defines external integration rules.
 
-### Constraints
+---
 
-Partners:
-- Cannot override recommendation outputs
-- Cannot inject custom ranking logic
-- Cannot suppress non-sponsored content
+### Partner Data Rules
 
-### Enforcement
+- content metadata MUST remain consistent
+- creator attribution MUST be preserved
+- monetization rules MUST not be bypassed
 
-- All partner interactions are subject to Phase 6 enforcement
-- Violations result in removal, not adaptation
+---
 
-Partners participate under **platform rules**, not private contracts.
+### Event Compliance (NEW)
+
+External integrations MUST:
+
+- produce marketplace_events
+- maintain schema compatibility
+
+---
+
+### Safety Integration
+
+Partner violations MUST:
+
+```
+→ generate safety_event
+```
+
+---
+
+### Invariants
+
+- no hidden logic
+- no bypass of marketplace rules
+- no unauthorized monetization
+
+---
+
+Partner constraints ensure:
+> ecosystem integrity across integrations

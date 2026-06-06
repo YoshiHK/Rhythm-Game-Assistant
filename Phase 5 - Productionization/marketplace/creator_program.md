@@ -1,24 +1,41 @@
-## Creator Program (Phase 5 Marketplace)
+### Creator Program
 
-This document defines how creators participate
-in the recommendation ecosystem.
+Defines how creators participate in content ecosystem.
 
-### Eligibility
+---
 
-Creators may:
-- Submit songs or practice content
-- Associate metadata with their content
-- Opt into marketplace visibility
+### Creator Roles
 
-Creators may NOT:
-- Influence recommendation ranking
-- Inject semantic guidance
-- Bypass Phase 6 safeguards
+- publish content
+- update content
+- receive rewards
+- interact with users
 
-### Responsibilities
+---
 
-- Maintain accurate content metadata
-- Respect platform guidelines
-- Accept visibility without ranking guarantees
+### Mapping | Event |### Mapping to Events (NEW)
+|------|------|
+| create | content_created |
+| publish | content_published |
+| reward | creator_rewarded |
 
-Creator participation is **contributory**, not controlling.
+---
+
+### Attribution Rules
+
+- every content MUST have creator_id
+- revenue and engagement MUST map to creator
+
+---
+
+### Anti-Abuse Constraints
+
+- no self-manipulation of metrics
+- no automated content farming
+- suspicious patterns MUST trigger safety_events
+
+---
+
+Creator program enables:
+> fair creator economy with traceability
+

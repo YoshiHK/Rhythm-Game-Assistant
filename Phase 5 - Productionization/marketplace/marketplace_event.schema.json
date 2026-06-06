@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase5MarketplaceEvent",
+  "type": "object",
+
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp"
+  ],
+
+  "properties": {
+
+    "event_id": { "type": "string" },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "content_created",
+        "content_updated",
+        "content_published",
+        "content_consumed",
+        "content_rated",
+        "creator_rewarded",
+        "transaction"
+      ]
+    },
+
+    "provenance_id": {
+      "type": "string"
+    },
+
+    "player_id": { "type": "string" },
+
+    "creator_id": { "type": "string" },
+
+    "content": {
+      "type": "object",
+      "properties": {
+        "content_id": { "type": "string" },
+        "content_type": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+
+    "interaction": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "rating": { "type": "number" }
+      }
+    },
+
+    "transaction": {
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["purchase", "reward", "refund"]
+        }
+      }
+    },
+
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "engagement_score": { "type": "number" }
+      }
+    },
+
+    "experiment": {
+      "type": "object",
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "variant": { "type": "string" }
+      }
+    }
+
+  },
+
+  "additionalProperties": false
+}

@@ -1,37 +1,97 @@
-## Curator Labeling Guidelines (Phase 5)
+### Labeling Guidelines (Phase 5)### Labeling Guidelines (Phase converts feedback signals into **taxonomy-aligned ground truth**.
 
-This document defines how curators apply **gold labels** used for
-offline evaluation and retraining.
+---
 
-### Core Principles
+### Label Structure
 
-- Judge **correctness**, not writing style.
-- Anchor all judgments to **Phase 4 provenance**.
-- Do not infer intent beyond observable output.
-- When uncertain, record uncertainty rather than forcing agreement.
+Each label MUST include:
 
-### Label Semantics
+- primary_reason (single dominant explanation)
+- reason_codes (all applicable causes)
+- taxonomy metadata:
+  - category
+  - layer
+  - plane
+  - decision_type
+  - cause_type
+  - signal_type
 
-- **tip_effectiveness**  
-  Did the tip meaningfully help address the identified issue?
+---
 
-- **severity_accuracy**  
-  Was the assigned severity appropriate given the chart context?
+### Core Rules
 
-- **element_relevance**  
-  Was the chosen gameplay element correct and well‑scoped?
+#### 1. Use Taxonomy Only (NEW)
+- All reason_codes MUST exist in reason_taxonomy_v1
+- No free-form labels allowed
 
-- **recommendation_quality**  
-  Was the recommended song appropriate for the player’s capability?
+---
 
-### Confidence & Notes
+#### 2. Separate Observation vs Interpretation
 
-- Confidence reflects how strongly the curator believes the label
-  represents ground truth.
-- Notes are encouraged for edge cases and ambiguous charts.
+Curators must distinguish:
 
-### Non‑Goals
+| Type | Example |
+|------|--------|
+| Observation | player skipped recommendation |
+| Interpretation | SELECTOR_FALLBACK_USED |
 
-- Labels MUST NOT trigger runtime changes.
-- Labels MUST NOT override algorithmic output directly.
-- Disagreements are data, not errors.
+---
+
+#### 3. Primary Reason Selection
+
+- Choose ONE dominant cause
+- Use reason priority logic (same as interpreter ordering where possible)
+- Avoid ambiguity
+
+---
+
+#### 4. Multi-Reason Cases
+
+- Multiple reason_codes allowed
+- Must still define a single primary_reason
+
+---
+
+#### 5. Handling Ambiguity (NEW)
+
+If unclear:
+
+- Prefer broader taxonomy category
+- Avoid overfitting to rare edge cases
+- Add notes for future refinement
+
+---
+
+#### 6. Machine vs Human Comparison (NEW)
+
+Curators SHOULD consider:
+
+- model_reason (machine hypothesis)
+- Compare against observed signals
+
+But MUST NOT blindly copy machine output.
+
+---
+
+### Error Categories
+
+Common cases:
+
+- Execution failure → EXEC_FAILURE
+- Missing output → PARTIAL_OUTPUT
+- Personalization mismatch → CAPABILITY_MISCLASSIFIED
+- Fallback overuse → FALLBACK_OVERUSE
+
+---
+
+### Consistency Requirements
+
+- Similar cases MUST produce consistent labels
+- All labels must be reproducible from input signals
+- Labeling decisions must be explainable
+
+---
+
+Labeling exists to:
+> create stable, learnable truth signals
+

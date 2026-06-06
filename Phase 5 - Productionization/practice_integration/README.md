@@ -1,58 +1,63 @@
-## Phase 5 — Practice Integration Layer
+### Phase 5 – Practice Integration & In-Session Experience
 
-Practice Integration defines how generated tips and guidance
-are applied during player practice and replay.
-
----
-
-## Purpose
-
-- Support deliberate practice
-- Reinforce learning at the right moment
-- Improve player comprehension of tips
+This layer defines how recommendations and guidance
+are delivered to players during gameplay and practice.
 
 ---
 
-## What This Layer Does
+### Pipeline Role
 
-- Translate tips into practice‑time hints
-- Surface contextual reminders
-- Collect non‑judgmental practice telemetry
+```
+recommendation_response → UI → in-session hints → practice → telemetry → feedback
+```
 
----
-
-## What This Layer Does NOT Do
-
-- It does NOT analyze charts
-- It does NOT generate tips
-- It does NOT alter recommendations
-- It does NOT enforce behavior
 
 ---
 
-## Relationship to Other Phases
+### Purpose
 
-- **Upstream**  
-  Consumes tips and elements produced by Phases 1–4.5,
-  executed under Phase 6 governance.
-
-- **Downstream**  
-  Emits practice telemetry for Phase 5 Observability,
-  Feedback Aggregation, and Curator review.
-
-Practice Integration is downstream of intelligence
-and upstream of learning.
+- Deliver recommendations in a usable form
+- Provide contextual guidance during gameplay
+- Capture player interaction signals
+- Feed observability and learning pipelines
 
 ---
 
-## Invariants
+### What This Layer Does
 
-- All assistance is optional
-- All behavior is reversible
-- All semantics remain unchanged
-- Phase 6 boundaries are never crossed
+- Render recommendations and hints
+- Map system outputs into gameplay context
+- Capture user interaction signals
+- Record telemetry for downstream analysis
 
 ---
 
-Practice Integration exists to **help players practice better**,
-not to decide how they should play.
+### What This Layer Does NOT Do
+
+- ❌ Does NOT change semantic meaning
+- ❌ Does NOT modify recommendation output logic
+- ❌ Does NOT generate training labels
+- ❌ Does NOT bypass Phase 6 control
+
+---
+
+### Data Contract (NEW)
+
+Primary schema:
+- practice_telemetry.schema.json
+
+Generated via:
+- build_practice_telemetry_event()
+
+---
+
+### Invariants
+
+- All outputs must be traceable via provenance_id
+- Presentation must not alter system meaning
+- All interactions must be observable via telemetry
+
+---
+
+Practice Integration exists to:
+> deliver decisions safely, without changing them

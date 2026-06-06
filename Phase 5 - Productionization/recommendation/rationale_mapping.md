@@ -1,24 +1,103 @@
-## Recommendation Rationale Mapping (Phase 5)
+### Rationale Mapping
 
-Rationale Mapping defines how internal recommendation signals
-are translated into **human-readable explanations**.
+Defines how structured reason codes are translated into user-facing explanations.
 
-### Responsibilities
+---
 
-- Convert model outputs into clear rationales
-- Preserve alignment with generated tips and elements
-- Avoid exposing internal scores or weights
+### Purpose
 
-### Constraints
+- Convert machine reasoning into human-readable explanations
+- Preserve semantic meaning across transformation
+- Enable consistent explanation across UI contexts
 
-- Mapping MUST NOT introduce new reasoning
-- Mapping MUST NOT reinterpret model intent
-- Mapping MUST remain consistent across versions
+---
 
-### Examples
+### Inputs
 
-- “This song helps you practice alternating rhythms”
-- “Recommended because it targets your recent timing issues”
+- reason_codes
+- primary_reason
+- taxonomy metadata
 
-Rationales explain **why something was suggested**,
-not **how the model works**.
+---
+
+### Output
+
+- human-readable rationale text
+- localization-ready strings
+
+---
+
+### Mapping Rules (UPDATED)
+
+#### 1. Deterministic Mapping
+
+Each reason_code MUST map to:
+
+- predefined explanation template
+- localization-ready string
+
+---
+
+#### 2. No Semantic Drift
+
+Mapping MUST NOT:
+
+- ❌ change meaning of reason_codes
+- ❌ introduce new reasoning
+- ❌ remove critical explanation elements
+
+---
+
+#### 3. Structure Preservation (NEW)
+
+Mapping MUST preserve:
+
+- primary_reason
+- reason_codes
+- ordering of importance
+
+---
+
+#### 4. UI Independence (NEW)
+
+Mapping must:
+
+- support multiple UI formats
+- separate:
+  - content (meaning)
+  - format (presentation)
+
+---
+
+### Example
+
+```
+reason_code: SELECTOR_FALLBACK_USED
+→ template:
+"This recommendation was generated using a fallback strategy."
+→ localized:
+"此推薦是基於備用策略生成"
+```
+
+---
+
+### Relationship to Evaluation (NEW)
+
+Reason mapping MUST:
+
+- align with evaluate_reason_alignment
+- allow reverse-check:
+  text → reason_code consistency
+
+---
+
+### Invariants
+
+- Mapping is reversible at semantic level
+- No hidden logic or thresholds
+- All explanation is traceable to taxonomy
+
+---
+
+Rationale mapping exists to:
+> translate meaning without changing it

@@ -1,58 +1,106 @@
-## Phase 5 — Safety, Legal, and Anti‑Cheat Layer
+### Phase 5 — Safety, Legal, and Anti‑Cheat
 
-This layer defines **safety, legal, and integrity boundaries**
-for Phase 5 (Productionization).
+This layer defines how the system:
 
----
-
-## Purpose
-
-- Protect the platform from misuse and abuse
-- Define legal and ethical constraints
-- Preserve fairness and trust in learning signals
+- detects risk
+- records structured safety events
+- escalates issues for enforcement
 
 ---
 
-## What This Layer Does
+### Pipeline Role (UPDATED)
 
-- Define unacceptable behaviors
-- Specify anti‑cheat and abuse signals
-- Record safety‑relevant events
-- Escalate issues to Phase 6 enforcement
-
----
-
-## What This Layer Does NOT Do
-
-- It does NOT block runtime execution
-- It does NOT modify recommendations or tips
-- It does NOT penalize users directly
-- It does NOT replace Phase 6 enforcement
+```
+telemetry / feedback / marketplace
+→ safety_events
+→ escalation
+→ Phase 6 enforcement
+```
 
 ---
 
-## Relationship to Other Phases
+### Purpose
 
-- **Upstream**  
-  Consumes telemetry and feedback from Phase 5 layers
-  (Observability, Practice Integration, Marketplace).
-
-- **Downstream**  
-  Provides evidence and signals to Phase 6
-  Security, Compliance, and Anti‑Cheat subsystems.
-
-Safety monitoring informs enforcement;
-it never executes it.
+- Protect system integrity
+- Preserve fairness in learning
+- Ensure legal and compliance alignment
 
 ---
 
-## Invariants
+### What This Layer Does
 
-- All safety signals are auditable
-- All actions are reversible
-- No silent penalties are allowed
-- Phase 6 remains the sole authority for enforcement
+- Detect risk signals (anti-cheat / misuse)
+- Structure signals into safety_events
+- Classify severity
+- Record decisions (non-enforcing)
+- Escalate to Phase 6
 
 ---
 
-This layer exists to **define risk**, not to impose punishment.
+### What This Layer Does NOT Do
+
+- ❌ Does NOT block runtime execution
+- ❌ Does NOT apply penalties
+- ❌ Does NOT modify recommendations
+- ❌ Does NOT define legal outcomes
+
+---
+
+### Core Model (NEW)
+
+```
+signal → classification → decision → safety_event → escalation
+```
+
+---
+
+### Data Contract (NEW)
+
+Primary schema:
+- safety_events.schema.json
+
+Generated via:
+- build_safety_event()
+
+Core fields:
+- severity
+- signal
+- decision
+
+### Relationship to Other Layers
+
+| Layer | Role |
+|------|------|
+| telemetry | system behavior |
+| feedback | user reaction |
+| marketplace | economic signals |
+| safety | risk detection |
+
+---
+
+### Invariants
+
+- Signals are probabilistic
+- No automatic punishment
+- All events are auditable
+- All decisions are reversible
+- Phase 6 is the only enforcement authority 
+
+---
+
+### Design Intent
+
+Safety defines:
+
+✅ what is risky  
+✅ what needs escalation  
+
+NOT:
+
+❌ what punishment is  
+❌ what truth is  
+
+---
+
+Safety exists to:
+> detect and structure risk, not enforce it

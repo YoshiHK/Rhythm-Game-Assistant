@@ -1,32 +1,74 @@
-## In‑Session Hints (Phase 5)
+### In-Session Hints
 
-In‑session hints provide **optional, contextual reminders**
-during practice or replay.
+Defines how guidance is presented during gameplay.
+
+---
 
 ### Purpose
 
-- Reinforce previously generated tips
-- Help players focus on specific improvement areas
-- Support deliberate practice
+- Surface actionable hints at the right time
+- Improve player understanding of recommendations
+- Support learning without modifying model outputs
 
-### What In‑Session Hints Are
+---
 
-- Derived from existing tips and elements
-- Non‑blocking and non‑interruptive
-- Informational, not directive
+### Input Contract
 
-### What In‑Session Hints Are NOT
+Hints MUST be derived from:
 
-- They do NOT enforce actions
-- They do NOT alter chart analysis
-- They do NOT change severity or scoring
-- They do NOT gate progress
+- recommendation_response.reason
+- structured reason_codes
+- taxonomy-aligned outputs
+
+---
+
+### Presentation Rules
+
+Hints MAY:
+
+- rephrase for readability
+- adjust wording for UI clarity
+- localize content
+
+Hints MUST NOT:
+
+- ❌ change meaning of recommendation
+- ❌ introduce new semantic content
+- ❌ override system reasoning
+
+---
+
+### Timing Rules
+
+Hints should be:
+
+- context-aware (gameplay state)
+- non-blocking
+- dismissible
+
+---
+
+### Telemetry (NEW)
+
+Each hint interaction MUST generate:
+
+- hint_shown
+- hint_dismissed
+- follow-up action (if any)
+
+Linked via:
+- provenance_id
+- session_id
+
+---
 
 ### Invariants
 
-- Hints must always be skippable
-- Hints must respect user settings
-- Absence of hints does not imply correctness
+- Hints are presentation-only
+- All hint behavior is observable
+- No hint affects model decision logic
 
-In‑session hints exist to **support learning**, not to control play.
-``
+---
+
+Hints exist to:
+> translate system decisions, not to redefine them

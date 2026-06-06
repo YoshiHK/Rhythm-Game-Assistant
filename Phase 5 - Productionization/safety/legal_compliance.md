@@ -1,24 +1,56 @@
-## Legal and Compliance Guidelines (Phase 5)
+### Legal and Compliance (Phase 5)
 
-This document defines legal and regulatory considerations
-relevant to Phase 5 operations.
+Defines constraints for lawful operation.
+
+---
 
 ### Key Areas
 
-- Data protection and privacy
-- Consent for data usage
-- Transparency in recommendations and monetization
-- Auditability of automated decisions
+- privacy & data protection 
+- consent management 
+- transparency 
+- auditability 
+
+---
+
+### Data Requirements
+
+Safety events MUST:
+
+- avoid storing unnecessary raw data
+- prefer aggregated signals
+- support audit trails
+
+---
+
+### Integration with Safety Events (NEW)
+
+Legal considerations MUST influence:
+
+```
+safety_event:
+decision
+severity
+review_required
+```
+
+---
 
 ### Principles
 
-- Minimize data collection
-- Prefer aggregation over raw data
-- Support user data access and deletion requests
+- minimize data collection 
+- ensure user rights 
+- maintain transparency  
+
+---
 
 ### Scope Limitation
 
-- Phase 5 does not make legal determinations
-- Compliance enforcement is handled in Phase 6
+- Phase 5 does NOT enforce law 
+- Phase 6 handles enforcement  
 
-Legal guidelines define **constraints**, not legal outcomes.
+---
+
+Legal defines:
+> constraints, not outcomes
+

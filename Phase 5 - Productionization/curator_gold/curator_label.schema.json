@@ -1,49 +1,167 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Phase5CuratorGoldLabel",
+  "title": "CuratorLabel",
+
   "type": "object",
+
   "required": [
-    "label_id",
+    "event_id",
     "provenance_id",
-    "label_type",
-    "label_value",
-    "curator_id",
+    "curation_id",
     "timestamp",
-    "schema_version"
+    "model_reason",
+    "curator_reason"
   ],
+
   "properties": {
-    "label_id": { "type": "string" },
-    "provenance_id": { "type": "string" },
 
-    "label_type": {
+    "event_id": {
+      "type": "string"
+    },
+
+    "provenance_id": {
+      "type": "string"
+    },
+
+    "curation_id": {
+      "type": "string"
+    },
+
+    "timestamp": {
       "type": "string",
-      "enum": [
-        "tip_effectiveness",
-        "severity_accuracy",
-        "element_relevance",
-        "recommendation_quality"
-      ]
+      "format": "date-time"
     },
 
-    "label_value": {
-      "type": ["string", "number", "boolean"]
+    "curator_id": {
+      "type": "string"
     },
 
-    "confidence": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 1,
-      "description": "Curator confidence in this label (0–1)"
+    "model_reason": {
+      "type": "object",
+      "description": "Output from feedback_interpreter (machine hypothesis)",
+      "properties": {
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "primary_reason": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number"
+        }
+      }
     },
 
-    "schema_version": {
-      "type": "string",
-      "description": "Schema version for forward compatibility"
+    "curator_reason": {
+      "type": "object",
+      "description": "Human-labeled ground truth aligned with taxonomy",
+      "properties": {
+
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+
+        "primary_reason": {
+          "type": "string"
+        },
+
+        "category": {
+          "type": "string",
+          "enum": [
+            "EXECUTION",
+            "SELECTION",
+            "PERSONALIZATION",
+            "LOCALIZATION",
+            "API",
+            "CONTROL"
+          ]
+        },
+
+        "layer": {
+          "type": "string"
+        },
+
+        "plane": {
+          "type": "string",
+          "enum": [
+            "execution",
+            "orchestration",
+            "api_surface",
+            "control"
+          ]
+        },
+
+        "decision_type": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "fallback",
+            "override",
+            "normalization"
+          ]
+        },
+
+        "cause_type": {
+          "type": "string",
+          "enum": [
+            "integration",
+            "control",
+            "semantic",
+            "numerical",
+            "environment"
+          ]
+        },
+
+        "signal_type": {
+          "type": "string",
+          "enum": [
+            "observed_error",
+            "missing_output",
+            "fallback_used",
+            "baseline_gap"
+          ]
+        }
+      }
     },
 
-    "curator_id": { "type": "string" },
-    "timestamp": { "type": "string", "format": "date-time" },
+    "judgement": {
+      "type": "object",
+      "description": "Comparison between model and human",
+      "properties": {
 
-    "notes": { "type": "string" }
+        "is_correct": {
+          "type": "boolean"
+        },
+
+        "agreement_type": {
+          "type": "string",
+          "enum": [
+            "exact_match",
+            "partial_match",
+            "mismatch"
+          ]
+        },
+
+        "severity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+
+    "notes": {
+      "type": "string"
+    }
+
   }
 }

@@ -2,34 +2,59 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5RecommendationRequest",
   "type": "object",
+
   "required": [
     "request_id",
     "player_id",
-    "provenance_id",
     "timestamp"
   ],
+
   "properties": {
+
     "request_id": { "type": "string" },
 
-    "player_id": {
-      "type": "string",
-      "description": "Identifier for the requesting player"
-    },
+    "player_id": { "type": "string" },
 
-    "provenance_id": {
-      "type": "string",
-      "description": "Phase 4 provenance identifier"
-    },
+    "provenance_id": { "type": "string" },
 
     "timestamp": {
       "type": "string",
       "format": "date-time"
     },
 
+    "request_type": {
+      "type": "string",
+      "enum": ["song", "practice", "game"]
+    },
+
     "context": {
       "type": "object",
-      "description": "Non-semantic request context",
+      "properties": {
+        "game_id": { "type": "string" },
+        "locale": { "type": "string" },
+        "player_level": { "type": "string" },
+        "recent_activity": { "type": "string" }
+      },
       "additionalProperties": true
+    },
+
+    "personalization": {
+      "type": "object",
+      "properties": {
+        "capability_tier": { "type": "string" },
+        "recommended_focus": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "experiment": {
+      "type": "object",
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "variant": { "type": "string" }
+      }
     }
-  }
+  },
+
+  "additionalProperties": false
 }

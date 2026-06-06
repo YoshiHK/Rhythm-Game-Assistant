@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5PracticeTelemetryEvent",
   "type": "object",
+
   "required": [
     "event_id",
     "event_type",
@@ -9,7 +10,9 @@
     "provenance_id",
     "practice_context"
   ],
+
   "properties": {
+
     "event_id": { "type": "string" },
 
     "event_type": {
@@ -18,18 +21,10 @@
         "hint_shown",
         "hint_dismissed",
         "practice_retry",
-        "section_replayed"
+        "section_replayed",
+        "session_started",
+        "session_ended"
       ]
-    },
-
-    "practice_context": {
-      "type": "string",
-      "description": "Identifier for practice session or mode"
-    },
-
-    "provenance_id": {
-      "type": "string",
-      "description": "Phase 4 provenance identifier"
     },
 
     "timestamp": {
@@ -37,10 +32,48 @@
       "format": "date-time"
     },
 
-    "metadata": {
+    "provenance_id": {
+      "type": "string"
+    },
+
+    "player_id": {
+      "type": "string"
+    },
+
+    "session_id": {
+      "type": "string"
+    },
+
+    "practice_context": {
       "type": "object",
-      "description": "Non-judgmental practice context",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string" },
+        "game_id": { "type": "string" },
+        "song_id": { "type": "string" },
+        "difficulty": { "type": "string" },
+        "section_id": { "type": "string" }
+      },
       "additionalProperties": true
+    },
+
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "duration_ms": { "type": "number" },
+        "retry_count": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+
+    "experiment": {
+      "type": "object",
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "variant": { "type": "string" }
+      }
     }
-  }
+  },
+
+  "additionalProperties": false
 }

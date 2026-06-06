@@ -2,15 +2,21 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5FeedbackEvent",
   "type": "object",
+
   "required": [
     "event_id",
     "provenance_id",
     "event_type",
     "source_type",
-    "timestamp"
+    "timestamp",
+    "payload"
   ],
+
   "properties": {
-    "event_id": { "type": "string" },
+
+    "event_id": {
+      "type": "string"
+    },
 
     "provenance_id": {
       "type": "string",
@@ -35,14 +41,106 @@
       ]
     },
 
-    "payload": {
-      "type": "object",
-      "description": "Raw, uninterpreted feedback payload"
-    },
-
     "timestamp": {
       "type": "string",
       "format": "date-time"
+    },
+
+    "context": {
+      "type": "object",
+      "description": "Runtime context (no interpretation, only raw linkage)",
+
+      "properties": {
+        "player_id": { "type": "string" },
+        "session_id": { "type": "string" },
+
+        "game_id": { "type": "string" },
+        "song_id": { "type": "string" },
+
+        "recommendation_set_id": { "type": "string" },
+
+        "difficulty": { "type": "string" },
+        "rank": { "type": "integer" },
+
+        "locale": { "type": "string" },
+
+        "surface": { "type": "string" },
+        "mode": { "type": "string" }
+      },
+
+      "additionalProperties": true
+    },
+
+    "payload": {
+      "type": "object",
+      "description": "Raw, uninterpreted feedback payload",
+
+      "properties": {
+
+        "action": {
+          "type": "string"
+        },
+
+        "reaction_type": {
+          "type": "string"
+        },
+
+        "completion_status": {
+          "type": "string"
+        },
+
+        "dismiss_reason": {
+          "type": "string"
+        },
+
+        "duration_ms": {
+          "type": "number"
+        },
+
+        "retry_count": {
+          "type": "integer"
+        }
+      },
+
+      "additionalProperties": true
+    },
+
+    "system_context": {
+      "type": "object",
+      "description": "System-level signals (non-interpretive)",
+
+      "properties": {
+        "selector_used": { "type": "string" },
+        "fallback_triggered": { "type": "boolean" },
+        "degraded_mode": { "type": "boolean" },
+
+        "execution_stage": { "type": "string" },
+        "error_code": { "type": "string" }
+      },
+
+      "additionalProperties": true
+    },
+
+    "experiment": {
+      "type": "object",
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "variant": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "ingestion_metadata": {
+      "type": "object",
+      "properties": {
+        "client_version": { "type": "string" },
+        "platform": { "type": "string" },
+        "ingestion_source": { "type": "string" }
+      },
+      "additionalProperties": false
     }
-  }
+
+  },
+
+  "additionalProperties": false
 }

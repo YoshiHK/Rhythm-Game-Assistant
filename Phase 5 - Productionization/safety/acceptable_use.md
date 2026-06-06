@@ -1,25 +1,45 @@
-## Acceptable Use Policy (Phase 5)
+### Acceptable Use Policy (Phase 5)
 
-This document defines acceptable and unacceptable use
-of the Rhythm Game Assistant platform.
+Defines platform behavioral boundaries.
+
+---
 
 ### Acceptable Use
 
-- Genuine gameplay improvement
-- Honest feedback submission
-- Fair participation in recommendations and practice
+- genuine gameplay
+- honest feedback
+- fair participation
+
+---
 
 ### Prohibited Use
 
-- Deliberate manipulation of feedback signals
-- Automated or scripted submissions
-- Misrepresentation of gameplay results
-- Attempts to reverse‑engineer model behavior for advantage
+- feedback manipulation 
+- automated submissions 
+- misrepresentation 
+- model gaming 
+
+---
+
+### Mapping to Safety Events (NEW)
+
+Violations MUST produce:
+
+```
+safety_event:
+event_type = "policy_violation"
+severity = derived
+```
+
+---
 
 ### Principles
 
-- Intent matters more than outcome
-- Edge cases are reviewed, not punished
-- Users are not assumed malicious by default
+- intent > outcome 
+- ambiguous cases reviewed  
+- users assumed non-malicious  
 
-Acceptable use defines **community boundaries**, not enforcement actions.
+---
+
+Acceptable use defines:
+> community boundaries, not enforcement

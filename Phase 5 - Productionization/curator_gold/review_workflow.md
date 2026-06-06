@@ -1,21 +1,91 @@
-## Curator Review Workflow (Phase 5)
+### Review Workflow (Phase 5)
 
-This workflow governs how gold labels are produced for training and evaluation.
+Defines how curator labeling is executed and validated.
 
-### Workflow Steps
+---
 
-1. Receive grouped feedback events (by provenance_id).
-2. Review generated tips, selected elements, and surrounding context.
-3. Apply one or more gold labels.
-4. Record confidence and optional notes.
-5. Submit labels to an append‑only, versioned store.
-6. Escalate ambiguous or disputed cases for secondary review.
+### Workflow Steps (UPDATED)
 
-### Invariants
+1. Receive curator queue item
+2. Inspect aggregated feedback
+3. Review model_reason (optional reference)
+4. Apply taxonomy-aligned labeling
+5. Validate consistency
+6. Submit labeled item
 
-- No automatic approval or rejection is permitted.
-- Labels do not affect runtime behavior.
-- All labels are immutable once written.
-- Revisions are represented as new labels, not edits.
+---
 
-This process exists to build **trustworthy training data**, not to police outputs.
+### Required Inputs
+
+Each review MUST have access to:
+
+- aggregated feedback signals
+- runtime context
+- provenance_id
+- (optional) model_reason
+
+---
+
+### Output Requirements
+
+Each review MUST produce:
+
+- curator_reason (taxonomy-aligned)
+- judgement comparison:
+  - is_correct
+  - agreement_type
+  - severity
+
+---
+
+### Review Modes (NEW)
+
+#### Standard Review
+- Label from scratch
+
+#### Assisted Review
+- Compare against model_reason
+- Correct or confirm model output
+
+---
+
+### Consistency Enforcement (NEW)
+
+- Reviewers must follow labeling_guidelines
+- Conflicting labels should be escalated
+- High-disagreement cases should be flagged
+
+---
+
+### Escalation (NEW)
+
+Escalate when:
+
+- taxonomy is insufficient
+- case is ambiguous
+- repeated mismatch detected
+
+---
+
+### Traceability
+
+Each review must be traceable to:
+
+- original feedback events
+- aggregation output
+- eventual training dataset
+
+---
+
+### Downstream Impact (NEW)
+
+Curator output directly affects:
+
+- dataset_builder
+- model training
+- evaluation metrics
+
+---
+
+Review workflow exists to:
+> ensure truth is applied consistently and safely

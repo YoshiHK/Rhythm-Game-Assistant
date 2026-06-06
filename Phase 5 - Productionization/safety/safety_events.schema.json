@@ -2,39 +2,98 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5SafetyEvent",
   "type": "object",
+
   "required": [
     "event_id",
     "event_type",
-    "timestamp",
-    "source_layer"
+    "timestamp"
   ],
+
   "properties": {
+
     "event_id": { "type": "string" },
-
-    "event_type": {
-      "type": "string",
-      "enum": [
-        "acceptable_use_violation",
-        "anti_cheat_signal",
-        "legal_risk_flag",
-        "escalation_created"
-      ]
-    },
-
-    "source_layer": {
-      "type": "string",
-      "description": "Originating Phase 5 layer"
-    },
 
     "timestamp": {
       "type": "string",
       "format": "date-time"
     },
 
-    "metadata": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "abuse_detected",
+        "anti_cheat_flag",
+        "policy_violation",
+        "content_flagged",
+        "account_action",
+        "safety_review_required"
+      ]
+    },
+
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+
+    "provenance_id": {
+      "type": "string"
+    },
+
+    "player_id": { "type": "string" },
+
+    "context": {
       "type": "object",
-      "description": "Non-judgmental supporting context",
+      "properties": {
+        "game_id": { "type": "string" },
+        "song_id": { "type": "string" },
+        "session_id": { "type": "string" }
+      },
       "additionalProperties": true
+    },
+
+    "signal": {
+      "type": "object",
+      "description": "raw detection signals",
+      "additionalProperties": true
+    },
+
+    "decision": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "none",
+            "flag",
+            "restrict",
+            "temporary_block",
+            "permanent_ban"
+          ]
+        },
+        "automated": { "type": "boolean" }
+      }
+    },
+
+    "review": {
+      "type": "object",
+      "properties": {
+        "required": { "type": "boolean" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "reviewed", "resolved"]
+        }
+      }
+    },
+
+    "experiment": {
+      "type": "object",
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "variant": { "type": "string" }
+      }
     }
-  }
+
+  },
+
+  "additionalProperties": false
 }

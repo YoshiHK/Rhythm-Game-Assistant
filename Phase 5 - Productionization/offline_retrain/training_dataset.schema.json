@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Phase5TrainingDataset",
   "type": "object",
+
   "required": [
     "dataset_id",
     "created_at",
@@ -9,8 +10,12 @@
     "label_schema_version",
     "samples"
   ],
+
   "properties": {
-    "dataset_id": { "type": "string" },
+
+    "dataset_id": {
+      "type": "string"
+    },
 
     "created_at": {
       "type": "string",
@@ -27,33 +32,140 @@
     },
 
     "label_schema_version": {
+      "type": "string"
+    },
+
+    "feature_schema_version": {
       "type": "string",
-      "description": "Version of curator_label.schema.json"
+      "description": "Version of feature construction logic"
+    },
+
+    "aggregation_version": {
+      "type": "string"
     },
 
     "samples": {
       "type": "array",
       "items": {
         "type": "object",
+
         "required": [
           "provenance_id",
           "features",
           "gold_labels"
         ],
+
         "properties": {
-          "provenance_id": { "type": "string" },
+
+          "provenance_id": {
+            "type": "string"
+          },
+
+          "event_id": {
+            "type": "string"
+          },
+
+          "curation_id": {
+            "type": "string"
+          },
 
           "features": {
             "type": "object",
-            "description": "Derived, offline-only features"
+            "description": "Selection-level deterministic features",
+
+            "required": [
+              "game_id",
+              "song_id"
+            ],
+
+            "properties": {
+
+              "game_id": { "type": "string" },
+              "song_id": { "type": "string" },
+              "difficulty": { "type": "string" },
+              "rank": { "type": "integer" },
+              "action": { "type": "string" },
+
+              "locale": { "type": "string" },
+              "tier_id": { "type": "string" },
+              "target_metric": { "type": "number" },
+
+              "catalog_fingerprint": { "type": "string" },
+              "recommendation_set_id": { "type": "string" },
+
+              "derived_primary_reason": { "type": "string" },
+              "derived_reason_confidence": { "type": "number" }
+            },
+
+            "additionalProperties": true
           },
 
           "gold_labels": {
             "type": "array",
-            "items": { "type": "object" }
+
+            "items": {
+              "type": "object",
+
+              "required": [
+                "reason_codes",
+                "primary_reason"
+              ],
+
+              "properties": {
+
+                "primary_reason": {
+                  "type": "string"
+                },
+
+                "reason_codes": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+
+                "category": { "type": "string" },
+                "layer": { "type": "string" },
+                "plane": { "type": "string" },
+                "decision_type": { "type": "string" },
+                "cause_type": { "type": "string" },
+                "signal_type": { "type": "string" }
+              },
+
+              "additionalProperties": false
+            }
+          },
+
+          "model_reason": {
+            "type": "object",
+            "properties": {
+              "reason_codes": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "primary_reason": { "type": "string" },
+              "confidence": { "type": "number" }
+            },
+            "additionalProperties": false
+          },
+
+          "curator_metadata": {
+            "type": "object",
+            "properties": {
+              "agreement_type": { "type": "string" },
+              "is_correct": { "type": "boolean" },
+              "severity": { "type": "string" },
+              "notes": { "type": "string" },
+              "curator_id": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            },
+            "additionalProperties": false
           }
-        }
+
+        },
+
+        "additionalProperties": false
       }
     }
-  }
+  },
+
+  "additionalProperties": false
 }

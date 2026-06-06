@@ -1,53 +1,80 @@
-## Phase 5 — Feedback Aggregation Layer
 
-Feedback Aggregation is the first learning-facing layer in Phase 5
-(Productionization).
+### Phase 5 — Feedback Aggregation
 
-Its role is to transform **runtime feedback signals**
-into **structured review inputs** for Curator Gold & Labeling.
+Feedback Aggregation is the **first learning-facing layer** in Phase 5.
 
----
-
-## Responsibilities
-
-- Collect raw feedback from runtime execution.
-- Preserve provenance and execution context.
-- Aggregate feedback into curator-reviewable units.
-- Maintain append-only, auditable datasets.
+It transforms **raw runtime feedback events**
+into **structured, curator-reviewable units**.
 
 ---
 
-## What This Layer Does NOT Do
+### Pipeline Role 
 
-- It does NOT judge correctness.
-- It does NOT score quality.
-- It does NOT modify runtime behavior.
-- It does NOT produce training labels.
+```
+feedback_event → interpretation_bridge → aggregation → curator_queue → curator_label
+```
 
----
-
-## Relationship to Other Phases
-
-- **Upstream**  
-  Consumes runtime outputs from Phases 1–4.5,
-  executed under Phase 6 governance.
-
-- **Downstream**  
-  Produces curated inputs for Phase 5 Curator Gold & Labeling.
-
-Feedback Aggregation is downstream of runtime execution,
-but upstream of human judgment.
+This layer prepares data for human interpretation,
+but never performs interpretation itself.
 
 ---
 
-## Design Invariants
+### Responsibilities
 
-- All feedback is immutable and append-only.
-- All aggregation is reversible.
-- All semantics remain human-interpreted.
-- Phase 6 enforcement is never bypassed.
+- Collect raw feedback from runtime execution
+- Preserve full provenance and context
+- Maintain append-only, auditable records
+- Aggregate feedback into coherent review units
+- Ensure compatibility with:
+  - feedback_events.schema.json
+  - curator_label.schema.json
 
 ---
 
-Feedback Aggregation exists to **prepare reality for learning**,
-not to decide what reality means.
+### What This Layer Does NOT Do
+
+- ❌ Does NOT judge correctness
+- ❌ Does NOT assign reason codes
+- ❌ Does NOT score quality
+- ❌ Does NOT modify runtime behavior
+- ❌ Does NOT produce training labels
+
+---
+
+### Data Contract (NEW)
+
+Inputs MUST conform to:
+- feedback_events.schema.json 
+
+Generated via:
+- build_feedback_event()
+
+Output guarantees:
+- event_id
+- provenance_id
+- raw payload (uninterpreted)
+
+---
+
+### Relationship to Other Phases
+
+Upstream:
+- Runtime outputs (Phase 1–4.5, governed by Phase 6)
+
+Downstream:
+- curator_queue
+- curator_label
+
+---
+
+### Design Invariants
+
+- All feedback is immutable and append-only
+- Aggregation is reversible to raw events
+- No semantic interpretation is introduced
+- All meaning is deferred to humans or interpreter layer
+
+---
+
+Feedback Aggregation exists to:
+> prepare reality for learning, never to interpret it

@@ -1,57 +1,77 @@
-## Phase 5 – Observability & Experimentation Layer
+### Phase 5 – Observability & Experimentation
 
-This layer defines how the system **measures effectiveness**
-and **runs controlled experiments** during Phase 5 (Productionization).
+This layer defines how the system:
 
----
-
-## Purpose
-
-- Measure effectiveness of tips and recommendations
-- Enable controlled experimentation without semantic drift
-- Provide signals for offline learning and Phase 7 expansion
+- measures effectiveness
+- runs controlled experiments
+- produces analysis signals for learning
 
 ---
 
-## What This Layer Does
+### Pipeline Role
 
-- Collect non-semantic telemetry
-- Define canonical evaluation metrics
-- Run presentation-only experiments
-- Support analysis and human review
+```
+runtime → telemetry_events → metrics → experiments → evaluation → dataset → retraining
+```
 
----
-
-## What This Layer Does NOT Do
-
-- It does NOT change runtime behavior
-- It does NOT modify semantic outputs
-- It does NOT trigger enforcement actions
-- It does NOT replace curator judgment
 
 ---
 
-## Relationship to Other Phases
+### Purpose
 
-- **Upstream**  
-  Consumes runtime outputs from Phases 1–4.5,
-  executed under Phase 6 governance.
-
-- **Downstream**  
-  Feeds Phase 5 Curator Gold & Labeling and offline retraining.
-
-Observability informs learning; it never controls execution.
+- Measure effectiveness of recommendations and tips
+- Enable controlled, reversible experiments
+- Provide reliable signals for offline learning
 
 ---
 
-## Invariants
+### What This Layer Does
 
-- All telemetry is explainable and auditable
+- Collect structured telemetry events
+- Compute canonical metrics
+- Record experiment exposure and outcomes
+- Support evaluation and model validation
+
+---
+
+### What This Layer Does NOT Do
+
+- ❌ Does NOT modify semantic outputs
+- ❌ Does NOT affect runtime decision logic
+- ❌ Does NOT trigger model updates
+- ❌ Does NOT replace curator judgment
+
+---
+
+### Data Contract
+
+Primary schema:
+- telemetry_events.schema.json
+
+Generated via:
+- build_telemetry_event()
+---
+
+### Relationship to Other Layers
+
+Upstream:
+- Runtime execution (Phase 6 governed)
+
+Downstream:
+- Evaluation layer (metrics consumption)
+- Dataset builder (feature signals)
+- Model validation
+
+---
+
+### Invariants
+
+- All telemetry is non-semantic
 - All experiments are reversible
-- All semantics remain fixed
-- Phase 6 boundaries are never bypassed
+- All results are deterministic
+- Observability NEVER controls execution
 
 ---
 
-Phase 5 Observability exists to **learn safely from reality**,
-not to steer it in real time.
+Observability exists to:
+> measure reality safely, not to steer it

@@ -1,25 +1,54 @@
-## Escalation Policy (Phase 5 → Phase 6)
+### Escalation Policy (Phase 5 → Phase 6)
 
-This document defines how safety or legal concerns
-are escalated for enforcement.
+Defines how safety events are escalated.
+
+---
+
+### Escalation Model
+
+```
+safety_event → severity check → escalation package → Phase 6
+```
+
+---
 
 ### Escalation Triggers
 
-- Sustained anti‑cheat signals
-- Repeated acceptable‑use violations
-- Legal or compliance risk indicators
+- sustained anti-cheat signals 
+- repeated violations
+- legal risk indicators 
 
-### Escalation Process
+---
 
-1. Record safety event
-2. Aggregate supporting evidence
-3. Forward escalation package to Phase 6
-4. Await enforcement decision
+### Escalation Inputs (NEW)
+
+Each escalation MUST include:
+
+- safety_events
+- provenance_id
+- supporting signals
+- historical context
+
+---
+
+### Severity-Based Flow (NEW)
+
+| Severity | Action |
+|--------|--------|
+| low | log only |
+| medium | monitor |
+| high | escalate |
+| critical | immediate escalation |
+
+---
 
 ### Invariants
 
-- No direct enforcement in Phase 5
-- All escalations are logged
-- Human review is required for severe cases
+- No direct enforcement 
+- All escalations logged 
+- Human review required for severe cases 
 
-Escalation separates **detection** from **action**.
+---
+
+Escalation separates:
+> detection from enforcement

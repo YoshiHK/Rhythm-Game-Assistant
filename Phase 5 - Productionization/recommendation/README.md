@@ -1,61 +1,88 @@
-## Phase 5 — Recommendation Layer
+### Phase 5 – Recommendation Layer
 
-The Recommendation Layer defines how
-model-driven suggestions are delivered
-during Phase 5 (Productionization).
-
----
-
-## Purpose
-
-- Provide stable recommendation outputs
-- Ensure explanations are understandable
-- Support client and UI integration
+This layer defines how model outputs are transformed into
+user-facing recommendations and explanations.
 
 ---
 
-## What This Layer Does
+### Pipeline Role
 
-- Accept standardized recommendation requests
-- Return ranked recommendation lists
-- Attach human-readable rationales
-
----
-
-## What This Layer Does NOT Do
-
-- It does NOT analyze charts
-- It does NOT retrain models
-- It does NOT enforce safety rules
-- It does NOT perform experimentation
+```
+model output → structured response → UI rendering → telemetry → feedback
+```
 
 ---
 
-## Relationship to Other Phases
+### Purpose
 
-- **Upstream**  
-  Consumes intelligence produced by Phases 1–4.5
-  under Phase 6 governance.
-
-- **Downstream**  
-  Feeds:
-  - Phase 5 Observability
-  - Phase 5 Feedback Aggregation
-  - Practice Integration
-
-Recommendation delivery is downstream of learning
-and upstream of user experience.
+- Deliver ranked recommendations to users
+- Provide structured, explainable reasoning
+- Maintain traceability to model and dataset
+- Support evaluation and experimentation
 
 ---
 
-## Invariants
+### What This Layer Does
 
-- Output semantics are stable
-- Explanations are consistent
-- Phase 6 enforcement is never bypassed
-- Learning feedback is indirect and offline
+- Generate recommendation responses
+- Attach ranking and scoring metadata
+- Provide structured reasoning (reason_codes)
+- Support rationale mapping for UI
 
 ---
 
-The Recommendation Layer exists to **deliver trustable suggestions**,
-not to decide how learning happens.
+### What This Layer Does NOT Do
+
+- ❌ Does NOT change model decisions
+- ❌ Does NOT introduce new semantic meaning
+- ❌ Does NOT generate training labels
+- ❌ Does NOT perform runtime learning
+
+---
+
+### Data Contract (NEW)
+
+Request:
+- recommendation_request.schema.json
+Generated via:
+- build_recommendation_request()
+
+Response:
+- recommendation_response.schema.json
+Generated via:
+- build_recommendation_response()
+
+### Traceability Requirements (NEW)
+
+Responses MUST include:
+
+- request_id
+- provenance_id
+- model_version
+- feature_version
+
+---
+
+### Relationship to Other Layers
+
+Upstream:
+- model inference
+- personalization layer
+
+Downstream:
+- UI rendering
+- telemetry capture
+- feedback_events
+
+---
+
+### Invariants
+
+- Recommendation meaning is fixed
+- Explanation must align with taxonomy
+- Responses must be reproducible
+
+---
+
+Recommendation Layer exists to:
+> expose model decisions safely and transparently

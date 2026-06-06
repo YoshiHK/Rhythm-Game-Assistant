@@ -1,35 +1,18 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Phase5TelemetryEvent",
+  "title": "TelemetryEvent",
   "type": "object",
+
   "required": [
     "event_id",
     "event_type",
-    "timestamp",
-    "provenance_id",
-    "event_scope"
+    "timestamp"
   ],
+
   "properties": {
-    "event_id": { "type": "string" },
 
-    "event_type": {
-      "type": "string",
-      "description": "Non-semantic telemetry event type"
-    },
-
-    "event_scope": {
-      "type": "string",
-      "enum": [
-        "presentation",
-        "interaction",
-        "navigation"
-      ],
-      "description": "Telemetry scope; must not encode judgment"
-    },
-
-    "provenance_id": {
-      "type": "string",
-      "description": "Phase 4 provenance identifier"
+    "event_id": {
+      "type": "string"
     },
 
     "timestamp": {
@@ -37,10 +20,115 @@
       "format": "date-time"
     },
 
-    "metadata": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "recommendation_served",
+        "selection_made",
+        "model_inference",
+        "pipeline_execution",
+        "latency_measurement",
+        "error_event",
+        "experiment_exposure"
+      ]
+    },
+
+    "provenance_id": {
+      "type": "string",
+      "description": "Link to runtime and feedback pipeline"
+    },
+
+    "session_id": {
+      "type": "string"
+    },
+
+    "player_id": {
+      "type": "string"
+    },
+
+    "context": {
       "type": "object",
-      "description": "Auxiliary, non-judgmental context",
+
+      "properties": {
+        "game_id": { "type": "string" },
+        "song_id": { "type": "string" },
+        "recommendation_set_id": { "type": "string" },
+        "rank": { "type": "integer" },
+        "difficulty": { "type": "string" },
+
+        "surface": { "type": "string" },
+        "mode": { "type": "string" },
+        "locale": { "type": "string" }
+      },
+
       "additionalProperties": true
+    },
+
+    "metrics": {
+      "type": "object",
+      "description": "Numeric metrics for aggregation",
+
+      "properties": {
+        "latency_ms": { "type": "number" },
+        "execution_time_ms": { "type": "number" },
+        "retry_count": { "type": "integer" },
+        "success": { "type": "boolean" },
+        "cost": { "type": "number" }
+      },
+
+      "additionalProperties": true
+    },
+
+    "decision": {
+      "type": "object",
+      "description": "System decisions (non-semantic)",
+
+      "properties": {
+        "selector_used": { "type": "string" },
+        "fallback_triggered": { "type": "boolean" },
+        "model_version": { "type": "string" },
+        "feature_version": { "type": "string" }
+      },
+
+      "additionalProperties": true
+    },
+
+    "experiment": {
+      "type": "object",
+
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "variant": { "type": "string" },
+        "exposed": { "type": "boolean" }
+      },
+
+      "additionalProperties": false
+    },
+
+    "error": {
+      "type": "object",
+
+      "properties": {
+        "error_code": { "type": "string" },
+        "stage": { "type": "string" },
+        "message": { "type": "string" }
+      },
+
+      "additionalProperties": false
+    },
+
+    "ingestion_metadata": {
+      "type": "object",
+
+      "properties": {
+        "platform": { "type": "string" },
+        "client_version": { "type": "string" }
+      },
+
+      "additionalProperties": false
     }
-  }
+
+  },
+
+  "additionalProperties": false
 }
