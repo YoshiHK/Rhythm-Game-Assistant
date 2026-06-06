@@ -38,6 +38,7 @@ def build_practice_telemetry_event(
     event_type: str,
     provenance_id: str,
     mode: str,
+    event_id: Optional[str] = None,
     player_id: Optional[str] = None,
     session_id: Optional[str] = None,
     game_id: Optional[str] = None,
@@ -46,6 +47,7 @@ def build_practice_telemetry_event(
     section_id: Optional[str] = None,
     duration_ms: Optional[float] = None,
     retry_count: Optional[int] = None,
+    timestamp: Optional[str] = None,
     experiment_id: Optional[str] = None,
     variant: Optional[str] = None,
     extra_context: Optional[Dict[str, Any]] = None,
@@ -53,6 +55,11 @@ def build_practice_telemetry_event(
 ) -> Dict[str, Any]:
     """
     Build practice telemetry events aligned with practice_telemetry.schema.json.
+
+    Schema requirements:
+    - event_id, event_type, timestamp, provenance_id, practice_context: required
+    - practice_context.mode: required
+    - experiment: optional, additionalProperties: false
     """
 
     practice_context: Dict[str, Any] = {
@@ -78,11 +85,12 @@ def build_practice_telemetry_event(
             "experiment_id": _norm_str(experiment_id),
             "variant": _norm_str(variant),
         }
+        experiment = {k: v for k, v in experiment.items() if v is not None}
 
     obj = {
-        "event_id": f"practice_{hash(str(provenance_id) + str(mode) + str(_now_iso()))}",
+        "event_id": event_id or f"practice_{hash(str(provenance_id) + str(mode) + str(_now_iso()))}",
         "event_type": _norm_str(event_type),
-        "timestamp": _now_iso(),
+        "timestamp": timestamp or _now_iso(),
         "provenance_id": _norm_str(provenance_id),
         "player_id": _norm_str(player_id),
         "session_id": _norm_str(session_id),

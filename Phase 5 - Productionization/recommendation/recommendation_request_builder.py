@@ -19,8 +19,8 @@ def build_recommendation_request(
     *,
     request_id: str,
     player_id: str,
+    request_type: str,
     provenance_id: Optional[str] = None,
-    request_type: Optional[str] = None,
     timestamp: Optional[str] = None,
     game_id: Optional[str] = None,
     locale: Optional[str] = None,
@@ -35,6 +35,11 @@ def build_recommendation_request(
 ) -> Dict[str, Any]:
     """
     Build recommendation request objects aligned with recommendation_request.schema.json.
+
+    Schema requirements:
+    - request_id, player_id, timestamp, request_type: required
+    - context.game_id: required
+    - experiment: optional, additionalProperties: false
     """
 
     context: Dict[str, Any] = {
@@ -59,6 +64,7 @@ def build_recommendation_request(
             "experiment_id": _norm_str(experiment_id),
             "variant": _norm_str(variant),
         }
+        experiment = {k: v for k, v in experiment.items() if v is not None}
 
     obj = {
         "request_id": _norm_str(request_id),

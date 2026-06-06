@@ -80,6 +80,11 @@ def build_curator_label(
 ) -> Dict[str, Any]:
     """
     Build curator label objects aligned with curator_label.schema.json.
+
+    Schema requirements:
+    - model_reason: required, must have reason_codes, primary_reason
+    - curator_reason: required, must have reason_codes, primary_reason, category, plane
+    - judgement: optional, may have is_correct, agreement_type, severity
     """
 
     model_reason = {
