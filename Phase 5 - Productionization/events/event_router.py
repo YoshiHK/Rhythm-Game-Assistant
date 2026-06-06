@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict
 
 # ---------------------------------------------------------------------
-# ✅ Event Builders (ENTRY ONLY)
+# Event Builders (ENTRY ONLY)
 # ---------------------------------------------------------------------
 
-# Feedback / Telemetry / Marketplace / Safety are the ONLY entry types
 from feedback_aggregation.feedback_event_builder import build_feedback_event
 from observability_experiments.telemetry_event_builder import build_telemetry_event
 from marketplace.marketplace_event_builder import build_marketplace_event
@@ -14,7 +13,7 @@ from safety.safety_event_builder import build_safety_event
 
 
 # ---------------------------------------------------------------------
-# ✅ Strict Routing Table
+# Strict Routing Table
 # ---------------------------------------------------------------------
 
 _EVENT_ROUTING = {
@@ -26,7 +25,15 @@ _EVENT_ROUTING = {
 
 
 # ---------------------------------------------------------------------
-# ✅ Public API (STRICT)
+# Helpers
+# ---------------------------------------------------------------------
+
+def _norm_category(x: Any) -> str:
+    return str(x).strip().lower() if x is not None else ""
+
+
+# ---------------------------------------------------------------------
+# Public API (STRICT)
 # ---------------------------------------------------------------------
 
 def route_event(
@@ -38,16 +45,13 @@ def route_event(
     Phase 5 Event Router (STRICT ENTRY LAYER)
 
     Responsibilities:
-    - Route raw signals into the correct event builder
-    - Enforce event construction discipline
+    - Route raw payloads into the correct event builder
+    - Enforce entry-builder usage
     - Ensure only structured events enter Phase 5 pipelines
-
-    Contract:
-    - ALL external ingestion MUST go through this function
-    - ONLY entry event types are supported
     """
+    category = _norm_category(event_category)
 
-    if event_category not in _EVENT_ROUTING:
+    if category not in _EVENT_ROUTING:
         raise ValueError(
             f"Unsupported event_category: {event_category}. "
             f"Allowed: {list(_EVENT_ROUTING.keys())}"
@@ -56,63 +60,69 @@ def route_event(
     if not isinstance(payload, dict):
         raise ValueError("payload must be a dict")
 
-    builder = _EVENT_ROUTING[event_category]
-
+    builder = _EVENT_ROUTING[category]
     return builder(**payload)
 
 
 # ---------------------------------------------------------------------
-# ✅ Optional: Deterministic Inference (SAFE MODE)
+# Optional: Deterministic Inference (SAFE MODE)
 # ---------------------------------------------------------------------
 
 def infer_and_route_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Infer event type from payload structure.
 
-    Use ONLY when event_category is unavailable.
-
-    This function applies minimal deterministic rules.
+    Use ONLY if event_category is unavailable.
+    Explicit route_event(...) is preferred.
     """
-
     if not isinstance(payload, dict):
         raise ValueError("payload must be dict")
 
-    # ------------------------------------------------------------------
-    # Feedback Detection
-    # ------------------------------------------------------------------
+    # feedback_event
     if "source_type" in payload:
         return build_feedback_event(**payload)
 
-    # ------------------------------------------------------------------
-    # Telemetry Detection
-    # ------------------------------------------------------------------
-    if "latency_ms" in payload or "execution_time_ms" in payload:
+    # telemetry_event
+    telemetry_keys = {
+        "latency_ms",
+        "execution_time_ms",
+        "success",
+        "cost",
+        "selector_used",
+        "model_version",
+        "feature_version",
+        "error_code",
+        "error_stage",
+        "error_message",
+    }
+    if any(k in payload for k in telemetry_keys):
         return build_telemetry_event(**payload)
 
-    if "metrics" in payload and "success" in payload:
-        return build_telemetry_event(**payload)
-
-    # ------------------------------------------------------------------
-    # Marketplace Detection
-    # ------------------------------------------------------------------
-    if "content_id" in payload or "transaction_type" in payload:
+    # marketplace_event
+    marketplace_keys = {
+        "creator_id",
+        "content_id",
+        "content_type",
+        "content_version",
+        "transaction_type",
+        "currency",
+        "amount",
+        "rating",
+    }
+    if any(k in payload for k in marketplace_keys):
         return build_marketplace_event(**payload)
 
-    # ------------------------------------------------------------------
-    # Safety Detection
-    # ------------------------------------------------------------------
-    if "risk_score" in payload or "signal" in payload:
+    # safety_event
+    safety_keys = {
+        "risk_score",
+        "signal",
+        "require_review",
+    }
+    if any(k in payload for k in safety_keys):
         return build_safety_event(**payload)
 
-    # ------------------------------------------------------------------
-    # No Match
-    # ------------------------------------------------------------------
     raise ValueError("Unable to infer event type from payload")
 
-
-# ---------------------------------------------------------------------
-# ✅ Export Contract
-# ---------------------------------------------------------------------
 
 __all__ = [
     "route_event",
