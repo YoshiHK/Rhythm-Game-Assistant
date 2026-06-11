@@ -1,39 +1,27 @@
 """
-Evaluation Layer – Song Recommendation (Phase 5)
+Phase 5 — Song Recommendation Learning
+Evaluation Layer (Offline Only)
 
-This module exposes deterministic, offline-only evaluation utilities
-for measuring learning quality and regression safety.
+This package evaluates selection-quality changes using safe, selection-level metrics.
 
-Structure:
-- evaluate_selection_quality:
-    Selection-level performance metrics (accept / play / completion, @k, regression guards)
+Contract (Non-Negotiable) — per PHASE_5_SONG_RECOMMENDATION_LEARNING_SPEC:
+- Offline only (Phase 5).
+- Deterministic and auditable.
+- No gameplay semantics (tips/taxonomy/severity/narrative/localization content).
+- Produces evaluation reports and regression guard outcomes.
+- No runtime dependencies; no direct runtime feedback loop.
 
-- evaluate_reason_alignment:
-    Model vs curator reasoning alignment (agreement rates, mismatch analysis)
-
-Design Principles:
-- Offline only (no runtime impact)
-- Deterministic outputs
-- No semantic inference / mutation of upstream data
-- Compatible with Phase 5 routing + dataset pipeline
+See README.md for boundaries and invariants.
 """
 
 from .evaluate_selection_quality import (
+    EvalConfig,
+    EvalReport,
     evaluate_selection_quality,
-    EvalConfig as SelectionEvalConfig,
-)
-
-from .evaluate_reason_alignment import (
-    evaluate_reason_alignment,
-    ReasonAlignmentSummary,
 )
 
 __all__ = [
-    # Selection performance
+    "EvalConfig",
+    "EvalReport",
     "evaluate_selection_quality",
-    "SelectionEvalConfig",
-
-    # Reason alignment
-    "evaluate_reason_alignment",
-    "ReasonAlignmentSummary",
 ]

@@ -1,183 +1,67 @@
-## Phase 5 — Song Recommendation Artifacts Layer
+# Phase 5 — Song Recommendation Artifacts Layer
 
-### Purpose
+## Purpose
 
-The Artifacts Layer defines how Phase 5 produces **deployment-safe outputs**.
+This layer writes **offline artifacts** produced by the Phase 5 Song Recommendation
+learning loop, including:
 
-It is the final stage of the offline learning pipeline:
+- static selector parameters (deployment artifact)
+- training reports (audit + QA)
+- evaluation reports (metrics + regression guards)
+- baseline metric snapshots (for future deltas)
 
-```
-aggregation → features → training → evaluation → artifacts → deployment
-```
-
----
-
-### Role in Pipeline (UPDATED)
-
-This layer:
-
-- materializes static selector parameters
-- records training and evaluation reports
-- produces baseline snapshots for regression comparison
-
-It is the **only layer that generates deployable outputs**.
+This layer is **offline only**.
 
 ---
 
-### What This Layer Does
+## Phase Boundary
 
-- Write selector parameter artifacts
-- Write training reports (audit + QA)
-- Write evaluation reports (metrics + regression guards)
-- Write / load baseline metrics snapshots
+- **Upstream:** Training + Evaluation layers (Phase 5)
+- **Downstream:** Deployment pipeline (build-time integration)
+- **Runtime impact:** None (Phase 6 must not load artifacts dynamically)
 
----
-
-### What This Layer Does NOT Do
-
-- ❌ Does NOT run in runtime (Phase 6)
-- ❌ Does NOT perform learning or calibration
-- ❌ Does NOT interpret model outputs
-- ❌ Does NOT trigger deployment
+Artifacts are introduced via **deployment only**, consistent with the learning spec. [1](https://onedrive.live.com?cid=D5D62A1EF303BA22&id=D5D62A1EF303BA22!sb2f7c783c4344d509f43af7f127b6c89)
 
 ---
 
-### Artifact Format (NEW)
+## Non‑Negotiable Boundaries
 
-All artifacts MUST follow a standard envelope:
+This layer MUST:
+- be deterministic and auditable
+- serialize artifacts in stable JSON form
+- avoid gameplay semantics and any tips content
+- remain offline only (Phase 5)
 
-```json
-{
-  "artifact_type": "...",
-  "artifact_schema_version": "...",
-  "payload": {...}
-}
-```
-
-This ensures:
-
-- consistency across artifact types
-- forward compatibility
-- auditability
+This layer MUST NOT:
+- introduce runtime loading requirements
+- create a closed loop into Phase 6 runtime
+- write or consume tips/taxonomy/severity/narrative content
 
 ---
 
-## Artifact Types
+## Artifact Files (Conventional)
 
-### 1. selector_params
+- `song_selector_params.json`  
+  Static selector parameters intended for deployment only.
 
-Deployment payload:
+- `song_selector_training_report.json`  
+  Counts, defaults used, learned fields, basic summary metrics.
 
-- widen_steps
-- top_producers
-- rank_decay_alpha
+- `song_selector_evaluation_report.json`  
+  Acceptance/play/completion metrics, baseline deltas, regression guard results.
 
-Constraints:
-
-- must pass validation
-- must be bounded and deterministic
-
----
-
-### 2. training_report
-
-Includes:
-
-- aggregation summary
-- feature summary
-- training output
-- schema versions
-
-Used for:
-
-- QA
-- debugging
-- audit
-
----
-
-### 3. evaluation_report
-
-Includes:
-
-- metrics
-- deltas vs baseline
-- guard_pass
-- guard_fail_reasons
-
-Used for:
-
-- regression protection
-- promotion gating
-
----
-
-### 4. baseline_metrics
-
-Snapshot of metrics for:
-
-- future comparison
-- regression detection
-
----
-
-## Deployment Boundary (CRITICAL)
-
-Artifacts are:
-
-✅ build-time outputs
-✅ consumed by deployment pipelines
-
-Artifacts are NOT:
-
-❌ runtime inputs
-❌ dynamically loaded
-❌ self-updating
-
----
-
-## Guard Constraints
-
-Artifacts MUST:
-
-- only be updated when evaluation guard passes
-
-Artifacts MUST NOT:
-
-- be generated from regressed models
-- overwrite valid baseline with failing runs
-
----
-
-## Determinism & Auditability
-
-- Same inputs → same artifacts
-- All outputs are stable JSON
-- All artifacts are versioned
-- All data is traceable back to inputs
-
----
-
-## Relationship to Other Layers
-
-| Layer | Relationship |
-|------|------|
-| training | produces |
-| evaluation | validates results |
-| utils | orchestrates writing |
-| deployment | consumes artiting |
+- `song_selector_baseline_metrics.json`  
+  Baseline metrics snapshot used offline to compute future deltas.
 
 ---
 
 ## Design Intent
 
-This layer exists to:
+Artifacts exist to make learning:
+✅ reviewable  
+✅ reproducible  
+✅ reversible  
 
-✅ safely move learning outputs into deployment
-✅ enforce reproducibility
-✅ prevent unsafe model promotion
+without changing runtime determinism.
 
----
-
-**Artifacts define what can be deployed — not what should be learned.**
-
+Learning is offline. Deployment integrates results.

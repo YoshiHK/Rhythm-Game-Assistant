@@ -1,32 +1,17 @@
 """
 Phase 5 — Song Recommendation Learning
-Artifacts Layer (Deployment Boundary)
+Artifacts Layer (Offline Only)
 
-This package defines how offline learning outputs are exported
-as deployment-safe artifacts.
+This package writes and loads **offline artifacts** produced by Phase 5:
+- static selector parameter JSON (deployment artifact)
+- training reports
+- evaluation reports + baseline snapshots
 
-Scope:
-- Selector parameter export
-- Training report export
-- Evaluation report export
-- Baseline metrics snapshot
-
-Contract (Non-Negotiable):
-- Offline only (Phase 5)
-- Outputs are static and deterministic
-- Artifacts MUST NOT be used directly in runtime
-- No mutation after write
-
-Updated Guarantees:
-- All artifacts follow a standard envelope format
-- Selector params are minimally validated before export
-- Baseline metrics snapshots support regression tracking
-- Artifacts are safe for deployment pipelines only
-
-Role in Pipeline:
-aggregation → features → training → evaluation → ✅ artifacts → deployment
-
-This is the final boundary before deployment.
+Contract (Non-Negotiable) — per PHASE_5_SONG_RECOMMENDATION_LEARNING_SPEC:
+- Offline only (Phase 5).
+- Deterministic artifact serialization.
+- No runtime dependencies on Phase 6.
+- Artifacts are introduced via deployment only (Phase 6 MUST NOT load dynamically).
 """
 
 from .artifact_exporter import (

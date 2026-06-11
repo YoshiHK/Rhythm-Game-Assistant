@@ -4,37 +4,29 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from datetime import datetime
 
-from feedback.bridge.interpretation_bridge import enrich_feedback_event
-
-
-# ---------------------------------------------------------------------
-# Configuration / summary
-# ---------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class AggregationConfig:
     """
     Aggregation configuration.
 
-    Notes:
-    - event_type is optional. If provided, only events with matching event_type
-      are considered valid.
-    - action_priority determines which action wins when multiple feedback events
-      refer to the same recommended item.
-    - attach_derived_reason controls whether interpreter output is copied into
-      aggregated rows.
+    Keep this layer purely mechanical:
+    - deterministic
+    - schema-light
+    - selection-level only
     """
-    event_type: Optional[str] = None
-    action_priority: Tuple[str, ...] = (
-        "accepted",
-        "completed",
-        "clicked",
-        "used",
-        "dismissed",
-        "skipped",
-        "shown",
-    )
-    attach_derived_reason: bool = True
+    # Filter: only process events matching this event_type
+    event_type: str = "phase6.song_feedback"
+
+    # Action priority (higher wins) used to compute final_outcome per item
+    # completed > played > accept > ignore
+    action_priority: Tuple[str, ...] = ("ignore", "accept", "played", "completed")
+
+    # If True, drop events with missing required fields rather than raising
+    drop_invalid: bool = True
+
+    # If True, keep only a whitelist of safe (non-semantic) columns in output rows
+    strict_safe_columns: bool = True
 
 
 @dataclass(frozen=True)
@@ -54,6 +46,7 @@ def _parse_iso8601(s: Any) -> Optional[datetime]:
     if not isinstance(s, str) or not s.strip():
         return None
     try:
+        # datetime.fromisoformat supports many ISO-8601 forms; keep best-effort
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except Exception:
         return None
@@ -92,49 +85,8 @@ def _priority_index(action: str, priority: Tuple[str, ...]) -> int:
     try:
         return priority.index(action)
     except ValueError:
+        # Unknown actions are treated as lowest priority (ignored in outcome)
         return -1
-
-
-def _extract_action(evt: Dict[str, Any]) -> str:
-    """
-    Best-effort action extraction.
-
-    Prefers:
-    1) top-level action
-    2) payload.action
-    3) event_type (fallback)
-    """
-    action = _norm_str(evt.get("action"))
-    if action:
-        return action
-
-    payload = evt.get("payload")
-    if isinstance(payload, dict):
-        action = _norm_str(payload.get("action"))
-        if action:
-            return action
-
-    return _norm_str(evt.get("event_type"))
-
-
-def _payload_overlay(evt: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Return a non-mutating merged view of the event:
-    - top-level fields win
-    - payload fields backfill missing top-level ones
-
-    This keeps raw events unchanged while allowing aggregation helpers
-    to work with either top-level or payload-scoped fields.
-    """
-    if not isinstance(evt, dict):
-        return {}
-
-    out = dict(evt)
-    payload = evt.get("payload")
-    if isinstance(payload, dict):
-        for k, v in payload.items():
-            out.setdefault(k, v)
-    return out
 
 
 def _item_key(evt: Dict[str, Any]) -> Tuple[str, str, str, str, Optional[str], Optional[int]]:
@@ -151,38 +103,26 @@ def _item_key(evt: Dict[str, Any]) -> Tuple[str, str, str, str, Optional[str], O
     )
 
 
-def _has_minimum_identity(evt: Dict[str, Any]) -> bool:
-    """
-    Require enough identity to aggregate to selection/item level.
-    """
-    return bool(
-        _norm_str(evt.get("player_id"))
-        and _norm_str(evt.get("game_id"))
-        and _norm_str(evt.get("recommendation_set_id"))
-        and _norm_str(evt.get("song_id"))
-    )
-
-
 def _is_valid_event(evt: Dict[str, Any], cfg: AggregationConfig) -> bool:
     if not isinstance(evt, dict):
         return False
-
-    if cfg.event_type is not None:
-        if _norm_str(evt.get("event_type")) != _norm_str(cfg.event_type):
-            return False
-
-    if not _has_minimum_identity(evt):
+    if _norm_str(evt.get("event_type")) != cfg.event_type:
         return False
+
+    # Required fields for aggregation identity
+    required = ["player_id", "game_id", "recommendation_set_id", "song_id", "action", "timestamp_utc"]
+    for k in required:
+        if not _norm_str(evt.get(k)):
+            return False
 
     return True
 
 
-def _safe_row(evt: Dict[str, Any], action: str) -> Dict[str, Any]:
+def _safe_row(evt: Dict[str, Any], action: str, cfg: AggregationConfig) -> Dict[str, Any]:
     """
-    Convert event -> safe, selection-level row fragment.
-    This remains aggregation-safe and does not mutate raw feedback.
+    Convert event -> safe, selection-level row fragment (no semantics).
     """
-    return {
+    row: Dict[str, Any] = {
         "player_id": _norm_str(evt.get("player_id")),
         "game_id": _norm_str(evt.get("game_id")),
         "recommendation_set_id": _norm_str(evt.get("recommendation_set_id")),
@@ -190,51 +130,19 @@ def _safe_row(evt: Dict[str, Any], action: str) -> Dict[str, Any]:
         "difficulty": _norm_optional_str(evt.get("difficulty")),
         "rank": _norm_int(evt.get("rank")),
         "action": action,
-        "timestamp_utc": _norm_str(evt.get("timestamp_utc") or evt.get("timestamp")),
+        "timestamp_utc": _norm_str(evt.get("timestamp_utc")),
         "tier_id": _norm_optional_str(evt.get("tier_id")),
         "target_metric": _norm_float(evt.get("target_metric")),
         "catalog_fingerprint": _norm_optional_str(evt.get("catalog_fingerprint")),
         "locale": _norm_optional_str(evt.get("locale")),
         "session_id": _norm_optional_str(evt.get("session_id")),
-        "provenance_id": _norm_optional_str(evt.get("provenance_id")),
-        "event_id": _norm_optional_str(evt.get("event_id")),
-        "source_type": _norm_optional_str(evt.get("source_type")),
-        "event_type": _norm_optional_str(evt.get("event_type")),
     }
 
+    if not cfg.strict_safe_columns:
+        # If you ever need additional fields, add them explicitly—do not pass through blindly.
+        pass
 
-def _is_better_candidate(
-    candidate: Dict[str, Any],
-    incumbent: Dict[str, Any],
-    *,
-    priority: Tuple[str, ...],
-) -> bool:
-    """
-    Decide whether candidate should replace incumbent for same item key.
-
-    Rules:
-    1) Higher action priority wins
-    2) If same priority, later timestamp wins
-    """
-    cand_action = _norm_str(candidate.get("action"))
-    inc_action = _norm_str(incumbent.get("action"))
-
-    cand_pri = _priority_index(cand_action, priority)
-    inc_pri = _priority_index(inc_action, priority)
-
-    if cand_pri != inc_pri:
-        return cand_pri > inc_pri
-
-    cand_ts = _parse_iso8601(candidate.get("timestamp_utc"))
-    inc_ts = _parse_iso8601(incumbent.get("timestamp_utc"))
-
-    if cand_ts and inc_ts:
-        return cand_ts > inc_ts
-
-    if cand_ts and not inc_ts:
-        return True
-
-    return False
+    return row
 
 
 # ---------------------------------------------------------------------
@@ -250,77 +158,126 @@ def aggregate_song_feedback_events(
     Aggregate forward-only Song Recommendation feedback events (Phase 6 -> Phase 5).
 
     Output:
-    {
-        "rows": [...],
-        "summary": {...}
-    }
+      {
+        "rows": [ ... ],         # aggregated per item exposure
+        "summary": { ... }       # AggregationSummary as dict
+      }
 
-    Notes:
-    - Raw feedback events are never mutated.
-    - Interpreter output is attached only to aggregated rows (derived_* fields).
+    Aggregation rules (deterministic):
+    - Group by (player_id, game_id, recommendation_set_id, song_id, difficulty, rank)
+    - Determine final_outcome by highest priority action seen
+    - Record first_seen_utc / last_seen_utc
+    - Count actions per item
     """
+    cfg = config
+    priority = cfg.action_priority
+
     total_in = 0
-    total_dropped = 0
-    outcome_counts: Dict[str, int] = {}
+    used = 0
+    dropped = 0
 
-    best_by_item: Dict[
-        Tuple[str, str, str, str, Optional[str], Optional[int]],
-        Dict[str, Any]
-    ] = {}
+    # Per-item accumulator
+    acc: Dict[Tuple[str, str, str, str, Optional[str], Optional[int]], Dict[str, Any]] = {}
 
-    for raw_evt in events:
+    for evt in events:
         total_in += 1
+        if not isinstance(evt, dict) or not _is_valid_event(evt, cfg):
+            dropped += 1
+            if cfg.drop_invalid:
+                continue
+            raise ValueError(f"Invalid event for aggregation: {evt}")
 
-        # Create a merged read-only view for aggregation convenience
-        evt = _payload_overlay(raw_evt)
+        action = _norm_str(evt.get("action")).lower()
+        if _priority_index(action, priority) < 0:
+            # Unknown action: drop (mechanical, deterministic)
+            dropped += 1
+            if cfg.drop_invalid:
+                continue
+            raise ValueError(f"Unknown action: {action}")
 
-        if not _is_valid_event(evt, config):
-            total_dropped += 1
-            continue
+        used += 1
+        key = _item_key(evt)
+        ts = _parse_iso8601(evt.get("timestamp_utc"))
 
-        action = _extract_action(evt)
-        row = _safe_row(evt, action)
+        frag = _safe_row(evt, action, cfg)
 
-        # ---------------------------------------------------------
-        # Bridge: raw event -> derived interpreter output
-        # ---------------------------------------------------------
-        enriched = enrich_feedback_event(
-            event=raw_evt,  # keep RAW event source unchanged
-            trigger=evt.get("trigger") if isinstance(evt.get("trigger"), dict) else None,
-            request=evt.get("request") if isinstance(evt.get("request"), dict) else None,
-            run_result=evt.get("run_result") if isinstance(evt.get("run_result"), dict) else None,
-            diagnostics=evt.get("diagnostics") if isinstance(evt.get("diagnostics"), dict) else None,
-            tips_payload=evt.get("tips_payload") if isinstance(evt.get("tips_payload"), dict) else None,
-            personalization_context=evt.get("personalization_context") if isinstance(evt.get("personalization_context"), dict) else None,
-            localization_context=evt.get("localization_context") if isinstance(evt.get("localization_context"), dict) else None,
-            rationale=evt.get("rationale") if isinstance(evt.get("rationale"), dict) else None,
-        )
+        if key not in acc:
+            acc[key] = {
+                "player_id": frag["player_id"],
+                "game_id": frag["game_id"],
+                "recommendation_set_id": frag["recommendation_set_id"],
+                "song_id": frag["song_id"],
+                "difficulty": frag["difficulty"],
+                "rank": frag["rank"],
+                "tier_id": frag["tier_id"],
+                "target_metric": frag["target_metric"],
+                "catalog_fingerprint": frag["catalog_fingerprint"],
+                "locale": frag["locale"],
+                "session_id": frag["session_id"],
+                "first_seen_utc": frag["timestamp_utc"],
+                "last_seen_utc": frag["timestamp_utc"],
+                "action_counts": {a: 0 for a in priority},
+                "final_outcome": action,
+                "_final_priority": _priority_index(action, priority),
+                "_first_ts": ts,
+                "_last_ts": ts,
+            }
 
-        derived = enriched.get("derived") if isinstance(enriched, dict) else {}
-        reason = derived.get("reason") if isinstance(derived, dict) else {}
+        item = acc[key]
 
-        if config.attach_derived_reason and isinstance(reason, dict):
-            row["derived_reason_codes"] = list(reason.get("reason_codes") or [])
-            row["derived_primary_reason"] = _norm_optional_str(reason.get("primary_reason"))
-            row["derived_reason_confidence"] = _norm_float(reason.get("confidence"))
+        # Update counts
+        item["action_counts"][action] = int(item["action_counts"].get(action, 0)) + 1
 
-        k = _item_key(evt)
-        incumbent = best_by_item.get(k)
+        # Update time bounds deterministically using parsed timestamps when available
+        if ts is not None:
+            if item["_first_ts"] is None or ts < item["_first_ts"]:
+                item["_first_ts"] = ts
+                item["first_seen_utc"] = frag["timestamp_utc"]
+            if item["_last_ts"] is None or ts > item["_last_ts"]:
+                item["_last_ts"] = ts
+                item["last_seen_utc"] = frag["timestamp_utc"]
+        else:
+            # If unparsable, still keep last_seen as last processed (deterministic order)
+            item["last_seen_utc"] = frag["timestamp_utc"]
 
-        if incumbent is None or _is_better_candidate(row, incumbent, priority=config.action_priority):
-            best_by_item[k] = row
+        # Update final outcome by priority
+        p = _priority_index(action, priority)
+        if p > item["_final_priority"]:
+            item["_final_priority"] = p
+            item["final_outcome"] = action
 
-    rows = list(best_by_item.values())
+        # Keep catalog_fingerprint if missing previously
+        if item.get("catalog_fingerprint") is None and frag.get("catalog_fingerprint") is not None:
+            item["catalog_fingerprint"] = frag["catalog_fingerprint"]
 
-    for row in rows:
-        action = _norm_str(row.get("action"))
-        if action:
-            outcome_counts[action] = outcome_counts.get(action, 0) + 1
+        # Keep locale if missing previously
+        if item.get("locale") is None and frag.get("locale") is not None:
+            item["locale"] = frag["locale"]
+
+    # Materialize output rows (stable order)
+    keys_sorted = sorted(acc.keys(), key=lambda k: (k[0], k[1], k[2], k[5] if k[5] is not None else 10**9, k[3]))
+    rows: List[Dict[str, Any]] = []
+
+    outcome_counts: Dict[str, int] = {a: 0 for a in cfg.action_priority}
+
+    for k in keys_sorted:
+        item = acc[k]
+        # Remove internal fields
+        item.pop("_final_priority", None)
+        item.pop("_first_ts", None)
+        item.pop("_last_ts", None)
+
+        out = dict(item)
+        # Ensure action_counts only contains known actions (stable)
+        out["action_counts"] = {a: int(out["action_counts"].get(a, 0)) for a in cfg.action_priority}
+
+        outcome_counts[out["final_outcome"]] = int(outcome_counts.get(out["final_outcome"], 0)) + 1
+        rows.append(out)
 
     summary = AggregationSummary(
         total_events_in=total_in,
-        total_events_used=len(rows),
-        total_events_dropped=total_dropped,
+        total_events_used=used,
+        total_events_dropped=dropped,
         unique_items=len(rows),
         outcome_counts=outcome_counts,
     )
@@ -329,10 +286,3 @@ def aggregate_song_feedback_events(
         "rows": rows,
         "summary": asdict(summary),
     }
-
-
-__all__ = [
-    "AggregationConfig",
-    "AggregationSummary",
-    "aggregate_song_feedback_events",
-]

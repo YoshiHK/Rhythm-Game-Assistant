@@ -5,9 +5,9 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Contracts / Config
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class FeatureConfig:
@@ -17,30 +17,22 @@ class FeatureConfig:
     Keep this layer purely mechanical and selection-level:
     - no semantics
     - no tips/taxonomy/severity fields
-    - deterministic output only
     """
-
     # Allowed outcomes (must match aggregation layer final_outcome values)
     allowed_outcomes: Tuple[str, ...] = ("ignore", "accept", "played", "completed")
 
     # Outcome -> numeric label (for offline calibration convenience)
     # completed > played > accept > ignore
-    outcome_score: Optional[Dict[str, int]] = None
+    outcome_score: Dict[str, int] = None  # filled in __post_init__ style below
 
     # If True, reject any row containing forbidden semantic keys
     strict_semantic_guard: bool = True
 
-    # If True, output only safe feature columns
+    # If True, output only safe feature columns (whitelist)
     strict_safe_output: bool = True
 
     # If True, drop invalid rows instead of raising
     drop_invalid: bool = True
-
-    # Version emitted for downstream dataset / evaluation alignment
-    feature_schema_version: str = "v1_selection_features"
-
-    # If strict_safe_output=False, optionally pass through non-training metadata
-    include_optional_metadata: bool = True
 
 
 @dataclass(frozen=True)
@@ -55,9 +47,9 @@ def _default_outcome_score() -> Dict[str, int]:
     return {"ignore": 0, "accept": 1, "played": 2, "completed": 3}
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Helpers (pure)
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 _FORBIDDEN_SEMANTIC_KEYS = {
     # Any hint of Phase 1–4 semantics should never appear here
@@ -70,8 +62,6 @@ _FORBIDDEN_SEMANTIC_KEYS = {
 
 # Whitelist of safe columns expected from aggregation output
 _ALLOWED_INPUT_KEYS = {
-    "event_id",
-    "provenance_id",
     "player_id",
     "game_id",
     "recommendation_set_id",
@@ -87,18 +77,11 @@ _ALLOWED_INPUT_KEYS = {
     "last_seen_utc",
     "action_counts",
     "final_outcome",
-
-    # optional derived reasoning from interpretation bridge (metadata only)
-    "derived_reason_codes",
-    "derived_primary_reason",
-    "derived_reason_confidence",
 }
 
 # Whitelist of safe output feature columns
 _ALLOWED_OUTPUT_KEYS = {
-    # identity / traceability
-    "event_id",
-    "provenance_id",
+    # identity (kept for join/debug; may be dropped later by training code)
     "player_id",
     "game_id",
     "recommendation_set_id",
@@ -111,9 +94,8 @@ _ALLOWED_OUTPUT_KEYS = {
     "target_metric",
     "catalog_fingerprint",
     "locale",
-    "session_id",
 
-    # labels / targets
+    # outcome labels
     "final_outcome",
     "outcome_score",
 
@@ -126,15 +108,8 @@ _ALLOWED_OUTPUT_KEYS = {
     "any_played_or_better",
     "any_completed",
 
-    # timing features (mechanical)
+    # timing features (mechanical; optional)
     "exposure_span_seconds",
-}
-
-# Optional metadata passthrough (NOT intended as model features)
-_OPTIONAL_METADATA_KEYS = {
-    "derived_primary_reason",
-    "derived_reason_confidence",
-    "derived_reason_codes",
 }
 
 
@@ -177,30 +152,16 @@ def _parse_iso8601(s: Any) -> Optional[datetime]:
 
 
 def _semantic_guard(row: Dict[str, Any]) -> None:
-    """
-    Reject forbidden semantic keys.
-    Allows bridge-derived reason fields explicitly.
-    """
+    # Reject forbidden keys (direct or nested shallow match)
     lowered = {str(k).strip().lower() for k in row.keys()}
     for bad in _FORBIDDEN_SEMANTIC_KEYS:
         if bad in lowered:
             raise ValueError(f"Semantic leakage detected: forbidden key '{bad}' present in row")
 
 
-def _input_guard(row: Dict[str, Any]) -> None:
-    """
-    Optional soft guard for unexpected columns.
-    This does NOT reject unknown keys by default, but can be used for debugging.
-    """
-    if not isinstance(row, dict):
-        raise ValueError("row must be dict")
-
-
 def _validate_row(row: Dict[str, Any], cfg: FeatureConfig) -> bool:
     if not isinstance(row, dict):
         return False
-
-    _input_guard(row)
 
     if cfg.strict_semantic_guard:
         _semantic_guard(row)
@@ -220,17 +181,11 @@ def _validate_row(row: Dict[str, Any], cfg: FeatureConfig) -> bool:
     if not isinstance(ac, dict):
         return False
 
-    # rank is optional, but if present must be parseable
-    if row.get("rank") is not None and _norm_int(row.get("rank")) is None:
-        return False
-
     return True
 
 
 def _safe_extract_action_counts(ac: Dict[str, Any]) -> Dict[str, int]:
-    """
-    Ensure stable presence of known action keys; ignore unknowns.
-    """
+    # Ensure stable presence of known action keys; ignore unknowns
     def as_int(v: Any) -> int:
         try:
             return int(v)
@@ -250,18 +205,14 @@ def _compute_exposure_span_seconds(first_seen_utc: Any, last_seen_utc: Any) -> O
     b = _parse_iso8601(last_seen_utc)
     if a is None or b is None:
         return None
-
+    # Deterministic integer seconds (floor)
     delta = b - a
-    # Guard dirty ordering while staying deterministic
-    if delta.total_seconds() < 0:
-        return 0
-
     return int(delta.total_seconds())
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Public API
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 def build_selection_feature_rows(
     aggregated_rows: Iterable[Dict[str, Any]],
@@ -277,12 +228,15 @@ def build_selection_feature_rows(
     Returns:
       {
         "rows": [feature_row, ...],
-        "summary": {...},
-        "feature_schema_version": "..."
+        "summary": {...}
       }
     """
     cfg = config
-    outcome_score = dict(cfg.outcome_score) if cfg.outcome_score is not None else _default_outcome_score()
+    if cfg.outcome_score is None:
+        # create default mapping without mutating dataclass
+        outcome_score = _default_outcome_score()
+    else:
+        outcome_score = dict(cfg.outcome_score)
 
     total_in = 0
     used = 0
@@ -311,9 +265,7 @@ def build_selection_feature_rows(
         ac = _safe_extract_action_counts(row.get("action_counts", {}))
 
         feature: Dict[str, Any] = {
-            # identity / traceability
-            "event_id": _norm_optional_str(row.get("event_id")),
-            "provenance_id": _norm_optional_str(row.get("provenance_id")),
+            # identity / join keys
             "player_id": _norm_str(row.get("player_id")),
             "game_id": _norm_str(row.get("game_id")),
             "recommendation_set_id": _norm_str(row.get("recommendation_set_id")),
@@ -326,7 +278,6 @@ def build_selection_feature_rows(
             "target_metric": _norm_float(row.get("target_metric")),
             "catalog_fingerprint": _norm_optional_str(row.get("catalog_fingerprint")),
             "locale": _norm_optional_str(row.get("locale")),
-            "session_id": _norm_optional_str(row.get("session_id")),
 
             # labels
             "final_outcome": final_outcome,
@@ -343,18 +294,11 @@ def build_selection_feature_rows(
             "any_played_or_better": bool(ac["played"] > 0 or ac["completed"] > 0),
             "any_completed": bool(ac["completed"] > 0),
 
-            # deterministic timing feature
+            # deterministic timing feature (optional)
             "exposure_span_seconds": _compute_exposure_span_seconds(
-                row.get("first_seen_utc"),
-                row.get("last_seen_utc"),
+                row.get("first_seen_utc"), row.get("last_seen_utc")
             ),
         }
-
-        # Optional metadata passthrough for debugging/evaluation only
-        if not cfg.strict_safe_output and cfg.include_optional_metadata:
-            for k in _OPTIONAL_METADATA_KEYS:
-                if k in row:
-                    feature[k] = row.get(k)
 
         if cfg.strict_safe_output:
             feature = {k: feature.get(k) for k in _ALLOWED_OUTPUT_KEYS}
@@ -382,12 +326,4 @@ def build_selection_feature_rows(
     return {
         "rows": out_rows,
         "summary": asdict(summary),
-        "feature_schema_version": cfg.feature_schema_version,
     }
-
-
-__all__ = [
-    "FeatureConfig",
-    "FeatureSummary",
-    "build_selection_feature_rows",
-]
