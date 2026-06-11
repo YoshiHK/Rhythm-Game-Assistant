@@ -12,23 +12,6 @@
 
 ---
 
-## Event Entry Layer (NEW)
-
-All pipelines MUST begin with structured events constructed by builders.
-
-DO NOT:
-- ingest raw payloads directly
-- infer structure inside pipelines
-
-All ingestion MUST occur via:
-
-- feedback_event_builder
-- telemetry_event_builder
-- marketplace_event_builder
-- safety_event_builder
-
----
-
 ## 1. Architectural Role
 
 Phase 5 sits **downstream of personalization and localization (Phases 1–4.5)**

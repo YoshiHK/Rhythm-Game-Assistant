@@ -34,17 +34,6 @@ Phase 5 exists to:
 
 ---
 
-### Entry Contract
-
-Phase 5 accepts ONLY structured events.
-
-All inputs MUST:
-- follow event schema
-- include provenance_id
-- be generated via builders
-
-Raw signals MUST NOT enter Phase 5 pipelines directly.
-
 ## 2. Phase Boundary
 
 ### 2.1 Inputs (from Phases 4 / 4.5 only)
