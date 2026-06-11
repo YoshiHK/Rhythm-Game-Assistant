@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from feedback.interpreter.feedback_interpreter import interpret_feedback
+from engine.feedback.interpreter.feedback_interpreter import interpret_feedback
 
 
 # -----------------------------------------------------------------------------
