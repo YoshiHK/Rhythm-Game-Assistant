@@ -1,5 +1,7 @@
-"""rhythm_ingestion.validators.common_validator_utils
+from __future__ import annotations
 
+"""
+rhythm_ingestion.validators.common_validator_utils
 Shared validator utilities for UMI Phase 3 (foundation-layer helper).
 
 Scope:
@@ -16,9 +18,7 @@ All functions here return values that validators may use to build their own
 error lists and enforcement policies.
 """
 
-from __future__ import annotations
-
-from typing import Any, Optional
+from typing import Any, Dict, Optional, Sequence, Set
 
 
 # ---------------------------------------------------------------------
@@ -26,15 +26,9 @@ from typing import Any, Optional
 # ---------------------------------------------------------------------
 
 def safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
-    """Best-effort conversion to int.
-
-    Returns default if conversion is not possible.
-    """
+    """Best-effort conversion to int."""
     try:
         if value is None:
-            return default
-        # Avoid converting booleans to 1/0 implicitly
-        if isinstance(value, bool):
             return default
         return int(value)
     except Exception:
@@ -42,14 +36,9 @@ def safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
 
 
 def safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
-    """Best-effort conversion to float.
-
-    Returns default if conversion is not possible.
-    """
+    """Best-effort conversion to float."""
     try:
         if value is None:
-            return default
-        if isinstance(value, bool):
             return default
         return float(value)
     except Exception:
@@ -61,10 +50,7 @@ def safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
 # ---------------------------------------------------------------------
 
 def compute_delta(a: Optional[int], b: Optional[int]) -> Optional[int]:
-    """Compute |a - b| safely.
-
-    Returns None if either input is None.
-    """
+    """Compute |a - b| safely."""
     if a is None or b is None:
         return None
     try:
@@ -78,12 +64,7 @@ def compute_delta(a: Optional[int], b: Optional[int]) -> Optional[int]:
 # ---------------------------------------------------------------------
 
 def is_within_threshold(delta: Optional[int], threshold: int) -> Optional[bool]:
-    """Return whether delta <= threshold.
-
-    Returns None if delta is None.
-
-    Note: This function does not decide what to do when False; validators do.
-    """
+    """Return whether delta <= threshold."""
     if delta is None:
         return None
     try:
@@ -97,15 +78,7 @@ def is_within_threshold(delta: Optional[int], threshold: int) -> Optional[bool]:
 # ---------------------------------------------------------------------
 
 def values_equal(a: Any, b: Any) -> Optional[bool]:
-    """Safe equality check.
-
-    - Returns None if either value is None.
-    - Otherwise returns (a == b).
-
-    Intended for exact parity checks when types are already normalized.
-    """
-    if a is None or b is None:
-        return None
+    """Safe equality check."""
     try:
         return a == b
     except Exception:
@@ -113,25 +86,16 @@ def values_equal(a: Any, b: Any) -> Optional[bool]:
 
 
 def numeric_equal(a: Any, b: Any, *, tol: float = 0.0) -> Optional[bool]:
-    """Compare two numeric-ish values with an optional tolerance.
-
-    - Returns None if either value cannot be converted to float.
-    - If tol <= 0, uses exact float equality.
-    - If tol > 0, returns abs(a-b) <= tol.
-
-    Useful for BPM/duration comparisons across payload/row/DB values.
-    """
-    fa = safe_float(a, default=None)
-    fb = safe_float(b, default=None)
-    if fa is None or fb is None:
+    """Compare two numeric-ish values with an optional tolerance."""
+    af = safe_float(a)
+    bf = safe_float(b)
+    if af is None or bf is None:
         return None
     try:
-        t = float(tol or 0.0)
-        if t <= 0.0:
-            return float(fa) == float(fb)
-        return abs(float(fa) - float(fb)) <= t
+        return abs(af - bf) <= float(tol)
     except Exception:
         return None
+
 
 # ---------------------------------------------------------------------
 # 5) ValidationResult builders (Validator v2 spec helpers)
@@ -144,14 +108,9 @@ def build_validation_ok(
 ) -> dict:
     """
     Build a successful ValidationResult dict.
-
-    This helper does NOT decide whether a chart should pass.
-    It only standardizes the output shape for validators.
-
-    Aligned with VALIDATOR_V2_SPEC.md.
     """
     return {
-        "supported": True,
+        "ok": True,
         "errors": [],
         "warnings": list(warnings or []),
         "degraded_mode": bool(degraded_mode),
@@ -166,12 +125,9 @@ def build_validation_fail(
 ) -> dict:
     """
     Build a failed ValidationResult dict.
-
-    Validators decide *when* to call this.
-    This helper only standardizes the shape.
     """
     return {
-        "supported": False,
+        "ok": False,
         "errors": list(errors),
         "warnings": list(warnings or []),
         "degraded_mode": bool(degraded_mode),
@@ -179,7 +135,7 @@ def build_validation_fail(
 
 
 # ---------------------------------------------------------------------
-# 6) Phase‑4 gate interpretation helpers (informational only)
+# 6) Phase-4 gate interpretation helpers (informational only)
 # ---------------------------------------------------------------------
 
 def compute_phase4_gate_state(
@@ -189,42 +145,18 @@ def compute_phase4_gate_state(
     opt_in: Optional[bool],
 ) -> dict:
     """
-    Compute Phase‑4 gate state in a PURE, informational way.
+    Compute Phase-4 gate state in a PURE, informational way.
 
-    This helper mirrors Phase‑4 deterministic gating logic,
-    but does NOT execute Phase‑4 or enforce behavior.
-
-    Intended usage:
-    - Validators may attach warnings
-    - Validators may set degraded_mode
-    - Validators may explain why personalization will not apply
-
-    Returns a dict safe to include in diagnostics or explanations.
+    This helper does not make runtime decisions; it only normalizes inputs
+    into a compact state summary that validators can attach for diagnostics.
     """
-    mode = (engine_mode or "deterministic").strip().lower()
-    flags = feature_flags or {}
-
-    phase4_enabled = bool(flags.get("phase4_enabled", True))
-
-    gate_fail_reasons: list[str] = []
-
-    if not phase4_enabled:
-        gate_fail_reasons.append("FLAG_DISABLED")
-
-    if opt_in is False:
-        gate_fail_reasons.append("OPT_OUT")
-
-    personalization_allowed = (
-        mode == "personalized"
-        and phase4_enabled
-        and opt_in is not False
-    )
-
+    flags = dict(feature_flags or {})
     return {
-        "engine_mode": mode,
-        "phase4_enabled": phase4_enabled,
-        "personalization_allowed": personalization_allowed,
-        "gate_fail_reasons": gate_fail_reasons,
+        "engine_mode": engine_mode,
+        "feature_flags_present": bool(flags),
+        "feature_flags_enabled": sorted([k for k, v in flags.items() if bool(v)]),
+        "opt_in": bool(opt_in) if opt_in is not None else None,
+        "phase4_active": bool(opt_in) and bool(flags),
     }
 
 
@@ -234,42 +166,62 @@ def compute_phase4_gate_state(
 
 def explain_gate_failures(gate_fail_reasons: Optional[list[str]]) -> str:
     """
-    Convert Phase‑4 gate failure reasons into a human‑readable explanation.
-
-    Intended for Validator.explain_failure() implementations.
+    Convert Phase-4 gate failure reasons into a human-readable explanation.
     """
-    reasons = list(gate_fail_reasons or [])
+    reasons = [str(x).strip() for x in (gate_fail_reasons or []) if str(x).strip()]
     if not reasons:
-        return ""
-
-    if "FLAG_DISABLED" in reasons:
-        return (
-            "Personalization is currently disabled by feature flags. "
-            "Deterministic tips will be used."
-        )
-
-    if "OPT_OUT" in reasons:
-        return (
-            "The player has opted out of personalization. "
-            "Deterministic tips will be used."
-        )
-
-    return (
-        "Personalization is unavailable due to gating conditions. "
-        "Deterministic tips will be used."
-    )
+        return "No gate-failure reasons were provided."
+    return "; ".join(reasons)
 
 
 # ---------------------------------------------------------------------
-# Public exports (additive)
+# 8) Suggested cross-layer baseline extension helpers (optional)
 # ---------------------------------------------------------------------
+# NOTE:
+# These are a practical alignment helper so validators can remain consistent
+# with adapter-side baseline fallback extension handling.
+# This is an additive engineering helper, not a source-mandated behavior.
 
-__all__ += [
-    "build_validation_ok",
-    "build_validation_fail",
-    "compute_phase4_gate_state",
-    "explain_gate_failures",
-]
+BASELINE_FALLBACK_EXTENSIONS: Set[str] = {".html", ".mht"}
+
+
+def normalize_extensions(extensions: Optional[Sequence[str]]) -> Set[str]:
+    """Normalize an iterable of extensions to lower-case dotted strings."""
+    out: Set[str] = set()
+    for ext in extensions or []:
+        if ext is None:
+            continue
+        e = str(ext).strip().lower()
+        if not e:
+            continue
+        if not e.startswith("."):
+            e = "." + e
+        out.add(e)
+    return out
+
+
+def with_baseline_fallback_extensions(
+    extensions: Optional[Sequence[str]] = None,
+    *,
+    include_baseline: bool = True,
+) -> Set[str]:
+    """
+    Return normalized extensions with baseline fallback extensions added.
+    """
+    out = normalize_extensions(extensions)
+    if include_baseline:
+        out.update(BASELINE_FALLBACK_EXTENSIONS)
+    return out
+
+
+def file_matches_extensions(path: Any, extensions: Optional[Sequence[str]] = None) -> bool:
+    """
+    Return True if the file suffix matches the normalized extension set.
+    """
+    suffix = str(getattr(path, "suffix", "") or "").lower()
+    allowed = with_baseline_fallback_extensions(extensions)
+    return suffix in allowed
+
 
 __all__ = [
     "safe_int",
@@ -278,4 +230,12 @@ __all__ = [
     "is_within_threshold",
     "values_equal",
     "numeric_equal",
+    "build_validation_ok",
+    "build_validation_fail",
+    "compute_phase4_gate_state",
+    "explain_gate_failures",
+    "BASELINE_FALLBACK_EXTENSIONS",
+    "normalize_extensions",
+    "with_baseline_fallback_extensions",
+    "file_matches_extensions",
 ]

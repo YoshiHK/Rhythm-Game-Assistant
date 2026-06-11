@@ -1,5 +1,7 @@
-"""rhythm_ingestion.adapters.common_adapter_utils
+from __future__ import annotations
 
+"""
+rhythm_ingestion.adapters.common_adapter_utils
 Shared adapter utilities for UMI Phase 3.
 
 Scope (foundation-layer helper):
@@ -12,13 +14,12 @@ payloads/rows:
 - diagnostics: small numeric aggregates that are safe to compute generically
 - internal_metadata: ingestion/QA tracing information
 - canonical_sections_version: consistent version strings for sections producers
+- fallback file extension helpers for adapter acceptance logic
 
 All functions are additive: callers decide whether/where to attach returned dicts.
 """
 
-from __future__ import annotations
-
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Set
 
 
 def _safe_float(x: Any, default: float = 0.0) -> float:
@@ -38,36 +39,27 @@ def build_internal_metadata(
     notes: Optional[str] = None,
     extra: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Build a small internal_metadata block for canonical_payload.
-
-    This is intended for ingestion/QA tracing only.
-    """
+    """Build a small internal_metadata block for canonical_payload."""
     out: Dict[str, Any] = {}
-    if adapter_id:
+    if adapter_id is not None:
         out["adapter_id"] = adapter_id
-    if adapter_version:
+    if adapter_version is not None:
         out["adapter_version"] = adapter_version
-    if sections_source:
+    if sections_source is not None:
         out["sections_source"] = sections_source
-    if notes:
+    if notes is not None:
         out["notes"] = notes
     if extra:
-        for k, v in dict(extra).items():
-            # keep only JSON-serializable-ish primitives and dict/list
-            out[k] = v
+        out.update(dict(extra))
     return out
 
 
 def canonical_sections_version(game_id: str, producer: str, version: str = "v1") -> str:
-    """Return a normalized canonical_sections_version string.
-
-    Example: canonical_sections_version('proseka','sectionmetrics','v1')
-      -> 'proseka_sectionmetrics_v1'
-    """
-    gid = (game_id or "").strip().lower()
-    prod = (producer or "").strip().lower().replace(" ", "_")
-    ver = (version or "v1").strip().lower().lstrip("v")
-    return f"{gid}_{prod}_v{ver}" if gid and prod else f"{gid}_sections_v{ver}"
+    """Return a normalized canonical_sections_version string."""
+    gid = str(game_id or "unknown").strip()
+    prod = str(producer or "unknown").strip()
+    ver = str(version or "v1").strip()
+    return f"{gid}:{prod}:{ver}"
 
 
 def build_standard_diagnostics(
@@ -77,41 +69,81 @@ def build_standard_diagnostics(
     npb_key: str = "npb",
     hold_cov_key: str = "hold_coverage",
 ) -> Dict[str, Any]:
-    """Compute lightweight diagnostics from sections.
+    """Compute lightweight diagnostics from sections."""
+    rows = list(sections or [])
+    if not rows:
+        return {
+            "section_count": 0,
+            "avg_nps": 0.0,
+            "avg_npb": 0.0,
+            "avg_hold_coverage": 0.0,
+        }
 
-    This intentionally mirrors the common QA metrics you already use:
-    - sections_count
-    - avg_nps
-    - avg_npb
-    - total_hold_coverage (mean of hold_coverage)
-
-    Keys are customizable to support different section dict schemas.
-    """
-    secs = list(sections or [])
-    if not secs:
-        return {}
-
-    n = len(secs)
-    avg_nps = sum(_safe_float(s.get(nps_key), 0.0) for s in secs) / max(1, n)
-    avg_npb = sum(_safe_float(s.get(npb_key), 0.0) for s in secs) / max(1, n)
-    avg_hold = sum(_safe_float(s.get(hold_cov_key), 0.0) for s in secs) / max(1, n)
+    nps_vals = [_safe_float(r.get(nps_key, 0.0)) for r in rows]
+    npb_vals = [_safe_float(r.get(npb_key, 0.0)) for r in rows]
+    hold_vals = [_safe_float(r.get(hold_cov_key, 0.0)) for r in rows]
 
     return {
-        "sections_count": n,
-        "avg_nps": avg_nps,
-        "avg_npb": avg_npb,
-        "total_hold_coverage": avg_hold,
+        "section_count": len(rows),
+        "avg_nps": (sum(nps_vals) / len(nps_vals)) if nps_vals else 0.0,
+        "avg_npb": (sum(npb_vals) / len(npb_vals)) if npb_vals else 0.0,
+        "avg_hold_coverage": (sum(hold_vals) / len(hold_vals)) if hold_vals else 0.0,
     }
 
 
 def attach_if_missing(target: Dict[str, Any], key: str, value: Any) -> Dict[str, Any]:
-    """Attach a key/value into target only if key is absent.
-
-    This is a tiny helper used to keep adapter output additive.
-    """
+    """Attach a key/value into target only if key is absent."""
     if key not in target:
         target[key] = value
     return target
+
+
+# ---------------------------------------------------------------------
+# Baseline fallback file-extension helpers
+# ---------------------------------------------------------------------
+
+BASELINE_FALLBACK_EXTENSIONS: Set[str] = {".html", ".mht"}
+
+
+def normalize_extensions(extensions: Optional[Sequence[str]]) -> Set[str]:
+    """Normalize an iterable of extensions to lower-case dotted strings."""
+    out: Set[str] = set()
+    for ext in extensions or []:
+        if ext is None:
+            continue
+        e = str(ext).strip().lower()
+        if not e:
+            continue
+        if not e.startswith("."):
+            e = "." + e
+        out.add(e)
+    return out
+
+
+def with_baseline_fallback_extensions(
+    extensions: Optional[Sequence[str]] = None,
+    *,
+    include_baseline: bool = True,
+) -> Set[str]:
+    """
+    Return normalized extensions with baseline fallback extensions added.
+
+    Recommended use in adapters:
+        allowed = with_baseline_fallback_extensions([".json", ".txt"])
+    """
+    out = normalize_extensions(extensions)
+    if include_baseline:
+        out.update(BASELINE_FALLBACK_EXTENSIONS)
+    return out
+
+
+def file_matches_extensions(path: Any, extensions: Optional[Sequence[str]] = None) -> bool:
+    """
+    Return True if the file suffix matches the normalized extension set.
+    """
+    suffix = str(getattr(path, "suffix", "") or "").lower()
+    allowed = with_baseline_fallback_extensions(extensions)
+    return suffix in allowed
 
 
 __all__ = [
@@ -119,4 +151,8 @@ __all__ = [
     "canonical_sections_version",
     "build_standard_diagnostics",
     "attach_if_missing",
+    "BASELINE_FALLBACK_EXTENSIONS",
+    "normalize_extensions",
+    "with_baseline_fallback_extensions",
+    "file_matches_extensions",
 ]
