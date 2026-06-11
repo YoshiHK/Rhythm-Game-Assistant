@@ -1,21 +1,14 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "RGA Tips Meta Report Schema",
   "type": "object",
-  "additionalProperties": false,
 
   "required": [
     "report_type",
-    "report_date",
-    "report_seq",
     "run_id",
-    "total_charts",
-    "total_success",
-    "total_failed",
-    "by_game",
-    "metadata_stats",
-    "integrity",
-    "generated_at"
+    "report_date",
+    "generated_at",
+    "summary",
+    "pipeline_output",
+    "integrity"
   ],
 
   "properties": {
@@ -24,138 +17,111 @@
       "const": "tips_meta"
     },
 
-    "report_date": {
-      "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-    },
-
-    "report_seq": {
-      "type": "integer",
-      "minimum": 1
-    },
-
     "run_id": {
-      "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}_\\d+$"
+      "type": "string"
+    },
+
+    "report_date": {
+      "type": "string"
     },
 
     "generated_at": {
-      "type": "string",
-      "format": "date-time"
+      "type": "string"
     },
 
-    "total_charts": {
-      "type": "integer",
-      "minimum": 0
-    },
-
-    "total_success": {
-      "type": "integer",
-      "minimum": 0
-    },
-
-    "total_failed": {
-      "type": "integer",
-      "minimum": 0
+    "summary": {
+      "type": "object",
+      "required": ["total_charts", "success", "failed"],
+      "properties": {
+        "total_charts": { "type": "integer" },
+        "success": { "type": "integer" },
+        "failed": { "type": "integer" },
+        "success_rate": { "type": "number" }
+      }
     },
 
     "by_game": {
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["success", "failed"],
-        "additionalProperties": false,
         "properties": {
-          "success": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "failed": {
-            "type": "integer",
-            "minimum": 0
-          }
+          "success": { "type": "integer" },
+          "failed": { "type": "integer" },
+          "success_rate": { "type": "number" }
         }
       }
     },
 
-    "failures": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["game_id", "error"],
-        "additionalProperties": false,
-        "properties": {
-          "game_id": {
-            "type": "string"
-          },
-          "song_id": {
-            "type": ["string", "null"]
-          },
-          "song_name": {
-            "type": ["string", "null"]
-          },
-          "difficulty": {
-            "type": ["string", "null"]
-          },
-          "error": {
-            "type": "string"
-          }
-        }
-      }
-    },
-
-    "metadata_stats": {
+    "coverage": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "combo_mismatch_charts": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "bpm_mismatch_charts": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "duration_mismatch_charts": {
-          "type": "integer",
-          "minimum": 0
+        "charts_with_tips": { "type": "integer" },
+        "charts_missing_tips": { "type": "integer" },
+        "coverage_rate": { "type": "number" }
+      }
+    },
+
+    "validation": {
+      "type": "object",
+      "properties": {
+        "inference_failures": { "type": "integer" },
+        "empty_pipeline_output": { "type": "integer" },
+        "invalid_rows": { "type": "integer" },
+        "pipeline_output_error": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "pipeline_metrics": {
+      "type": "object",
+      "properties": {
+        "tips_mode": { "type": "string" },
+        "total_rows": { "type": "integer" },
+        "games_count": { "type": "integer" }
+      }
+    },
+
+    "difficulty_metrics": {
+      "type": "object",
+      "properties": {
+        "by_difficulty": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
         }
       }
     },
 
-    "sections_by_game": {
+    "chart_metrics": {
       "type": "object",
+      "properties": {
+        "rows_with_bpm": { "type": "integer" },
+        "rows_with_duration_ms": { "type": "integer" },
+        "rows_with_note_total_chart": { "type": "integer" },
+
+        "missing_name": { "type": "integer" },
+        "missing_difficulty": { "type": "integer" },
+        "missing_chart_path": { "type": "integer" },
+        "missing_bpm": { "type": "integer" },
+        "missing_duration_ms": { "type": "integer" },
+        "missing_note_total_chart": { "type": "integer" },
+
+        "avg_bpm": { "type": "number" },
+        "min_bpm": { "type": "number" },
+        "max_bpm": { "type": "number" }
+      },
       "additionalProperties": true
+    },
+
+    "pipeline_output": {
+      "type": "object"
     },
 
     "integrity": {
       "type": "object",
-      "required": [
-        "hash_algo",
-        "schema_version",
-        "content_hash_sha256"
-      ],
-      "additionalProperties": false,
+      "required": ["schema_version"],
       "properties": {
-        "hash_algo": {
-          "type": "string",
-          "const": "sha256"
-        },
-        "schema_version": {
-          "type": "integer"
-        },
-        "content_hash_sha256": {
-          "type": ["string", "null"],
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "prev_content_hash_sha256": {
-          "type": ["string", "null"],
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "pair_content_hash_sha256": {
-          "type": ["string", "null"],
-          "pattern": "^[a-f0-9]{64}$"
-        }
+        "schema_version": { "type": "integer" },
+        "source_layer": { "type": "string" }
       }
     }
   }

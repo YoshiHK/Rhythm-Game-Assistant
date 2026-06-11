@@ -32,9 +32,10 @@ from rhythm_ingestion.pipeline.pattern_tags import (
 from rhythm_ingestion.pipeline.pattern_tags.pattern_tags_taxonomy import (
     PatternTagsTaxonomy,
 )
+from rhythm_ingestion.runtime_meta import RuntimeMetaManager
 
 # ------------------------------------------------------------
-# Control‑plane constants
+# Control-plane constants
 # ------------------------------------------------------------
 
 DEFAULT_CHART_ROOT = (
@@ -59,11 +60,12 @@ def _json_dump(path: str, obj: Any) -> None:
         json.dump(obj, f, indent=2, ensure_ascii=False)
 
 
+
 def _filter_supported_extensions(
     paths: List[Path],
 ) -> Tuple[List[Path], List[Path]]:
     """
-    Control‑plane validation only.
+    Control-plane validation only.
 
     Returns:
       (supported_files, excluded_files)
@@ -134,6 +136,8 @@ def ingest(
     tips_mode: str,
 ) -> int:
     src = Path(source_dir)
+    
+    # ❌ no runtime here
 
     if not src.exists():
         log(f"Error: directory not found: {src}")
@@ -142,12 +146,10 @@ def ingest(
     # --------------------------------------------------------
     # 1) File scan (recursive)
     # --------------------------------------------------------
-    
     all_files = scan_directory(
         src,
         allowed_extensions=sorted(SUPPORTED_CHART_EXTENSIONS),
     )
-
 
     files, excluded = _filter_supported_extensions(all_files)
 
@@ -158,6 +160,19 @@ def ingest(
         )
 
     log(f"Candidate chart files after filtering: {len(files)}")
+    
+    total = len(files)
+
+    for idx, file_path in enumerate(files):
+
+        if idx % 100 == 0:
+            log(f"[INGEST PROGRESS] {idx}/{total} current={file_path}") 
+    
+    # --------------------------------------------------------
+    # Resolve artifact paths (NEW)
+    # --------------------------------------------------------
+    resolved_db_path = db_path or str(runtime.build_artifact_path("song_db"))
+    resolved_json_out = json_out or str(runtime.build_artifact_path("song_db_meta"))
 
     # --------------------------------------------------------
     # 2) Game / adapter routing
@@ -166,6 +181,10 @@ def ingest(
     tips_enabled_games = set(get_games_supporting_tips())
 
     rows: List[Dict[str, Any]] = []
+    
+    route_none_count = 0
+    canonical_error_count = 0
+    canonical_error_samples: List[str] = []
 
     for path in files:
         game_id, matches = _detect_game_for_file(path, enabled_games)
@@ -174,6 +193,7 @@ def ingest(
             continue
 
         if not game_id:
+            route_none_count += 1
             continue
 
         adapter = get_adapter(game_id)
@@ -186,28 +206,105 @@ def ingest(
         except Exception as e:
             payload.setdefault("diagnostics", {})["validation_error"] = str(e)
 
+        try:
+            canonical_row = adapter.to_canonical_row(payload)
+        except Exception as e:
+            canonical_error_count += 1
+            if len(canonical_error_samples) < 10:
+                canonical_error_samples.append(f"{path.name}: {repr(e)}")
+            log(f"canonical_row error for {path}: {e}")
+            continue
+
         rows.append(
             {
                 "game_id": game_id,
-                "path": str(path),
-                "payload": payload,
+                "canonical_row": canonical_row,
             }
         )
+    
+    log(f"[INGEST] rows={len(rows)} route_miss={route_none_count} errors={canonical_error_count}")
+
+    if canonical_error_samples:
+        print("CANONICAL_ERROR_SAMPLES:")
+        for item in canonical_error_samples:
+            print("  ", item)
 
     # --------------------------------------------------------
     # 3) Writers / QA summary
     # --------------------------------------------------------
     if not dry_run:
         writer = get_writer()
-        writer.write_rows(rows, db_path=db_path)
+        writer.write_rows(rows, db_path=resolved_db_path)
 
     summary = build_batch_summary(rows, tips_mode=tips_mode)
+    
+    batch_summary = summary
+    log("Batch summary generated")
+    
+    # --------------------------------------------------------
+    # Build song_db_meta
+    # --------------------------------------------------------
+    by_game = {}
+    for item in rows:
+        gid = item.get("game_id")
+        if not gid:
+            continue
+        slot = by_game.setdefault(gid, {"files": 0, "rows": 0, "failures": 0})
+        slot["files"] += 1
+        slot["rows"] += 1
 
+    from datetime import datetime, timezone
+
+    song_db_meta = {
+        "report_type": "song_db_meta",
+        "report_date": Path(resolved_json_out).parent.parent.name,
+        "run_id": Path(resolved_json_out).parent.name,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+
+        "db_file": Path(resolved_db_path).name,
+
+        "summary": {
+            "total_files_scanned": len(files),
+            "total_supported_files": len(files),
+            "rows_built": len(rows),
+            "rows_written": len(rows) if not dry_run else 0,
+        },
+
+        "validation": {
+            "routing_failures": route_none_count,
+            "adapter_failures": 0,
+            "canonical_row_errors": canonical_error_count,
+            "validation_errors": 0,
+        },
+
+        "by_game": by_game,
+
+        "data_quality": {},
+        "lookup_stats": {},
+
+        "integrity": {
+            "schema_version": 1,
+        },
+    }
+
+    # --------------------------------------------------------
+    # SINGLE WRITE ONLY (NO FALLBACK, NO DUPLICATION)
+    # --------------------------------------------------------
     if json_out:
-        _json_dump(json_out, summary)
+        _json_dump(resolved_json_out, song_db_meta)
+    else:
+        raise ValueError("json_out must be provided for song_db_meta")
 
     log("Ingestion completed")
-    return 0
+
+    # --------------------------------------------------------
+    # CLEAN RETURN CONTRACT
+    # --------------------------------------------------------
+    return {
+        "status_code": 0,
+        "rows": rows,
+        "batch_summary": batch_summary
+    }
 
 
 # ------------------------------------------------------------
