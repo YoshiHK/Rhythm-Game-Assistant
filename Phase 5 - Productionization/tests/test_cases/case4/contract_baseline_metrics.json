@@ -1,0 +1,73 @@
+{
+  "baseline_type": "contract",
+
+  "event_batch_contract": {
+    "allowed_event_types": [
+      "recommendation_feedback"
+    ],
+    "required_top_level_keys": [
+      "event_id",
+      "event_type",
+      "context",
+      "payload",
+      "timestamp"
+    ],
+    "required_context_fields": [
+      "game_id",
+      "song_id",
+      "difficulty",
+      "session_id",
+      "player_id"
+    ],
+    "required_payload_fields": [
+      "action",
+      "completion_status",
+      "duration_ms",
+      "reaction_type"
+    ]
+  },
+
+  "interpretation_contract": {
+    "require_output": true,
+    "allowed_output_shapes_any_of": [
+      ["derived_reason"],
+      ["raw_event", "derived_reason"],
+      ["context", "payload"]
+    ],
+    "min_outputs": 1
+  },
+
+  "phase5_loop_contract": {
+    "required_artifacts": [
+      "selector_params",
+      "training_report",
+      "evaluation_report"
+    ],
+    "require_paths": true,
+    "require_metrics": true
+  },
+
+  "semantic_rules": [
+    {
+      "name": "dismissed_requires_reason",
+      "if": {
+        "completion_status": "dismissed"
+      },
+      "then": {
+        "dismiss_reason_not_null": true
+      }
+    },
+    {
+      "name": "duration_non_negative",
+      "assert": {
+        "duration_ms_min": 0
+      }
+    },
+    {
+      "name": "retry_non_negative",
+      "assert": {
+        "retry_count_min": 0
+      }
+    }
+  ]
+}

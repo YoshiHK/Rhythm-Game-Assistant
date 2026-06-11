@@ -1,0 +1,16 @@
+{
+  "baseline_type": "regression",
+
+  "metrics": {
+    "accept_or_better_rate": 0.78,
+    "played_or_better_rate": 0.88,
+    "completed_rate": 0.72,
+    "mean_outcome_score": 0.68
+  },
+
+  "policy": {
+    "allow_degradation": false,
+    "tolerance": 0.0,
+    "comparison": "greater_or_equal"
+  }
+}

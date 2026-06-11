@@ -1,0 +1,404 @@
+{
+  "summary_type": "phase5_test_case_summary",
+  "summary_version": "2.0",
+  "timestamp": "2026-06-07T15:00:00+08:00",
+
+  "totals": {
+    "total_cases": 10,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "skipped_cases": 0
+  },
+
+  "status_legend": {
+    "PASS": "validator/layer completed successfully",
+    "FAIL": "validator/layer executed and failed",
+    "SKIP": "validator/layer intentionally skipped",
+    "N/A": "validator/layer not applicable for this case"
+  },
+
+  "cases": [
+    {
+      "case": "case1",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "SKIP",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case2",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "SKIP",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case3",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "SKIP",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case4",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "SKIP",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case5",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "SKIP",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case6",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "SKIP",
+      "regression": "SKIP",
+      "determinism": "PASS",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case7",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "PASS",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case8",
+      "event_category": "feedback",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "PASS",
+      "phase5_loop": "PASS",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "PASS",
+      "drift": "SKIP",
+      "regression": "PASS",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": ["recommendation_feedback"],
+        "require_interpretation_output": true,
+        "required_artifacts": [
+          "selector_params",
+          "training_report",
+          "evaluation_report"
+        ]
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case9",
+      "event_category": "telemetry",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "N/A",
+      "phase5_loop": "N/A",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "SKIP",
+      "drift": "SKIP",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": [],
+        "require_interpretation_output": false,
+        "required_artifacts": []
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    },
+
+    {
+      "case": "case10",
+      "event_category": "safety",
+      "overall_status": "PASS",
+
+      "integrity": "PASS",
+      "event_batch": "PASS",
+      "interpretation_batch": "N/A",
+      "phase5_loop": "N/A",
+      "contract_baseline": "PASS",
+      "coverage": "PASS",
+      "schema": "PASS",
+      "artifact_integrity": "SKIP",
+      "drift": "SKIP",
+      "regression": "SKIP",
+
+      "expected": {
+        "min_structured_events": 1,
+        "required_event_types": [],
+        "require_interpretation_output": false,
+        "required_artifacts": []
+      },
+
+      "actual": {
+        "structured_events_count": 0,
+        "interpreted_outputs_count": 0,
+        "artifacts_present": [],
+        "artifact_paths_present": false,
+        "metrics_present": false
+      },
+
+      "errors": [],
+      "warnings": []
+    }
+  ]
+}

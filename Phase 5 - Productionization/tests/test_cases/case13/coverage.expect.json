@@ -1,0 +1,29 @@
+{
+  "event_batch": {
+    "min_structured_events": 1,
+    "required_event_types": ["recommendation_feedback"],
+    "require_fields": [
+      "event_id",
+      "event_type",
+      "payload",
+      "context",
+      "timestamp"
+    ]
+  },
+  "interpretation_batch": {
+    "min_outputs": 1,
+    "require_output_keys_any_of": [
+      ["derived_reason"],
+      ["raw_event", "derived_reason"]
+    ]
+  },
+  "phase5_loop": {
+    "required_artifacts": [
+      "selector_params",
+      "training_report",
+      "evaluation_report"
+    ],
+    "require_paths": true,
+    "require_metrics": true
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "event_category": "feedback",
+  "payload": {
+    "event_type": "recommendation_feedback",
+    "source_type": "phase5_regression_anchor",
+    "provenance_id": "case8-feedback-001",
+    "event_id": "case8-feedback-001",
+    "timestamp": "2026-06-07T14:36:00+08:00",
+    "player_id": "anchor-player",
+    "session_id": "anchor-session",
+    "game_id": "pjsekai",
+    "song_id": "anchor_song",
+    "recommendation_set_id": "anchor_rec",
+    "difficulty": "expert",
+    "rank": 2,
+    "locale": "en-HK",
+    "surface": "phase5_batch",
+    "mode": "practice",
+    "action": "tip_view",
+    "reaction_type": "neutral",
+    "completion_status": "completed",
+    "duration_ms": 150000.0,
+    "retry_count": 2,
+    "selector_used": "offline_validation_selector",
+    "fallback_triggered": false,
+    "degraded_mode": false,
+    "execution_stage": "phase5_batch",
+    "experiment_id": "regression-anchor",
+    "variant": "case8",
+    "client_version": "dev-local"
+  }
+}

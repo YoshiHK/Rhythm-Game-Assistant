@@ -1,0 +1,32 @@
+{
+  "event_category": "feedback",
+  "payload": {
+    "event_type": "recommendation_feedback",
+    "source_type": "phase5_test_case",
+    "provenance_id": "case5-feedback-001",
+    "event_id": "case5-feedback-001",
+    "timestamp": "2026-06-07T14:34:00+08:00",
+    "player_id": "test-player-003",
+    "session_id": "session-20260607-005",
+    "game_id": "pjsekai",
+    "song_id": "test_song_002",
+    "recommendation_set_id": "rec-set-case5",
+    "difficulty": "expert",
+    "rank": 5,
+    "locale": "en-HK",
+    "surface": "phase5_batch",
+    "mode": "practice",
+    "action": "retry",
+    "reaction_type": "frustrated",
+    "completion_status": "completed",
+    "duration_ms": 300000.0,
+    "retry_count": 7,
+    "selector_used": "offline_validation_selector",
+    "fallback_triggered": false,
+    "degraded_mode": false,
+    "execution_stage": "phase5_batch",
+    "experiment_id": "offline-validation",
+    "variant": "case5",
+    "client_version": "dev-local"
+  }
+}

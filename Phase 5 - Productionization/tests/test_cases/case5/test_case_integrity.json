@@ -1,0 +1,52 @@
+{
+  "integrity_type": "phase5_test_case",
+
+  "required_files": [
+    "input.json",
+    "coverage.expect.json"
+  ],
+
+  "optional_files": [
+    "schema_baseline_metrics.json",
+    "drift_baseline_metrics.json",
+    "regression_baseline_metrics.json",
+    "contract_baseline_metrics.json"
+  ],
+
+  "input_requirements": {
+    "require_event_category": true,
+    "require_payload": true,
+    "payload_required_fields": [
+      "event_type",
+      "source_type",
+      "provenance_id",
+      "event_id",
+      "timestamp"
+    ]
+  },
+
+  "category_rules": {
+    "feedback": {
+      "requires_interpretation": true,
+      "requires_phase5_loop": true
+    },
+    "telemetry": {
+      "requires_interpretation": false,
+      "requires_phase5_loop": false
+    },
+    "safety": {
+      "requires_interpretation": false,
+      "requires_phase5_loop": false
+    }
+  },
+
+  "file_integrity_rules": {
+    "input_json_must_be_object": true,
+    "payload_must_be_object": true,
+    "no_top_level_game_fields": [
+      "game",
+      "chart",
+      "metadata"
+    ]
+  }
+}

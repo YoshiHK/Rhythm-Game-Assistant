@@ -1,0 +1,35 @@
+{
+  "baseline_type": "schema",
+
+  "metrics_schema": {
+    "accept_or_better_rate": {
+      "type": "float",
+      "required": true,
+      "range": [0.0, 1.0]
+    },
+    "played_or_better_rate": {
+      "type": "float",
+      "required": true,
+      "range": [0.0, 1.0]
+    },
+    "completed_rate": {
+      "type": "float",
+      "required": true,
+      "range": [0.0, 1.0]
+    },
+    "mean_outcome_score": {
+      "type": "float",
+      "required": true,
+      "range": [0.0, 1.0]
+    }
+  },
+
+  "artifact_schema": {
+    "required_paths": true,
+    "required_artifacts": [
+      "selector_params",
+      "training_report",
+      "evaluation_report"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "baseline_type": "drift",
+
+  "metrics": {
+    "accept_or_better_rate": 0.75,
+    "played_or_better_rate": 0.85,
+    "completed_rate": 0.70,
+    "mean_outcome_score": 0.65
+  },
+
+  "tolerance": {
+    "accept_or_better_rate": 0.10,
+    "played_or_better_rate": 0.10,
+    "completed_rate": 0.10,
+    "mean_outcome_score": 0.10
+  },
+
+  "policy": {
+    "mode": "relative",
+    "allow_improvement": true
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "min_structured_events": 1,
+  "required_event_types": [],
+  "require_interpretation_output": false,
+  "required_artifacts": [],
+  "notes": "routing_only_case"
+}

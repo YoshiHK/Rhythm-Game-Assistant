@@ -1,0 +1,13 @@
+{
+  "event_category": "safety",
+  "payload": {
+    "event_type": "anti_cheat_signal",
+    "source_type": "phase5_test_case",
+    "provenance_id": "case10-safety-001",
+    "event_id": "case10-safety-001",
+    "timestamp": "2026-06-07T14:38:00+08:00",
+    "player_id": "test-player-004",
+    "session_id": "session-safety",
+    "game_id": "pjsekai"
+  }
+}
