@@ -1,0 +1,98 @@
+name: Deployment Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  deployment-gate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create venv
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+
+      - name: Install requirements
+        shell: pwsh
+        run: |
+          if (Test-Path .\requirements.txt) {
+            .\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
+          }
+
+      - name: Run setup chain
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+          .\setup.ps1 `
+            -RepoRoot "." `
+            -OfflineValidationMode `
+            -RunStageProbes `
+            -RunOrchestrator `
+            -EnableCaseExpectOverride `
+            -RequireInterpretationOutput `
+            -SkipNonFeedbackCases `
+            -StrictValidation
+
+      - name: Resolve latest offline validation report
+        id: offline
+        shell: pwsh
+        run: |
+          $report = Get-ChildItem `
+            ".\Tips Output Meta\offline_validation" `
+            -Recurse -Filter "offline_validation_report.json" |
+            Sort-Object LastWriteTime | Select-Object -Last 1
+
+          if (-not $report) {
+            throw "offline_validation_report.json not found"
+          }
+
+          "report_path=$($report.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Resolve latest runtime index
+        id: runtime
+        shell: pwsh
+        run: |
+          $idx = Get-ChildItem `
+            "." `
+            -Recurse -Filter "runtime_index.json" |
+            Sort-Object LastWriteTime | Select-Object -Last 1
+
+          if ($idx) {
+            "runtime_index_path=$($idx.FullName)" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Run deployment gate
+        shell: pwsh
+        run: |
+          $args = @(
+            ".\deployment_gate.py",
+            "--offline-validation-report", "${{ steps.offline.outputs.report_path }}",
+            "--output", ".\deployment_gate_report.json"
+          )
+
+          if ("${{ steps.runtime.outputs.runtime_index_path }}" -ne "") {
+            $args += "--runtime-index"
+            $args += "${{ steps.runtime.outputs.runtime_index_path }}"
+            $args += "--require-runtime-index"
+          }
+
+          .\.venv\Scripts\python.exe @args
+
+      - name: Upload deployment gate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-gate-report
+          path: deployment_gate_report.json
