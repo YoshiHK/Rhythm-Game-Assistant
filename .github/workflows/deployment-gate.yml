@@ -85,13 +85,13 @@ jobs:
         shell: pwsh
         run: |
           $report = Get-ChildItem `
-            ".\ci_data\offline_validation" `
+            ".\ci_data\Tips Output Meta\offline_validation" `
             -Recurse -Filter "offline_validation_report.json" |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
 
           if (-not $report) {
-            throw "offline_validation_report.json not found under .\ci_data\offline_validation"
+            throw "offline_validation_report.json not found under .\ci_data\Tips Output Meta\offline_validation"
           }
 
           "report_path=$($report.FullName)" >> $env:GITHUB_OUTPUT
