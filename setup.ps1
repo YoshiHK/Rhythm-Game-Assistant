@@ -183,3 +183,38 @@ try {
 
         # Forward newer RepoSmoke / Phase5 Batch controls
         if ($EnableCaseExpectOverride)    { $smokeParams["EnableCaseExpectOverride"] = $true }
+        if ($RequireInterpretationOutput) { $smokeParams["RequireInterpretationOutput"] = $true }
+        if ($SkipNonFeedbackCases)        { $smokeParams["SkipNonFeedbackCases"] = $true }
+        if ($StrictValidation)            { $smokeParams["StrictValidation"] = $true }
+
+        if ($RequiredEventTypes -and $RequiredEventTypes.Count -gt 0) {
+            $smokeParams["RequiredEventTypes"] = $RequiredEventTypes
+        }
+
+        if ($SummaryOutputPath -and $SummaryOutputPath.Trim() -ne "") {
+            $smokeParams["SummaryOutputPath"] = $SummaryOutputPath
+        }
+
+        & $RepoSmokeScript @smokeParams
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Run-RepoSmoke.ps1 failed"
+        }
+
+        Write-Ok "Repo smoke completed"
+    }
+    else {
+        Write-Warn2 "Skipping repo smoke"
+    }
+
+    # --------------------------------------------------
+    # FINAL
+    # --------------------------------------------------
+    Write-Host ""
+    Write-Host "============================================="
+    Write-Host "SETUP COMPLETE"
+    Write-Host "============================================="
+}
+finally {
+    Pop-Location
+}
