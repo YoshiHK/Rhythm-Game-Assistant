@@ -45,15 +45,21 @@ jobs:
           }
 
       # --------------------------------------------------
-      # ✅ 5. Prepare CI DataRoot (CRITICAL FIX)
+      # 5. Prepare CI-local runtime workspace
       # --------------------------------------------------
       - name: Prepare CI data root
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path .\ci_data | Out-Null
+          New-Item -ItemType Directory -Force -Path ".\ci_data\Chart File" | Out-Null
+
+          # Optional: if you have repo-contained chart fixtures, copy them in.
+          if (Test-Path ".\tests\fixtures\Chart File") {
+            Copy-Item ".\tests\fixtures\Chart File\*" ".\ci_data\Chart File" -Recurse -Force
+          }
 
       # --------------------------------------------------
-      # ✅ 6. Run full setup chain (FIXED)
+      # 6. Run setup chain against CI-local DataRoot
       # --------------------------------------------------
       - name: Run setup chain
         shell: pwsh
@@ -72,7 +78,7 @@ jobs:
             -StrictValidation
 
       # --------------------------------------------------
-      # ✅ 7. Resolve offline validation report (CI path)
+      # 7. Resolve latest offline validation report from CI-local DataRoot
       # --------------------------------------------------
       - name: Resolve offline validation report
         id: offline
@@ -85,20 +91,21 @@ jobs:
             Select-Object -Last 1
 
           if (-not $report) {
-            throw "offline_validation_report.json not found"
+            throw "offline_validation_report.json not found under .\ci_data\offline_validation"
           }
 
           "report_path=$($report.FullName)" >> $env:GITHUB_OUTPUT
 
       # --------------------------------------------------
-      # ✅ 8. Resolve runtime_index
+      # 8. Resolve runtime index from CI-local outputs only (optional)
       # --------------------------------------------------
       - name: Resolve runtime index
         id: runtime
         shell: pwsh
         run: |
+          # Prefer CI-local generated runtime index, if your pipeline emits one.
           $idx = Get-ChildItem `
-            "." `
+            ".\ci_data" `
             -Recurse -Filter "runtime_index.json" |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
@@ -108,7 +115,7 @@ jobs:
           }
 
       # --------------------------------------------------
-      # ✅ 9. Run deployment gate
+      # 9. Run deployment gate (online-only artifacts)
       # --------------------------------------------------
       - name: Run deployment gate
         shell: pwsh
@@ -119,6 +126,7 @@ jobs:
             "--output", ".\deployment_gate_report.json"
           )
 
+          # Only require runtime_index if this run actually generated one inside CI-local workspace.
           if ("${{ steps.runtime.outputs.runtime_index_path }}" -ne "") {
             $args += "--runtime-index"
             $args += "${{ steps.runtime.outputs.runtime_index_path }}"
