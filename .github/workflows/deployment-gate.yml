@@ -36,8 +36,11 @@ jobs:
         shell: pwsh
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+          New-Item -ItemType Directory -Force -Path .\ci_data | Out-Null
+
           .\setup.ps1 `
             -RepoRoot "." `
+            -DataRoot ".\ci_data" `
             -OfflineValidationMode `
             -RunStageProbes `
             -RunOrchestrator `
@@ -50,10 +53,9 @@ jobs:
         id: offline
         shell: pwsh
         run: |
-          $report = Get-ChildItem `
-            ".\Tips Output Meta\offline_validation" `
-            -Recurse -Filter "offline_validation_report.json" |
-            Sort-Object LastWriteTime | Select-Object -Last 1
+          $report = Get-ChildItem ".\ci_data\offline_validation" -Recurse -Filter "offline_validation_report.json" |
+          Sort-Object LastWriteTime |
+          Select-Object -Last 1
 
           if (-not $report) {
             throw "offline_validation_report.json not found"
