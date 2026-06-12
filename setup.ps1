@@ -1,6 +1,7 @@
 ﻿param(
     [string]$RepoRoot = ".",
     [string]$PythonExe = "python",
+    [string]$DataRoot = "",
 
     # Execution modes
     [switch]$BootstrapOnly,
@@ -105,6 +106,11 @@ try {
             PythonExe         = $PythonExe
             SkipInstall       = $true
             SkipOneDriveCheck = $true
+        }
+
+        
+        if ($DataRoot -and $DataRoot.Trim() -ne "") {
+             $bootstrapParams["DataRoot"] = $DataRoot
         }
 
         if ($OfflineValidationMode) { $bootstrapParams["OfflineValidationMode"] = $true }
