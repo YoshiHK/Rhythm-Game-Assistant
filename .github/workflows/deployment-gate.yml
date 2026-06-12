@@ -11,20 +11,32 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # --------------------------------------------------
+      # 1. Checkout
+      # --------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
+      # --------------------------------------------------
+      # 2. Setup Python
+      # --------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # --------------------------------------------------
+      # 3. Create venv
+      # --------------------------------------------------
       - name: Create venv
         shell: pwsh
         run: |
           python -m venv .venv
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
 
+      # --------------------------------------------------
+      # 4. Install requirements (if exists)
+      # --------------------------------------------------
       - name: Install requirements
         shell: pwsh
         run: |
@@ -32,11 +44,21 @@ jobs:
             .\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
           }
 
+      # --------------------------------------------------
+      # ✅ 5. Prepare CI DataRoot (CRITICAL FIX)
+      # --------------------------------------------------
+      - name: Prepare CI data root
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\ci_data | Out-Null
+
+      # --------------------------------------------------
+      # ✅ 6. Run full setup chain (FIXED)
+      # --------------------------------------------------
       - name: Run setup chain
         shell: pwsh
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-          New-Item -ItemType Directory -Force -Path .\ci_data | Out-Null
 
           .\setup.ps1 `
             -RepoRoot "." `
@@ -49,13 +71,18 @@ jobs:
             -SkipNonFeedbackCases `
             -StrictValidation
 
-      - name: Resolve latest offline validation report
+      # --------------------------------------------------
+      # ✅ 7. Resolve offline validation report (CI path)
+      # --------------------------------------------------
+      - name: Resolve offline validation report
         id: offline
         shell: pwsh
         run: |
-          $report = Get-ChildItem ".\ci_data\offline_validation" -Recurse -Filter "offline_validation_report.json" |
-          Sort-Object LastWriteTime |
-          Select-Object -Last 1
+          $report = Get-ChildItem `
+            ".\ci_data\offline_validation" `
+            -Recurse -Filter "offline_validation_report.json" |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
 
           if (-not $report) {
             throw "offline_validation_report.json not found"
@@ -63,19 +90,26 @@ jobs:
 
           "report_path=$($report.FullName)" >> $env:GITHUB_OUTPUT
 
-      - name: Resolve latest runtime index
+      # --------------------------------------------------
+      # ✅ 8. Resolve runtime_index
+      # --------------------------------------------------
+      - name: Resolve runtime index
         id: runtime
         shell: pwsh
         run: |
           $idx = Get-ChildItem `
             "." `
             -Recurse -Filter "runtime_index.json" |
-            Sort-Object LastWriteTime | Select-Object -Last 1
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
 
           if ($idx) {
             "runtime_index_path=$($idx.FullName)" >> $env:GITHUB_OUTPUT
           }
 
+      # --------------------------------------------------
+      # ✅ 9. Run deployment gate
+      # --------------------------------------------------
       - name: Run deployment gate
         shell: pwsh
         run: |
@@ -93,6 +127,9 @@ jobs:
 
           .\.venv\Scripts\python.exe @args
 
+      # --------------------------------------------------
+      # ✅ 10. Upload deployment report artifact
+      # --------------------------------------------------
       - name: Upload deployment gate report
         uses: actions/upload-artifact@v4
         with:
