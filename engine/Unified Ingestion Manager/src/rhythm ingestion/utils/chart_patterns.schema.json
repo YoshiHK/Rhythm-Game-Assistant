@@ -1,0 +1,154 @@
+{
+  "schema_name": "chart_patterns",
+  "schema_version": 1,
+  "description": "Schema for storing extracted chart pattern data and feature signals from rhythm game charts",
+  "entities": {
+    "chart_patterns": {
+      "description": "Core chart pattern metadata and extraction identity",
+      "primary_key": ["chart_id", "extraction_version"],
+      "columns": {
+        "chart_id": {
+          "type": "string",
+          "description": "Unique identifier for a chart (linked to chart_registry)"
+        },
+        "game_id": {
+          "type": "string",
+          "description": "Game identifier (e.g. bandori, pjsekai)"
+        },
+        "extraction_version": {
+          "type": "integer",
+          "description": "Version of the pattern extraction algorithm"
+        },
+        "pattern_hash": {
+          "type": "string",
+          "description": "Hash of extracted pattern for deduplication and integrity"
+        },
+        "note_count": {
+          "type": "integer",
+          "description": "Total number of notes in chart"
+        },
+        "section_count": {
+          "type": "integer",
+          "description": "Number of segmented sections (SectionMetrics)"
+        },
+        "dominant_pattern": {
+          "type": "string",
+          "description": "Dominant detected pattern category"
+        },
+        "difficulty_signal": {
+          "type": "number",
+          "description": "Computed scalar difficulty signal from pattern extraction"
+        },
+        "created_at": {
+          "type": "datetime",
+          "description": "Creation timestamp"
+        }
+      }
+    },
+
+    "pattern_features": {
+      "description": "Aggregated machine-readable features used in Phase 5 learning and Phase 7 ranking",
+      "primary_key": ["chart_id", "extraction_version"],
+      "columns": {
+        "chart_id": {
+          "type": "string"
+        },
+        "extraction_version": {
+          "type": "integer"
+        },
+        "density": {
+          "type": "number",
+          "description": "Overall note density"
+        },
+        "burst_density": {
+          "type": "number",
+          "description": "Density of burst sections"
+        },
+        "stream_length_avg": {
+          "type": "number",
+          "description": "Average length of continuous note streams"
+        },
+        "jump_ratio": {
+          "type": "number",
+          "description": "Ratio of simultaneous/stack notes"
+        },
+        "hold_complexity": {
+          "type": "number",
+          "description": "Relative complexity of hold interactions"
+        },
+        "section_variance": {
+          "type": "number",
+          "description": "Variance across section difficulty"
+        },
+        "spike_count": {
+          "type": "integer",
+          "description": "Number of high-difficulty spikes"
+        },
+        "pattern_score_json": {
+          "type": "string",
+          "description": "Serialized JSON with per-pattern taxonomy scores"
+        }
+      }
+    },
+
+    "pattern_blobs": {
+      "description": "Storage pointer to full pattern structure blobs (compressed)",
+      "primary_key": ["blob_id"],
+      "columns": {
+        "blob_id": {
+          "type": "string",
+          "description": "Unique blob identifier"
+        },
+        "chart_id": {
+          "type": "string"
+        },
+        "extraction_version": {
+          "type": "integer"
+        },
+        "blob_path": {
+          "type": "string",
+          "description": "Relative path to stored zip/binary blob"
+        },
+        "compression_type": {
+          "type": "string",
+          "description": "Compression used (zip, gzip, etc.)"
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum for integrity validation"
+        }
+      }
+    }
+  },
+
+  "relationships": [
+    {
+      "from": "chart_patterns.chart_id",
+      "to": "pattern_features.chart_id",
+      "type": "one_to_one"
+    },
+    {
+      "from": "chart_patterns.chart_id",
+      "to": "pattern_blobs.chart_id",
+      "type": "one_to_many"
+    }
+  ],
+
+  "constraints": [
+    {
+      "type": "uniqueness",
+      "fields": ["chart_id", "extraction_version"],
+      "description": "Each chart can have multiple extraction versions but must be unique per version"
+    }
+  ],
+
+  "design_notes": [
+    "chart_patterns represents immutable extracted results from file scan",
+    "pattern_features are optimized for runtime inference (Phase 5 & Phase 7)",
+    "pattern_blobs store reconstructable raw pattern structure",
+    "extraction_version is critical for reproducibility and model consistency",
+    "game_id enables multi-game support and adapter-based ingestion",
+    "pattern_hash enables deduplication and integrity checks",
+    "schema is designed to separate heavy extraction (offline) from lightweight inference (runtime)"
+  ]
+}
