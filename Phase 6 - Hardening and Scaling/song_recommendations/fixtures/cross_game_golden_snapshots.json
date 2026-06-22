@@ -1,0 +1,373 @@
+{
+  "_meta": {
+    "description": "Aggregated game capability registry for song recommendation and multi-game routing",
+    "source": "cross_game_golden_snapshots.json + identity_normalizer.py alignment",
+    "notes": [
+      "Canonical game keys are aligned to identity_normalizer-style snake_case IDs.",
+      "Difficulty tiers are normalized tiers intended for routing / identity / recommendation use.",
+      "Completion ladders copied from the existing file remain unchanged where already present.",
+      "For newly added planned/post-launch games, completion ladders are conservative placeholders and should be verified game-by-game before production gating."
+    ],
+    "excludes": [
+      "our_notes"
+    ],
+    "version": "v2_proposed"
+  },
+  "bandori": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert",
+      "special"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc",
+      "ap"
+    ],
+    "support_status": "launch_or_core"
+  },
+  "project_sekai": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert",
+      "master",
+      "append"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc",
+      "ap"
+    ],
+    "support_status": "launch_or_core",
+    "aliases": [
+      "proseka",
+      "pjsekai"
+    ]
+  },
+  "arcaea": {
+    "difficulty_tiers": [
+      "past",
+      "present",
+      "future",
+      "beyond"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fr",
+      "pm"
+    ],
+    "support_status": "planned"
+  },
+  "maimai": {
+    "difficulty_tiers": [
+      "basic",
+      "advanced",
+      "expert",
+      "master",
+      "remaster"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc",
+      "ap"
+    ],
+    "support_status": "planned"
+  },
+  "dynamix": {
+    "difficulty_tiers": [
+      "casual",
+      "normal",
+      "hard",
+      "mega"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned"
+  },
+  "chunithm": {
+    "difficulty_tiers": [
+      "basic",
+      "advanced",
+      "expert",
+      "master",
+      "ultima"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc",
+      "aj"
+    ],
+    "support_status": "launch_or_core"
+  },
+  "d4dj": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc",
+      "ap"
+    ],
+    "support_status": "planned"
+  },
+  "yumesute": {
+    "difficulty_tiers": [
+      "normal",
+      "hard",
+      "extra",
+      "stella",
+      "olivier"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc",
+      "ap"
+    ],
+    "support_status": "launch_or_core",
+    "aliases": [
+      "world_dai_star",
+      "world dai star",
+      "ユメステ"
+    ]
+  },
+  "phigros": {
+    "difficulty_tiers": [
+      "easy",
+      "hard",
+      "insane",
+      "another"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned",
+    "raw_aliases": [
+      "ez",
+      "hd",
+      "in",
+      "at"
+    ]
+  },
+  "lanota": {
+    "difficulty_tiers": [
+      "whisper",
+      "acoustic",
+      "ultra",
+      "master"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned"
+  },
+  "ongeki": {
+    "difficulty_tiers": [
+      "basic",
+      "advanced",
+      "expert",
+      "master",
+      "lunatic"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc",
+      "aj"
+    ],
+    "support_status": "launch_or_core"
+  },
+  "sound_voltex": {
+    "difficulty_tiers": [
+      "novice",
+      "advanced",
+      "exhaust",
+      "infinite"
+    ],
+    "completion_ladder": [
+      "clear",
+      "uc",
+      "puc"
+    ],
+    "support_status": "planned",
+    "aliases": [
+      "sdvx"
+    ]
+  },
+  "cytus": {
+    "difficulty_tiers": [
+      "easy",
+      "hard",
+      "chaos",
+      "glitch"
+    ],
+    "completion_ladder": [
+      "clear",
+      "mm"
+    ],
+    "support_status": "planned_or_reserved"
+  },
+  "cytus_ii": {
+    "difficulty_tiers": [
+      "easy",
+      "hard",
+      "chaos",
+      "glitch"
+    ],
+    "completion_ladder": [
+      "clear",
+      "mm"
+    ],
+    "support_status": "planned"
+  },
+  "groove_coaster": {
+    "difficulty_tiers": [
+      "simple",
+      "normal",
+      "hard",
+      "extra"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned"
+  },
+  "deemo": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved"
+  },
+  "ensemble_stars": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved",
+    "aliases": [
+      "ensemble_star",
+      "enstars"
+    ]
+  },
+  "idolmaster": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved",
+    "aliases": [
+      "the_idolmaster",
+      "im@s"
+    ]
+  },
+  "kalpa": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved"
+  },
+  "muse_dash": {
+    "difficulty_tiers": [
+      "easy",
+      "hard",
+      "master"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved"
+  },
+  "osu": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved",
+    "aliases": [
+      "osu!"
+    ]
+  },
+  "our_notes": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved"
+  },
+  "taiko": {
+    "difficulty_tiers": [
+      "easy",
+      "normal",
+      "hard",
+      "expert",
+      "master"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved",
+    "aliases": [
+      "taiko_no_tatsujin"
+    ]
+  },
+  "voez": {
+    "difficulty_tiers": [
+      "easy",
+      "hard",
+      "expert"
+    ],
+    "completion_ladder": [
+      "clear",
+      "fc"
+    ],
+    "support_status": "planned_or_reserved"
+  }
+}
