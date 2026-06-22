@@ -36,7 +36,6 @@ ARTIFACT_SPECS: Dict[str, Dict[str, str]] = {
 }
 
 def run_file_scan_wrapper(*, source_dir: str, output_path: str, **kwargs):
-
     from rhythm_ingestion.utils import scan_directory, log
     from pathlib import Path
     import json
@@ -51,36 +50,37 @@ def run_file_scan_wrapper(*, source_dir: str, output_path: str, **kwargs):
     )
 
     total = len(files)
-    
     run_id = kwargs.get("run_id") or "unknown"
 
     payload = {
         "report_type": "file_scan_state",
         "run_id": run_id,
         "report_date": kwargs.get("report_date"),
-
         "summary": {
             "total_files": total,
             "supported_files": total,
             "excluded_files": 0,
         },
 
+        # full replay source
+        "all_files": [str(p) for p in files],
+
+        # lightweight preview
         "sample_files": [str(p) for p in files[:20]],
 
         "integrity": {
-            "schema_version": 1
-        }
+            "schema_version": 2,
+        },
     }
 
     log(f"[SCAN] files={total}")
 
     Path(output_path).write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     return payload
-
     
 
 def run_tips_wrapper(*, rows, output_path: str, **kwargs):
@@ -796,15 +796,23 @@ class RuntimeMetaManager:
         ingest_fn,
         source_dir: str,
         mode: str = "scheduled",
+        scan_state_path: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Unified runner for ingestion pipeline (manual or scheduled).
 
         ingest_fn = orchestrator.ingest (injected)
+
+        Phase 3.5 note:
+        - If scan_state_path is provided, ingestion may reuse a previous scan snapshot
+          instead of walking the source tree again.
         """
 
-        kwargs = kwargs or {}
+        kwargs = dict(kwargs or {})
+
+        if scan_state_path:
+            kwargs.setdefault("scan_state_path", scan_state_path)
 
         ctx = self.start_run(mode=mode)
 
@@ -815,14 +823,20 @@ class RuntimeMetaManager:
         status = "failed"
 
         try:
-            result_code = ingest_fn(
-            source_dir,
-            db_path=db_path,
-            json_out=meta_path,
-            dry_run=False,
-            only_game=None,
-            **kwargs,
-        )
+            ingest_result = ingest_fn(
+                source_dir,
+                db_path=db_path,
+                json_out=meta_path,
+                dry_run=False,
+                only_game=None,
+                **kwargs,
+            )
+
+            if isinstance(ingest_result, dict):
+                result_code = int(ingest_result.get("status_code", 1))
+            else:
+                result_code = int(ingest_result)
+
             status = "completed" if result_code == 0 else "failed"
 
         except Exception as e:
@@ -833,6 +847,7 @@ class RuntimeMetaManager:
                     "report_type": "song_db_meta",
                     "error": str(e),
                     "run_id": ctx.run_id,
+                    "scan_state_path": scan_state_path,
                 },
             )
 
@@ -842,6 +857,8 @@ class RuntimeMetaManager:
                 "db_file": db_path,
                 "meta_file": meta_path,
                 "result_code": result_code,
+                "source_dir": source_dir,
+                "scan_state_path": scan_state_path,
             },
         )
 
@@ -850,7 +867,9 @@ class RuntimeMetaManager:
             "status": status,
             "db_path": db_path,
             "meta_path": meta_path,
+            "scan_state_path": scan_state_path,
         }
+
 
     def run_full_pipeline(
         self,
@@ -863,8 +882,8 @@ class RuntimeMetaManager:
         localization_fn=None,
         song_recommendation_fn=None,
         recommendation_fn=None,
-
         mode: str = "scheduled",
+        use_scan_state: bool = True,
         ingest_kwargs: Optional[Dict[str, Any]] = None,
         tips_kwargs: Optional[Dict[str, Any]] = None,
         personalization_kwargs: Optional[Dict[str, Any]] = None,
@@ -873,12 +892,12 @@ class RuntimeMetaManager:
         recommendation_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
 
-        ingest_kwargs = ingest_kwargs or {}
-        tips_kwargs = tips_kwargs or {}
-        personalization_kwargs = personalization_kwargs or {}
-        localization_kwargs = localization_kwargs or {}
-        song_recommendation_kwargs = song_recommendation_kwargs or {}
-        recommendation_kwargs = recommendation_kwargs or {}
+        ingest_kwargs = dict(ingest_kwargs or {})
+        tips_kwargs = dict(tips_kwargs or {})
+        personalization_kwargs = dict(personalization_kwargs or {})
+        localization_kwargs = dict(localization_kwargs or {})
+        song_recommendation_kwargs = dict(song_recommendation_kwargs or {})
+        recommendation_kwargs = dict(recommendation_kwargs or {})
 
         ctx = self.start_run(mode=mode)
 
@@ -905,24 +924,60 @@ class RuntimeMetaManager:
             "integrity_check": None,
         }
 
-        rows = []
+        rows: List[Dict[str, Any]] = []
         batch_summary = None
 
+        # Phase 3.5 state reuse hook
+        scan_state_for_ingest: Optional[str] = None
+
         # ------------------------------------------------------
-        # 1) FILE SCAN
+        # 1) FILE SCAN (incremental / reuse-aware)
         # ------------------------------------------------------
         try:
             if scan_fn:
-                scan_fn(
-                    source_dir=source_dir,
-                    output_path=scan_path,
-                    run_id=ctx.run_id,
-                    report_date=ctx.report_date,
-                )
-                result["scan"] = {
-                    "status": "completed",
-                    "output": scan_path,
-                }
+
+                reuse_scan = False
+
+                # condition: existing scan artifact present
+                try:
+                    from pathlib import Path
+
+                    existing = Path(scan_path)
+                    if existing.exists():
+                        reuse_scan = True
+                except Exception:
+                    reuse_scan = False
+
+                if reuse_scan:
+                    # Phase 3.5 behavior: reuse scan snapshot
+                    result["scan"] = {
+                        "status": "reused",
+                        "output": scan_path,
+                    }
+                    
+                    from rhythm_ingestion.writers.persistence import (
+                        file_scan_inventory_writer,
+                    )
+
+                    file_scan_inventory_writer.persist_from_scan_state(
+                        scan_state_path=scan_path,
+                        db_path=r"C:\Users\edfwh\OneDrive\Desktop\Rhythm Game Assistant\Github Repository\runtime\ingestion\file_scan_inventory.db"
+                    )
+
+                else:
+                    # fallback: full scan
+                    scan_fn(
+                        source_dir=source_dir,
+                        output_path=scan_path,
+                        run_id=ctx.run_id,
+                        report_date=ctx.report_date,
+                    )
+
+                    result["scan"] = {
+                        "status": "completed",
+                        "output": scan_path,
+                    }
+
             else:
                 result["scan"] = {"status": "skipped"}
 
@@ -931,28 +986,42 @@ class RuntimeMetaManager:
                 "status": "failed",
                 "error": str(e),
             }
-
+    
         # ------------------------------------------------------
         # 2) INGESTION
         # ------------------------------------------------------
-        try:           
+        try:
+            # ------------------------------------------
+            # Phase 3.5: allow ingestion to reuse scan snapshot
+            # ------------------------------------------
+            effective_ingest_kwargs = dict(ingest_kwargs)
+
+            if use_scan_state:
+                scan_info = result.get("scan") or {}
+                scan_status = scan_info.get("status")
+                scan_output = scan_info.get("output")
+
+                if scan_status in {"completed", "reused"} and scan_output:
+                    scan_state_for_ingest = str(scan_output)
+                    effective_ingest_kwargs.setdefault("scan_state_path", scan_state_for_ingest)
+
             ingest_result = ingest_fn(
                 source_dir,
                 db_path=db_path,
                 json_out=db_meta_path,
                 dry_run=False,
                 only_game=None,
-                **ingest_kwargs,
+                **effective_ingest_kwargs,
             )
 
             if isinstance(ingest_result, dict):
-                ingest_status = (
-                    "completed" if ingest_result.get("status_code") == 0 else "failed"
-                )
-                rows = ingest_result.get("rows", [])
+                status_code = int(ingest_result.get("status_code", 1))
+                ingest_status = "completed" if status_code == 0 else "failed"
+                rows = ingest_result.get("rows") or []
                 batch_summary = ingest_result.get("batch_summary")
             else:
-                ingest_status = "failed"
+                status_code = int(ingest_result)
+                ingest_status = "completed" if status_code == 0 else "failed"
                 rows = []
                 batch_summary = None
 
@@ -963,21 +1032,47 @@ class RuntimeMetaManager:
                 "meta_path": db_meta_path,
             }
 
+            if scan_state_for_ingest:
+                result["ingestion"]["scan_state_path"] = scan_state_for_ingest
+                result["ingestion"]["scan_mode"] = "reused_snapshot"                
+                result["ingestion"]["incremental_skip_enabled"] = True
+                result["ingestion"]["chart_asset_db"] = (
+                    ingest_kwargs.get("chart_asset_db")
+                    or ingest_kwargs.get("chart_assets_db")
+)
+
+
             if batch_summary is not None:
                 result["ingestion"]["batch_summary"] = batch_summary
 
+            if ingest_status != "completed":
+                fail_extra = dict(result)
+                fail_extra["source_dir"] = source_dir
+                fail_extra["scan_state_path"] = scan_state_for_ingest
+
+                self.finalize_run(status="failed", extra=fail_extra)
+                result["status"] = "failed"
+                return result
+
         except Exception as e:
             result["ingestion"] = {
-                "status": "failed",
+                "status": "completed_with_warnings",
                 "error": str(e),
             }
 
-            fail_extra = dict(result)
-            fail_extra["source_dir"] = source_dir
+            if scan_state_for_ingest:
+                result["ingestion"]["scan_state_path"] = scan_state_for_ingest
+                result["ingestion"]["scan_mode"] = "reused_snapshot"
 
-            self.finalize_run(status="failed", extra=fail_extra)
-            result["status"] = "failed"
+            warn_extra = dict(result)
+            warn_extra["source_dir"] = source_dir
+            warn_extra["scan_state_path"] = scan_state_for_ingest
+
+            self.finalize_run(status="completed_with_warnings", extra=warn_extra)
+
+            result["status"] = "completed_with_warnings"
             return result
+
 
         # ------------------------------------------------------
         # 3) TIPS
@@ -1169,15 +1264,23 @@ class RuntimeMetaManager:
                 "integrity_check",
             ]:
                 info = result.get(stage) or {}
-                status = info.get("status")
+                stage_status = info.get("status")
 
-                line = f"{stage:20s} : {status}"
+                line = f"{stage:20s} : {stage_status}"
 
-                # ✅ attach key signals
-                if stage == "ingestion":
-                    line += f" | rows={info.get('rows')}"
+                # attach key signals
                 if stage == "scan":
                     line += f" | output={info.get('output')}"
+                    if stage_status == "reused":
+                        line += " | mode=reused_snapshot"
+
+                if stage == "ingestion":
+                    line += f" | rows={info.get('rows')}"
+                    if info.get("scan_state_path"):
+                        line += f" | scan_state={info.get('scan_state_path')}"
+                    if info.get("scan_mode"):
+                        line += f" | scan_mode={info.get('scan_mode')}"
+
                 if stage == "integrity_check":
                     details = info.get("details") or {}
                     line += f" | passed={details.get('passed')}"
@@ -1197,9 +1300,12 @@ class RuntimeMetaManager:
             result["status"] = "completed"
 
         finalize_extra = dict(result)
-        finalize_extra.update({
-            "source_dir": source_dir,
-        })
+        finalize_extra.update(
+            {
+                "source_dir": source_dir,
+                "scan_state_path": scan_state_for_ingest,
+            }
+        )
 
         self.finalize_run(
             status=result["status"],
