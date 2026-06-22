@@ -26,13 +26,27 @@ param(
     [switch]$RunStageProbes,
     [switch]$RunOrchestrator,
 
-    # NEW: Align with Phase5 Batch Runner
+    # Existing Path B alignment
     [switch]$EnableCaseExpectOverride,
     [string[]]$RequiredEventTypes = @(),
     [switch]$RequireInterpretationOutput,
     [switch]$SkipNonFeedbackCases,
     [switch]$StrictValidation,
-    [string]$SummaryOutputPath = ""
+    [string]$SummaryOutputPath = "",
+
+    # ------------------------------------------------------------
+    # Path A / intersection wiring (additive only)
+    # ------------------------------------------------------------
+    [switch]$RunPathABaseline,
+    [switch]$RunPathAIngestion,
+    [switch]$RunDeploymentGate,
+    [switch]$SkipPathAVerify,
+    [switch]$RunOfflineAnalysis,
+    [switch]$EnableConverterCache,
+
+    [string]$RuntimeDbBuildScript = ".\Run_UpdateRuntimeDbs.ps1",
+    [string]$IngestionRuntimeScript = ".\Run_Ingestion.ps1",
+    [string]$DeploymentGateScript = ".\Run-DeploymentGate.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -86,7 +100,7 @@ function Invoke-Step {
 }
 
 function Test-FileExists($Path, $Label) {
-    if (-not (Test-Path $Path)) {
+    if (-not (Test-Path -LiteralPath $Path)) {
         throw "$Label not found: $Path"
     }
 }
@@ -121,7 +135,7 @@ function New-SharedRunDirectory($ArtifactRootDir) {
 
 function Get-ProjectPython($ProjectRoot, $PythonExe) {
     $venv = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
-    if (Test-Path $venv) {
+    if (Test-Path -LiteralPath $venv) {
         Write-Ok "Using venv python: $venv"
         return $venv
     }
@@ -135,8 +149,8 @@ function Run-BootstrapStep {
     Test-FileExists $BootstrapScript "Bootstrap script"
 
     $params = @{
-        RepoRoot         = $Root
-        SkipInstall      = $true
+        RepoRoot          = $Root
+        SkipInstall       = $true
         SkipOneDriveCheck = $true
     }
 
@@ -198,25 +212,22 @@ function Run-Phase5BatchStep {
     $stdoutFile = Join-Path $phase5ArtifactRoot "phase5_batch_stdout.txt"
     $stderrFile = Join-Path $phase5ArtifactRoot "phase5_batch_stderr.txt"
 
-    # --------------------------------------------------
-    # Build PowerShell child-process argument list
-    # --------------------------------------------------
     $childArgs = @(
-		"-NoLogo",
-		"-NoProfile",
-		"-ExecutionPolicy", "Bypass",
-		"-File", $ScriptPath,
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $ScriptPath,
 
-		"-CasesDir", ".\Phase 5 - Productionization\tests\test_cases",
-		"-EventRunnerScript", ".\Phase 5 - Productionization\event_batch_runner.py",
-		"-InterpretationRunnerScript", ".\engine\feedback\feedback_interpretation_batch_runner.py",
-		"-Phase5RunnerScript", ".\Phase 5 - Productionization\feedback_loop_batch_runner.py",
-		"-ValidateBundleScript", ".\Phase 5 - Productionization\tests\validators\validate_bundle.py",
+        "-CasesDir", ".\Phase 5 - Productionization\tests\test_cases",
+        "-EventRunnerScript", ".\Phase 5 - Productionization\event_batch_runner.py",
+        "-InterpretationRunnerScript", ".\engine\feedback\feedback_interpretation_batch_runner.py",
+        "-Phase5RunnerScript", ".\Phase 5 - Productionization\feedback_loop_batch_runner.py",
+        "-ValidateBundleScript", ".\Phase 5 - Productionization\tests\validators\validate_bundle.py",
 
-		"-ArtifactRootDir", $phase5ArtifactRoot,
-		"-RegressionTolerance", [string]$RegressionTolerance,
-		"-DriftTolerance", [string]$DriftTolerance
-	)
+        "-ArtifactRootDir", $phase5ArtifactRoot,
+        "-RegressionTolerance", [string]$RegressionTolerance,
+        "-DriftTolerance", [string]$DriftTolerance
+    )
 
     if ($SkipDeterminism) { $childArgs += "-SkipDeterminism" }
     if ($SkipSchema)      { $childArgs += "-SkipSchema" }
@@ -243,9 +254,6 @@ function Run-Phase5BatchStep {
     Write-Info "Running Phase 5 batch..."
     Write-Host "[REPO-SMOKE][PHASE5-CALL] pwsh $($childArgs -join ' ')" -ForegroundColor DarkYellow
 
-    # --------------------------------------------------
-    # Launch child pwsh process for stable parameter binding
-    # --------------------------------------------------
     & pwsh @childArgs 1> $stdoutFile 2> $stderrFile
 
     if ($LASTEXITCODE -ne 0) {
@@ -265,6 +273,151 @@ function Run-Phase5BatchStep {
     Write-Ok "Phase 5 batch completed"
 }
 
+function Run-PathABaselineStep {
+    param(
+        [string]$ScriptPath,
+        [string]$RunDir
+    )
+
+    Test-FileExists $ScriptPath "Path A baseline script"
+
+    $artifactRoot = Join-Path $RunDir "path_a_baseline"
+    Ensure-Dir $artifactRoot
+
+    $stdoutFile = Join-Path $artifactRoot "run_update_runtime_dbs_stdout.txt"
+    $stderrFile = Join-Path $artifactRoot "run_update_runtime_dbs_stderr.txt"
+    $jsonOut    = Join-Path $artifactRoot "runtime_db_build.json"
+
+    $childArgs = @(
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $ScriptPath,
+        "-JsonOut", $jsonOut
+    )
+
+    if ($SkipPathAVerify) {
+        $childArgs += "-SkipVerify"
+    }
+
+    Write-Info "Running Path A baseline build..."
+    Write-Host "[REPO-SMOKE][PATH-A-BASELINE] pwsh $($childArgs -join ' ')" -ForegroundColor DarkYellow
+
+    & pwsh @childArgs 1> $stdoutFile 2> $stderrFile
+
+    if ($LASTEXITCODE -ne 0) {
+        $out = ""
+        $err = ""
+        if (Test-Path -LiteralPath $stdoutFile) {
+            $out = [System.IO.File]::ReadAllText($stdoutFile)
+        }
+        if (Test-Path -LiteralPath $stderrFile) {
+            $err = [System.IO.File]::ReadAllText($stderrFile)
+        }
+        throw "Path A baseline build failed.`n--- STDOUT ---`n$out`n--- STDERR ---`n$err"
+    }
+
+    Write-Ok "Path A baseline build completed"
+}
+
+function Run-PathAIngestionStep {
+    param(
+        [string]$ScriptPath,
+        [string]$RunDir
+    )
+
+    Test-FileExists $ScriptPath "Path A ingestion script"
+
+    $artifactRoot = Join-Path $RunDir "path_a_ingestion"
+    Ensure-Dir $artifactRoot
+
+    $stdoutFile = Join-Path $artifactRoot "run_ingestion_stdout.txt"
+    $stderrFile = Join-Path $artifactRoot "run_ingestion_stderr.txt"
+
+    $childArgs = @(
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $ScriptPath
+    )
+
+    if ($SkipPathAVerify) {
+        $childArgs += "-SkipVerify"
+    }
+    if ($RunOfflineAnalysis) {
+        $childArgs += "-RunOfflineAnalysis"
+    }
+    if ($EnableConverterCache) {
+        $childArgs += "-EnableConverterCache"
+    }
+
+    Write-Info "Running Path A ingestion/runtime test..."
+    Write-Host "[REPO-SMOKE][PATH-A-INGESTION] pwsh $($childArgs -join ' ')" -ForegroundColor DarkYellow
+
+    & pwsh @childArgs 1> $stdoutFile 2> $stderrFile
+
+    if ($LASTEXITCODE -ne 0) {
+        $out = ""
+        $err = ""
+        if (Test-Path -LiteralPath $stdoutFile) {
+            $out = [System.IO.File]::ReadAllText($stdoutFile)
+        }
+        if (Test-Path -LiteralPath $stderrFile) {
+            $err = [System.IO.File]::ReadAllText($stderrFile)
+        }
+        throw "Path A ingestion/runtime test failed.`n--- STDOUT ---`n$out`n--- STDERR ---`n$err"
+    }
+
+    Write-Ok "Path A ingestion/runtime test completed"
+}
+
+function Run-DeploymentGateStep {
+    param(
+        [string]$ScriptPath,
+        [string]$RunDir
+    )
+
+    Test-FileExists $ScriptPath "Deployment gate script"
+
+    $artifactRoot = Join-Path $RunDir "deployment_gate"
+    Ensure-Dir $artifactRoot
+
+    $stdoutFile = Join-Path $artifactRoot "deployment_gate_stdout.txt"
+    $stderrFile = Join-Path $artifactRoot "deployment_gate_stderr.txt"
+    $jsonOut    = Join-Path $artifactRoot "deployment_gate_report.json"
+
+    $childArgs = @(
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $ScriptPath,
+        "-OutputReport", $jsonOut
+    )
+
+    if ($SkipPathAVerify) {
+        $childArgs += "-SkipStrictRuntimeVerify"
+    }
+
+    Write-Info "Running deployment gate..."
+    Write-Host "[REPO-SMOKE][DEPLOYMENT-GATE] pwsh $($childArgs -join ' ')" -ForegroundColor DarkYellow
+
+    & pwsh @childArgs 1> $stdoutFile 2> $stderrFile
+
+    if ($LASTEXITCODE -ne 0) {
+        $out = ""
+        $err = ""
+        if (Test-Path -LiteralPath $stdoutFile) {
+            $out = [System.IO.File]::ReadAllText($stdoutFile)
+        }
+        if (Test-Path -LiteralPath $stderrFile) {
+            $err = [System.IO.File]::ReadAllText($stderrFile)
+        }
+        throw "Deployment gate failed.`n--- STDOUT ---`n$out`n--- STDERR ---`n$err"
+    }
+
+    Write-Ok "Deployment gate completed"
+}
+
 # -------------------- MAIN --------------------
 
 Push-Location $ProjectRoot
@@ -275,6 +428,12 @@ try {
 
     $runDir = New-SharedRunDirectory $outRoot
     $python = Get-ProjectPython $root $PythonExe
+
+    $bootstrapAbs      = Resolve-AbsolutePath $BootstrapScript $root
+    $phase5Abs         = Resolve-AbsolutePath $Phase5BatchScript $root
+    $runtimeDbBuildAbs = Resolve-AbsolutePath $RuntimeDbBuildScript $root
+    $ingestionAbs      = Resolve-AbsolutePath $IngestionRuntimeScript $root
+    $deploymentGateAbs = Resolve-AbsolutePath $DeploymentGateScript $root
 
     $results = @()
 
@@ -292,52 +451,82 @@ try {
         Write-Warn2 "Skipping engine/feedback import smoke"
     }
 
+    if ($RunPathABaseline) {
+        $results += Invoke-Step "Path A Baseline" { Run-PathABaselineStep $runtimeDbBuildAbs $runDir }
+    }
+    else {
+        Write-Warn2 "Skipping Path A baseline"
+    }
+
+    if ($RunPathAIngestion) {
+        $results += Invoke-Step "Path A Ingestion" { Run-PathAIngestionStep $ingestionAbs $runDir }
+    }
+    else {
+        Write-Warn2 "Skipping Path A ingestion/runtime test"
+    }
+
     if (-not $SkipPhase5) {
-        $results += Invoke-Step "Phase5 Batch" { Run-Phase5BatchStep $Phase5BatchScript $runDir }
+        $results += Invoke-Step "Phase5 Batch" { Run-Phase5BatchStep $phase5Abs $runDir }
     }
     else {
         Write-Warn2 "Skipping Phase 5 batch"
     }
 
+    if ($RunDeploymentGate) {
+        $results += Invoke-Step "Deployment Gate" { Run-DeploymentGateStep $deploymentGateAbs $runDir }
+    }
+    else {
+        Write-Warn2 "Skipping deployment gate"
+    }
+
     $summaryPath = Join-Path $runDir "repo_smoke_summary.json"
 
     $summary = [PSCustomObject]@{
-        root                        = $root
-        python                      = $python
-        bootstrap_script            = $BootstrapScript
-        phase5_script               = $Phase5BatchScript
-        output_root                 = $outRoot
-        run_dir                     = $runDir
+        root                          = $root
+        python                        = $python
+        bootstrap_script              = $BootstrapScript
+        phase5_script                 = $Phase5BatchScript
+        runtime_db_build_script       = $RuntimeDbBuildScript
+        ingestion_runtime_script      = $IngestionRuntimeScript
+        deployment_gate_script        = $DeploymentGateScript
+        output_root                   = $outRoot
+        run_dir                       = $runDir
 
-        validation_mode             = [bool]$OfflineValidationMode
-        stage_probes                = [bool]$RunStageProbes
-        orchestrator                = [bool]$RunOrchestrator
+        validation_mode               = [bool]$OfflineValidationMode
+        stage_probes                  = [bool]$RunStageProbes
+        orchestrator                  = [bool]$RunOrchestrator
 
-        skip_bootstrap              = [bool]$SkipBootstrap
-        skip_engine_feedback        = [bool]$SkipEngineFeedback
-        skip_phase5                 = [bool]$SkipPhase5
+        skip_bootstrap                = [bool]$SkipBootstrap
+        skip_engine_feedback          = [bool]$SkipEngineFeedback
+        skip_phase5                   = [bool]$SkipPhase5
+        run_path_a_baseline           = [bool]$RunPathABaseline
+        run_path_a_ingestion          = [bool]$RunPathAIngestion
+        run_deployment_gate           = [bool]$RunDeploymentGate
+        skip_path_a_verify            = [bool]$SkipPathAVerify
+        run_offline_analysis          = [bool]$RunOfflineAnalysis
+        enable_converter_cache        = [bool]$EnableConverterCache
 
-        skip_determinism            = [bool]$SkipDeterminism
-        skip_schema                 = [bool]$SkipSchema
-        skip_contract               = [bool]$SkipContract
-        skip_coverage               = [bool]$SkipCoverage
-        skip_integrity              = [bool]$SkipIntegrity
-        skip_drift                  = [bool]$SkipDrift
-        skip_regression             = [bool]$SkipRegression
+        skip_determinism              = [bool]$SkipDeterminism
+        skip_schema                   = [bool]$SkipSchema
+        skip_contract                 = [bool]$SkipContract
+        skip_coverage                 = [bool]$SkipCoverage
+        skip_integrity                = [bool]$SkipIntegrity
+        skip_drift                    = [bool]$SkipDrift
+        skip_regression               = [bool]$SkipRegression
 
-        regression_tolerance        = $RegressionTolerance
-        drift_tolerance             = $DriftTolerance
+        regression_tolerance          = $RegressionTolerance
+        drift_tolerance               = $DriftTolerance
 
-        enable_case_expect_override = [bool]$EnableCaseExpectOverride
-        required_event_types        = $RequiredEventTypes
+        enable_case_expect_override   = [bool]$EnableCaseExpectOverride
+        required_event_types          = $RequiredEventTypes
         require_interpretation_output = [bool]$RequireInterpretationOutput
-        skip_non_feedback_cases     = [bool]$SkipNonFeedbackCases
-        strict_validation           = [bool]$StrictValidation
-        summary_output_path         = $SummaryOutputPath
+        skip_non_feedback_cases       = [bool]$SkipNonFeedbackCases
+        strict_validation             = [bool]$StrictValidation
+        summary_output_path           = $SummaryOutputPath
 
-        passed                      = @($results | Where-Object { $_.Status -eq "PASS" }).Count
-        failed                      = @($results | Where-Object { $_.Status -eq "FAIL" }).Count
-        results                     = $results
+        passed                        = @($results | Where-Object { $_.Status -eq "PASS" }).Count
+        failed                        = @($results | Where-Object { $_.Status -eq "FAIL" }).Count
+        results                       = $results
     }
 
     $summary | ConvertTo-Json -Depth 8 | Set-Content -Path $summaryPath -Encoding UTF8

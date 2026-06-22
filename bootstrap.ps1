@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$RepoRoot = ".",
     [string]$DataRoot = "$HOME\OneDrive\Desktop\Rhythm Game Assistant",
     [string]$PythonExe = "python",
@@ -8,7 +8,7 @@
     [switch]$SkipOneDriveCheck,
     [switch]$SkipImportSmoke,
 
-    # Offline Learning Validation Mode
+    # Offline Learning Validation Mode (Path B foundation)
     [switch]$OfflineValidationMode,
     [switch]$RunStageProbes,
     [switch]$RunOrchestrator,
@@ -48,7 +48,7 @@ function Get-ResolvedRepoRoot($RepoRoot) {
 }
 
 function Resolve-DataRoot($InputPath, $RepoRoot) {
-    if ($InputPath -and (Test-Path $InputPath)) {
+    if ($InputPath -and (Test-Path -LiteralPath $InputPath)) {
         Write-Ok "Using DataRoot: $InputPath"
         return (Resolve-Path $InputPath).Path
     }
@@ -64,7 +64,7 @@ function Resolve-DataRoot($InputPath, $RepoRoot) {
     )
 
     foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
+        if (Test-Path -LiteralPath $candidate) {
             Write-Ok "Auto-detected DataRoot: $candidate"
             return (Resolve-Path $candidate).Path
         }
@@ -77,7 +77,7 @@ function Resolve-ProjectPython($RepoRoot, $PythonExe) {
     $root = Get-ResolvedRepoRoot $RepoRoot
     $venvPython = Join-Path $root ".venv\Scripts\python.exe"
 
-    if (Test-Path $venvPython) {
+    if (Test-Path -LiteralPath $venvPython) {
         Write-Ok "Using venv python: $venvPython"
         return $venvPython
     }
@@ -97,12 +97,12 @@ function Ensure-EnvTemplate($RepoRoot) {
         (Join-Path $root ".env.example")
     )
 
-    if (Test-Path $envPath) {
+    if (Test-Path -LiteralPath $envPath) {
         return
     }
 
     foreach ($template in $templateCandidates) {
-        if (Test-Path $template) {
+        if (Test-Path -LiteralPath $template) {
             Copy-Item $template $envPath
             Write-Warn2 ".env was missing. Created from template: $template"
             return
@@ -113,7 +113,7 @@ function Ensure-EnvTemplate($RepoRoot) {
 }
 
 function Load-DotEnv($Path) {
-    if (-not (Test-Path $Path)) {
+    if (-not (Test-Path -LiteralPath $Path)) {
         Write-Warn2 ".env not found at $Path"
         return
     }
@@ -127,7 +127,6 @@ function Load-DotEnv($Path) {
             $name = $matches[1].Trim()
             $value = $matches[2].Trim()
 
-            # strip surrounding double quotes
             if ($value.Length -ge 2 -and $value.StartsWith('"') -and $value.EndsWith('"')) {
                 $value = $value.Substring(1, $value.Length - 2)
             }
@@ -146,7 +145,7 @@ function Ensure-Venv($RepoRoot, $PythonExe) {
     $root = Get-ResolvedRepoRoot $RepoRoot
     $venvPath = Join-Path $root ".venv"
 
-    if (Test-Path $venvPath) {
+    if (Test-Path -LiteralPath $venvPath) {
         Write-Ok "venv exists: $venvPath"
         return $venvPath
     }
@@ -159,7 +158,7 @@ function Ensure-Venv($RepoRoot, $PythonExe) {
 
 function Get-VenvPython($VenvPath) {
     $pythonPath = Join-Path $VenvPath "Scripts\python.exe"
-    if (-not (Test-Path $pythonPath)) {
+    if (-not (Test-Path -LiteralPath $pythonPath)) {
         throw "venv python not found: $pythonPath"
     }
     return $pythonPath
@@ -172,7 +171,7 @@ function Install-Requirements($RepoRoot, $PythonBin) {
     $root = Get-ResolvedRepoRoot $RepoRoot
     $req = Join-Path $root "requirements.txt"
 
-    if (-not (Test-Path $req)) {
+    if (-not (Test-Path -LiteralPath $req)) {
         Write-Warn2 "No requirements.txt at $req"
         return
     }
@@ -221,18 +220,11 @@ function Get-Phase5Context($RepoRoot) {
         $valid = $false
         $resolvedPkg = $null
 
-        # --------------------------------------------------
-        # Condition A: legacy phase5-style package root exists
-        # --------------------------------------------------
         if ($c.PackageRoot -and (Test-Path -LiteralPath $c.PackageRoot)) {
             $valid = $true
             $resolvedPkg = $c.PackageRoot
         }
 
-        # --------------------------------------------------
-        # Condition B: current productionization script layout
-        # Must have the Phase 5 runner + tests directory
-        # --------------------------------------------------
         $runner     = Join-Path $c.Phase5Outer "feedback_loop_batch_runner.py"
         $testsDir   = Join-Path $c.Phase5Outer "tests"
         $casesDir   = Join-Path $testsDir "test_cases"
@@ -244,8 +236,6 @@ function Get-Phase5Context($RepoRoot) {
             (Test-Path -LiteralPath $validators)) {
 
             $valid = $true
-
-            # For script-based Phase 5, use Phase5Outer as the effective root.
             if (-not $resolvedPkg) {
                 $resolvedPkg = $c.Phase5Outer
             }
@@ -283,13 +273,10 @@ function Set-ProcessPythonPath($RepoRoot) {
     $paths = @(
         $root,
         (Join-Path $root "engine"),
-        (Join-Path $root "Phase 4 - Personalization"),
-        (Join-Path $root "Phase 4.5 - Localization"),
-		(Join-Path $root "Phase 5 - Productionization"),
-        $phase5.PackageRoot,
+        (Join-Path $root "Phase 5 - Productionization"),
         (Join-Path $root "Phase 6 - Hardening and Scaling"),
         (Join-Path $root "Phase 7 - Games Recommendation")
-    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
 
     $existing = [Environment]::GetEnvironmentVariable("PYTHONPATH", "Process")
     if ($existing) {
@@ -312,16 +299,55 @@ function Test-RgaPaths($DataRoot) {
     $chartRoot = Join-Path $DataRoot "Chart File"
     $metaRoot  = Join-Path $DataRoot "Tips Output Meta"
 
-    if (-not (Test-Path $chartRoot)) {
+    if (-not (Test-Path -LiteralPath $chartRoot)) {
         throw "Missing Chart File folder: $chartRoot"
     }
 
-    if (-not (Test-Path $metaRoot)) {
+    if (-not (Test-Path -LiteralPath $metaRoot)) {
         Write-Warn2 "Creating meta folder: $metaRoot"
         New-Item -ItemType Directory -Force -Path $metaRoot | Out-Null
     }
 
     Write-Ok "RGA paths OK"
+}
+
+# --------------------------------------------------
+# Path A / runner-family validation (additive only)
+# --------------------------------------------------
+function Test-PathARunnerFamily($RepoRoot) {
+    $root = Get-ResolvedRepoRoot $RepoRoot
+
+    $required = @(
+        (Join-Path $root "Run_UpdateRuntimeDbs.ps1"),
+        (Join-Path $root "Run_Ingestion.ps1"),
+        (Join-Path $root "Run-DeploymentGat.ps1"),
+        (Join-Path $root "verify_runtime_bundle_strict.py"),
+        (Join-Path $root "Update_Runtime_Dbs.py")
+    )
+
+    $missing = @()
+    foreach ($p in $required) {
+        if (-not (Test-Path -LiteralPath $p)) {
+            $missing += $p
+        }
+    }
+
+    if ($missing.Count -gt 0) {
+        Write-Warn2 "Path A runner family is incomplete."
+        foreach ($m in $missing) {
+            Write-Host "  MISSING: $m" -ForegroundColor Yellow
+        }
+        return [PSCustomObject]@{
+            Complete = $false
+            Missing  = $missing
+        }
+    }
+
+    Write-Ok "Path A runner family detected"
+    return [PSCustomObject]@{
+        Complete = $true
+        Missing  = @()
+    }
 }
 
 # --------------------------------------------------
@@ -333,10 +359,10 @@ function Run-SanityChecks($PythonBin) {
 
     try {
         Invoke-NativeOrThrow $PythonBin @("-m", "pip", "show", "fastapi")
-        Write-Ok "Core package check passed"
+        Write-Ok "Optional package detected: fastapi"
     }
     catch {
-        Write-Warn2 "Core package check did not fully pass (fastapi not confirmed). Continuing."
+        Write-Warn2 "Optional package not found: fastapi. Continuing."
     }
 }
 
@@ -377,14 +403,9 @@ if failed:
 # Phase 5 offline structure validation
 # --------------------------------------------------
 function Test-Phase5OfflineStructure($RepoRoot) {
-
     $phase5 = Get-Phase5Context $RepoRoot
 
-    # ------------------------------------------
-    # Resolve effective root (CRITICAL)
-    # ------------------------------------------
     $pkg = $phase5.PackageRoot
-
     if (-not $pkg -or -not (Test-Path -LiteralPath $pkg)) {
         $pkg = $phase5.Phase5Outer
     }
@@ -393,48 +414,30 @@ function Test-Phase5OfflineStructure($RepoRoot) {
         throw "Resolved Phase 5 path is invalid."
     }
 
-    # ------------------------------------------
-    # Diagnostics
-    # ------------------------------------------
     Write-Info "Detected Phase 5 context:"
     Write-Host "  Label       : $($phase5.Label)"
     Write-Host "  Phase5Outer : $($phase5.Phase5Outer)"
     Write-Host "  PackageRoot : $pkg"
 
-    # ------------------------------------------
-    # Required structure (productionized layout)
-    # ------------------------------------------
     $requiredPaths = @(
-        # execution layer
         (Join-Path $pkg "feedback_loop_batch_runner.py"),
         (Join-Path $pkg "event_batch_runner.py"),
-
-        # tests
         (Join-Path $pkg "tests"),
         (Join-Path $pkg "tests\test_cases"),
         (Join-Path $pkg "tests\validators"),
-
-        # core learning modules
         (Join-Path $pkg "song_recommendation"),
         (Join-Path $pkg "song_recommendation\aggregation"),
         (Join-Path $pkg "song_recommendation\aggregation\aggregate_song_feedback.py"),
-
         (Join-Path $pkg "song_recommendation\features"),
         (Join-Path $pkg "song_recommendation\features\selection_features.py"),
-
         (Join-Path $pkg "song_recommendation\training"),
         (Join-Path $pkg "song_recommendation\training\train_selector_params.py"),
-
         (Join-Path $pkg "song_recommendation\evaluation"),
         (Join-Path $pkg "song_recommendation\evaluation\evaluate_selection_quality.py"),
-
         (Join-Path $pkg "song_recommendation\utils"),
         (Join-Path $pkg "song_recommendation\utils\song_rec_learning_orchestrator.py")
     )
 
-    # ------------------------------------------
-    # Optional structure (warn only)
-    # ------------------------------------------
     $optionalPaths = @(
         (Join-Path $pkg "song_recommendation\artifacts"),
         (Join-Path $pkg "feedback_aggregation"),
@@ -447,11 +450,7 @@ function Test-Phase5OfflineStructure($RepoRoot) {
         (Join-Path $pkg "safety")
     )
 
-    # ------------------------------------------
-    # Validation
-    # ------------------------------------------
     $missingRequired = @()
-
     foreach ($p in $requiredPaths) {
         if (-not (Test-Path -LiteralPath $p)) {
             $missingRequired += $p
@@ -460,17 +459,12 @@ function Test-Phase5OfflineStructure($RepoRoot) {
 
     if ($missingRequired.Count -gt 0) {
         Write-Fail "Phase 5 offline structure validation failed."
-
         foreach ($m in $missingRequired) {
             Write-Host "  MISSING: $m"
         }
-
         throw "Required Phase 5 offline structure is incomplete."
     }
 
-    # ------------------------------------------
-    # Optional checks
-    # ------------------------------------------
     foreach ($opt in $optionalPaths) {
         if (-not (Test-Path -LiteralPath $opt)) {
             Write-Warn2 "Optional Phase 5 path not found: $opt"
@@ -487,7 +481,6 @@ function Test-Phase5OfflineStructure($RepoRoot) {
     }
 }
 
-
 # --------------------------------------------------
 # Validation output path
 # --------------------------------------------------
@@ -499,7 +492,7 @@ function Get-ValidationOutputDir($DataRoot, $ValidationOutputRoot) {
         $base = Join-Path (Join-Path $DataRoot "Tips Output Meta") "offline_validation"
     }
 
-    if (-not (Test-Path $base)) {
+    if (-not (Test-Path -LiteralPath $base)) {
         New-Item -ItemType Directory -Force -Path $base | Out-Null
     }
 
@@ -524,9 +517,6 @@ function Run-OfflineLearningValidationMode {
 
     Write-Info "Starting Offline Learning Validation Mode"
 
-    # --------------------------------------------------
-    # Resolve Phase 5 context and effective root
-    # --------------------------------------------------
     $phase5 = Test-Phase5OfflineStructure $RepoRoot
 
     $pkg = $phase5.PackageRoot
@@ -538,30 +528,18 @@ function Run-OfflineLearningValidationMode {
         throw "Resolved Phase 5 path is invalid."
     }
 
-    # --------------------------------------------------
-    # Output locations
-    # --------------------------------------------------
     $outDir = Get-ValidationOutputDir $DataRoot $ValidationOutputRoot
     $reportPath = Join-Path $outDir "offline_validation_report.json"
     $pyPath = Join-Path $outDir "offline_validation_probe.py"
 
-    # --------------------------------------------------
-    # Normalize for Python string embedding
-    # --------------------------------------------------
     $packageRootPy = ($pkg -replace '\\', '\\\\')
     $reportPathPy  = ($reportPath -replace '\\', '\\\\')
 
-    # --------------------------------------------------
-    # Diagnostics
-    # --------------------------------------------------
     Write-Info "Detected Phase 5 context:"
     Write-Host "  Label       : $($phase5.Label)"
     Write-Host "  Phase5Outer : $($phase5.Phase5Outer)"
     Write-Host "  PackageRoot : $pkg"
 
-    # --------------------------------------------------
-    # Python validation probe
-    # --------------------------------------------------
     $py = @"
 import importlib
 import inspect
@@ -744,7 +722,6 @@ if report["status"] != "ok":
 
     try {
         $json = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
-
         Write-Host ""
         Write-Host "Validation Summary" -ForegroundColor Cyan
         Write-Host "  Package root       : $($json.package_root)"
@@ -768,7 +745,7 @@ $resolvedDataRoot = Resolve-DataRoot $DataRoot $resolvedRepoRoot
 Write-Info "RepoRoot = $resolvedRepoRoot"
 Write-Info "DataRoot = $resolvedDataRoot"
 
-if (-not (Test-Path $resolvedRepoRoot)) {
+if (-not (Test-Path -LiteralPath $resolvedRepoRoot)) {
     throw "Repo root missing: $resolvedRepoRoot"
 }
 
@@ -779,6 +756,7 @@ if (-not $SkipEnv) {
 }
 
 Test-RgaPaths $resolvedDataRoot
+[void](Test-PathARunnerFamily $resolvedRepoRoot)
 
 $pythonBin = Resolve-ProjectPython $resolvedRepoRoot $PythonExe
 
@@ -816,7 +794,9 @@ Write-Ok "Bootstrap COMPLETE"
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "  1. Activate venv (optional): .\.venv\Scripts\Activate.ps1"
-Write-Host "  2. Use -OfflineValidationMode to validate Phase 5 offline learning wiring"
-Write-Host "  3. Add -RunStageProbes and/or -RunOrchestrator for opt-in execution probes"
-Write-Host "  4. Keep Phase 6 as the runtime entry point"
-Write-Host "  5. Re-run this bootstrap on another PC without requiring permanent env setup"
+Write-Host "  2. Path A baseline builder : .\Run_UpdateRuntimeDbs.ps1"
+Write-Host "  3. Path A runtime runner   : .\Run_Ingestion.ps1"
+Write-Host "  4. Path B validation mode  : use -OfflineValidationMode"
+Write-Host "  5. Repo-level harness      : .\Run-RepoSmoke.ps1"
+Write-Host "  6. Deployment gate         : .\Run-DeploymentGate.ps1"
+Write-Host "  7. Keep bootstrap focused on setup / validation prep only"

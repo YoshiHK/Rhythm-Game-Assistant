@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$RepoRoot = ".",
     [string]$PythonExe = "python",
     [string]$DataRoot = "",
@@ -8,7 +8,7 @@
     [switch]$SkipBootstrap,
     [switch]$SkipSmoke,
 
-    # Forward to Bootstrap / RepoSmoke
+    # Forward to Bootstrap / RepoSmoke (Path B foundation)
     [switch]$OfflineValidationMode,
     [switch]$RunStageProbes,
     [switch]$RunOrchestrator,
@@ -32,7 +32,16 @@
     [switch]$RequireInterpretationOutput,
     [switch]$SkipNonFeedbackCases,
     [switch]$StrictValidation,
-    [string]$SummaryOutputPath = ""
+    [string]$SummaryOutputPath = "",
+
+    # ------------------------------------------------------------
+    # NEW: Path A / intersection wiring (additive only)
+    # ------------------------------------------------------------
+    [switch]$RunPathABaseline,
+    [switch]$RunPathAIngestion,
+    [switch]$RunDeploymentGate,
+    [switch]$SkipPathAVerify,
+    [switch]$RunOfflineAnalysis
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,8 +83,11 @@ function Get-ProjectPython($RepoRoot, $PythonExe) {
 # --------------------------------------------------
 # script targets (repo-level)
 # --------------------------------------------------
-$BootstrapScript = ".\bootstrap.ps1"
-$RepoSmokeScript = ".\Run-RepoSmoke.ps1"
+$BootstrapScript      = ".\bootstrap.ps1"
+$RepoSmokeScript      = ".\Run-RepoSmoke.ps1"
+$RuntimeDbBuildScript = ".\Run_UpdateRuntimeDbs.ps1"
+$IngestionRuntimeScript = ".\Run_Ingestion.ps1"
+$DeploymentGateScript = ".\Run-DeploymentGate.ps1"
 
 # --------------------------------------------------
 # main
@@ -142,16 +154,17 @@ try {
     }
 
     # --------------------------------------------------
-    # STEP 2: Repo Smoke
+    # STEP 2: Repo Smoke / Path A + Path B harness
     # IMPORTANT:
-    # Setup is the outer orchestrator. If bootstrap was already run
+    # setup.ps1 is the outer orchestrator. If bootstrap already ran
     # successfully above, RepoSmoke must NOT run bootstrap again.
-    # This avoids duplicated environment reconstruction and CI DataRoot
-    # mismatches.
     # --------------------------------------------------
     if (-not $SkipSmoke) {
 
         Test-FileExists $RepoSmokeScript "Run-RepoSmoke.ps1"
+        Test-FileExists $RuntimeDbBuildScript "Run_UpdateRuntimeDbs.ps1"
+        Test-FileExists $IngestionRuntimeScript "Run_Ingestion.ps1"
+        Test-FileExists $DeploymentGateScript "Run-DeploymentGat.ps1"
 
         Write-Info "Running repo smoke..."
 
@@ -161,9 +174,14 @@ try {
 
             # Always skip bootstrap inside RepoSmoke when called from setup.ps1
             SkipBootstrap = $true
+
+            # Path A / intersection wiring
+            RuntimeDbBuildScript   = $RuntimeDbBuildScript
+            IngestionRuntimeScript = $IngestionRuntimeScript
+            DeploymentGateScript   = $DeploymentGateScript
         }
 
-        # Existing controls
+        # Existing Path B controls
         if ($SkipPhase5) { $smokeParams["SkipPhase5"] = $true }
 
         if ($OfflineValidationMode) { $smokeParams["OfflineValidationMode"] = $true }
@@ -194,6 +212,13 @@ try {
         if ($SummaryOutputPath -and $SummaryOutputPath.Trim() -ne "") {
             $smokeParams["SummaryOutputPath"] = $SummaryOutputPath
         }
+
+        # NEW: Path A execution controls
+        if ($RunPathABaseline)    { $smokeParams["RunPathABaseline"] = $true }
+        if ($RunPathAIngestion)   { $smokeParams["RunPathAIngestion"] = $true }
+        if ($RunDeploymentGate)   { $smokeParams["RunDeploymentGate"] = $true }
+        if ($SkipPathAVerify)     { $smokeParams["SkipPathAVerify"] = $true }
+        if ($RunOfflineAnalysis)  { $smokeParams["RunOfflineAnalysis"] = $true }
 
         & $RepoSmokeScript @smokeParams
 
