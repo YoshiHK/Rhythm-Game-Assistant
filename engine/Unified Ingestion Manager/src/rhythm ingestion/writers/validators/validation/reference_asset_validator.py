@@ -86,8 +86,15 @@ def _is_youtube_url(value: Any) -> bool:
     if not _is_url(s):
         return False
     parsed = urlparse(s)
-    host = (parsed.netloc or "").lower()
-    return "youtube.com" in host or "youtu.be" in host
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    return (
+        host == "youtube.com"
+        or host.endswith(".youtube.com")
+        or host == "youtu.be"
+        or host.endswith(".youtu.be")
+    )
 
 
 def _validate_reference_string(reference: str, *, subtype: Optional[str]) -> tuple[list[str], list[str]]:
