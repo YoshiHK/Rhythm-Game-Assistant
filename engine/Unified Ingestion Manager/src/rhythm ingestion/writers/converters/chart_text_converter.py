@@ -28,6 +28,7 @@ import json
 import re
 import email
 from email import policy
+from html.parser import HTMLParser
 from typing import Any, Dict, Optional
 
 # --------------------------------------------------
@@ -126,10 +127,29 @@ def _strip_trailing_space(text: str) -> str:
 
 
 def _extract_text_from_html(raw_html: str) -> str:
-    text = re.sub(r"<script.*?>.*?</script>", " ", raw_html, flags=re.I | re.S)
-    text = re.sub(r"<style.*?>.*?</style>", " ", text, flags=re.I | re.S)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = html_lib.unescape(text)
+    class _TextExtractor(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=False)
+            self._skip_depth = 0
+            self._chunks: list[str] = []
+
+        def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[override]
+            if tag.lower() in {"script", "style"}:
+                self._skip_depth += 1
+
+        def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+            if tag.lower() in {"script", "style"} and self._skip_depth > 0:
+                self._skip_depth -= 1
+
+        def handle_data(self, data: str) -> None:  # type: ignore[override]
+            if self._skip_depth == 0 and data:
+                self._chunks.append(data)
+
+    parser = _TextExtractor()
+    parser.feed(raw_html)
+    parser.close()
+
+    text = html_lib.unescape(" ".join(parser._chunks))
     text = re.sub(r"\s+", " ", text).strip()
     return text + "\n" if text else ""
 
