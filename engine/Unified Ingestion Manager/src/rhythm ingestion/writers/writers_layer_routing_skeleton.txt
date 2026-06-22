@@ -1,0 +1,95 @@
+writers/
+├── README.md
+├── __init__.py
+├── validators/
+│   ├── __init__.py
+│   ├── asset/
+│   │   ├── __init__.py
+│   │   ├── verify_asset_bundle.py
+│   │   ├── verify_asset_consistency.py
+│   │   ├── verify_asset_pattern_reconciliation.py
+│   │   ├── verify_chart_assets.py
+│   │   ├── verify_chart_pipeline.py
+│   │   ├── verify_conversion_determinism.py
+│   │   └── verify_identity_consistency.py
+│   │
+│   ├── inventory/
+│   │   ├── __init__.py
+│   │   ├── verify_file_scan_inventory.py
+│   │   └── verify_inventory_asset_coverage.py
+│   │
+│   ├── pattern/
+│   │   ├── __init__.py
+│   │   ├── verify_pattern_bundle.py
+│   │   ├── verify_chart_patterns.py
+│   │   ├── verify_pattern_blob_integrity.py
+│   │   └── verify_pattern_feature_consistency.py
+│   │
+│   └── validation/
+│       ├── __init__.py
+│       ├── chart_asset_validator.py
+│       ├── delete_policy_validator.py
+│       └── reference_asset_validator.py
+│
+├── verification/
+│   ├── __init__.py
+│   └── verify_full_bundle.py
+│
+├── safety/
+│   ├── __init__.py
+│   ├── safe_delete_candidates.py
+│   └── config/
+│       └── delete_policy.py
+│
+├── readers/
+│   ├── __init__.py
+│   └── chart_pattern_reader.py
+│
+├── normalizers/
+│   ├── __init__.py
+│   └── identity_normalizer.py
+│
+├── converters/
+│   ├── __init__.py
+│   └── chart_text_converter.py
+│
+├── classifiers/
+│   ├── __init__.py
+│   └── chart_asset_classifier.py
+│
+├── bridges/
+│   ├── __init__.py
+│   ├── chart_feature_bridge.py
+│   ├── feedback_event_adapter.py
+│   ├── feedback_event_provenance.py
+│   └── song_identity_resolver.py
+│
+├── persistence/
+│   ├── __init__.py
+│   ├── chart_asset_writer.py
+│   ├── chart_pattern_writer.py
+│   ├── file_scan_inventory_writer.py
+│   └── excel_writer.py   # (pending revision)
+│
+├── orchestrators/
+│   ├── __init__.py
+│   └── chart_asset_ingestion_orchestrator.py
+│
+├── models/
+│   ├── __init__.py
+│   └── chart_asset_model.py
+│
+├── reference_asset_analysis/
+│   ├── __init__.py
+│   ├── analyzers/
+│   │   ├── __init__.py
+│   │   └── (future analyzers)
+│   ├── persistence/
+│   │   ├── __init__.py
+│   │   └── (future writers)
+│   ├── validators/
+│   │   ├── __init__.py
+│   │   └── (future validators)
+│   └── bridges/
+│       ├── __init__.py
+        └── (future bridge)

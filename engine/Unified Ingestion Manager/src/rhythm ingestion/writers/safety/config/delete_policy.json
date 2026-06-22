@@ -1,0 +1,41 @@
+{
+  "version": 1,
+
+  "verification": {
+    "require_pass": true
+  },
+
+  "scope": {
+    "only_type_A": true,
+    "include_type_B": false
+  },
+
+  "deduplication": {
+    "enabled": true,
+    "group_by": "content_sha256",
+    "keep_at_least_one_copy": true,
+    "max_copies_to_keep": 1
+  },
+
+  "fallback_grouping": {
+    "enabled": true,
+    "strategy": "path"
+  },
+
+  "action": {
+    "mode": "quarantine",
+    "quarantine_dir": "_quarantine_deleted",
+    "allow_delete_last_copy": false
+  },
+
+  "safety": {
+    "dry_run_default": true,
+    "require_explicit_execute": true
+  },
+
+  "logging": {
+    "highlight_limit": 20,
+    "show_plan": true,
+    "show_summary": true
+  }
+}
