@@ -320,7 +320,7 @@ function Test-PathARunnerFamily($RepoRoot) {
     $required = @(
         (Join-Path $root "Run_UpdateRuntimeDbs.ps1"),
         (Join-Path $root "Run_Ingestion.ps1"),
-        (Join-Path $root "Run-DeploymentGat.ps1"),
+        (Join-Path $root "Run-DeploymentGate.ps1"),
         (Join-Path $root "verify_runtime_bundle_strict.py"),
         (Join-Path $root "Update_Runtime_Dbs.py")
     )
