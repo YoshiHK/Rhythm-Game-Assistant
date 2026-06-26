@@ -225,6 +225,8 @@ RGA is designed as a system that can:
 
 ## Status Badges
 
+[![CodeQL Advanced](https://github.com/YoshiHK/Rhythm-Game-Assistant/actions/workflows/codeql.yml/badge.svg)](https://github.com/YoshiHK/Rhythm-Game-Assistant/actions/workflows/codeql.yml)
+
 [![Deployment Gate](https://github.com/YoshiHK/Rhythm-Game-Assistant/actions/workflows/deployment-gate.yml/badge.svg)](https://github.com/YoshiHK/Rhythm-Game-Assistant/actions/workflows/deployment-gate.yml)
 
 ---
