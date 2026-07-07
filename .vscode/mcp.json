@@ -1,9 +1,8 @@
 {
   "servers": {
-    "gistpad": {
-      "command": "node",
-      "args": ["build/index.js"],
-      "dev": {
-        "watch": "build/**/*.js",
-        "debug": { "type": "node" }
-      },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    }
+  }
+}
