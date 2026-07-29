@@ -3,6 +3,7 @@
     "github": {
       "type": "http",
       "url": "https://api.githubcopilot.com/mcp/",
+      "client_id": "71846b1a-05dd-429d-a5a3-c95046e19fcd",
       "headers": {
         "_comment": "Set the Authorization header at runtime. Example: \"Authorization: Bearer <token>\". Do NOT store tokens in the repository — configure GITHUB_MCP_TOKEN as an environment variable or use your editor/extension's secure settings."
       }
