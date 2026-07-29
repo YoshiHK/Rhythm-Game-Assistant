@@ -12,10 +12,10 @@ Non-goals:
 - No learning logic
 - No phase mutation
 """
-
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # ------------------------------------------------------------
 # Phase 6 Routing Surface (single source)
@@ -47,6 +47,20 @@ def create_app(
     """
 
     app = FastAPI()
+
+    # --------------------------------------------------------
+    # CORS / preflight handling for browser clients that call
+    # the /v1/mcp (or /api/v1/*) surface. This ensures the
+    # Authorization header and OPTIONS preflight are accepted.
+    # Change allow_origins to specific origins in production.
+    # --------------------------------------------------------
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # change to exact origins for production
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept"],
+    )
 
     # ----------------------------------------
     # Inject core dependencies (Phase 6 wiring)
