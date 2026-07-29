@@ -1,9 +1,5 @@
 {
   "servers": {
-    "github": {
-      "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/"
-    },
     "rhythm-game-assistant": {
       "type": "http",
       "url": "https://www.rhythm-game-assistant.com/v1/mcp"
