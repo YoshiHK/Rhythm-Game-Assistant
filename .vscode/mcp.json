@@ -4,7 +4,7 @@
       "type": "http",
       "url": "https://api.githubcopilot.com/mcp/",
       "headers": {
-        "Authorization": "Bearer ${GITHUB_MCP_TOKEN}"
+        "_comment": "Set the Authorization header at runtime. Example: \"Authorization: Bearer <token>\". Do NOT store tokens in the repository — configure GITHUB_MCP_TOKEN as an environment variable or use your editor/extension's secure settings."
       }
     },
     "rhythm-game-assistant": {
