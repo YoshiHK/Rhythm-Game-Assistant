@@ -1,3 +1,5 @@
+# engine/Unified Ingestion Manager/src/rhythm ingestion/api/app.py
+
 """
 app.py
 
@@ -12,6 +14,7 @@ Non-goals:
 - No learning logic
 - No phase mutation
 """
+
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -50,13 +53,13 @@ def create_app(
 
     # --------------------------------------------------------
     # CORS / preflight handling for browser clients that call
-    # the /v1/mcp (or /api/v1/*) surface. This ensures the
-    # Authorization header and OPTIONS preflight are accepted.
-    # Change allow_origins to specific origins in production.
+    # the /v1/mcp surface. This ensures Authorization header
+    # and OPTIONS preflight are accepted. Adjust allow_origins
+    # in production to a specific origin list.
     # --------------------------------------------------------
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # change to exact origins for production
+        allow_origins=["*"],  # change to specific origins in production
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept"],
