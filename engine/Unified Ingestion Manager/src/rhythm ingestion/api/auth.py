@@ -35,4 +35,3 @@ def require_softr_bearer(authorization: Optional[str]) -> None:
 
     if token != expected:
         raise HTTPException(status_code=403, detail="Invalid token")
-``

@@ -20,10 +20,11 @@ Routing discipline:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Literal
 from uuid import uuid4
 
-from fastapi import Request
+from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from .auth import auth_header, require_softr_bearer
@@ -59,7 +60,69 @@ def _phase6_trigger_envelope(*, source: str = "softr", surface: str = "recommend
 def _stable_request_id(req: "RecommendRequest", trigger: Dict[str, Any]) -> str:
     rid = (req.request_id or "").strip()
     return rid or str(trigger.get("trigger_id") or uuid4())
+    
+def interpret_feedback(
+    *,
+    trigger: Dict[str, Any],
+    request: Dict[str, Any],
+    run_result: Any,
+    diagnostics: Any = None,
+    tips_payload: Any = None,
+    personalization_context: Any = None,
+    localization_context: Any = None,
+    provenance_id: Optional[str] = None,
+) -> str:
+    """
+    Phase 6 fallback feedback interpreter.
 
+    Purpose:
+    - Preserve the API response contract when the legacy interpret_feedback()
+      implementation is not wired.
+    - Stay read-only.
+    - Do not mutate learning state.
+    - Do not perform network I/O.
+    - Do not alter Phase 1–7 gameplay / recommendation / personalization logic.
+
+    This is intentionally conservative. It only explains which observable
+    branch produced the response.
+    """
+
+    mode = ""
+    game_id = ""
+
+    if isinstance(request, dict):
+        mode = str(request.get("mode") or "").strip()
+        game_id = str(request.get("game_id") or "").strip()
+
+    # If Phase 3 / core execution produced an explicit error-like result,
+    # surface a stable explanation without throwing.
+    if isinstance(run_result, dict):
+        error = run_result.get("error")
+        status_code = run_result.get("status_code")
+
+        if error:
+            return f"Request processed, but the runtime reported: {error}"
+
+        if status_code not in (None, 0, 200, "0", "200"):
+            return f"Request processed with runtime status_code={status_code}."
+
+    # If tips were generated or attached, explain that the response is chart-first.
+    if tips_payload:
+        return "Generated from chart-level analysis, then shaped by personalization and localization context."
+
+    # If diagnostics exist, acknowledge fallback interpretation without failing.
+    if diagnostics:
+        return "Generated with available diagnostics; detailed feedback interpretation is using the Phase 6 fallback."
+
+    if mode == "song":
+        if game_id:
+            return f"Song-level request processed for game_id={game_id} using the available Phase 6 runtime wiring."
+        return "Song-level request processed using the available Phase 6 runtime wiring."
+
+    if mode == "game":
+        return "Game-level recommendation response processed using the available Phase 6 runtime wiring."
+
+    return "Recommendation response processed using the available Phase 6 runtime wiring."
 
 # -----------------------------------------------------------------------------
 # Song Catalog (read-only contract; injection only)
@@ -93,7 +156,7 @@ def _resolve_chart_ref(*, game_id: str, song_id: str) -> str:
     cat = _SONG_CATALOG
     if cat is not None:
         for attr in ("get_chart_ref", "chart_ref_for", "chart_ref", "resolve_chart_ref"):
-        """Must be pure (no mutation). Should not perform network I/O."""    
+            # Must be pure (no mutation). Should not perform network I/O. 
             fn = getattr(cat, attr, None)
             if callable(fn):
                 try:

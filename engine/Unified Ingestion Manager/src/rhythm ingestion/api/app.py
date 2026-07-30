@@ -1,5 +1,3 @@
-# engine/Unified Ingestion Manager/src/rhythm ingestion/api/app.py
-
 """
 app.py
 
@@ -18,7 +16,6 @@ Non-goals:
 from __future__ import annotations
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 # ------------------------------------------------------------
 # Phase 6 Routing Surface (single source)
@@ -50,20 +47,6 @@ def create_app(
     """
 
     app = FastAPI()
-
-    # --------------------------------------------------------
-    # CORS / preflight handling for browser clients that call
-    # the /v1/mcp surface. This ensures Authorization header
-    # and OPTIONS preflight are accepted. Adjust allow_origins
-    # in production to a specific origin list.
-    # --------------------------------------------------------
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # change to specific origins in production
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Accept"],
-    )
 
     # ----------------------------------------
     # Inject core dependencies (Phase 6 wiring)
