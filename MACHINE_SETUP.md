@@ -1,134 +1,170 @@
-# MACHINE_SETUP.md
+## MACHINE_SETUP.md
 
-## Purpose
+### Purpose
+
 This document is the minimum recovery checklist for moving the UMI / RGA project to a new Windows PC.
 
 It is designed to preserve:
+
 - OneDrive-backed project files
 - Python package reproducibility
 - local bootstrap reproducibility
 - scan / tips_meta workflow readiness
+- FastAPI backend startup consistency
+- ngrok tunnel recovery
+- Softr → ngrok → FastAPI connectivity
 
 ---
 
 ## 1. What is expected to roam vs not roam
 
 ### Roams with OneDrive (if synced)
-- Project files stored under your OneDrive-backed project root
-- `Chart File/`
-- `Tips Output Meta/`
+
+- Project files stored under the OneDrive-backed project root
+- Chart File/
+- Tips Output Meta/
 - source code, schemas, configs, tests
+- bootstrap.ps1
+- backend_start.ps1
+- ngrok_start.ps1
+- MACHINE_SETUP.md
 
 ### Does **not** automatically roam
+
 - Windows environment variables
-- virtual environments (`.venv/`)
+- virtual environments (.venv/)
 - custom PATH / PYTHONPATH settings
 - Python installation itself
 - OneDrive per-device sync preferences
-- “Always keep on this device” status on a different PC
+- "Always keep on this device" status on a different PC
+- ngrok local authentication state
 
 ---
 
 ## 2. Prerequisites on a new PC
 
-1. Install OneDrive and sign in with the same Microsoft account.
-2. Let the project root sync to the new PC.
-3. Install Python (recommended: the same major/minor version used previously).
-4. Open PowerShell in the project root.
+- Install OneDrive and sign in with the same Microsoft account.
+- Let the project root sync to the new PC.
+- Install Python (recommended: same major/minor version).
+- Install Git.
+- Install ngrok.
+- Open PowerShell in the project root.
 
 ---
 
 ## 3. Required project files for recovery
 
 Keep these in the project root:
-- `requirements.txt`
-- `.env.example`
-- `bootstrap.ps1`
-- `MACHINE_SETUP.md`
+
+- requirements.txt
+- .env.example
+- bootstrap.ps1
+- backend_start.ps1
+- ngrok_start.ps1
+- MACHINE_SETUP.md
 
 Recommended additional files:
-- `.gitignore`
-- `README.md`
-- any CI runner or local runner scripts
+
+- .gitignore
+- .gitattributes
+- README.md
+- CI scripts
+- local runner scripts
 
 ---
 
-## 4. First-time setup on a new PC
+## 4. Environment Variables
+
+### Required
+
+RGA API authentication depends on:
+
+```text
+SOFTR_API_TOKEN
+```
+
+Example:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+    "SOFTR_API_TOKEN",
+    "your_token_here",
+    "User"
+)
+```
+
+Verify:
+
+```powershell
+echo $env:SOFTR_API_TOKEN
+```
+
+---
+
+## 5. First-time setup on a new PC
 
 ### Step A — Copy environment template
 
+```powershell
 Copy-Item .env.example .env
-Edit .env if your local paths differ.
+```
 
 ### Step B — Run bootstrap
 
-```
+```powershell
 powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
 ```
 
-This will:
+---
 
-- load .env
-- set process-level PYTHONPATH
-- create .venv
-- install requirements.txt
-- verify key folders
-- print sample chart files for local-availability checking
+## 6. ngrok Authentication Recovery
+
+```powershell
+ngrok config add-authtoken YOUR_AUTHTOKEN
+```
 
 ---
 
-## 5. OneDrive expectations for local scanning
+## 7. OneDrive Expectations for Local Scanning
 
-For PC-based chart scanning and QA generation:
-
-- the project may live in OneDrive
-- but files used by local scan / adapter execution should be available locally on the PC
-- a solid green circle with white checkmark in File Explorer is the safest state for strict local execution
-
-If files are cloud-only on the new PC, scanning may discover file paths, but local adapter steps may require file contents to be downloaded first.
+- adapter execution should have local file availability
+- cloud-only files may require download before execution
 
 ---
 
-## 6. Daily workflow reminder
+## 8. Daily Workflow
 
-### Activate virtual environment
+### Backend
 
-```
-.\.venv\Scripts\Activate.ps1
-```
-
-### Optional: verify Python path
-
-```
-$env:PYTHONPATH
+```powershell
+.\backend_start.ps1
 ```
 
-### Run your UMI / RGA workflow
-Use your normal local runner commands from the project root.
+### ngrok
+
+```powershell
+.\ngrok_start.ps1
+```
 
 ---
 
-## 7. Recovery after PC failure
+## 9. Recovery After PC Failure
 
-If the old PC breaks:
-
-1. Sign in to OneDrive on the new PC.
-2. Wait for the project root to sync.
-3. Open PowerShell in the project root.
-4. Copy .env.example to .env and adjust if needed.
-5. Run bootstrap.ps1.
-6. Verify chart files that will be scanned are locally available.
-7. Run your normal scan / QA workflow.
+1. Sign in to OneDrive.
+2. Install Python.
+3. Install ngrok.
+4. Run bootstrap.ps1.
+5. Restore SOFTR_API_TOKEN.
+6. Run backend_start.ps1.
+7. Run ngrok_start.ps1.
+8. Verify Softr API returns HTTP 200.
 
 ---
 
-## 8. Non-goals
-
-This setup does **not** attempt to preserve:
+## 10. Non-goals
 
 - hidden registry state
+- global Python packages
+- machine-specific PATH configuration
 - machine-specific environment variables automatically
-- pre-existing global Python packages
-- OneDrive device-specific sync customizations
-
-Those are intentionally rebuilt per machine for predictability.
+- ngrok local authentication cache automatically
