@@ -12,7 +12,8 @@
       "type": "http",
       "url": "https://leptophyllous-nick-unobscured.ngrok-free.dev/api/v1/recommend",
       "headers": {
-        "Authorization": "Bearer ${input:rhythm-mcp-token}"
+        "Authorization": "Bearer ${input:rhythm-mcp-token}",
+        "ngrok-skip-browser-warning": "true"
       }
     }
   }
