@@ -10,7 +10,7 @@
   "servers": {
     "rhythm-game-assistant": {
       "type": "http",
-      "url": "https://leptophyllous-nick-unobscured.ngrok-free.app/v1/mcp",
+      "url": "https://leptophyllous-nick-unobscured.ngrok-free.dev/api/v1/recommend",
       "headers": {
         "Authorization": "Bearer ${input:rhythm-mcp-token}"
       }
