@@ -16,14 +16,17 @@
 *.bat          text eol=crlf
 
 # -------------------------------------------------
-# Documentation / configs
+# Documentation / configuration
 # -------------------------------------------------
 *.md           text eol=lf
 *.txt          text eol=lf
+
 *.json         text eol=lf
 *.jsonc        text eol=lf
+
 *.yaml         text eol=lf
 *.yml          text eol=lf
+
 *.toml         text eol=lf
 *.ini          text eol=lf
 
@@ -35,31 +38,93 @@
 # -------------------------------------------------
 # Data / chart-related text formats
 # -------------------------------------------------
+
+# Web / text chart formats
 *.html         text eol=lf
 *.htm          text eol=lf
 *.svg          text eol=lf
 *.xml          text eol=lf
+
+# Type A chart assets
 *.aff          text eol=lf
 *.sus          text eol=lf
 *.c2s          text eol=lf
+*.ogkr         text eol=lf
+
+# Canonical / exported text assets
+*.json         text eol=lf
 
 # -------------------------------------------------
-# Binary assets (never normalize line endings)
+# Binary assets
+# Never normalize line endings
 # -------------------------------------------------
+
+# Images
 *.png          binary
 *.jpg          binary
 *.jpeg         binary
 *.gif          binary
 *.webp         binary
 *.ico          binary
+
+# Documents
 *.pdf          binary
+*.docx         binary
+*.pptx         binary
+
+# Archives
 *.zip          binary
 *.7z           binary
 *.rar          binary
+
+# Databases
 *.db           binary
 *.sqlite       binary
+*.sqlite3      binary
+
+# Spreadsheet outputs
 *.xlsx         binary
 *.xls          binary
-*.docx         binary
-*.pptx         binary
+
+# MHT archives
 *.mht          binary
+
+# Runtime cache / serialized objects
+*.bin          binary
+*.pickle       binary
+*.pkl          binary
+
+# -------------------------------------------------
+# OneDrive / Windows generated files
+# -------------------------------------------------
+*.lnk          binary
+
+# -------------------------------------------------
+# Git merge behavior
+# -------------------------------------------------
+
+# Environment templates should merge normally
+.env.example   merge=text
+
+# Lockfiles should be merged as text
+requirements.txt text eol=lf
+
+# -------------------------------------------------
+# Runtime metadata artifacts
+# -------------------------------------------------
+
+# Metadata reports remain text
+*_meta.json    text eol=lf
+
+# Runtime indexes
+runtime_index.json text eol=lf
+
+# -------------------------------------------------
+# Optional future asset manifests
+# -------------------------------------------------
+
+# Verification / asset coverage manifests
+*_manifest.json text eol=lf
+*_inventory.json text eol=lf
+*_coverage.json text eol=lf
+*_verification.json text eol=lf
