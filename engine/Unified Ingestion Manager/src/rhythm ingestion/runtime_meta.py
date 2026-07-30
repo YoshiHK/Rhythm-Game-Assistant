@@ -32,7 +32,8 @@ ARTIFACT_SPECS: Dict[str, Dict[str, str]] = {
     "personalization_meta": {"prefix": "personalization_meta", "ext": ".json"},
     "localization_meta": {"prefix": "localization_meta", "ext": ".json"},
     "song_recommendation_meta": {"prefix": "song_recommendation_meta", "ext": ".json"},
-    "recommendation_meta": {"prefix": "recommendation_meta", "ext": ".json"}
+    "game_recommendation_meta": {"prefix": "game_recommendation_meta", "ext": ".json"},
+    "recommendation_meta": {"prefix": "recommendation_meta", "ext": ".json"},
 }
 
 def run_file_scan_wrapper(*, source_dir: str, output_path: str, **kwargs):

@@ -16,10 +16,59 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from rhythm_ingestion.config.games_loader import (
-    get_enabled_games,
-    get_games_supporting_tips,
-)
+# ---------------------------------------------------------------------
+# Config layer import (legacy UMI path preferred; Phase 7 fallback)
+# ---------------------------------------------------------------------
+try:
+    # Legacy / in-package location (if still available)
+    from rhythm_ingestion.config.games_loader import (
+        get_enabled_games,
+        get_games_supporting_tips,
+    )
+
+except Exception:
+    # Phase 7 config layer fallback (external to UMI package)
+    import importlib.util
+
+    _HERE = Path(__file__).resolve()
+
+    def _find_phase7_games_loader(start: Path) -> Path:
+        """
+        Walk upward from the current file until the repo root containing
+        'Phase 7 - Games Recommendation/config/games_loader.py' is found.
+        """
+        for parent in [start.parent, *start.parents]:
+            candidate = (
+                parent
+                / "Phase 7 - Games Recommendation"
+                / "config"
+                / "games_loader.py"
+            )
+            if candidate.exists():
+                return candidate
+
+        raise ModuleNotFoundError(
+            "Could not locate Phase 7 games_loader.py by walking parent directories "
+            f"from: {start}"
+        )
+
+    _PHASE7_GAMES_LOADER = _find_phase7_games_loader(_HERE)
+
+    _spec = importlib.util.spec_from_file_location(
+        "phase7_games_loader",
+        str(_PHASE7_GAMES_LOADER),
+    )
+    if _spec is None or _spec.loader is None:
+        raise ModuleNotFoundError(
+            f"Could not build import spec for: {_PHASE7_GAMES_LOADER}"
+        )
+
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+
+    get_enabled_games = _mod.get_enabled_games
+    get_games_supporting_tips = _mod.get_games_supporting_tips
+
 from rhythm_ingestion.utils import scan_directory, log
 from rhythm_ingestion.adapters import get_adapter
 from rhythm_ingestion.validators import get_validator
