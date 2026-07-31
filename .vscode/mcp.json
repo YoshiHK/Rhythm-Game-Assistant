@@ -3,16 +3,20 @@
     {
       "id": "rhythm-mcp-token",
       "type": "promptString",
+      "description": "Enter your RGA Bearer Token",
       "password": true
     }
   ],
   "servers": {
     "rhythm-game-assistant": {
-      "type": "http",
-      "url": "https://leptophyllous-nick-unobscured.ngrok-free.dev/api/v1/recommend",
-      "headers": {
-        "Authorization": "Bearer ${input:rhythm-mcp-token}",
-        "ngrok-skip-browser-warning": "true"
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "C:\\Users\\edfwh\\OneDrive\\Desktop\\Rhythm Game Assistant\\Github Repository\\engine\\Unified Ingestion Manager\\Unified Ingestion Manager\\mcp_server.py"
+      ],
+      "env": {
+        "SOFTR_API_TOKEN": "${input:rhythm-mcp-token}",
+        "RGA_REST_URL": "http://127.0.0.1:8000/api/v1/recommend"
       }
     }
   }
