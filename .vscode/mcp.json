@@ -3,7 +3,6 @@
     {
       "id": "rhythm-mcp-token",
       "type": "promptString",
-      "description": "Enter your RGA Bearer Token",
       "password": true
     }
   ],
