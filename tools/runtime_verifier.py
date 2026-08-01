@@ -523,10 +523,10 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
 
 def discover_runtime_candidates(
     search_root: Path,
-) -> Listroots: Dict[str, Path] = {}
+) -> List[RuntimeCandidate]:
+    roots: Dict[str, Path] = {}
 
-    try:
-        for main_py in search_root.rglob("main.py"):
+n_py in search_root.rglob("main.py"):
             roots[str(main_py.parent.resolve())] = main_py.parent.resolve()
 
         for rec_py in search_root.rglob("recommend.py"):
