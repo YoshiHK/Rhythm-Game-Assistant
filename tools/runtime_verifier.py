@@ -374,8 +374,9 @@ class RuntimeVerifier:
             if path_text not in sys.path:
                 sys.path.insert(0, path_text)
 
-    def read_json_file(self, path: Path) -> Optionaltry:
-            return json.loads(path.read_text(encoding="utf-8"))
+    def read_json_file(self, path: Path) -> Optional[Any]:
+        try:
+            return json.loads(path.read_text(encoding
         except Exception as exc:
             self.add(
                 domain="file",
@@ -387,6 +388,7 @@ class RuntimeVerifier:
                     "error": str(exc),
                 },
             )
+
             return None
 
     # ------------------------------------------------------------------
