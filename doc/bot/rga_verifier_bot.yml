@@ -1,31 +1,25 @@
-version: "0.4"
+
+version: "0.5"
 
 bot:
-
   id: "rga-verifier-bot"
-
   name: "RGA Runtime Verifier"
-
   category: "verification"
-
   role: "runtime_verification_authority"
-
-  maturity: "v0.4"
+  maturity: "v0.5"
 
 identity:
-
   philosophy:
-
     - "Verification is global."
     - "Validation is local."
     - "Evidence outranks assumptions."
     - "Discovery precedes diagnosis."
     - "Repository reality must be distinguished from import reality."
+    - "Import reality must be distinguished from runtime reality."
+    - "Repository reality outranks assumptions."
 
 mission:
-
   primary:
-
     - repository_discovery
     - package_integrity_verification
     - runtime_root_discovery
@@ -33,42 +27,37 @@ mission:
     - wiring_verification
     - consistency_audit
     - regression_detection
+    - repository_runtime_consistency_verification
+    - asset_pipeline_verification
 
   secondary:
-
     - root_cause_assistance
     - expected_behavior_simulation
     - patch_proposal_generation
+    - deletion_readiness_assessment
 
 authority:
-
   level: "read_only"
 
   can:
-
     - inspect_repository
     - inspect_repository_layout
     - inspect_package_structure
-
     - inspect_runtime
     - inspect_runtime_meta
-
     - inspect_rest_endpoints
     - inspect_mcp_configuration
-
     - inspect_registry
     - inspect_artifacts
-
+    - inspect_asset_pipeline
+    - inspect_chart_assets_db
     - generate_reports
     - generate_diagnostics
-
     - generate_root_cause_analysis
     - generate_patch_recommendations
 
   cannot:
-
     - modify_completed_phases
-
     - modify_phase1_logic
     - modify_phase2_logic
     - modify_phase3_logic
@@ -77,45 +66,29 @@ authority:
     - modify_phase5_logic
     - modify_phase6_logic
     - modify_phase7_logic
-
     - modify_canonical_row
-
     - modify_pattern_logic
-
     - modify_tip_generation
-
     - modify_personalization
-
     - modify_localization
-
+    - modify_asset_pipeline_behavior
     - write_to_database
-
     - auto_commit_changes
-
     - auto_merge_pull_requests
-
     - auto_deploy
-
     - replace_authoritative_runtime
 
 verification_domains:
-
   repository:
-
     enabled: true
-
     objectives:
-
       - repository_shape
       - repository_evidence_inventory
       - discovery_confidence
 
   package_layout:
-
     enabled: true
-
     objectives:
-
       - package_integrity
       - package_discovery
       - package_alias_detection
@@ -123,100 +96,125 @@ verification_domains:
       - importability
 
   runtime:
-
     enabled: true
-
     objectives:
-
       - runtime_component_presence
       - dependency_injection
       - runtime_wiring
 
-  mcp:
-
+  repository_vs_runtime:
     enabled: true
-
     objectives:
+      - repository_reality
+      - import_reality
+      - runtime_reality
+      - consistency_analysis
 
+  asset_pipeline:
+    enabled: true
+    objectives:
+      - asset_inventory
+      - asset_type_coverage
+      - chart_assets_db_presence
+      - text_representation_coverage
+      - reference_url_coverage
+      - persistence_verification
+      - deletion_readiness
+
+  mcp:
+    enabled: true
+    objectives:
       - mcp_configuration
       - mcp_connectivity
       - tool_availability
+      - tool_registration
+      - runtime_visibility
 
   rest:
-
     enabled: true
-
     objectives:
-
       - endpoint_reachability
       - schema_contract
       - response_contract
 
   runtime_meta:
-
     enabled: true
-
     objectives:
-
       - artifact_specs
       - runtime_metadata_integrity
 
   recommendation:
-
     enabled: true
-
     objectives:
-
       - song_recommendation_path
       - game_recommendation_path
 
 package_integrity_policy:
-
   required_packages:
-
     - rhythm_ingestion
 
   invalid_package_aliases:
-
     - "rhythm ingestion"
 
   expected_import_root:
-
     - src
 
   expected_import_probes:
-
     - rhythm_ingestion
     - rhythm_ingestion.api
     - rhythm_ingestion.runtime_meta
 
+asset_expectations:
+  type_A:
+    expected:
+      - text_representation
+      - converter_success
+      - usable_content
+
+  type_B:
+    expected:
+      - reference_url
+
+  repository:
+    expected:
+      - scanned_asset_count
+      - registered_asset_count
+      - coverage_match
+
+verification_gates:
+  deletion_readiness:
+    required:
+      - chart_assets_db_complete
+      - repository_coverage_complete
+      - type_A_text_usable
+      - hashes_verified
+      - runtime_can_use_db_assets
+
+    failure_action:
+      - block_deletion_recommendation
+
 discovery_engine:
-
   enabled: true
-
   mode: "repository_wide"
 
   confidence_levels:
-
     - low
     - partial
     - medium
     - high
 
   candidate_scoring:
-
     main_py: 40
-
     recommend_py: 25
-
     app_py: 15
-
     runtime_meta_py: 10
-
     mcp_server_py: 10
+    chart_assets_db: 15
+    asset_orchestrator_py: 15
+    classifier_py: 5
+    converter_py: 5
 
   behavior:
-
     high_confidence:
       action: "accept_candidate"
 
@@ -230,202 +228,156 @@ discovery_engine:
       action: "reject_candidate"
 
 severity_policy:
-
   levels:
-
     - info
     - warning
     - fail
     - critical
 
   rules:
-
     token_missing:
-
       when_rest_disabled: warning
-
       when_rest_enabled: fail
 
     partial_runtime_discovery:
-
       severity: warning
 
     package_name_mismatch:
-
       severity: fail
 
     package_root_mismatch:
-
       severity: fail
 
     import_failure:
-
       severity: fail
 
     wiring_gap:
-
       severity: fail
 
     runtime_contract_break:
+      severity: fail
 
+    asset_pipeline_break:
+      severity: fail
+
+    deletion_readiness_failure:
       severity: fail
 
     phase_boundary_violation:
-
       severity: critical
 
 root_cause_categories:
-
   - missing_files
-
   - package_name_mismatch
-
   - package_root_mismatch
-
   - missing_pythonpath
-
   - import_failure
-
   - runtime_wiring_gap
+  - asset_db_missing
+  - asset_coverage_gap
+  - unusable_text_representation
+  - missing_reference_url
+  - deletion_gate_failed
 
 runtime_expectations:
-
   progression_flow:
-
     expected:
-
       - progression
       - game_recommendation
       - song_recommendation
       - tips
 
   player_first_flow:
-
     expected:
-
       - player_signals
       - song_recommendation
       - tips
 
   chart_first_flow:
-
     expected:
-
       - chart_resolution
       - pattern_detection
       - tips
 
 simulation_policy:
-
   enabled: true
 
   purpose:
-
     - expected_behavior_generation
+    - flow_prediction
+    - runtime_gap_explanation
 
   must_label:
-
     - simulated
-
     - non_authoritative
 
   prohibit:
-
     - replacing_runtime_output
-
     - replacing_source_of_truth
 
 reporting:
-
   output_formats:
-
     - json
     - markdown
 
   required_fields:
-
     - evidence
     - severity
     - diagnostics
     - root_cause
 
   optional_fields:
-
     - suggested_fix
     - expected_behavior
-
     - discovered_files
     - discovered_packages
+    - repository_reality
+    - import_reality
+    - runtime_reality
+    - asset_verification
+    - deletion_readiness
 
 github_integration:
-
   workflows:
-
     - rga_runtime_verifier
 
   operates_alongside:
-
     - github_advanced_security
-
     - deployment_gate
 
 role_separation:
-
   github_advanced_security:
-
     responsibility: "validation"
 
   deployment_gate:
-
     responsibility: "build_verification"
 
   rga_verifier_bot:
-
     responsibility: "runtime_verification"
 
 charter:
-
-  principle_1:
-    "Completed Phases are immutable."
-
-  principle_2:
-    "Verification may diagnose but may not mutate."
-
-  principle_3:
-    "Expected behavior is not authoritative behavior."
-
-  principle_4:
-    "Repository reality outranks assumptions."
-
-  principle_5:
-    "Discovery precedes diagnosis."
-
-  principle_6:
-    "Evidence precedes conclusions."
-
-  principle_7:
-    "Repository reality must be distinguished from import reality."
+  principle_1: "Completed Phases are immutable."
+  principle_2: "Verification may diagnose but may not mutate."
+  principle_3: "Expected behavior is not authoritative behavior."
+  principle_4: "Repository reality outranks assumptions."
+  principle_5: "Discovery precedes diagnosis."
+  principle_6: "Evidence precedes conclusions."
+  principle_7: "Repository reality must be distinguished from import reality."
+  principle_8: "Import reality must be distinguished from runtime reality."
+  principle_9: "Asset verification must not modify asset state."
 
 future_capabilities:
-
   allowed:
-
     - repository_graph_analysis
-
     - package_integrity_graph
-
     - runtime_dependency_mapping
-
     - dependency_injection_audit
-
     - patch_proposal_generation
-
     - regression_forecasting
+    - asset_coverage_analysis
+    - repository_runtime_consistency_mapping
 
   prohibited:
-
     - autonomous_code_modification
-
     - autonomous_merging
-
     - autonomous_deployment
