@@ -2,31 +2,27 @@
 """
 runtime_verifier.py
 
-RGA Runtime Verifier Bot — v0.5
+RGA Runtime Verifier Bot — v0.6
 
-New in v0.5:
+New in v0.6:
+- Asset Coverage Verification
+- Hash Verification
+- Type A Usability Verification
+- Runtime DB Read Verification
+
+Carried forward from v0.5:
 - Repository Reality vs Import Reality vs Runtime Reality separation
 - Asset Pipeline Verification
 - chart_assets.db discovery and read-only inspection
-- Type A / Type B asset coverage evidence
+- Type A / Type B asset evidence
 - Deletion readiness gate
 - MCP tool visibility / registration evidence
-- v0.5 report schema
-
-Carried forward from v0.4:
-- Package Integrity Verification
-- Package Directory Inventory
-- Package Alias Detection
-- Package Import Probe
-- Package Root Resolution
-- Import Failure Classification
-- Repository Reality vs Import Reality separation
 
 Purpose:
 - Read-only runtime / wiring verification for Rhythm Game Assistant (RGA).
-- Detect missing runtime components, REST contract issues, MCP config issues,
-  package layout issues, asset coverage gaps, and wiring gaps such as
-  games_recommender not being injected.
+- Detect missing runtime components, package layout issues, REST contract issues,
+  MCP config issues, asset coverage gaps, hash gaps, Type A usability gaps,
+  runtime DB read gaps, and wiring gaps such as games_recommender not being injected.
 
 Boundary:
 - Verification-only.
@@ -34,7 +30,7 @@ Boundary:
 - Must not write to production databases.
 - Must not change canonical_row, pattern/tag logic, tips generation,
   personalization, localization, recommendation internals, or asset pipeline behavior.
-- Asset inspection is read-only.
+- Asset and database inspection is read-only.
 
 Recommended placement:
 - tools/runtime_verifier.py
@@ -54,6 +50,7 @@ Strict mode:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
 import os
@@ -66,7 +63,7 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 
 # -----------------------------------------------------------------------------
@@ -140,10 +137,47 @@ TYPE_B_EXTENSIONS = {
 }
 
 ASSET_DB_NAME = "chart_assets.db"
+MIN_TYPE_A_TEXT_LENGTH = 32
+
+PATH_COLUMN_CANDIDATES = [
+    "path",
+    "file_path",
+    "source_path",
+    "asset_path",
+    "original_path",
+    "relative_path",
+]
+
+HASH_COLUMN_CANDIDATES = [
+    "sha256",
+    "file_sha256",
+    "source_sha256",
+    "content_hash",
+    "hash",
+]
+
+TEXT_COLUMN_CANDIDATES = [
+    "text_representation",
+    "converted_text",
+    "text",
+    "content_text",
+]
+
+REFERENCE_URL_COLUMN_CANDIDATES = [
+    "reference_url",
+    "url",
+    "source_url",
+]
+
+TYPE_COLUMN_CANDIDATES = [
+    "asset_type",
+    "type",
+    "kind",
+]
 
 
 # -----------------------------------------------------------------------------
-# Discovery helpers
+# General helpers
 # -----------------------------------------------------------------------------
 
 def artifact_path(root: Path, artifact: str) -> Path:
@@ -260,7 +294,6 @@ def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
             roots[str(main_py.parent.resolve())] = main_py.parent.resolve()
 
         for rec_py in search_root.rglob("recommend.py"):
-            # Support both canonical and invalid alias package paths.
             parts = list(rec_py.parts)
             if "src" in parts:
                 idx = parts.index("src")
@@ -340,6 +373,33 @@ def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
     return discovered
 
 
+def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def normalize_path_text(value: Any) -> str:
+    return str(value or "").replace("\\", "/").strip()
+
+
+def table_quote(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def first_existing(columns: Iterable[str], candidates: List[str]) -> Optional[str]:
+    column_set = set(columns)
+    for candidate in candidates:
+        if candidate in column_set:
+            return candidate
+    return None
+
+
 # -----------------------------------------------------------------------------
 # Verifier
 # -----------------------------------------------------------------------------
@@ -373,18 +433,14 @@ class RuntimeVerifier:
         self.discovered_assets = discover_asset_files(self.repo_root)
 
         self.results: List[CheckResult] = []
+        self.asset_db_snapshots: List[Dict[str, Any]] = []
+        self.repository_asset_hashes: Dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Result helpers
     # ------------------------------------------------------------------
 
-    def classify(
-        self,
-        *,
-        domain: str,
-        check: str,
-        base_status: str,
-    ) -> Tuple[str, str]:
+    def classify(self, *, domain: str, check: str, base_status: str) -> Tuple[str, str]:
         if domain == "environment" and check == "softr_api_token_present":
             if self.token:
                 return "pass", "info"
@@ -457,19 +513,13 @@ class RuntimeVerifier:
                 check="json_parse",
                 status="fail",
                 summary=f"Could not parse JSON file: {path}",
-                evidence={
-                    "path": str(path),
-                    "error": str(exc),
-                },
+                evidence={"path": str(path), "error": str(exc)},
             )
             return None
 
     def post_json(self, payload: Dict[str, Any]) -> Any:
         body = json.dumps(payload).encode("utf-8")
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -487,6 +537,10 @@ class RuntimeVerifier:
                 return {}
             return json.loads(text)
 
+    # ------------------------------------------------------------------
+    # Asset DB helpers
+    # ------------------------------------------------------------------
+
     def resolve_asset_db_candidates(self) -> List[Path]:
         candidates: List[Path] = []
 
@@ -500,13 +554,15 @@ class RuntimeVerifier:
 
         return candidates
 
-    def inspect_sqlite_readonly(self, path: Path) -> Dict[str, Any]:
+    def inspect_sqlite_readonly(self, path: Path, sample_limit: int = 5) -> Dict[str, Any]:
         evidence: Dict[str, Any] = {
             "path": str(path),
             "exists": path.exists(),
             "tables": [],
             "table_columns": {},
             "table_row_counts": {},
+            "table_samples": {},
+            "candidate_columns": {},
         }
 
         if not path.exists():
@@ -515,6 +571,7 @@ class RuntimeVerifier:
         try:
             uri = f"file:{path}?mode=ro"
             with sqlite3.connect(uri, uri=True) as conn:
+                conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 tables = [
                     row[0]
@@ -525,26 +582,115 @@ class RuntimeVerifier:
                 evidence["tables"] = tables
 
                 for table in tables:
-                    quoted_table = '"' + table.replace('"', '""') + '"'
+                    quoted_table = table_quote(table)
                     columns = [
                         row[1]
                         for row in cursor.execute(f"PRAGMA table_info({quoted_table})").fetchall()
                     ]
                     evidence["table_columns"][table] = columns
+                    evidence["candidate_columns"][table] = {
+                        "path": first_existing(columns, PATH_COLUMN_CANDIDATES),
+                        "hash": first_existing(columns, HASH_COLUMN_CANDIDATES),
+                        "text": first_existing(columns, TEXT_COLUMN_CANDIDATES),
+                        "reference_url": first_existing(columns, REFERENCE_URL_COLUMN_CANDIDATES),
+                        "type": first_existing(columns, TYPE_COLUMN_CANDIDATES),
+                    }
 
                     try:
                         count = cursor.execute(f"SELECT COUNT(*) FROM {quoted_table}").fetchone()[0]
                         evidence["table_row_counts"][table] = count
                     except Exception as exc:
-                        evidence["table_row_counts"][table] = {
-                            "error": str(exc),
-                        }
+                        evidence["table_row_counts"][table] = {"error": str(exc)}
+
+                    try:
+                        rows = cursor.execute(f"SELECT * FROM {quoted_table} LIMIT ?", (sample_limit,)).fetchall()
+                        evidence["table_samples"][table] = [dict(row) for row in rows]
+                    except Exception as exc:
+                        evidence["table_samples"][table] = {"error": str(exc)}
 
         except Exception as exc:
             evidence["error"] = str(exc)
             evidence["traceback"] = traceback.format_exc()
 
         return evidence
+
+    def get_asset_db_snapshots(self) -> List[Dict[str, Any]]:
+        if not self.asset_db_snapshots:
+            self.asset_db_snapshots = [self.inspect_sqlite_readonly(path) for path in self.resolve_asset_db_candidates()]
+        return self.asset_db_snapshots
+
+    def iter_asset_db_records(self) -> List[Dict[str, Any]]:
+        records: List[Dict[str, Any]] = []
+
+        for snapshot in self.get_asset_db_snapshots():
+            db_path = snapshot.get("path")
+            if not db_path or snapshot.get("error") or not snapshot.get("exists"):
+                continue
+
+            try:
+                uri = f"file:{db_path}?mode=ro"
+                with sqlite3.connect(uri, uri=True) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+
+                    for table in snapshot.get("tables", []):
+                        columns = snapshot.get("table_columns", {}).get(table, [])
+                        candidate_columns = snapshot.get("candidate_columns", {}).get(table, {})
+                        quoted_table = table_quote(table)
+
+                        selected_columns = [
+                            column
+                            for column in [
+                                candidate_columns.get("path"),
+                                candidate_columns.get("hash"),
+                                candidate_columns.get("text"),
+                                candidate_columns.get("reference_url"),
+                                candidate_columns.get("type"),
+                            ]
+                            if column
+                        ]
+
+                        if not selected_columns:
+                            continue
+
+                        select_sql = ", ".join(table_quote(column) for column in selected_columns)
+                        rows = cursor.execute(f"SELECT {select_sql} FROM {quoted_table}").fetchall()
+
+                        for row in rows:
+                            row_dict = dict(row)
+                            records.append(
+                                {
+                                    "db_path": db_path,
+                                    "table": table,
+                                    "columns": columns,
+                                    "path": row_dict.get(candidate_columns.get("path")) if candidate_columns.get("path") else None,
+                                    "hash": row_dict.get(candidate_columns.get("hash")) if candidate_columns.get("hash") else None,
+                                    "text": row_dict.get(candidate_columns.get("text")) if candidate_columns.get("text") else None,
+                                    "reference_url": row_dict.get(candidate_columns.get("reference_url")) if candidate_columns.get("reference_url") else None,
+                                    "asset_type": row_dict.get(candidate_columns.get("type")) if candidate_columns.get("type") else None,
+                                }
+                            )
+            except Exception:
+                continue
+
+        return records
+
+    def compute_repository_asset_hashes(self) -> Dict[str, str]:
+        if self.repository_asset_hashes:
+            return self.repository_asset_hashes
+
+        paths = [Path(item) for item in self.discovered_assets.get("type_A", [])]
+        paths += [Path(item) for item in self.discovered_assets.get("type_B", [])]
+
+        hashes: Dict[str, str] = {}
+        for path in paths:
+            try:
+                hashes[str(path.resolve())] = sha256_file(path)
+            except Exception:
+                continue
+
+        self.repository_asset_hashes = hashes
+        return hashes
 
     # ------------------------------------------------------------------
     # Checks
@@ -574,15 +720,8 @@ class RuntimeVerifier:
                 if token_present
                 else "SOFTR_API_TOKEN is missing. This blocks REST checks only when --rest is enabled."
             ),
-            evidence={
-                "token_present": token_present,
-                "rest_checks_enabled": self.run_rest,
-            },
-            suggested_fix=(
-                None
-                if token_present
-                else "Set SOFTR_API_TOKEN or pass --token when running REST verification."
-            ),
+            evidence={"token_present": token_present, "rest_checks_enabled": self.run_rest},
+            suggested_fix=(None if token_present else "Set SOFTR_API_TOKEN or pass --token when running REST verification."),
         )
 
     def check_repository_discovery(self) -> None:
@@ -619,10 +758,7 @@ class RuntimeVerifier:
             suggested_fix=(
                 None
                 if status == "pass"
-                else (
-                    "Ensure backend root contains main.py, mcp_server.py, "
-                    "and importable src/rhythm_ingestion package files."
-                )
+                else "Ensure backend root contains main.py, mcp_server.py, and importable src/rhythm_ingestion package files."
             ),
         )
 
@@ -676,11 +812,7 @@ class RuntimeVerifier:
                 "import_reality": import_reality,
                 "runtime_reality": runtime_reality,
             },
-            suggested_fix=(
-                None
-                if status == "pass"
-                else "Resolve package root and PYTHONPATH before diagnosing runtime wiring."
-            ),
+            suggested_fix=(None if status == "pass" else "Resolve package root and PYTHONPATH before diagnosing runtime wiring."),
         )
 
     def check_package_layout(self) -> None:
@@ -712,10 +844,7 @@ class RuntimeVerifier:
                     "invalid_aliases": INVALID_PACKAGE_ALIASES,
                     "invalid_alias_dirs": invalid_dirs,
                 },
-                suggested_fix=(
-                    "Rename invalid package directory to src/rhythm_ingestion, "
-                    "or restore the canonical Python package path."
-                ),
+                suggested_fix="Rename invalid package directory to src/rhythm_ingestion, or restore the canonical Python package path.",
             )
         else:
             self.add(
@@ -723,10 +852,7 @@ class RuntimeVerifier:
                 check="package_alias_detection",
                 status="pass",
                 summary="No invalid rhythm package alias directory was detected.",
-                evidence={
-                    "expected": EXPECTED_PACKAGE,
-                    "invalid_aliases": INVALID_PACKAGE_ALIASES,
-                },
+                evidence={"expected": EXPECTED_PACKAGE, "invalid_aliases": INVALID_PACKAGE_ALIASES},
             )
 
         canonical_src = self.backend_root / "src"
@@ -736,22 +862,14 @@ class RuntimeVerifier:
             domain="package_layout",
             check="package_root_resolution",
             status="pass" if canonical_pkg.exists() else "fail",
-            summary=(
-                "Canonical package root exists."
-                if canonical_pkg.exists()
-                else "Canonical package root does not exist at selected backend root."
-            ),
+            summary=("Canonical package root exists." if canonical_pkg.exists() else "Canonical package root does not exist at selected backend root."),
             evidence={
                 "backend_root": str(self.backend_root),
                 "expected_src": str(canonical_src),
                 "expected_package_root": str(canonical_pkg),
                 "exists": canonical_pkg.exists(),
             },
-            suggested_fix=(
-                None
-                if canonical_pkg.exists()
-                else "Ensure src/rhythm_ingestion exists under the selected backend root."
-            ),
+            suggested_fix=(None if canonical_pkg.exists() else "Ensure src/rhythm_ingestion exists under the selected backend root."),
         )
 
     def check_package_import_probe(self) -> None:
@@ -769,10 +887,7 @@ class RuntimeVerifier:
         for module_name in probes:
             try:
                 module = importlib.import_module(module_name)
-                results[module_name] = {
-                    "status": "pass",
-                    "file": getattr(module, "__file__", None),
-                }
+                results[module_name] = {"status": "pass", "file": getattr(module, "__file__", None)}
             except Exception as exc:
                 any_fail = True
                 failure_type = classify_import_failure(str(exc), self.discovered_packages)
@@ -787,20 +902,9 @@ class RuntimeVerifier:
             domain="package_layout",
             check="package_import_probe",
             status="fail" if any_fail else "pass",
-            summary=(
-                "One or more package import probes failed."
-                if any_fail
-                else "Package import probes passed."
-            ),
-            evidence={
-                "sys_path_prefix": sys.path[:5],
-                "results": results,
-            },
-            suggested_fix=(
-                "Fix package directory name and PYTHONPATH. Expected canonical package: src/rhythm_ingestion."
-                if any_fail
-                else None
-            ),
+            summary=("One or more package import probes failed." if any_fail else "Package import probes passed."),
+            evidence={"sys_path_prefix": sys.path[:5], "results": results},
+            suggested_fix=("Fix package directory name and PYTHONPATH. Expected canonical package: src/rhythm_ingestion." if any_fail else None),
         )
 
     def check_repo_shape(self) -> None:
@@ -815,17 +919,12 @@ class RuntimeVerifier:
 
         for name, path in expected.items():
             exists = path.exists()
-
             self.add(
                 domain="repo",
                 check=f"exists_{name}",
                 status="pass" if exists else "warning",
                 summary=f"{name} {'exists' if exists else 'was not found'} at selected backend root.",
-                evidence={
-                    "path": str(path),
-                    "exists": exists,
-                    "backend_root": str(self.backend_root),
-                },
+                evidence={"path": str(path), "exists": exists, "backend_root": str(self.backend_root)},
             )
 
     def check_python_imports(self) -> None:
@@ -833,7 +932,6 @@ class RuntimeVerifier:
 
         try:
             recommend = importlib.import_module("rhythm_ingestion.api.recommend")
-
             router = getattr(recommend, "router", None)
             games_rec = getattr(recommend, "_GAMES_RECOMMENDER", None)
             orchestrator = getattr(recommend, "_ORCHESTRATOR", None)
@@ -861,13 +959,8 @@ class RuntimeVerifier:
                     check="games_recommender_present",
                     status="fail",
                     summary="Games recommender is not injected into the Phase 6 API runtime.",
-                    evidence={
-                        "_GAMES_RECOMMENDER": None,
-                    },
-                    suggested_fix=(
-                        "Inject a Phase 7 games_recommender through "
-                        "create_app(..., games_recommender=...) in the runtime builder."
-                    ),
+                    evidence={"_GAMES_RECOMMENDER": None},
+                    suggested_fix="Inject a Phase 7 games_recommender through create_app(..., games_recommender=...) in the runtime builder.",
                 )
             else:
                 self.add(
@@ -875,28 +968,18 @@ class RuntimeVerifier:
                     check="games_recommender_present",
                     status="pass",
                     summary="Games recommender appears to be injected.",
-                    evidence={
-                        "games_recommender_type": str(type(games_rec)),
-                    },
+                    evidence={"games_recommender_type": str(type(games_rec))},
                 )
 
         except Exception as exc:
             failure_type = classify_import_failure(str(exc), self.discovered_packages)
-
             self.add(
                 domain="runtime_import",
                 check="recommend_module_importable",
                 status="fail",
                 summary="Failed to import rhythm_ingestion.api.recommend.",
-                evidence={
-                    "error": str(exc),
-                    "root_cause": failure_type,
-                    "traceback": traceback.format_exc(),
-                },
-                suggested_fix=(
-                    "Verify package layout and PYTHONPATH. Expected importable package path: "
-                    "src/rhythm_ingestion."
-                ),
+                evidence={"error": str(exc), "root_cause": failure_type, "traceback": traceback.format_exc()},
+                suggested_fix="Verify package layout and PYTHONPATH. Expected importable package path: src/rhythm_ingestion.",
             )
 
     def check_runtime_meta_specs(self) -> None:
@@ -920,36 +1003,23 @@ class RuntimeVerifier:
                 domain="runtime_meta",
                 check="artifact_specs",
                 status="pass" if not missing else "fail",
-                summary=(
-                    "Required runtime metadata artifact specs are registered."
-                    if not missing
-                    else "Some runtime metadata artifact specs are missing."
-                ),
+                summary=("Required runtime metadata artifact specs are registered." if not missing else "Some runtime metadata artifact specs are missing."),
                 evidence={
                     "required": required,
                     "missing": missing,
                     "registered": sorted(list(specs.keys())) if isinstance(specs, dict) else [],
                 },
-                suggested_fix=(
-                    None
-                    if not missing
-                    else "Add missing artifact keys to ARTIFACT_SPECS in runtime_meta.py."
-                ),
+                suggested_fix=(None if not missing else "Add missing artifact keys to ARTIFACT_SPECS in runtime_meta.py."),
             )
 
         except Exception as exc:
             failure_type = classify_import_failure(str(exc), self.discovered_packages)
-
             self.add(
                 domain="runtime_meta",
                 check="artifact_specs",
                 status="fail",
                 summary="Could not inspect runtime_meta.ARTIFACT_SPECS.",
-                evidence={
-                    "error": str(exc),
-                    "root_cause": failure_type,
-                    "traceback": traceback.format_exc(),
-                },
+                evidence={"error": str(exc), "root_cause": failure_type, "traceback": traceback.format_exc()},
             )
 
     def check_asset_pipeline(self) -> None:
@@ -979,14 +1049,12 @@ class RuntimeVerifier:
                 check="chart_assets_db_presence",
                 status="warning",
                 summary="No chart_assets.db file was discovered.",
-                evidence={
-                    "searched_root": str(self.repo_root),
-                },
+                evidence={"searched_root": str(self.repo_root)},
                 suggested_fix="Create or provide chart_assets.db after asset pipeline persistence is available.",
             )
             return
 
-        db_evidence = [self.inspect_sqlite_readonly(path) for path in db_candidates]
+        db_evidence = self.get_asset_db_snapshots()
         sqlite_errors = [item for item in db_evidence if item.get("error")]
         nonempty_tables = [
             item
@@ -1003,14 +1071,8 @@ class RuntimeVerifier:
                 if not sqlite_errors
                 else "One or more chart_assets.db candidates could not be inspected in read-only mode."
             ),
-            evidence={
-                "databases": db_evidence,
-            },
-            suggested_fix=(
-                None
-                if not sqlite_errors
-                else "Verify chart_assets.db is a valid SQLite database and is accessible to CI."
-            ),
+            evidence={"databases": db_evidence},
+            suggested_fix=(None if not sqlite_errors else "Verify chart_assets.db is a valid SQLite database and is accessible to CI."),
         )
 
         self.add(
@@ -1022,42 +1084,266 @@ class RuntimeVerifier:
                 if nonempty_tables
                 else "No non-empty chart_assets.db table was confirmed."
             ),
+            evidence={"nonempty_database_count": len(nonempty_tables), "database_count": len(db_evidence)},
+            suggested_fix=(None if nonempty_tables else "Run the asset persistence pipeline and verify its output table names/rows."),
+        )
+
+    def check_asset_coverage(self) -> None:
+        repository_assets = [str(Path(item).resolve()) for item in self.discovered_assets.get("type_A", [])]
+        repository_assets += [str(Path(item).resolve()) for item in self.discovered_assets.get("type_B", [])]
+        repository_assets_set = set(repository_assets)
+
+        records = self.iter_asset_db_records()
+        db_paths = {
+            normalize_path_text(record.get("path"))
+            for record in records
+            if normalize_path_text(record.get("path"))
+        }
+
+        db_path_matches: Set[str] = set()
+        orphan_files: List[str] = []
+
+        for asset in sorted(repository_assets_set):
+            normalized_asset = normalize_path_text(asset)
+            matched = False
+            for db_path in db_paths:
+                if db_path and (db_path == normalized_asset or normalized_asset.endswith(db_path) or db_path.endswith(Path(asset).name)):
+                    matched = True
+                    db_path_matches.add(db_path)
+                    break
+            if not matched:
+                orphan_files.append(asset)
+
+        orphan_db_entries = sorted([path for path in db_paths if path not in db_path_matches])
+        coverage_percentage = 100.0 if not repository_assets_set else round(
+            ((len(repository_assets_set) - len(orphan_files)) / len(repository_assets_set)) * 100,
+            2,
+        )
+
+        pass_condition = bool(repository_assets_set) and coverage_percentage == 100.0 and not orphan_db_entries
+
+        self.add(
+            domain="asset_coverage",
+            check="repository_db_asset_coverage",
+            status="pass" if pass_condition else "fail",
+            summary=(
+                "Repository asset coverage matches chart_assets.db records."
+                if pass_condition
+                else "Repository asset coverage has gaps or unmatched DB entries."
+            ),
             evidence={
-                "nonempty_database_count": len(nonempty_tables),
-                "database_count": len(db_evidence),
+                "repository_asset_count": len(repository_assets_set),
+                "db_asset_path_count": len(db_paths),
+                "coverage_percentage": coverage_percentage,
+                "orphan_files": orphan_files,
+                "orphan_db_entries": orphan_db_entries,
+                "matching_strategy": "path/name suffix heuristic; read-only verification",
             },
             suggested_fix=(
                 None
-                if nonempty_tables
-                else "Run the asset persistence pipeline and verify its output table names/rows."
+                if pass_condition
+                else "Persist all scanned assets to chart_assets.db and remove or resolve orphan DB records before deletion readiness."
+            ),
+        )
+
+    def check_hash_verification(self) -> None:
+        repository_hashes = self.compute_repository_asset_hashes()
+        records = self.iter_asset_db_records()
+
+        db_hashes: Dict[str, List[Dict[str, Any]]] = {}
+        for record in records:
+            hash_value = str(record.get("hash") or "").strip()
+            if not hash_value:
+                continue
+            db_hashes.setdefault(hash_value, []).append(record)
+
+        duplicate_hashes = {hash_value: len(rows) for hash_value, rows in db_hashes.items() if len(rows) > 1}
+        file_hash_set = set(repository_hashes.values())
+        db_hash_set = set(db_hashes.keys())
+
+        missing_hash_files = sorted([path for path, digest in repository_hashes.items() if digest not in db_hash_set])
+        orphan_db_hashes = sorted([digest for digest in db_hash_set if digest not in file_hash_set])
+        matched_hash_count = len(file_hash_set.intersection(db_hash_set))
+
+        pass_condition = bool(repository_hashes) and not missing_hash_files and not orphan_db_hashes and not duplicate_hashes
+
+        self.add(
+            domain="hash_verification",
+            check="repository_db_hash_consistency",
+            status="pass" if pass_condition else "fail",
+            summary=(
+                "Repository asset hashes are consistent with chart_assets.db."
+                if pass_condition
+                else "Hash verification found missing, orphan, or duplicate hashes."
+            ),
+            evidence={
+                "repository_hash_count": len(repository_hashes),
+                "db_hash_count": len(db_hash_set),
+                "matched_hash_count": matched_hash_count,
+                "missing_hash_files": missing_hash_files,
+                "orphan_db_hashes": orphan_db_hashes,
+                "duplicate_hashes": duplicate_hashes,
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else "Store SHA-256 hashes for persisted assets and resolve missing/orphan/duplicate hash records."
+            ),
+        )
+
+    def check_type_A_usability(self) -> None:
+        records = self.iter_asset_db_records()
+        type_a_records: List[Dict[str, Any]] = []
+
+        for record in records:
+            explicit_type = str(record.get("asset_type") or "").lower()
+            path_text = normalize_path_text(record.get("path"))
+            suffix_type = classify_asset_path(Path(path_text)) if path_text else "unknown"
+            if explicit_type in {"type_a", "type-a", "a", "deterministic"} or suffix_type == "type_A":
+                type_a_records.append(record)
+
+        unusable: List[Dict[str, Any]] = []
+        usable_count = 0
+
+        for record in type_a_records:
+            text = record.get("text")
+            text_value = str(text or "")
+            usable = bool(text_value.strip()) and len(text_value.strip()) >= MIN_TYPE_A_TEXT_LENGTH
+            if usable:
+                usable_count += 1
+            else:
+                unusable.append(
+                    {
+                        "db_path": record.get("db_path"),
+                        "table": record.get("table"),
+                        "path": record.get("path"),
+                        "text_length": len(text_value.strip()),
+                    }
+                )
+
+        pass_condition = bool(type_a_records) and not unusable
+
+        self.add(
+            domain="type_A_usability",
+            check="text_representation_usability",
+            status="pass" if pass_condition else "fail",
+            summary=(
+                "Type A assets have usable text representations."
+                if pass_condition
+                else "One or more Type A assets lack usable text representations."
+            ),
+            evidence={
+                "type_A_record_count": len(type_a_records),
+                "usable_count": usable_count,
+                "unusable_count": len(unusable),
+                "minimum_text_length": MIN_TYPE_A_TEXT_LENGTH,
+                "unusable_records": unusable,
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else "Convert Type A assets into non-empty text_representation values before deletion readiness."
+            ),
+        )
+
+    def check_runtime_db_read(self) -> None:
+        db_candidates = self.resolve_asset_db_candidates()
+        snapshots = self.get_asset_db_snapshots()
+        records = self.iter_asset_db_records()
+
+        readable_db_count = len([snapshot for snapshot in snapshots if snapshot.get("exists") and not snapshot.get("error")])
+        path_resolvable_count = len([record for record in records if normalize_path_text(record.get("path"))])
+        text_readable_count = len([record for record in records if str(record.get("text") or "").strip()])
+        reference_readable_count = len([record for record in records if str(record.get("reference_url") or "").strip()])
+
+        runtime_reader_modules = [
+            "rhythm_ingestion.assets.readers",
+            "rhythm_ingestion.asset_pipeline.readers",
+            "rhythm_ingestion.readers.chart_assets",
+            "rhythm_ingestion.chart_assets.reader",
+        ]
+
+        import_results: Dict[str, Dict[str, Any]] = {}
+        any_reader_imported = False
+        self.inject_pythonpath()
+
+        for module_name in runtime_reader_modules:
+            try:
+                module = importlib.import_module(module_name)
+                any_reader_imported = True
+                import_results[module_name] = {
+                    "status": "pass",
+                    "file": getattr(module, "__file__", None),
+                }
+            except Exception as exc:
+                import_results[module_name] = {
+                    "status": "fail",
+                    "error": str(exc),
+                }
+
+        pass_condition = (
+            bool(db_candidates)
+            and readable_db_count > 0
+            and bool(records)
+            and path_resolvable_count > 0
+            and (text_readable_count > 0 or reference_readable_count > 0)
+        )
+
+        self.add(
+            domain="runtime_db_read",
+            check="runtime_db_asset_readiness",
+            status="pass" if pass_condition else "fail",
+            summary=(
+                "Runtime DB asset read readiness evidence is sufficient."
+                if pass_condition
+                else "Runtime DB asset read readiness is incomplete."
+            ),
+            evidence={
+                "db_candidate_count": len(db_candidates),
+                "readable_db_count": readable_db_count,
+                "db_record_count": len(records),
+                "path_resolvable_count": path_resolvable_count,
+                "text_readable_count": text_readable_count,
+                "reference_readable_count": reference_readable_count,
+                "reader_import_results": import_results,
+                "any_reader_imported": any_reader_imported,
+                "note": "Reader module import is evidence only; runtime DB read readiness is based on read-only DB inspection.",
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else "Add or verify DB readers and ensure chart_assets.db contains readable asset rows for runtime use."
             ),
         )
 
     def check_deletion_readiness(self) -> None:
-        type_a_count = len(self.discovered_assets.get("type_A", []))
-        type_b_count = len(self.discovered_assets.get("type_B", []))
-        db_candidates = self.resolve_asset_db_candidates()
+        records = self.iter_asset_db_records()
+        repository_assets = self.discovered_assets.get("type_A", []) + self.discovered_assets.get("type_B", [])
 
-        db_readable = False
-        db_has_rows = False
-        db_evidence: List[Dict[str, Any]] = []
-
-        for path in db_candidates:
-            evidence = self.inspect_sqlite_readonly(path)
-            db_evidence.append(evidence)
-            if path.exists() and not evidence.get("error"):
-                db_readable = True
-            if any((count or 0) > 0 for count in evidence.get("table_row_counts", {}).values() if isinstance(count, int)):
-                db_has_rows = True
+        asset_coverage_result = next(
+            (result for result in self.results if result.domain == "asset_coverage" and result.check == "repository_db_asset_coverage"),
+            None,
+        )
+        hash_result = next(
+            (result for result in self.results if result.domain == "hash_verification" and result.check == "repository_db_hash_consistency"),
+            None,
+        )
+        type_a_result = next(
+            (result for result in self.results if result.domain == "type_A_usability" and result.check == "text_representation_usability"),
+            None,
+        )
+        runtime_db_result = next(
+            (result for result in self.results if result.domain == "runtime_db_read" and result.check == "runtime_db_asset_readiness"),
+            None,
+        )
 
         required = {
-            "chart_assets_db_present": bool(db_candidates),
-            "chart_assets_db_readable": db_readable,
-            "chart_assets_db_has_rows": db_has_rows,
-            "repository_has_assets": type_a_count + type_b_count > 0,
-            "type_A_inventory_available": type_a_count >= 0,
-            "hashes_verified": False,
-            "runtime_can_use_db_assets": False,
+            "chart_assets_db_complete": bool(records),
+            "repository_coverage_complete": bool(repository_assets),
+            "asset_coverage_verified": asset_coverage_result is not None and asset_coverage_result.status == "pass",
+            "hash_consistency_verified": hash_result is not None and hash_result.status == "pass",
+            "type_A_text_usable": type_a_result is not None and type_a_result.status == "pass",
+            "runtime_can_use_db_assets": runtime_db_result is not None and runtime_db_result.status == "pass",
         }
 
         passed = all(required.values())
@@ -1073,18 +1359,14 @@ class RuntimeVerifier:
             ),
             evidence={
                 "required": required,
-                "type_A_count": type_a_count,
-                "type_B_count": type_b_count,
-                "database_evidence": db_evidence,
+                "repository_asset_count": len(repository_assets),
+                "db_record_count": len(records),
                 "failure_action": "block_deletion_recommendation" if not passed else None,
             },
             suggested_fix=(
                 None
                 if passed
-                else (
-                    "Keep source chart files. Complete DB coverage, hash verification, "
-                    "usable Type A text representation, and runtime DB-asset read path first."
-                )
+                else "Keep source chart files until coverage, hashes, Type A usability, and runtime DB reads all pass."
             ),
         )
 
@@ -1105,9 +1387,7 @@ class RuntimeVerifier:
                 check="config_present",
                 status="warning",
                 summary="Provided MCP config path does not exist.",
-                evidence={
-                    "path": str(self.mcp_config),
-                },
+                evidence={"path": str(self.mcp_config)},
             )
             return
 
@@ -1124,9 +1404,7 @@ class RuntimeVerifier:
                 check="rga_server_defined",
                 status="fail",
                 summary="rhythm-game-assistant MCP server is not defined.",
-                evidence={
-                    "path": str(self.mcp_config),
-                },
+                evidence={"path": str(self.mcp_config)},
             )
             return
 
@@ -1150,11 +1428,7 @@ class RuntimeVerifier:
                 "args": args,
                 "env_keys": sorted(list(env.keys())) if isinstance(env, dict) else [],
             },
-            suggested_fix=(
-                None
-                if server_type == "stdio"
-                else "Use mcp_server.py as a local stdio MCP adapter and forward to RGA_REST_URL."
-            ),
+            suggested_fix=(None if server_type == "stdio" else "Use mcp_server.py as a local stdio MCP adapter and forward to RGA_REST_URL."),
         )
 
         tool_like_keys = []
@@ -1181,9 +1455,7 @@ class RuntimeVerifier:
                 check="rest_verification_enabled",
                 status="skipped",
                 summary="REST checks were skipped. Use --rest to enable REST verification.",
-                evidence={
-                    "api_url": self.api_url,
-                },
+                evidence={"api_url": self.api_url},
             )
             return
 
@@ -1220,26 +1492,19 @@ class RuntimeVerifier:
         for check, payload in payloads.items():
             try:
                 result = self.post_json(payload)
-
                 self.add(
                     domain="rest_api",
                     check=check,
                     status="pass",
                     summary=f"{check} completed.",
-                    evidence={
-                        "response_keys": sorted(list(result.keys())) if isinstance(result, dict) else [],
-                    },
+                    evidence={"response_keys": sorted(list(result.keys())) if isinstance(result, dict) else []},
                 )
 
             except urllib.error.HTTPError as exc:
                 body = exc.read().decode("utf-8", errors="replace")
                 summary = f"{check} returned HTTP {exc.code}."
 
-                if (
-                    check == "game_mode_post"
-                    and exc.code == 501
-                    and "Games recommender not configured" in body
-                ):
+                if check == "game_mode_post" and exc.code == 501 and "Games recommender not configured" in body:
                     summary = "Game mode confirms games_recommender is not configured."
 
                 self.add(
@@ -1247,15 +1512,8 @@ class RuntimeVerifier:
                     check=check,
                     status="fail",
                     summary=summary,
-                    evidence={
-                        "status": exc.code,
-                        "body": body,
-                    },
-                    suggested_fix=(
-                        "Inject a Phase 7 games_recommender into create_app(...)."
-                        if exc.code == 501
-                        else None
-                    ),
+                    evidence={"status": exc.code, "body": body},
+                    suggested_fix=("Inject a Phase 7 games_recommender into create_app(...)." if exc.code == 501 else None),
                 )
 
             except Exception as exc:
@@ -1264,9 +1522,7 @@ class RuntimeVerifier:
                     check=check,
                     status="fail",
                     summary=f"{check} failed.",
-                    evidence={
-                        "error": str(exc),
-                    },
+                    evidence={"error": str(exc)},
                 )
 
     def run_all(self) -> Dict[str, Any]:
@@ -1279,6 +1535,10 @@ class RuntimeVerifier:
         self.check_python_imports()
         self.check_runtime_meta_specs()
         self.check_asset_pipeline()
+        self.check_asset_coverage()
+        self.check_hash_verification()
+        self.check_type_A_usability()
+        self.check_runtime_db_read()
         self.check_deletion_readiness()
         self.check_mcp_config()
         self.check_rest_contract()
@@ -1291,7 +1551,7 @@ class RuntimeVerifier:
             severities[result.severity] = severities.get(result.severity, 0) + 1
 
         return {
-            "schema": "rga.runtime_verifier.report.v5",
+            "schema": "rga.runtime_verifier.report.v6",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "repo_root": str(self.repo_root),
             "backend_root": str(self.backend_root),
@@ -1391,72 +1651,17 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser("RGA Runtime Verifier Bot")
 
-    parser.add_argument(
-        "--repo-root",
-        default=".",
-        help="Repository root or backend root.",
-    )
-
-    parser.add_argument(
-        "--backend-root",
-        default=None,
-        help="Explicit backend root. Overrides auto-discovery.",
-    )
-
-    parser.add_argument(
-        "--api-url",
-        default="http://127.0.0.1:8000/api/v1/recommend",
-        help="RGA REST recommend endpoint.",
-    )
-
-    parser.add_argument(
-        "--token",
-        default=None,
-        help="Bearer token. Defaults to SOFTR_API_TOKEN environment variable.",
-    )
-
-    parser.add_argument(
-        "--mcp-config",
-        default=None,
-        help="Optional path to VS Code mcp.json.",
-    )
-
-    parser.add_argument(
-        "--asset-db",
-        default=None,
-        help="Optional explicit path to chart_assets.db. Otherwise discovered repository-wide.",
-    )
-
-    parser.add_argument(
-        "--rest",
-        action="store_true",
-        help="Run REST endpoint checks. Requires backend to be running.",
-    )
-
-    parser.add_argument(
-        "--json-out",
-        default=None,
-        help="Optional JSON report output path.",
-    )
-
-    parser.add_argument(
-        "--md-out",
-        default=None,
-        help="Optional Markdown report output path.",
-    )
-
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Exit non-zero if any fail severity results are found.",
-    )
-
-    parser.add_argument(
-        "--strict-severity",
-        choices=["fail", "critical"],
-        default="fail",
-        help="Severity threshold used by --strict.",
-    )
+    parser.add_argument("--repo-root", default=".", help="Repository root or backend root.")
+    parser.add_argument("--backend-root", default=None, help="Explicit backend root. Overrides auto-discovery.")
+    parser.add_argument("--api-url", default="http://127.0.0.1:8000/api/v1/recommend", help="RGA REST recommend endpoint.")
+    parser.add_argument("--token", default=None, help="Bearer token. Defaults to SOFTR_API_TOKEN environment variable.")
+    parser.add_argument("--mcp-config", default=None, help="Optional path to VS Code mcp.json.")
+    parser.add_argument("--asset-db", default=None, help="Optional explicit path to chart_assets.db. Otherwise discovered repository-wide.")
+    parser.add_argument("--rest", action="store_true", help="Run REST endpoint checks. Requires backend to be running.")
+    parser.add_argument("--json-out", default=None, help="Optional JSON report output path.")
+    parser.add_argument("--md-out", default=None, help="Optional Markdown report output path.")
+    parser.add_argument("--strict", action="store_true", help="Exit non-zero if any fail severity results are found.")
+    parser.add_argument("--strict-severity", choices=["fail", "critical"], default="fail", help="Severity threshold used by --strict.")
 
     args = parser.parse_args()
 
