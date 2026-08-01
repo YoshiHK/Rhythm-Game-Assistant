@@ -521,15 +521,13 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
 
     return discovered
 
-def discover_runtime_candidates(
-    search_root: Path,
-) -> Listroots: Dict[str, Path] = {}
+
+def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
+    roots: Dict[str, Path] = {}
 
     try:
         for main_py in search_root.rglob("main.py"):
-            roots[str(main_py.parent.resolve())] = (
-                main_py.parent.resolve()
-            )
+            roots[str(main_py.parent.resolve())] = main_py.parent.resolve()
 
         for rec_py in search_root.rglob("recommend.py"):
             parts = list(rec_py.parts)
@@ -539,25 +537,17 @@ def discover_runtime_candidates(
 
                 if idx > 0:
                     candidate = Path(*parts[:idx])
-
-                    roots[str(candidate.resolve())] = (
-                        candidate.resolve()
-                    )
+                    roots[str(candidate.resolve())] = candidate.resolve()
 
     except Exception:
         pass
 
-    candidates = [
-        score_candidate(root)
-        for root in roots.values()
-    ]
+    candidates = [score_candidate(root) for root in roots.values()]
 
-    candidates.sort(
-        key=lambda candidate: candidate.score,
-        reverse=True,
-    )
+    candidates.sort(key=lambda candidate: candidate.score, reverse=True)
 
     return candidates
+
 
 def choose_backend_root(
     repo_root: Path,
@@ -740,7 +730,8 @@ def table_quote(name: str) -> str:
 def first_existing(
     columns: Iterable[str],
     candidates: List[str],
-) -> Optionalcolumn_set = set(columns)
+) -> Optional[str]:
+    column_set = set(columns)
 
     for candidate in candidates:
         if candidate in column_set:
@@ -964,7 +955,8 @@ class RuntimeVerifier:
     def read_json_file(
         self,
         path: Path,
-    ) -> Optionaltry:
+    ) -> Optional[Dict[str, Any]]:
+        try:
             return json.loads(
                 path.read_text(
                     encoding="utf-8",
@@ -1020,7 +1012,8 @@ class RuntimeVerifier:
     def resolve_artifact_db_candidates(
         self,
         db_name: str,
-    ) -> Listcandidates: List[Path] = []
+    ) -> List[Path]:
+        candidates: List[Path] = []
 
         explicit_map: Dict[str, Optional[Path]] = {
             FILE_SCAN_INVENTORY_DB_NAME: self.file_scan_inventory_db,
@@ -1383,8 +1376,6 @@ class RuntimeVerifier:
                     count += 1
 
         return count
-
-   -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------
     # Checks
@@ -2181,8 +2172,6 @@ class RuntimeVerifier:
             ),
         )
 
-   -----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
     def check_asset_pipeline(self) -> None:
         type_a = self.discovered_assets.get("type_A", [])
         type_b = self.discovered_assets.get("type_B", [])
@@ -2848,9 +2837,7 @@ class RuntimeVerifier:
             ),
         )
 
- -----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-      def check_flow_verification(self) -> None:
+    def check_flow_verification(self) -> None:
         dependency_result = next(
             (
                 result
@@ -3037,8 +3024,6 @@ class RuntimeVerifier:
                 else "Move mixed responsibilities into the correct layer. Converters/validators/readers/models should not perform persistence or orchestration side effects."
             ),
         )
-
- -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     def check_mcp_config(self) -> None:
         if not self.mcp_config:
