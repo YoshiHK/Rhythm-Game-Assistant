@@ -15,7 +15,7 @@ identity:
     - "Discovery precedes diagnosis."
     - "Repository reality must be distinguished from import reality."
     - "Import reality must be distinguished from runtime reality."
-    - "Repository reality outranks assumptions."
+    - "Repository reality outranks inferred reality."
     - "Coverage must be verified before deletion readiness."
 
 mission:
@@ -241,7 +241,6 @@ verification_domains:
       - orphan_scans
       - orphan_assets
       - orphan_patterns
-      - chain_completeness
  
   dependency_reality:
     enabled: true
@@ -256,12 +255,22 @@ verification_domains:
     enabled: true
 
     objectives:
-      - chart_first_flow
-      - player_first_flow
-      - progression_flow
+      - chart_first_flow_presence
+      - player_first_flow_presence
+      - progression_flow_presence
       - flow_entrypoint_presence
       - flow_stopping_point_presence
       - flow_wiring_consistency
+
+  flow_contracts:
+    enabled: true
+
+    objectives:
+      - chart_first_contract
+      - player_first_contract
+      - progression_contract
+      - flow_boundary_integrity
+      - contract_compliance
 
   layer_separation:
     enabled: true
@@ -299,6 +308,7 @@ verification_domains:
       - governance_verdict_generation
 
 artifact_backbone_contract:
+
   required_databases:
     - file_scan_inventory.db
     - chart_assets.db
@@ -311,6 +321,7 @@ artifact_backbone_contract:
   required_capabilities:
     - runtime_asset_resolution
     - runtime_pattern_resolution
+    - runtime_recommendation_support
 
   modification:
     prohibited
@@ -349,24 +360,58 @@ flow_contracts:
 
 layer_boundary_policy:
 
+  models:
+    prohibit:
+      - persistence
+      - orchestration
+      - runtime_mutation
+
+  normalizers:
+    prohibit:
+      - persistence
+      - orchestration
+      - recommendations
+
+  classifiers:
+    prohibit:
+      - persistence
+      - runtime_mutation
+      - orchestration
+
   converters:
     prohibit:
       - persistence
       - orchestrator_side_effects
+      - recommendations
 
   validators:
     prohibit:
       - persistence
       - runtime_mutation
+      - orchestration
+
+  persistence:
+    prohibit:
+      - recommendation_logic
+      - tip_generation
+      - orchestration
 
   readers:
     prohibit:
       - writes
+      - schema_ownership
+
+  bridges:
+    prohibit:
+      - business_logic
+      - persistence_ownership
+      - recommendation_logic
 
   orchestrators:
     prohibit:
       - schema_ownership
       - persistence_ownership
+      - domain_logic_ownership
 
 mcp_contract:
 
@@ -477,6 +522,7 @@ verification_gates:
       - artifact_backbone_verified
       - layer_boundaries_verified
       - mcp_contract_verified
+      - architecture_contracts_verified
 
 discovery_engine:
   enabled: true
@@ -517,6 +563,7 @@ discovery_engine:
 
 severity_policy:
   levels:
+    - pass
     - info
     - warning
     - fail
@@ -706,13 +753,22 @@ github_integration:
 role_separation:
 
   github_advanced_security:
-    responsibility: "security_validation"
+    responsibility: security_validation
+    owns:
+      - secrets
+      - dependencies
+      - vulnerabilities
 
   deployment_gate:
     responsibility: "build_verification"
 
   rga_verifier_bot:
-    responsibility: "architecture_runtime_governance"
+    responsibility: architecture_runtime_governance
+    owns:
+      - runtime_reality
+      - artifact_backbone
+      - flow_contracts
+      - layer_boundaries
 
 
 charter:
