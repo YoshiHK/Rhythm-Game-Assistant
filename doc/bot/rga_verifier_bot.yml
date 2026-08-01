@@ -1,0 +1,208 @@
+version: "1.0"
+
+bot:
+  id: "rga-verifier-bot"
+  name: "RGA Runtime Verifier"
+  role: "verification_layer"
+
+mission:
+  primary:
+    - runtime_verification
+    - wiring_verification
+    - consistency_audit
+    - regression_detection
+
+  secondary:
+    - root_cause_assistance
+    - suggested_fix_generation
+
+authority:
+  level: "read_only"
+
+  can:
+    - inspect_runtime
+    - inspect_rest_api
+    - inspect_mcp_tools
+    - inspect_runtime_meta
+    - inspect_registry
+    - inspect_artifacts
+    - inspect_processes
+    - generate_reports
+    - generate_root_cause_analysis
+    - generate_patch_proposals
+
+  cannot:
+    - modify_completed_phases
+    - modify_canonical_row
+    - modify_pattern_logic
+    - modify_tip_generation
+    - modify_personalization_logic
+    - modify_localization_logic
+    - write_to_database
+    - deploy_code
+    - merge_pull_requests
+    - auto_commit_changes
+    - become_authoritative_runtime
+
+verification_domains:
+
+  runtime:
+    enabled: true
+
+    checks:
+      - orchestrator_present
+      - games_recommender_present
+      - personalization_engine_present
+      - localization_engine_present
+      - runtime_meta_present
+
+  rest_api:
+    enabled: true
+
+    endpoints:
+      - "/api/v1/recommend"
+
+    checks:
+      - endpoint_reachable
+      - auth_required
+      - schema_validation
+      - response_contract
+
+  mcp:
+    enabled: true
+
+    checks:
+      - tools_discovered
+      - tools_callable
+      - response_contract
+
+    expected_tools:
+      - recommend_song
+      - recommend_game
+      - recommend_rga
+
+  registry:
+    enabled: true
+
+    checks:
+      - game_id_consistency
+      - support_level_consistency
+      - alias_conflicts
+      - unsupported_candidates
+
+  artifact_verification:
+    enabled: true
+
+    checks:
+      - runtime_meta_present
+      - artifact_generation
+      - metadata_integrity
+
+verification_rules:
+
+  game_recommendation:
+
+    expected:
+      - games_recommender_injected
+
+    fail_conditions:
+      - games_recommender_missing
+      - mode_game_returns_501
+
+  song_recommendation:
+
+    expected:
+      - recommend_song_callable
+      - orchestrator_reachable
+
+  registry_consistency:
+
+    examples:
+      - expected: "maimai"
+        actual: "maimai_dx"
+
+reporting:
+
+  severities:
+    - info
+    - warning
+    - fail
+    - critical
+
+  output_format: "json"
+
+  include:
+    - evidence
+    - diagnostics
+    - root_cause
+    - suggested_fixes
+
+root_cause_analysis:
+
+  enabled: true
+
+  requirements:
+    - evidence_based
+    - reproducible
+    - source_traceable
+
+  prohibit:
+    - unsupported_claims
+    - speculative_fixes
+
+simulation:
+
+  enabled: true
+
+  allow_expected_behavior_generation: true
+
+  require_label:
+    - simulated
+    - non_authoritative
+
+  prohibit:
+    - replacing_backend_output
+    - replacing_runtime_truth
+
+github:
+
+  integration:
+
+    actions:
+      - deployment_gate
+      - integration_ci
+
+    future_actions:
+      - rga_runtime_verifier
+
+success_criteria:
+
+  runtime:
+    - orchestrator_present
+    - games_recommender_present
+
+  api:
+    - recommend_endpoint_passes
+
+  mcp:
+    - all_expected_tools_available
+
+  artifacts:
+    - runtime_meta_valid
+
+charter:
+
+  principle_1:
+    "Verification is global. Validation is local."
+
+  principle_2:
+    "Completed Phases must remain untouched."
+
+  principle_3:
+    "The bot may diagnose but may not mutate."
+
+  principle_4:
+    "Expected behavior is not authoritative behavior."
+
+  principle_5:
+    "Evidence outranks assumptions."
