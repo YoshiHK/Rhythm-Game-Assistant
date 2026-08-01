@@ -1,0 +1,134 @@
+{
+  "schema_id": "runtime_verification.canonical_error_breakdown.v1",
+  "kind": "verification_artifact_schema",
+  "scope": "Runtime DB build diagnostics for canonical conversion failures",
+  "description": "Structured breakdown of canonical conversion failures observed during Update_Runtime_Dbs.py execution.",
+  "root_type": "object",
+  "required_fields": [
+    "build_id",
+    "generated_at",
+    "source_dir",
+    "runtime_root",
+    "summary",
+    "by_bucket",
+    "by_game",
+    "rows"
+  ],
+  "fields": {
+    "build_id": {
+      "type": "string",
+      "description": "Unique identifier for the DB rebuild run, typically timestamp-based."
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "Timestamp when the artifact was emitted."
+    },
+    "source_dir": {
+      "type": "string",
+      "description": "Source chart directory used for the rebuild."
+    },
+    "runtime_root": {
+      "type": "string",
+      "description": "Runtime root used for the rebuild."
+    },
+    "summary": {
+      "type": "object",
+      "required_fields": [
+        "inventory_count",
+        "rows_built",
+        "route_miss",
+        "canonical_errors"
+      ],
+      "fields": {
+        "inventory_count": { "type": "integer" },
+        "rows_built": { "type": "integer" },
+        "route_miss": { "type": "integer" },
+        "canonical_errors": { "type": "integer" }
+      }
+    },
+    "by_bucket": {
+      "type": "array",
+      "item_type": "object",
+      "required_fields": ["bucket", "count"],
+      "fields": {
+        "bucket": {
+          "type": "string",
+          "allowed_values": [
+            "ROUTE_MISS",
+            "NO_ADAPTER",
+            "NO_VALIDATOR",
+            "CONVERTER_FAIL",
+            "VALIDATION_FAIL",
+            "CANONICAL_PAYLOAD_FAIL",
+            "CANONICAL_ROW_FAIL",
+            "SCHEMA_PARITY_FAIL",
+            "UNKNOWN"
+          ]
+        },
+        "count": { "type": "integer" }
+      }
+    },
+    "by_game": {
+      "type": "array",
+      "item_type": "object",
+      "required_fields": ["game_id", "count"],
+      "fields": {
+        "game_id": { "type": "string" },
+        "count": { "type": "integer" },
+        "buckets": {
+          "type": "array",
+          "item_type": "object",
+          "required_fields": ["bucket", "count"],
+          "fields": {
+            "bucket": { "type": "string" },
+            "count": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "description": "Per-row failure breakdown for triage and debugging.",
+      "item_type": "object",
+      "required_fields": [
+        "source_path",
+        "normalized_game_id",
+        "asset_type",
+        "bucket",
+        "reason_code"
+      ],
+      "fields": {
+        "source_path": { "type": "string" },
+        "normalized_game_id": { "type": ["string", "null"] },
+        "asset_type": {
+          "type": ["string", "null"],
+          "allowed_values": ["type_A", "type_B", null]
+        },
+        "classifier_result": { "type": ["string", "null"] },
+        "adapter_id": { "type": ["string", "null"] },
+        "validator_id": { "type": ["string", "null"] },
+        "bucket": {
+          "type": "string",
+          "allowed_values": [
+            "ROUTE_MISS",
+            "NO_ADAPTER",
+            "NO_VALIDATOR",
+            "CONVERTER_FAIL",
+            "VALIDATION_FAIL",
+            "CANONICAL_PAYLOAD_FAIL",
+            "CANONICAL_ROW_FAIL",
+            "SCHEMA_PARITY_FAIL",
+            "UNKNOWN"
+          ]
+        },
+        "reason_code": { "type": "string" },
+        "reason_message": { "type": ["string", "null"] },
+        "exception_type": { "type": ["string", "null"] },
+        "exception_message": { "type": ["string", "null"] },
+        "validation_ok": { "type": ["boolean", "null"] },
+        "canonical_payload_ok": { "type": ["boolean", "null"] },
+        "canonical_row_ok": { "type": ["boolean", "null"] }
+      }
+    }
+  }
+}
