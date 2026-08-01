@@ -2,12 +2,13 @@
 """
 runtime_verifier.py
 
-RGA Runtime Verifier Bot — v0.2
+RGA Runtime Verifier Bot — v0.3
 
-New in v0.2:
-- Repository Discovery
-- Runtime Root Discovery
-- Severity Classification
+New in v0.3:
+- Discovery Confidence Engine
+- Partial Runtime Candidate reporting
+- Repository evidence inventory
+- Better CI behavior when backend files are partially present
 
 Purpose:
 - Read-only runtime / wiring verification for Rhythm Game Assistant (RGA).
@@ -24,25 +25,16 @@ Boundary:
 Recommended placement:
 - tools/runtime_verifier.py
 
-Typical usage from repo root:
+Typical CI usage from repository root:
 
-  python tools/runtime_verifier.py --json-out artifacts/runtime_verifier_report.json
+  python tools/runtime_verifier.py \
+    --repo-root . \
+    --json-out artifacts/runtime_verifier_report.json \
+    --md-out artifacts/runtime_verifier_report.md
 
-Typical usage from backend root:
+Strict mode:
 
-  python tools/runtime_verifier.py --repo-root . --json-out artifacts/runtime_verifier_report.json
-
-REST verification, if backend is running:
-
-  python tools/runtime_verifier.py --rest --api-url http://127.0.0.1:8000/api/v1/recommend
-
-Strict mode for CI:
-
-  python tools/runtime_verifier.py --strict
-
-Notes:
-- If --repo-root is not the backend root, v0.2 attempts to auto-discover the backend root.
-- In CI without --rest, missing SOFTR_API_TOKEN is classified as warning, not fail.
+  python tools/runtime_verifier.py --repo-root . --strict
 """
 
 from __future__ import annotations
@@ -62,10 +54,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-# -----------------------------------------------------------------------------
-# Result model
-# -----------------------------------------------------------------------------
-
 @dataclass
 class CheckResult:
     domain: str
@@ -77,65 +65,120 @@ class CheckResult:
     suggested_fix: Optional[str] = None
 
 
-# -----------------------------------------------------------------------------
-# Discovery helpers
-# -----------------------------------------------------------------------------
+@dataclass
+class RuntimeCandidate:
+    root: str
+    score: int
+    confidence: str
+    matched: List[str]
+    missing: List[str]
 
-def _is_backend_root(path: Path) -> bool:
-    """Return True if path looks like the RGA FastAPI backend root."""
-    return (
-        (path / "main.py").exists()
-        and (path / "src" / "rhythm_ingestion" / "api" / "recommend.py").exists()
-        and (path / "src" / "rhythm_ingestion" / "api" / "app.py").exists()
-        and (path / "src" / "rhythm_ingestion" / "runtime_meta.py").exists()
+
+ARTIFACT_WEIGHTS: Dict[str, int] = {
+    "main.py": 40,
+    "src/rhythm_ingestion/api/recommend.py": 25,
+    "src/rhythm_ingestion/api/app.py": 15,
+    "src/rhythm_ingestion/runtime_meta.py": 10,
+    "mcp_server.py": 10,
+}
+
+
+def _artifact_path(root: Path, artifact: str) -> Path:
+    return root.joinpath(*artifact.split("/"))
+
+
+def score_candidate(root: Path) -> RuntimeCandidate:
+    matched: List[str] = []
+    missing: List[str] = []
+    score = 0
+    for artifact, weight in ARTIFACT_WEIGHTS.items():
+        if _artifact_path(root, artifact).exists():
+            matched.append(artifact)
+            score += weight
+        else:
+            missing.append(artifact)
+
+    if score >= 90:
+        confidence = "high"
+    elif score >= 60:
+        confidence = "medium"
+    elif score >= 40:
+        confidence = "partial"
+    else:
+        confidence = "low"
+
+    return RuntimeCandidate(
+        root=str(root.resolve()),
+        score=score,
+        confidence=confidence,
+        matched=matched,
+        missing=missing,
     )
 
 
-def discover_backend_roots(search_root: Path) -> List[Path]:
-    """Find candidate backend roots under search_root."""
+def discover_files(search_root: Path) -> Dict[str, List[str]]:
+    patterns = {
+        "main.py": "main.py",
+        "recommend.py": "recommend.py",
+        "app.py": "app.py",
+        "runtime_meta.py": "runtime_meta.py",
+        "mcp_server.py": "mcp_server.py",
+    }
+    out: Dict[str, List[str]] = {k: [] for k in patterns}
+    try:
+        for path in search_root.rglob("*"):
+            if path.is_file():
+                name = path.name
+                for label, expected_name in patterns.items():
+                    if name == expected_name:
+                        out[label].append(str(path.resolve()))
+    except Exception:
+        pass
+    for k in out:
+        out[k] = sorted(out[k])
+    return out
+
+
+def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
     search_root = search_root.resolve()
-    candidates: List[Path] = []
+    roots: Dict[str, Path] = {}
 
-    # Fast path: given root is already backend root.
-    if _is_backend_root(search_root):
-        return [search_root]
-
-    # Find main.py candidates, then verify nearby src layout.
+    # Candidate roots are directories containing main.py or ancestors of key files.
     try:
         for main_py in search_root.rglob("main.py"):
-            candidate = main_py.parent
-            if _is_backend_root(candidate):
-                candidates.append(candidate.resolve())
+            roots[str(main_py.parent.resolve())] = main_py.parent.resolve()
+        for rec_py in search_root.rglob("recommend.py"):
+            # Try walking upward until a src/rhythm_ingestion layout is found.
+            for parent in [rec_py.parent, *rec_py.parents]:
+                if (parent / "src" / "rhythm_ingestion").exists() or parent.name == "src":
+                    if parent.name == "src":
+                        candidate = parent.parent
+                    else:
+                        candidate = parent
+                    roots[str(candidate.resolve())] = candidate.resolve()
+                    break
     except Exception:
-        # Some CI paths may be inaccessible; keep verifier non-crashing.
         pass
 
-    # Deduplicate while preserving order.
-    seen = set()
-    unique: List[Path] = []
-    for c in candidates:
-        key = str(c).casefold()
-        if key not in seen:
-            seen.add(key)
-            unique.append(c)
-    return unique
+    candidates = [score_candidate(p) for p in roots.values()]
+    candidates.sort(key=lambda c: c.score, reverse=True)
+    return candidates
 
 
-def choose_backend_root(repo_root: Path, explicit_backend_root: Optional[Path]) -> Tuple[Path, List[Path], str]:
-    """Choose runtime backend root and return (root, candidates, mode)."""
+def choose_backend_root(repo_root: Path, explicit_backend_root: Optional[Path]) -> Tuple[Path, List[RuntimeCandidate], str]:
     if explicit_backend_root:
-        return explicit_backend_root.resolve(), [explicit_backend_root.resolve()], "explicit"
+        candidate = score_candidate(explicit_backend_root.resolve())
+        return explicit_backend_root.resolve(), [candidate], "explicit"
 
-    candidates = discover_backend_roots(repo_root)
+    candidates = discover_runtime_candidates(repo_root)
     if candidates:
-        return candidates[0], candidates, "auto_discovered"
+        best = candidates[0]
+        if best.score >= 60:
+            return Path(best.root), candidates, "auto_discovered"
+        return Path(best.root), candidates, "partial_discovery"
 
     return repo_root.resolve(), [], "fallback_to_repo_root"
 
-
-# -----------------------------------------------------------------------------
-# Verifier
-# -----------------------------------------------------------------------------
 
 class RuntimeVerifier:
     def __init__(
@@ -158,19 +201,9 @@ class RuntimeVerifier:
         self.mcp_config = mcp_config
         self.run_rest = run_rest
         self.results: List[CheckResult] = []
+        self.discovered_files = discover_files(self.repo_root)
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-    def classify(
-        self,
-        *,
-        domain: str,
-        check: str,
-        base_status: str,
-    ) -> Tuple[str, str]:
-        """Return (status, severity) after context-aware severity classification."""
-        # Missing token only blocks REST verification. If --rest is off, warning is enough.
+    def classify(self, *, domain: str, check: str, base_status: str) -> Tuple[str, str]:
         if domain == "environment" and check == "softr_api_token_present":
             if self.token:
                 return "pass", "info"
@@ -178,15 +211,20 @@ class RuntimeVerifier:
                 return "fail", "fail"
             return "warning", "warning"
 
-        # Missing MCP config is informational unless explicitly provided and invalid.
         if domain == "mcp" and check == "config_present" and base_status == "skipped":
             return "skipped", "info"
 
-        # Repo shape warnings are fail only if no backend root could be found.
         if domain == "repo" and base_status == "warning":
-            if self.backend_root_mode == "fallback_to_repo_root":
-                return "fail", "fail"
-            return "pass", "info"
+            if self.backend_root_mode in {"auto_discovered", "explicit"}:
+                return "warning", "warning"
+            if self.backend_root_mode == "partial_discovery":
+                return "warning", "warning"
+            return "fail", "fail"
+
+        if domain == "repository_discovery" and check == "runtime_candidate_confidence":
+            # Partial discovery is a warning, not fail. It means the repo has some backend evidence.
+            if base_status == "warning":
+                return "warning", "warning"
 
         mapping = {
             "pass": "info",
@@ -221,6 +259,13 @@ class RuntimeVerifier:
             )
         )
 
+    def _inject_pythonpath(self) -> None:
+        src = self.backend_root / "src"
+        src_pkg = src / "rhythm_ingestion"
+        for p in [str(src), str(src_pkg), str(self.backend_root)]:
+            if p not in sys.path:
+                sys.path.insert(0, p)
+
     def _read_json_file(self, path: Path) -> Optional[Any]:
         try:
             return json.loads(path.read_text(encoding="utf-8"))
@@ -234,16 +279,6 @@ class RuntimeVerifier:
             )
             return None
 
-    def _inject_pythonpath(self) -> None:
-        src = self.backend_root / "src"
-        src_pkg = src / "rhythm_ingestion"
-        for p in [str(src), str(src_pkg), str(self.backend_root)]:
-            if p not in sys.path:
-                sys.path.insert(0, p)
-
-    # ------------------------------------------------------------------
-    # Checks
-    # ------------------------------------------------------------------
     def check_environment(self) -> None:
         self.add(
             domain="environment",
@@ -256,7 +291,6 @@ class RuntimeVerifier:
                 "platform": platform.platform(),
             },
         )
-
         token_present = bool(self.token)
         self.add(
             domain="environment",
@@ -265,44 +299,45 @@ class RuntimeVerifier:
             summary=(
                 "SOFTR_API_TOKEN is available to the verifier process."
                 if token_present
-                else (
-                    "SOFTR_API_TOKEN is missing from the verifier process. "
-                    "This is only a blocking issue when REST checks are enabled."
-                )
+                else "SOFTR_API_TOKEN is missing. This blocks REST checks only when --rest is enabled."
             ),
             evidence={"token_present": token_present, "rest_checks_enabled": self.run_rest},
-            suggested_fix=(
-                None
-                if token_present
-                else "Set SOFTR_API_TOKEN or pass --token when running REST verification."
-            ),
+            suggested_fix=None if token_present else "Set SOFTR_API_TOKEN or pass --token when running REST verification.",
         )
 
     def check_repository_discovery(self) -> None:
-        found = bool(self.backend_candidates)
+        candidates = [asdict(c) for c in self.backend_candidates]
+        best = candidates[0] if candidates else None
+        if self.backend_root_mode == "auto_discovered":
+            status = "pass"
+            summary = "Backend root was discovered with sufficient confidence."
+        elif self.backend_root_mode == "partial_discovery":
+            status = "warning"
+            summary = "Partial runtime candidate was discovered, but required backend artifacts are missing."
+        elif self.backend_root_mode == "explicit":
+            status = "pass"
+            summary = "Backend root was provided explicitly."
+        else:
+            status = "fail"
+            summary = "No runtime candidate was discovered; verifier is falling back to repo root."
+
         self.add(
             domain="repository_discovery",
-            check="backend_root_discovery",
-            status="pass" if found else "warning",
-            summary=(
-                "Backend root was discovered automatically."
-                if self.backend_root_mode == "auto_discovered"
-                else (
-                    "Backend root was provided explicitly."
-                    if self.backend_root_mode == "explicit"
-                    else "No backend root was discovered; verifier is falling back to repo root."
-                )
-            ),
+            check="runtime_candidate_confidence",
+            status=status,
+            summary=summary,
             evidence={
                 "repo_root": str(self.repo_root),
-                "backend_root": str(self.backend_root),
+                "selected_backend_root": str(self.backend_root),
                 "mode": self.backend_root_mode,
-                "candidates": [str(c) for c in self.backend_candidates],
+                "best_candidate": best,
+                "all_candidates": candidates,
+                "discovered_files": self.discovered_files,
             },
             suggested_fix=(
                 None
-                if found or self.backend_root_mode == "explicit"
-                else "Pass --backend-root or ensure backend root contains main.py and src/rhythm_ingestion/api/recommend.py."
+                if status == "pass"
+                else "Ensure the backend root contains main.py plus src/rhythm_ingestion/api/recommend.py, app.py, runtime_meta.py, and mcp_server.py; or pass --backend-root explicitly."
             ),
         )
 
@@ -315,28 +350,23 @@ class RuntimeVerifier:
             "runtime_meta.py": self.backend_root / "src" / "rhythm_ingestion" / "runtime_meta.py",
             "mcp_server.py": self.backend_root / "mcp_server.py",
         }
-
         for name, path in expected.items():
             exists = path.exists()
             self.add(
                 domain="repo",
                 check=f"exists_{name}",
                 status="pass" if exists else "warning",
-                summary=f"{name} {'exists' if exists else 'was not found'} at backend root.",
+                summary=f"{name} {'exists' if exists else 'was not found'} at selected backend root.",
                 evidence={"path": str(path), "exists": exists, "backend_root": str(self.backend_root)},
             )
 
     def check_python_imports(self) -> None:
         self._inject_pythonpath()
-
         try:
-            # Clear previously imported module to avoid stale path confusion during local development.
-            # This is inspection-only; it does not mutate project files.
             recommend = importlib.import_module("rhythm_ingestion.api.recommend")
             router = getattr(recommend, "router", None)
             games_rec = getattr(recommend, "_GAMES_RECOMMENDER", None)
             orchestrator = getattr(recommend, "_ORCHESTRATOR", None)
-
             self.add(
                 domain="runtime_import",
                 check="recommend_module_importable",
@@ -353,7 +383,6 @@ class RuntimeVerifier:
                     "backend_root": str(self.backend_root),
                 },
             )
-
             if games_rec is None:
                 self.add(
                     domain="runtime_wiring",
@@ -371,7 +400,6 @@ class RuntimeVerifier:
                     summary="Games recommender appears to be injected.",
                     evidence={"games_recommender_type": str(type(games_rec))},
                 )
-
         except Exception as exc:
             self.add(
                 domain="runtime_import",
@@ -379,12 +407,11 @@ class RuntimeVerifier:
                 status="fail",
                 summary="Failed to import rhythm_ingestion.api.recommend.",
                 evidence={"error": str(exc), "traceback": traceback.format_exc()},
-                suggested_fix="Verify backend root discovery and PYTHONPATH include backend_root/src and backend_root/src/rhythm_ingestion.",
+                suggested_fix="Verify backend root discovery and PYTHONPATH include selected_backend_root/src and selected_backend_root/src/rhythm_ingestion.",
             )
 
     def check_runtime_meta_specs(self) -> None:
         self._inject_pythonpath()
-
         try:
             runtime_meta = importlib.import_module("rhythm_ingestion.runtime_meta")
             specs = getattr(runtime_meta, "ARTIFACT_SPECS", {})
@@ -400,13 +427,9 @@ class RuntimeVerifier:
                 domain="runtime_meta",
                 check="artifact_specs",
                 status="pass" if not missing else "fail",
-                summary=(
-                    "Required runtime metadata artifact specs are registered."
-                    if not missing
-                    else "Some runtime metadata artifact specs are missing."
-                ),
+                summary="Required runtime metadata artifact specs are registered." if not missing else "Some runtime metadata artifact specs are missing.",
                 evidence={"required": required, "missing": missing, "registered": sorted(list(specs.keys()))},
-                suggested_fix=(None if not missing else "Add missing artifact keys to ARTIFACT_SPECS in runtime_meta.py."),
+                suggested_fix=None if not missing else "Add missing artifact keys to ARTIFACT_SPECS in runtime_meta.py.",
             )
         except Exception as exc:
             self.add(
@@ -419,67 +442,27 @@ class RuntimeVerifier:
 
     def check_mcp_config(self) -> None:
         if not self.mcp_config:
-            self.add(
-                domain="mcp",
-                check="config_present",
-                status="skipped",
-                summary="No MCP config path was provided.",
-                evidence={},
-            )
+            self.add(domain="mcp", check="config_present", status="skipped", summary="No MCP config path was provided.", evidence={})
             return
-
         if not self.mcp_config.exists():
-            self.add(
-                domain="mcp",
-                check="config_present",
-                status="warning",
-                summary="Provided MCP config path does not exist.",
-                evidence={"path": str(self.mcp_config)},
-            )
+            self.add(domain="mcp", check="config_present", status="warning", summary="Provided MCP config path does not exist.", evidence={"path": str(self.mcp_config)})
             return
-
         data = self._read_json_file(self.mcp_config)
         if data is None:
             return
-
         servers = data.get("servers", {}) if isinstance(data, dict) else {}
         server = servers.get("rhythm-game-assistant") if isinstance(servers, dict) else None
-
         if not server:
-            self.add(
-                domain="mcp",
-                check="rga_server_defined",
-                status="fail",
-                summary="rhythm-game-assistant MCP server is not defined in the config.",
-                evidence={"path": str(self.mcp_config)},
-            )
+            self.add(domain="mcp", check="rga_server_defined", status="fail", summary="rhythm-game-assistant MCP server is not defined.", evidence={"path": str(self.mcp_config)})
             return
-
         server_type = server.get("type")
-        command = server.get("command")
-        args = server.get("args", [])
-        env = server.get("env", {})
-
         self.add(
             domain="mcp",
             check="rga_server_shape",
             status="pass" if server_type == "stdio" else "fail",
-            summary=(
-                "RGA MCP server is configured as stdio."
-                if server_type == "stdio"
-                else "RGA MCP server should use stdio adapter mode, not direct REST HTTP mode."
-            ),
-            evidence={
-                "type": server_type,
-                "command": command,
-                "args": args,
-                "env_keys": sorted(list(env.keys())) if isinstance(env, dict) else [],
-            },
-            suggested_fix=(
-                None
-                if server_type == "stdio"
-                else "Use mcp_server.py as a local stdio MCP adapter and forward to RGA_REST_URL."
-            ),
+            summary="RGA MCP server is configured as stdio." if server_type == "stdio" else "RGA MCP server should use stdio adapter mode, not direct REST HTTP mode.",
+            evidence={"type": server_type, "command": server.get("command"), "args": server.get("args", []), "env_keys": sorted(list((server.get("env") or {}).keys()))},
+            suggested_fix=None if server_type == "stdio" else "Use mcp_server.py as a local stdio MCP adapter and forward to RGA_REST_URL.",
         )
 
     def _post_json(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -489,11 +472,7 @@ class RuntimeVerifier:
             self.api_url,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             method="POST",
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true",
-            },
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json", "ngrok-skip-browser-warning": "true"},
         )
         with urllib.request.urlopen(req, timeout=30) as res:
             raw = res.read().decode("utf-8")
@@ -501,104 +480,31 @@ class RuntimeVerifier:
 
     def check_rest_contract(self) -> None:
         if not self.run_rest:
-            self.add(
-                domain="rest_api",
-                check="rest_verification_enabled",
-                status="skipped",
-                summary="REST checks were skipped. Use --rest to enable REST verification.",
-                evidence={"api_url": self.api_url},
-            )
+            self.add(domain="rest_api", check="rest_verification_enabled", status="skipped", summary="REST checks were skipped. Use --rest to enable REST verification.", evidence={"api_url": self.api_url})
             return
-
-        song_payload = {
-            "mode": "song",
-            "game_id": "proseka",
-            "locale": "en-US",
-            "max_items": 1,
-            "song_ids": ["local-test-song"],
-            "player_signals": {},
-            "player_profile": {},
-            "player_history": {},
-            "preferences": {},
-            "evidence": {},
-        }
-
-        try:
-            song_result = self._post_json(song_payload)
-            self.add(
-                domain="rest_api",
-                check="song_mode_post",
-                status="pass",
-                summary="Song mode REST request completed.",
-                evidence={"response_keys": sorted(list(song_result.keys()))},
-            )
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            self.add(
-                domain="rest_api",
-                check="song_mode_post",
-                status="fail",
-                summary=f"Song mode REST request returned HTTP {exc.code}.",
-                evidence={"status": exc.code, "body": body},
-            )
-        except Exception as exc:
-            self.add(
-                domain="rest_api",
-                check="song_mode_post",
-                status="fail",
-                summary="Song mode REST request failed.",
-                evidence={"error": str(exc)},
-            )
-
-        game_payload = {
-            "mode": "game",
-            "game_id": "proseka",
-            "locale": "en-US",
-            "max_items": 3,
-            "player_signals": {
-                "expert_fc_count": "120",
-                "master_fc_count": "20",
-                "highest_confirmed_difficulty": "32",
+        payloads = {
+            "song_mode_post": {
+                "mode": "song", "game_id": "proseka", "locale": "en-US", "max_items": 1,
+                "song_ids": ["local-test-song"], "player_signals": {}, "player_profile": {}, "player_history": {}, "preferences": {}, "evidence": {},
             },
-            "player_profile": {},
-            "player_history": {},
-            "preferences": {},
-            "evidence": {},
+            "game_mode_post": {
+                "mode": "game", "game_id": "proseka", "locale": "en-US", "max_items": 3,
+                "player_signals": {"expert_fc_count": "120", "master_fc_count": "20", "highest_confirmed_difficulty": "32"},
+                "player_profile": {}, "player_history": {}, "preferences": {}, "evidence": {},
+            },
         }
-
-        try:
-            game_result = self._post_json(game_payload)
-            self.add(
-                domain="rest_api",
-                check="game_mode_post",
-                status="pass",
-                summary="Game mode REST request completed.",
-                evidence={
-                    "response_keys": sorted(list(game_result.keys())),
-                    "items_count": len(game_result.get("items", [])) if isinstance(game_result, dict) else None,
-                },
-            )
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            summary = f"Game mode REST request returned HTTP {exc.code}."
-            if exc.code == 501 and "Games recommender not configured" in body:
-                summary = "Game mode confirms games_recommender is not configured."
-            self.add(
-                domain="rest_api",
-                check="game_mode_post",
-                status="fail",
-                summary=summary,
-                evidence={"status": exc.code, "body": body},
-                suggested_fix="Inject a Phase 7 games_recommender into create_app(...)." if exc.code == 501 else None,
-            )
-        except Exception as exc:
-            self.add(
-                domain="rest_api",
-                check="game_mode_post",
-                status="fail",
-                summary="Game mode REST request failed.",
-                evidence={"error": str(exc)},
-            )
+        for check, payload in payloads.items():
+            try:
+                result = self._post_json(payload)
+                self.add(domain="rest_api", check=check, status="pass", summary=f"{check} completed.", evidence={"response_keys": sorted(list(result.keys())) if isinstance(result, dict) else []})
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                summary = f"{check} returned HTTP {exc.code}."
+                if check == "game_mode_post" and exc.code == 501 and "Games recommender not configured" in body:
+                    summary = "Game mode confirms games_recommender is not configured."
+                self.add(domain="rest_api", check=check, status="fail", summary=summary, evidence={"status": exc.code, "body": body}, suggested_fix="Inject a Phase 7 games_recommender into create_app(...)." if exc.code == 501 else None)
+            except Exception as exc:
+                self.add(domain="rest_api", check=check, status="fail", summary=f"{check} failed.", evidence={"error": str(exc)})
 
     def run_all(self) -> Dict[str, Any]:
         self.check_environment()
@@ -608,20 +514,19 @@ class RuntimeVerifier:
         self.check_runtime_meta_specs()
         self.check_mcp_config()
         self.check_rest_contract()
-
         counts: Dict[str, int] = {}
         severities: Dict[str, int] = {}
         for r in self.results:
             counts[r.status] = counts.get(r.status, 0) + 1
             severities[r.severity] = severities.get(r.severity, 0) + 1
-
         return {
-            "schema": "rga.runtime_verifier.report.v2",
+            "schema": "rga.runtime_verifier.report.v3",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "repo_root": str(self.repo_root),
             "backend_root": str(self.backend_root),
             "backend_root_mode": self.backend_root_mode,
-            "backend_root_candidates": [str(c) for c in self.backend_candidates],
+            "backend_root_candidates": [asdict(c) for c in self.backend_candidates],
+            "discovered_files": self.discovered_files,
             "api_url": self.api_url,
             "summary": counts,
             "severity_summary": severities,
@@ -647,18 +552,29 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     for k, v in sorted(report.get("severity_summary", {}).items()):
         lines.append(f"- **{k}**: {v}")
     lines.append("")
+    lines.append("## Backend Candidates")
+    lines.append("```json")
+    lines.append(json.dumps(report.get("backend_root_candidates", []), indent=2, ensure_ascii=False))
+    lines.append("```")
+    lines.append("")
+    lines.append("## Discovered Files")
+    lines.append("```json")
+    lines.append(json.dumps(report.get("discovered_files", {}), indent=2, ensure_ascii=False))
+    lines.append("```")
+    lines.append("")
     lines.append("## Results")
     for item in report.get("results", []):
         lines.append(f"### [{item['status'].upper()} / {item['severity'].upper()}] {item['domain']} / {item['check']}")
         lines.append("")
         lines.append(item.get("summary", ""))
-        lines.append("")
         evidence = item.get("evidence") or {}
         if evidence:
+            lines.append("")
             lines.append("```json")
             lines.append(json.dumps(evidence, indent=2, ensure_ascii=False))
             lines.append("```")
         if item.get("suggested_fix"):
+            lines.append("")
             lines.append(f"Suggested fix: {item['suggested_fix']}")
         lines.append("")
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -675,7 +591,7 @@ def main() -> int:
     parser.add_argument("--rest", action="store_true", help="Run REST endpoint checks. Requires backend to be running.")
     parser.add_argument("--json-out", default=None, help="Optional JSON report output path.")
     parser.add_argument("--md-out", default=None, help="Optional Markdown report output path.")
-    parser.add_argument("--strict", action="store_true", help="Exit non-zero if any fail results are found.")
+    parser.add_argument("--strict", action="store_true", help="Exit non-zero if any fail severity results are found.")
     parser.add_argument("--strict-severity", choices=["fail", "critical"], default="fail", help="Severity threshold used by --strict.")
     args = parser.parse_args()
 
@@ -688,7 +604,6 @@ def main() -> int:
         run_rest=args.rest,
     )
     report = verifier.run_all()
-
     text = json.dumps(report, indent=2, ensure_ascii=False)
     print(text)
 
@@ -696,7 +611,6 @@ def main() -> int:
         out = Path(args.json_out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
-
     if args.md_out:
         write_markdown(report, Path(args.md_out))
 
