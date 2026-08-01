@@ -732,6 +732,7 @@ charter:
   principle_14: "MCP adapters must remain observable and verifiable."
   principle_15: "Governance verdicts must be evidence-based and read-only."
 
+future capabilities:
 
 allowed:
   # Repository & Architecture Intelligence
