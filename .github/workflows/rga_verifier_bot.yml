@@ -18,78 +18,238 @@ jobs:
         with:
           python-version: "3.12"
 
+      ############################################################
+      # Repository Discovery
+      ############################################################
+
       - name: Repository Discovery Evidence
         run: |
           mkdir -p artifacts
 
-          echo "PWD:"
           pwd > artifacts/repository_root.txt
 
-          find . -type f | sort > artifacts/repository_inventory.txt
+          find . -type f | sort \
+            > artifacts/repository_inventory.txt
+
+          find . -type d | sort \
+            > artifacts/repository_directories.txt
+
+      ############################################################
+      # Runtime Discovery
+      ############################################################
 
       - name: Runtime Discovery Evidence
         run: |
-          find . -type f -name "main.py" | sort > artifacts/main_candidates.txt
-          find . -type f -name "recommend.py" | sort > artifacts/recommend_candidates.txt
-          find . -type f -name "app.py" | sort > artifacts/app_candidates.txt
-          find . -type f -name "runtime_meta.py" | sort > artifacts/runtime_meta_candidates.txt
-          find . -type f -name "mcp_server.py" | sort > artifacts/mcp_server_candidates.txt
-          find . -type f -name "runtime_verifier.py" | sort > artifacts/runtime_verifier_candidates.txt
-          find . -type d | grep "rhythm" > artifacts/rhythm_directories.txt || true
+          find . -type f -name "main.py" \
+            | sort > artifacts/main_candidates.txt
 
-      - name: Asset Pipeline Evidence
+          find . -type f -name "recommend.py" \
+            | sort > artifacts/recommend_candidates.txt
+
+          find . -type f -name "app.py" \
+            | sort > artifacts/app_candidates.txt
+
+          find . -type f -name "runtime_meta.py" \
+            | sort > artifacts/runtime_meta_candidates.txt
+
+          find . -type f -name "mcp_server.py" \
+            | sort > artifacts/mcp_server_candidates.txt
+
+          find . -type f -name "runtime_verifier.py" \
+            | sort > artifacts/runtime_verifier_candidates.txt
+
+          find . -type d \
+            | grep "rhythm" \
+            > artifacts/rhythm_directories.txt || true
+
+      ############################################################
+      # Artifact Database Discovery
+      ############################################################
+
+      - name: Artifact Database Discovery
         run: |
-          find . -type f \( \
+          find . -type f -name "file_scan_inventory.db" \
+            > artifacts/file_scan_inventory_db.txt || true
+
+          find . -type f -name "chart_assets.db" \
+            > artifacts/chart_assets_db.txt || true
+
+          find . -type f -name "chart_patterns.db" \
+            > artifacts/chart_patterns_db.txt || true
+
+      ############################################################
+      # Artifact Inventory
+      ############################################################
+
+      - name: Artifact Inventory Evidence
+        run: |
+          find . -type f \
+            > artifacts/repository_files.txt
+
+          find . -type f \
+            \( \
             -name "*.aff" -o \
             -name "*.sus" -o \
             -name "*.json" -o \
             -name "*.html" -o \
             -name "*.mht" \
-          \) > artifacts/type_a_assets.txt || true
+            \) \
+            > artifacts/type_a_candidates.txt || true
 
-          find . -type f \( \
+          find . -type f \
+            \( \
             -name "*.mp4" -o \
             -name "*.mov" -o \
             -name "*.mkv" -o \
             -name "*.webm" -o \
             -name "*.url" -o \
             -name "*.webloc" \
-          \) > artifacts/type_b_assets.txt || true
+            \) \
+            > artifacts/type_b_candidates.txt || true
 
-          find . -type f -name "chart_assets.db" > artifacts/chart_assets_db.txt || true
+      ############################################################
+      # Artifact Relationship Evidence
+      ############################################################
 
-      - name: Asset Coverage Evidence
+      - name: Artifact Relationship Evidence
         run: |
-          find . -type f > artifacts/repository_files.txt
-          find . -type f -name "chart_assets.db" > artifacts/chart_assets_db_candidates.txt || true
+          cat artifacts/file_scan_inventory_db.txt \
+            > artifacts/artifact_chain_discovery.txt || true
+
+          cat artifacts/chart_assets_db.txt \
+            >> artifacts/artifact_chain_discovery.txt || true
+
+          cat artifacts/chart_patterns_db.txt \
+            >> artifacts/artifact_chain_discovery.txt || true
+
+      ############################################################
+      # Hash Evidence
+      ############################################################
 
       - name: Hash Inventory Evidence
         run: |
-          sha256sum $(find . -type f | sort) > artifacts/repository_hashes.txt || true
+          find . -type f | sort \
+            > artifacts/hash_input_inventory.txt
 
-      - name: Type A Usability Evidence
+          sha256sum $(cat artifacts/hash_input_inventory.txt) \
+            > artifacts/repository_hashes.txt || true
+
+      ############################################################
+      # Dependency Reality Evidence
+      ############################################################
+
+      - name: Dependency Reality Evidence
         run: |
-          find . -type f \( \
-            -name "*.aff" -o \
-            -name "*.sus" -o \
-            -name "*.json" -o \
-            -name "*.html" -o \
-            -name "*.mht" \
-          \) > artifacts/type_a_candidates.txt || true
+          python -m pip freeze \
+            > artifacts/pip_freeze.txt
+
+          python - <<'PY'
+          import importlib
+
+          modules = [
+            "fastapi",
+            "uvicorn",
+            "pydantic",
+            "sqlite3"
+          ]
+
+          with open(
+              "artifacts/runtime_dependency_probe.txt",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              for mod in modules:
+                  try:
+                      importlib.import_module(mod)
+                      f.write(f"{mod}: PASS\n")
+                  except Exception as exc:
+                      f.write(f"{mod}: FAIL: {exc}\n")
+          PY
+
+      ############################################################
+      # Flow Verification Evidence
+      ############################################################
+
+      - name: Flow Verification Evidence
+        run: |
+          find . -type f \
+            \( \
+            -name "*recommend*.py" -o \
+            -name "*tips*.py" -o \
+            -name "*orchestrator*.py" -o \
+            -name "*runtime*.py" \
+            \) \
+            | sort \
+            > artifacts/flow_candidates.txt || true
+
+      ############################################################
+      # Layer Separation Evidence
+      ############################################################
+
+      - name: Layer Separation Evidence
+        run: |
+          find . -type f -name "*.py" \
+            | sort \
+            > artifacts/python_inventory.txt
+
+          find . -type d \
+            \( \
+            -iname "*model*" -o \
+            -iname "*normalizer*" -o \
+            -iname "*converter*" -o \
+            -iname "*classifier*" -o \
+            -iname "*validator*" -o \
+            -iname "*reader*" -o \
+            -iname "*writer*" -o \
+            -iname "*bridge*" -o \
+            -iname "*orchestrator*" \
+            \) \
+            | sort \
+            > artifacts/layer_directories.txt || true
+
+      ############################################################
+      # MCP Evidence
+      ############################################################
+
+      - name: MCP Evidence
+        run: |
+          find . -type f -name "mcp.json" \
+            > artifacts/mcp_configs.txt || true
+
+      ############################################################
+      # Runtime DB Read Evidence
+      ############################################################
 
       - name: Runtime DB Read Evidence
         run: |
-          find . -type f -name "chart_assets.db" > artifacts/runtime_db_candidates.txt || true
+          find . -type f \
+            \( \
+            -name "file_scan_inventory.db" -o \
+            -name "chart_assets.db" -o \
+            -name "chart_patterns.db" \
+            \) \
+            > artifacts/runtime_db_candidates.txt || true
+
+      ############################################################
+      # Run Verifier
+      ############################################################
 
       - name: Run RGA Runtime Verifier
         run: |
           python tools/runtime_verifier.py \
             --repo-root . \
+            --mcp-config .vscode/mcp.json \
             --json-out artifacts/runtime_verifier_report.json \
             --md-out artifacts/runtime_verifier_report.md
+
+      ############################################################
+      # Upload Artifact Bundle
+      ############################################################
 
       - name: Upload Runtime Verifier Report
         uses: actions/upload-artifact@v4
         with:
           name: runtime-verifier-report
           path: artifacts/
+          if-no-files-found: warn
