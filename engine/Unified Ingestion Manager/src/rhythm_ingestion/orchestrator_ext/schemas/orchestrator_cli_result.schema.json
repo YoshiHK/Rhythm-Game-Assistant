@@ -1,0 +1,52 @@
+
+{ "title": "OrchestratorCLIResult",
+  "$schema": "https://json-schema.org/draft/2020-12 / batch runs. This schema is additive and non-breaking.",  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+
+  "required": [
+    "file",
+    "game_id",
+    "passed"
+  ],
+
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Input file or directory processed by the orchestrator."
+    },
+
+    "game_id": {
+      "type": "string",
+      "description": "Target game identifier."
+    },
+
+    "passed": {
+      "type": "boolean",
+      "description": "Whether the run passed all control-plane checks."
+    },
+
+    "decision": {
+      "type": "string",
+      "description": "Gate decision when the run does not pass.",
+      "enum": ["ALLOW", "STOP", "DEGRADED"]
+    },
+
+    "stage": {
+      "type": "string",
+      "description": "Stage at which the decision was made (control-plane only)."
+    },
+
+    "reason_code": {
+      "type": "string",
+      "description": "Stable control-plane reason code explaining STOP/DEGRADED."
+    },
+
+    "details": {
+      "type": "object",
+      "description": "Additional diagnostic details for debugging or QA.",
+      "additionalProperties": true
+    }
+  },
+
+  "additionalProperties": true
+}
