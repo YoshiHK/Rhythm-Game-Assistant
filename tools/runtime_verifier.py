@@ -523,11 +523,13 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
 
 def discover_runtime_candidates(
     search_root: Path,
-) -> List[RuntimeCandidate]:
-    roots: Dict[str, Path] = {}
+) -> Listroots: Dict[str, Path] = {}
 
-n_py in search_root.rglob("main.py"):
-            roots[str(main_py.parent.resolve())] = main_py.parent.resolve()
+    try:
+        for main_py in search_root.rglob("main.py"):
+            roots[str(main_py.parent.resolve())] = (
+                main_py.parent.resolve()
+            )
 
         for rec_py in search_root.rglob("recommend.py"):
             parts = list(rec_py.parts)
@@ -537,7 +539,10 @@ n_py in search_root.rglob("main.py"):
 
                 if idx > 0:
                     candidate = Path(*parts[:idx])
-                    roots[str(candidate.resolve())] = candidate.resolve()
+
+                    roots[str(candidate.resolve())] = (
+                        candidate.resolve()
+                    )
 
     except Exception:
         pass
