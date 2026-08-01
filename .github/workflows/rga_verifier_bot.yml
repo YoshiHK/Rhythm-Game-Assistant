@@ -1,4 +1,3 @@
-
 name: RGA Runtime Verifier
 
 on:
@@ -48,7 +47,39 @@ jobs:
             -name "*.mht" \
           \) > artifacts/type_a_assets.txt || true
 
+          find . -type f \( \
+            -name "*.mp4" -o \
+            -name "*.mov" -o \
+            -name "*.mkv" -o \
+            -name "*.webm" -o \
+            -name "*.url" -o \
+            -name "*.webloc" \
+          \) > artifacts/type_b_assets.txt || true
+
           find . -type f -name "chart_assets.db" > artifacts/chart_assets_db.txt || true
+
+      - name: Asset Coverage Evidence
+        run: |
+          find . -type f > artifacts/repository_files.txt
+          find . -type f -name "chart_assets.db" > artifacts/chart_assets_db_candidates.txt || true
+
+      - name: Hash Inventory Evidence
+        run: |
+          sha256sum $(find . -type f | sort) > artifacts/repository_hashes.txt || true
+
+      - name: Type A Usability Evidence
+        run: |
+          find . -type f \( \
+            -name "*.aff" -o \
+            -name "*.sus" -o \
+            -name "*.json" -o \
+            -name "*.html" -o \
+            -name "*.mht" \
+          \) > artifacts/type_a_candidates.txt || true
+
+      - name: Runtime DB Read Evidence
+        run: |
+          find . -type f -name "chart_assets.db" > artifacts/runtime_db_candidates.txt || true
 
       - name: Run RGA Runtime Verifier
         run: |
