@@ -30,3 +30,20 @@ jobs:
         with:
           name: runtime-verifier-report
           path: artifacts/
+
+      - name: Debug repository layout
+        run: |
+          echo "PWD:"
+          pwd
+
+          echo ""
+          echo "Top-level files:"
+          find . -maxdepth 2 -type f | sort
+
+          echo ""
+          echo "Candidate main.py files:"
+          find . -type f -name "main.py" | sort
+
+          echo ""
+          echo "Candidate recommend.py files:"
+          find . -type f -path "*/src/rhythm_ingestion/api/recommend.py" | sort
