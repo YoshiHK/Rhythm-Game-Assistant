@@ -18,32 +18,33 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Debug repository layout
+        run: |
+          echo "PWD:"
+          pwd
+          echo ""
+          echo "Top-level files:"
+          find . -maxdepth 2 -type f | sort
+          echo ""
+          echo "Candidate main.py files:"
+          find . -type f -name "main.py" | sort
+          echo ""
+          echo "Candidate recommend.py files:"
+          find . -type f -path "*/src/rhythm_ingestion/api/recommend.py" | sort
+          echo ""
+          echo "Candidate runtime_verifier.py files:"
+          find . -type f -name "runtime_verifier.py" | sort
+
       - name: Run RGA Runtime Verifier
         run: |
+          mkdir -p artifacts
           python tools/runtime_verifier.py \
             --repo-root . \
             --json-out artifacts/runtime_verifier_report.json \
             --md-out artifacts/runtime_verifier_report.md
 
-      - name: Upload verifier report
+      - name: Upload runtime verifier report
         uses: actions/upload-artifact@v4
         with:
           name: runtime-verifier-report
           path: artifacts/
-
-      - name: Debug repository layout
-        run: |
-          echo "PWD:"
-          pwd
-
-          echo ""
-          echo "Top-level files:"
-          find . -maxdepth 2 -type f | sort
-
-          echo ""
-          echo "Candidate main.py files:"
-          find . -type f -name "main.py" | sort
-
-          echo ""
-          echo "Candidate recommend.py files:"
-          find . -type f -path "*/src/rhythm_ingestion/api/recommend.py" | sort
