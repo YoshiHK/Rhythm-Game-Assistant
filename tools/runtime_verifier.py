@@ -2,9 +2,18 @@
 """
 runtime_verifier.py
 
-RGA Runtime Verifier Bot — v0.4
+RGA Runtime Verifier Bot — v0.5
 
-New in v0.4:
+New in v0.5:
+- Repository Reality vs Import Reality vs Runtime Reality separation
+- Asset Pipeline Verification
+- chart_assets.db discovery and read-only inspection
+- Type A / Type B asset coverage evidence
+- Deletion readiness gate
+- MCP tool visibility / registration evidence
+- v0.5 report schema
+
+Carried forward from v0.4:
 - Package Integrity Verification
 - Package Directory Inventory
 - Package Alias Detection
@@ -16,14 +25,16 @@ New in v0.4:
 Purpose:
 - Read-only runtime / wiring verification for Rhythm Game Assistant (RGA).
 - Detect missing runtime components, REST contract issues, MCP config issues,
-  package layout issues, and wiring gaps such as games_recommender not being injected.
+  package layout issues, asset coverage gaps, and wiring gaps such as
+  games_recommender not being injected.
 
 Boundary:
 - Verification-only.
 - Must not modify Completed Phases 1–7.
 - Must not write to production databases.
 - Must not change canonical_row, pattern/tag logic, tips generation,
-  personalization, localization, or recommendation internals.
+  personalization, localization, recommendation internals, or asset pipeline behavior.
+- Asset inspection is read-only.
 
 Recommended placement:
 - tools/runtime_verifier.py
@@ -47,6 +58,7 @@ import importlib
 import json
 import os
 import platform
+import sqlite3
 import sys
 import traceback
 import urllib.error
@@ -110,6 +122,25 @@ LOGICAL_ARTIFACT_ALIASES: Dict[str, List[str]] = {
     ],
 }
 
+TYPE_A_EXTENSIONS = {
+    ".aff",
+    ".sus",
+    ".json",
+    ".html",
+    ".mht",
+}
+
+TYPE_B_EXTENSIONS = {
+    ".mp4",
+    ".mov",
+    ".mkv",
+    ".webm",
+    ".url",
+    ".webloc",
+}
+
+ASSET_DB_NAME = "chart_assets.db"
+
 
 # -----------------------------------------------------------------------------
 # Discovery helpers
@@ -138,7 +169,7 @@ def score_candidate(root: Path) -> RuntimeCandidate:
     score = 0
 
     for artifact, weight in ARTIFACT_WEIGHTS.items():
-        exists, matched_path = artifact_exists_with_alias(root, artifact)
+        exists, _matched_path = artifact_exists_with_alias(root, artifact)
         if exists:
             matched.append(artifact)
             score += weight
@@ -170,9 +201,10 @@ def discover_files(search_root: Path) -> Dict[str, List[str]]:
         "app.py": "app.py",
         "runtime_meta.py": "runtime_meta.py",
         "mcp_server.py": "mcp_server.py",
+        "runtime_verifier.py": "runtime_verifier.py",
     }
 
-    discovered: Dict[str, List[str]] = {k: [] for k in patterns}
+    discovered: Dict[str, List[str]] = {key: [] for key in patterns}
 
     try:
         for path in search_root.rglob("*"):
@@ -239,8 +271,9 @@ def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
         pass
 
     candidates = [score_candidate(root) for root in roots.values()]
-    candidates.sort(key=lambda c: c.score, reverse=True)
+    candidates.sort(key=lambda candidate: candidate.score, reverse=True)
     return candidates
+
 
 def choose_backend_root(
     repo_root: Path,
@@ -269,6 +302,44 @@ def classify_import_failure(error_text: str, package_dirs: Dict[str, List[str]])
     return "import_failure"
 
 
+def classify_asset_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in TYPE_A_EXTENSIONS:
+        return "type_A"
+    if suffix in TYPE_B_EXTENSIONS:
+        return "type_B"
+    return "unknown"
+
+
+def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
+    discovered: Dict[str, List[str]] = {
+        "type_A": [],
+        "type_B": [],
+        "unknown": [],
+        "chart_assets_db": [],
+    }
+
+    try:
+        for path in search_root.rglob("*"):
+            if not path.is_file():
+                continue
+
+            if path.name == ASSET_DB_NAME:
+                discovered["chart_assets_db"].append(str(path.resolve()))
+                continue
+
+            asset_type = classify_asset_path(path)
+            if asset_type in {"type_A", "type_B"}:
+                discovered[asset_type].append(str(path.resolve()))
+    except Exception:
+        pass
+
+    for key in discovered:
+        discovered[key] = sorted(discovered[key])
+
+    return discovered
+
+
 # -----------------------------------------------------------------------------
 # Verifier
 # -----------------------------------------------------------------------------
@@ -282,6 +353,7 @@ class RuntimeVerifier:
         api_url: str,
         token: Optional[str],
         mcp_config: Optional[Path],
+        asset_db: Optional[Path],
         run_rest: bool,
     ) -> None:
         self.repo_root = repo_root.resolve()
@@ -293,10 +365,12 @@ class RuntimeVerifier:
         self.api_url = api_url
         self.token = token or os.getenv("SOFTR_API_TOKEN")
         self.mcp_config = mcp_config
+        self.asset_db = asset_db
         self.run_rest = run_rest
 
         self.discovered_files = discover_files(self.repo_root)
         self.discovered_packages = discover_package_dirs(self.repo_root)
+        self.discovered_assets = discover_asset_files(self.repo_root)
 
         self.results: List[CheckResult] = []
 
@@ -376,7 +450,7 @@ class RuntimeVerifier:
 
     def read_json_file(self, path: Path) -> Optional[Any]:
         try:
-            return json.loads(path.read_text(encoding
+            return json.loads(path.read_text(encoding="utf-8"))
         except Exception as exc:
             self.add(
                 domain="file",
@@ -388,8 +462,89 @@ class RuntimeVerifier:
                     "error": str(exc),
                 },
             )
-
             return None
+
+    def post_json(self, payload: Dict[str, Any]) -> Any:
+        body = json.dumps(payload).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+
+        request = urllib.request.Request(
+            self.api_url,
+            data=body,
+            headers=headers,
+            method="POST",
+        )
+
+        with urllib.request.urlopen(request, timeout=15) as response:
+            text = response.read().decode("utf-8", errors="replace")
+            if not text:
+                return {}
+            return json.loads(text)
+
+    def resolve_asset_db_candidates(self) -> List[Path]:
+        candidates: List[Path] = []
+
+        if self.asset_db:
+            candidates.append(self.asset_db.expanduser().resolve())
+
+        for item in self.discovered_assets.get("chart_assets_db", []):
+            path = Path(item)
+            if path not in candidates:
+                candidates.append(path)
+
+        return candidates
+
+    def inspect_sqlite_readonly(self, path: Path) -> Dict[str, Any]:
+        evidence: Dict[str, Any] = {
+            "path": str(path),
+            "exists": path.exists(),
+            "tables": [],
+            "table_columns": {},
+            "table_row_counts": {},
+        }
+
+        if not path.exists():
+            return evidence
+
+        try:
+            uri = f"file:{path}?mode=ro"
+            with sqlite3.connect(uri, uri=True) as conn:
+                cursor = conn.cursor()
+                tables = [
+                    row[0]
+                    for row in cursor.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                    ).fetchall()
+                ]
+                evidence["tables"] = tables
+
+                for table in tables:
+                    quoted_table = '"' + table.replace('"', '""') + '"'
+                    columns = [
+                        row[1]
+                        for row in cursor.execute(f"PRAGMA table_info({quoted_table})").fetchall()
+                    ]
+                    evidence["table_columns"][table] = columns
+
+                    try:
+                        count = cursor.execute(f"SELECT COUNT(*) FROM {quoted_table}").fetchone()[0]
+                        evidence["table_row_counts"][table] = count
+                    except Exception as exc:
+                        evidence["table_row_counts"][table] = {
+                            "error": str(exc),
+                        }
+
+        except Exception as exc:
+            evidence["error"] = str(exc)
+            evidence["traceback"] = traceback.format_exc()
+
+        return evidence
 
     # ------------------------------------------------------------------
     # Checks
@@ -431,7 +586,7 @@ class RuntimeVerifier:
         )
 
     def check_repository_discovery(self) -> None:
-        candidates = [asdict(c) for c in self.backend_candidates]
+        candidates = [asdict(candidate) for candidate in self.backend_candidates]
         best = candidates[0] if candidates else None
 
         if self.backend_root_mode == "auto_discovered":
@@ -468,6 +623,63 @@ class RuntimeVerifier:
                     "Ensure backend root contains main.py, mcp_server.py, "
                     "and importable src/rhythm_ingestion package files."
                 )
+            ),
+        )
+
+    def check_repository_vs_runtime(self) -> None:
+        canonical_package_root = self.backend_root / "src" / EXPECTED_PACKAGE
+        repository_reality = {
+            "backend_root_exists": self.backend_root.exists(),
+            "canonical_package_root_exists": canonical_package_root.exists(),
+            "main_py_exists": (self.backend_root / "main.py").exists(),
+            "mcp_server_py_exists": (self.backend_root / "mcp_server.py").exists(),
+        }
+
+        import_reality: Dict[str, Any] = {
+            "rhythm_ingestion_importable": None,
+            "rhythm_ingestion_file": None,
+            "error": None,
+        }
+
+        self.inject_pythonpath()
+        try:
+            module = importlib.import_module(EXPECTED_PACKAGE)
+            import_reality["rhythm_ingestion_importable"] = True
+            import_reality["rhythm_ingestion_file"] = getattr(module, "__file__", None)
+        except Exception as exc:
+            import_reality["rhythm_ingestion_importable"] = False
+            import_reality["error"] = str(exc)
+
+        runtime_reality = {
+            "recommend_module_discovered": bool(self.discovered_files.get("recommend.py")),
+            "runtime_meta_discovered": bool(self.discovered_files.get("runtime_meta.py")),
+            "selected_backend_root": str(self.backend_root),
+        }
+
+        status = "pass"
+        summary = "Repository, import, and runtime realities are distinguishable."
+
+        if not repository_reality["canonical_package_root_exists"]:
+            status = "fail"
+            summary = "Repository reality does not show the canonical package root."
+        elif import_reality["rhythm_ingestion_importable"] is False:
+            status = "fail"
+            summary = "Repository package exists but import reality failed."
+
+        self.add(
+            domain="repository_vs_runtime",
+            check="reality_separation",
+            status=status,
+            summary=summary,
+            evidence={
+                "repository_reality": repository_reality,
+                "import_reality": import_reality,
+                "runtime_reality": runtime_reality,
+            },
+            suggested_fix=(
+                None
+                if status == "pass"
+                else "Resolve package root and PYTHONPATH before diagnosing runtime wiring."
             ),
         )
 
@@ -716,7 +928,7 @@ class RuntimeVerifier:
                 evidence={
                     "required": required,
                     "missing": missing,
-                    "registered": sorted(list(specs.keys())),
+                    "registered": sorted(list(specs.keys())) if isinstance(specs, dict) else [],
                 },
                 suggested_fix=(
                     None
@@ -739,6 +951,142 @@ class RuntimeVerifier:
                     "traceback": traceback.format_exc(),
                 },
             )
+
+    def check_asset_pipeline(self) -> None:
+        type_a = self.discovered_assets.get("type_A", [])
+        type_b = self.discovered_assets.get("type_B", [])
+        db_candidates = self.resolve_asset_db_candidates()
+
+        self.add(
+            domain="asset_pipeline",
+            check="asset_inventory",
+            status="info",
+            summary="Chart asset inventory captured without modifying asset state.",
+            evidence={
+                "type_A_count": len(type_a),
+                "type_B_count": len(type_b),
+                "type_A_files": type_a,
+                "type_B_files": type_b,
+                "chart_assets_db_candidates": [str(path) for path in db_candidates],
+                "type_A_extensions": sorted(TYPE_A_EXTENSIONS),
+                "type_B_extensions": sorted(TYPE_B_EXTENSIONS),
+            },
+        )
+
+        if not db_candidates:
+            self.add(
+                domain="asset_pipeline",
+                check="chart_assets_db_presence",
+                status="warning",
+                summary="No chart_assets.db file was discovered.",
+                evidence={
+                    "searched_root": str(self.repo_root),
+                },
+                suggested_fix="Create or provide chart_assets.db after asset pipeline persistence is available.",
+            )
+            return
+
+        db_evidence = [self.inspect_sqlite_readonly(path) for path in db_candidates]
+        sqlite_errors = [item for item in db_evidence if item.get("error")]
+        nonempty_tables = [
+            item
+            for item in db_evidence
+            if any((count or 0) > 0 for count in item.get("table_row_counts", {}).values() if isinstance(count, int))
+        ]
+
+        self.add(
+            domain="asset_pipeline",
+            check="chart_assets_db_readable",
+            status="fail" if sqlite_errors else "pass",
+            summary=(
+                "chart_assets.db was inspected in read-only mode."
+                if not sqlite_errors
+                else "One or more chart_assets.db candidates could not be inspected in read-only mode."
+            ),
+            evidence={
+                "databases": db_evidence,
+            },
+            suggested_fix=(
+                None
+                if not sqlite_errors
+                else "Verify chart_assets.db is a valid SQLite database and is accessible to CI."
+            ),
+        )
+
+        self.add(
+            domain="asset_pipeline",
+            check="asset_db_has_rows",
+            status="pass" if nonempty_tables else "warning",
+            summary=(
+                "At least one discovered chart_assets.db table contains rows."
+                if nonempty_tables
+                else "No non-empty chart_assets.db table was confirmed."
+            ),
+            evidence={
+                "nonempty_database_count": len(nonempty_tables),
+                "database_count": len(db_evidence),
+            },
+            suggested_fix=(
+                None
+                if nonempty_tables
+                else "Run the asset persistence pipeline and verify its output table names/rows."
+            ),
+        )
+
+    def check_deletion_readiness(self) -> None:
+        type_a_count = len(self.discovered_assets.get("type_A", []))
+        type_b_count = len(self.discovered_assets.get("type_B", []))
+        db_candidates = self.resolve_asset_db_candidates()
+
+        db_readable = False
+        db_has_rows = False
+        db_evidence: List[Dict[str, Any]] = []
+
+        for path in db_candidates:
+            evidence = self.inspect_sqlite_readonly(path)
+            db_evidence.append(evidence)
+            if path.exists() and not evidence.get("error"):
+                db_readable = True
+            if any((count or 0) > 0 for count in evidence.get("table_row_counts", {}).values() if isinstance(count, int)):
+                db_has_rows = True
+
+        required = {
+            "chart_assets_db_present": bool(db_candidates),
+            "chart_assets_db_readable": db_readable,
+            "chart_assets_db_has_rows": db_has_rows,
+            "repository_has_assets": type_a_count + type_b_count > 0,
+            "type_A_inventory_available": type_a_count >= 0,
+            "hashes_verified": False,
+            "runtime_can_use_db_assets": False,
+        }
+
+        passed = all(required.values())
+
+        self.add(
+            domain="asset_pipeline",
+            check="deletion_readiness",
+            status="pass" if passed else "fail",
+            summary=(
+                "Deletion readiness gate passed."
+                if passed
+                else "Deletion readiness gate failed; do not delete source chart files."
+            ),
+            evidence={
+                "required": required,
+                "type_A_count": type_a_count,
+                "type_B_count": type_b_count,
+                "database_evidence": db_evidence,
+                "failure_action": "block_deletion_recommendation" if not passed else None,
+            },
+            suggested_fix=(
+                None
+                if passed
+                else (
+                    "Keep source chart files. Complete DB coverage, hash verification, "
+                    "usable Type A text representation, and runtime DB-asset read path first."
+                )
+            ),
+        )
 
     def check_mcp_config(self) -> None:
         if not self.mcp_config:
@@ -783,6 +1131,9 @@ class RuntimeVerifier:
             return
 
         server_type = server.get("type")
+        env = server.get("env") or {}
+        args = server.get("args", [])
+        command = server.get("command")
 
         self.add(
             domain="mcp",
@@ -795,9 +1146,9 @@ class RuntimeVerifier:
             ),
             evidence={
                 "type": server_type,
-                "command": server.get("command"),
-                "args": server.get("args", []),
-                "env_keys": sorted(list((server.get("env") or {}).keys())),
+                "command": command,
+                "args": args,
+                "env_keys": sorted(list(env.keys())) if isinstance(env, dict) else [],
             },
             suggested_fix=(
                 None
@@ -806,24 +1157,22 @@ class RuntimeVerifier:
             ),
         )
 
-    def post_json(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        if not self.token:
-            raise RuntimeError("SOFTR_API_TOKEN is missing; cannot run REST verification.")
+        tool_like_keys = []
+        if isinstance(server, dict):
+            for key in ["tools", "toolsets", "capabilities"]:
+                if key in server:
+                    tool_like_keys.append(key)
 
-        req = urllib.request.Request(
-            self.api_url,
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true",
+        self.add(
+            domain="mcp",
+            check="tool_registration_visibility",
+            status="info",
+            summary="MCP tool registration visibility evidence captured from config.",
+            evidence={
+                "tool_like_keys_present": tool_like_keys,
+                "server_keys": sorted(list(server.keys())) if isinstance(server, dict) else [],
             },
         )
-
-        with urllib.request.urlopen(req, timeout=30) as response:
-            raw = response.read().decode("utf-8")
-            return json.loads(raw) if raw else {"ok": True, "status": response.status}
 
     def check_rest_contract(self) -> None:
         if not self.run_rest:
@@ -923,11 +1272,14 @@ class RuntimeVerifier:
     def run_all(self) -> Dict[str, Any]:
         self.check_environment()
         self.check_repository_discovery()
+        self.check_repository_vs_runtime()
         self.check_package_layout()
         self.check_repo_shape()
         self.check_package_import_probe()
         self.check_python_imports()
         self.check_runtime_meta_specs()
+        self.check_asset_pipeline()
+        self.check_deletion_readiness()
         self.check_mcp_config()
         self.check_rest_contract()
 
@@ -939,7 +1291,7 @@ class RuntimeVerifier:
             severities[result.severity] = severities.get(result.severity, 0) + 1
 
         return {
-            "schema": "rga.runtime_verifier.report.v4",
+            "schema": "rga.runtime_verifier.report.v5",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "repo_root": str(self.repo_root),
             "backend_root": str(self.backend_root),
@@ -947,6 +1299,7 @@ class RuntimeVerifier:
             "backend_root_candidates": [asdict(candidate) for candidate in self.backend_candidates],
             "discovered_files": self.discovered_files,
             "discovered_packages": self.discovered_packages,
+            "discovered_assets": self.discovered_assets,
             "api_url": self.api_url,
             "summary": counts,
             "severity_summary": severities,
@@ -963,6 +1316,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append("# RGA Runtime Verifier Report")
     lines.append("")
+    lines.append(f"Schema: `{report.get('schema')}`")
     lines.append(f"Generated: `{report.get('generated_at')}`")
     lines.append(f"Repo root: `{report.get('repo_root')}`")
     lines.append(f"Backend root: `{report.get('backend_root')}`")
@@ -995,6 +1349,12 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("## Discovered Packages")
     lines.append("```json")
     lines.append(json.dumps(report.get("discovered_packages", {}), indent=2, ensure_ascii=False))
+    lines.append("```")
+    lines.append("")
+
+    lines.append("## Discovered Assets")
+    lines.append("```json")
+    lines.append(json.dumps(report.get("discovered_assets", {}), indent=2, ensure_ascii=False))
     lines.append("```")
     lines.append("")
 
@@ -1062,6 +1422,12 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--asset-db",
+        default=None,
+        help="Optional explicit path to chart_assets.db. Otherwise discovered repository-wide.",
+    )
+
+    parser.add_argument(
         "--rest",
         action="store_true",
         help="Run REST endpoint checks. Requires backend to be running.",
@@ -1100,6 +1466,7 @@ def main() -> int:
         api_url=args.api_url,
         token=args.token,
         mcp_config=Path(args.mcp_config).expanduser() if args.mcp_config else None,
+        asset_db=Path(args.asset_db).expanduser() if args.asset_db else None,
         run_rest=args.rest,
     )
 
