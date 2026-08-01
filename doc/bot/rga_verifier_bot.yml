@@ -262,7 +262,7 @@ verification_domains:
       - flow_stopping_point_presence
       - flow_wiring_consistency
 
-  flow_contracts:
+  flow_contract_verification:
     enabled: true
 
     objectives:
@@ -362,31 +362,31 @@ layer_boundary_policy:
 
   models:
     prohibit:
-      - persistence
+      - persistence_ownership
       - orchestration
       - runtime_mutation
 
   normalizers:
     prohibit:
-      - persistence
+      - persistence_ownership
       - orchestration
-      - recommendations
+      - recommendation_logic
 
   classifiers:
     prohibit:
-      - persistence
+      - persistence_ownership
       - runtime_mutation
       - orchestration
 
   converters:
     prohibit:
-      - persistence
-      - orchestrator_side_effects
-      - recommendations
+      - persistence_ownership
+      - orchestration
+      - recommendation_logic
 
   validators:
     prohibit:
-      - persistence
+      - persistence_ownership
       - runtime_mutation
       - orchestration
 
@@ -441,21 +441,24 @@ package_integrity_policy:
     - rhythm_ingestion.runtime_meta
 
 artifact_database_policy:
-  required_databases:
-    - file_scan_inventory.db
-    - chart_assets.db
-    - chart_patterns.db
-
-  relationship_chain:
-    - file_scan_inventory.db
-    - chart_assets.db
-    - chart_patterns.db
 
   read_mode:
     sqlite: readonly
 
   modification:
     prohibited
+
+  allowed_operations:
+    - schema_inventory
+    - readability_check
+    - record_count
+    - relationship_verification
+
+  prohibited_operations:
+    - insert
+    - update
+    - delete
+    - schema_mutation
 
 asset_scope_policy:
   enabled: true
@@ -616,11 +619,17 @@ severity_policy:
     architecture_contract_failure:
       severity: critical
 
-    artifact_backbone_failure:
-      severity: fail
-
     governance_gate_failure:
       severity: critical
+
+    layer_boundary_failure:
+      severity: fail
+
+    artifact_relationship_failure:
+      severity: fail
+
+    artifact_backbone_failure:
+      severity: fail
 
     flow_contract_failure:
       severity: fail
