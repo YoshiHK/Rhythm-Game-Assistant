@@ -2,15 +2,26 @@
 """
 runtime_verifier.py
 
-RGA Runtime Verifier Bot — v0.6
+RGA Runtime Verifier Bot — v0.7
 
-New in v0.6:
+New in v0.7:
+- Artifact Database Verification
+  - file_scan_inventory.db
+  - chart_assets.db
+  - chart_patterns.db
+- Artifact Relationship Verification
+  - file_scan_inventory.db -> chart_assets.db -> chart_patterns.db
+- Dependency Reality Verification
+- Asset Scope Policy Verification
+- Flow Verification scaffolding
+- Layer Separation Audit scaffolding
+- Type B Intelligence Verification scaffolding
+
+Carried forward from v0.6:
 - Asset Coverage Verification
 - Hash Verification
 - Type A Usability Verification
 - Runtime DB Read Verification
-
-Carried forward from v0.5:
 - Repository Reality vs Import Reality vs Runtime Reality separation
 - Asset Pipeline Verification
 - chart_assets.db discovery and read-only inspection
@@ -20,9 +31,12 @@ Carried forward from v0.5:
 
 Purpose:
 - Read-only runtime / wiring verification for Rhythm Game Assistant (RGA).
-- Detect missing runtime components, package layout issues, REST contract issues,
-  MCP config issues, asset coverage gaps, hash gaps, Type A usability gaps,
-  runtime DB read gaps, and wiring gaps such as games_recommender not being injected.
+- Detect missing runtime components, package layout issues, runtime dependency
+  issues, REST contract issues, MCP config issues, artifact database gaps,
+  artifact relationship gaps, asset coverage gaps, hash gaps, Type A usability
+  gaps, Type B reference gaps, runtime DB read gaps, flow boundary gaps,
+  layer separation violations, and wiring gaps such as games_recommender not
+  being injected.
 
 Boundary:
 - Verification-only.
@@ -31,6 +45,7 @@ Boundary:
 - Must not change canonical_row, pattern/tag logic, tips generation,
   personalization, localization, recommendation internals, or asset pipeline behavior.
 - Asset and database inspection is read-only.
+- Artifact databases are inspected only through read-only SQLite access.
 
 Recommended placement:
 - tools/runtime_verifier.py
@@ -39,6 +54,14 @@ Typical CI usage from repository root:
 
   python tools/runtime_verifier.py \
     --repo-root . \
+    --json-out artifacts/runtime_verifier_report.json \
+    --md-out artifacts/runtime_verifier_report.md
+
+With MCP config:
+
+  python tools/runtime_verifier.py \
+    --repo-root . \
+    --mcp-config .vscode/mcp.json \
     --json-out artifacts/runtime_verifier_report.json \
     --md-out artifacts/runtime_verifier_report.md
 
@@ -64,6 +87,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from urllib.parse import quote
 
 
 # -----------------------------------------------------------------------------
@@ -90,11 +114,25 @@ class RuntimeCandidate:
     missing: List[str]
 
 
+@dataclass
+class ArtifactDatabaseSnapshot:
+    logical_name: str
+    path: str
+    exists: bool
+    readable: bool
+    tables: List[str]
+    table_columns: Dict[str, List[str]]
+    table_row_counts: Dict[str, Any]
+    candidate_columns: Dict[str, Dict[str, Optional[str]]]
+    error: Optional[str] = None
+
+
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
 
 EXPECTED_PACKAGE = "rhythm_ingestion"
+
 INVALID_PACKAGE_ALIASES = [
     "rhythm ingestion",
 ]
@@ -105,6 +143,11 @@ ARTIFACT_WEIGHTS: Dict[str, int] = {
     "src/rhythm_ingestion/api/app.py": 15,
     "src/rhythm_ingestion/runtime_meta.py": 10,
     "mcp_server.py": 10,
+
+    # v0.7 artifact runtime backbone evidence
+    "file_scan_inventory.db": 15,
+    "chart_assets.db": 15,
+    "chart_patterns.db": 15,
 }
 
 LOGICAL_ARTIFACT_ALIASES: Dict[str, List[str]] = {
@@ -118,6 +161,41 @@ LOGICAL_ARTIFACT_ALIASES: Dict[str, List[str]] = {
         "src/rhythm ingestion/runtime_meta.py",
     ],
 }
+
+
+# -----------------------------------------------------------------------------
+# Artifact database constants
+# -----------------------------------------------------------------------------
+
+FILE_SCAN_INVENTORY_DB_NAME = "file_scan_inventory.db"
+CHART_ASSETS_DB_NAME = "chart_assets.db"
+CHART_PATTERNS_DB_NAME = "chart_patterns.db"
+
+# Backward-compatible alias used by v0.6 methods.
+ASSET_DB_NAME = CHART_ASSETS_DB_NAME
+
+ARTIFACT_DATABASE_NAMES = [
+    FILE_SCAN_INVENTORY_DB_NAME,
+    CHART_ASSETS_DB_NAME,
+    CHART_PATTERNS_DB_NAME,
+]
+
+ARTIFACT_DATABASE_LOGICAL_NAMES: Dict[str, str] = {
+    FILE_SCAN_INVENTORY_DB_NAME: "file_scan_inventory",
+    CHART_ASSETS_DB_NAME: "chart_assets",
+    CHART_PATTERNS_DB_NAME: "chart_patterns",
+}
+
+ARTIFACT_RELATIONSHIP_CHAIN = [
+    FILE_SCAN_INVENTORY_DB_NAME,
+    CHART_ASSETS_DB_NAME,
+    CHART_PATTERNS_DB_NAME,
+]
+
+
+# -----------------------------------------------------------------------------
+# Asset type constants
+# -----------------------------------------------------------------------------
 
 TYPE_A_EXTENSIONS = {
     ".aff",
@@ -136,8 +214,61 @@ TYPE_B_EXTENSIONS = {
     ".webloc",
 }
 
-ASSET_DB_NAME = "chart_assets.db"
 MIN_TYPE_A_TEXT_LENGTH = 32
+MAX_REPORT_SAMPLE_VALUE_LENGTH = 500
+
+
+# -----------------------------------------------------------------------------
+# Asset scope policy
+# -----------------------------------------------------------------------------
+#
+# v0.6 proved that extension-only detection is too broad because general repository
+# JSON files can be mistaken for chart assets. v0.7 keeps repository-wide evidence,
+# but introduces explicit scope helpers so verification can distinguish:
+#
+#   repository files != chart assets
+#
+# The policy remains read-only and diagnostic only.
+
+ASSET_SCOPE_INCLUDE_ROOT_HINTS = [
+    "chart_assets",
+    "charts",
+    "assets",
+    "ingestion_assets",
+]
+
+ASSET_SCOPE_EXCLUDE_ROOT_HINTS = [
+    ".git",
+    ".github",
+    ".vscode",
+    "__pycache__",
+    ".pytest_cache",
+    "docs",
+    "tools",
+    "artifacts",
+
+    "Phase 4 - Personalization",
+    "Phase 4.5 - Localization",
+    "Phase 5 - Productionization",
+    "Phase 6 - Hardening and Scaling",
+    "Phase 7 - Games Recommendation",
+]
+
+ASSET_SCOPE_EXCLUDE_FILENAME_SUFFIXES = [
+    ".schema.json",
+    ".expect.json",
+]
+
+ASSET_SCOPE_EXCLUDE_FILENAME_CONTAINS = [
+    "baseline",
+    "registry",
+    "mcp.json",
+]
+
+
+# -----------------------------------------------------------------------------
+# SQLite column candidates
+# -----------------------------------------------------------------------------
 
 PATH_COLUMN_CANDIDATES = [
     "path",
@@ -174,6 +305,111 @@ TYPE_COLUMN_CANDIDATES = [
     "type",
     "kind",
 ]
+
+PATTERN_COLUMN_CANDIDATES = [
+    "pattern",
+    "pattern_id",
+    "pattern_name",
+    "pattern_type",
+    "tag",
+    "tags",
+]
+
+CHART_ID_COLUMN_CANDIDATES = [
+    "chart_id",
+    "song_id",
+    "asset_id",
+    "file_id",
+    "source_id",
+    "id",
+]
+
+TIMESTAMP_COLUMN_CANDIDATES = [
+    "created_at",
+    "updated_at",
+    "scanned_at",
+    "ingested_at",
+    "timestamp",
+]
+
+
+# -----------------------------------------------------------------------------
+# Dependency reality constants
+# -----------------------------------------------------------------------------
+
+REQUIRED_RUNTIME_DEPENDENCY_MODULES = [
+    "sqlite3",
+]
+
+OPTIONAL_RUNTIME_DEPENDENCY_MODULES = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+]
+
+API_RUNTIME_DEPENDENCY_MODULES = [
+    "fastapi",
+    "pydantic",
+]
+
+
+# -----------------------------------------------------------------------------
+# Flow / layer separation constants
+# -----------------------------------------------------------------------------
+
+FLOW_KEYWORDS = {
+    "chart_first": [
+        "chart",
+        "pattern",
+        "tips",
+    ],
+    "player_first": [
+        "player",
+        "recommend",
+        "tips",
+    ],
+    "progression": [
+        "progression",
+        "game",
+        "song",
+        "tips",
+    ],
+}
+
+LAYER_KEYWORDS = {
+    "models": ["model", "models"],
+    "normalizers": ["normalizer", "normalizers", "normalize"],
+    "converters": ["converter", "converters", "convert"],
+    "classifiers": ["classifier", "classifiers", "classify"],
+    "validators": ["validator", "validators", "validate"],
+    "persistence": ["persistence", "persist", "writer", "writers"],
+    "readers": ["reader", "readers", "read"],
+    "bridges": ["bridge", "bridges"],
+    "orchestrators": ["orchestrator", "orchestrators"],
+}
+
+PROHIBITED_LAYER_IMPORT_HINTS = {
+    "converters": [
+        ".writers",
+        ".persistence",
+        "sqlite3",
+    ],
+    "validators": [
+        ".writers",
+        ".persistence",
+        "sqlite3",
+    ],
+    "readers": [
+        ".writers",
+        ".persistence",
+    ],
+    "models": [
+        ".orchestrator",
+        ".orchestrators",
+        ".writers",
+        ".persistence",
+    ],
+}
 
 
 # -----------------------------------------------------------------------------
@@ -286,8 +522,7 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
     return discovered
 
 
-def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
-    roots: Dict[str, Path] = {}
+def discover_runtime_candidates(search_root: Path) -> Listroots: Dict[str, Path] = {}
 
     try:
         for main_py in search_root.rglob("main.py"):
@@ -332,6 +567,10 @@ def classify_import_failure(error_text: str, package_dirs: Dict[str, List[str]])
         if package_dirs.get("invalid_aliases") and not package_dirs.get("expected"):
             return "package_name_mismatch"
         return "missing_pythonpath_or_package"
+
+    if "No module named" in error_text:
+        return "dependency_missing"
+
     return "import_failure"
 
 
@@ -344,12 +583,70 @@ def classify_asset_path(path: Path) -> str:
     return "unknown"
 
 
+def is_path_under_hint(path: Path, hints: List[str]) -> bool:
+    normalized = normalize_path_text(path)
+    parts = [part.lower() for part in normalized.split("/")]
+    lowered = normalized.lower()
+
+    for hint in hints:
+        hint_lower = hint.lower()
+
+        if hint_lower in parts:
+            return True
+
+        if hint_lower in lowered:
+            return True
+
+    return False
+
+
+def is_excluded_asset_path(path: Path) -> bool:
+    normalized_name = path.name.lower()
+
+    if is_path_under_hint(path, ASSET_SCOPE_EXCLUDE_ROOT_HINTS):
+        return True
+
+    for suffix in ASSET_SCOPE_EXCLUDE_FILENAME_SUFFIXES:
+        if normalized_name.endswith(suffix.lower()):
+            return True
+
+    for token in ASSET_SCOPE_EXCLUDE_FILENAME_CONTAINS:
+        if token.lower() in normalized_name:
+            return True
+
+    return False
+
+
+def is_included_asset_path(path: Path) -> bool:
+    if is_excluded_asset_path(path):
+        return False
+
+    # Keep true chart extensions even if they live outside explicit roots.
+    # JSON/HTML/MHT are much broader and should prefer scoped roots.
+    suffix = path.suffix.lower()
+
+    if suffix in {".aff", ".sus"}:
+        return True
+
+    if suffix in {".json", ".html", ".mht"}:
+        return is_path_under_hint(path, ASSET_SCOPE_INCLUDE_ROOT_HINTS)
+
+    if suffix in TYPE_B_EXTENSIONS:
+        return True
+
+    return False
+
+
 def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
     discovered: Dict[str, List[str]] = {
         "type_A": [],
         "type_B": [],
         "unknown": [],
+        "excluded_candidates": [],
         "chart_assets_db": [],
+        "file_scan_inventory_db": [],
+        "chart_patterns_db": [],
+        "artifact_databases": [],
     }
 
     try:
@@ -357,13 +654,26 @@ def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
             if not path.is_file():
                 continue
 
-            if path.name == ASSET_DB_NAME:
-                discovered["chart_assets_db"].append(str(path.resolve()))
+            if path.name in ARTIFACT_DATABASE_NAMES:
+                logical_name = ARTIFACT_DATABASE_LOGICAL_NAMES.get(path.name, path.name)
+                discovered["artifact_databases"].append(str(path.resolve()))
+
+                if path.name == FILE_SCAN_INVENTORY_DB_NAME:
+                    discovered["file_scan_inventory_db"].append(str(path.resolve()))
+                elif path.name == CHART_ASSETS_DB_NAME:
+                    discovered["chart_assets_db"].append(str(path.resolve()))
+                elif path.name == CHART_PATTERNS_DB_NAME:
+                    discovered["chart_patterns_db"].append(str(path.resolve()))
+
                 continue
 
             asset_type = classify_asset_path(path)
+
             if asset_type in {"type_A", "type_B"}:
-                discovered[asset_type].append(str(path.resolve()))
+                if is_included_asset_path(path):
+                    discovered[asset_type].append(str(path.resolve()))
+                else:
+                    discovered["excluded_candidates"].append(str(path.resolve()))
     except Exception:
         pass
 
@@ -392,13 +702,55 @@ def table_quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def first_existing(columns: Iterable[str], candidates: List[str]) -> Optional[str]:
-    column_set = set(columns)
+def first_existing(columns: Iterable[str], candidates: List[str]) -> Optionalcolumn_set = set(columns)
     for candidate in candidates:
         if candidate in column_set:
             return candidate
     return None
 
+
+def sqlite_readonly_uri(path: Path) -> str:
+    # Read-only SQLite URI. URL-encoding keeps paths with spaces/special characters stable.
+    encoded_path = quote(path.resolve().as_posix(), safe="/:")
+    return f"file:{encoded_path}?mode=ro"
+
+
+def truncate_value(value: Any, limit: int = MAX_REPORT_SAMPLE_VALUE_LENGTH) -> Any:
+    # Prevent large text_representation values from bloating JSON / Markdown reports.
+    if isinstance(value, str) and len(value) > limit:
+        return value[:limit] + "...<truncated>"
+    return value
+
+
+def truncate_row(row: Dict[str, Any], limit: int = MAX_REPORT_SAMPLE_VALUE_LENGTH) -> Dict[str, Any]:
+    return {key: truncate_value(value, limit=limit) for key, value in row.items()}
+
+
+def import_module_probe(module_name: str) -> Dict[str, Any]:
+    try:
+        module = importlib.import_module(module_name)
+        return {
+            "status": "pass",
+            "file": getattr(module, "__file__", None),
+        }
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+
+
+def read_text_safely(path: Path, limit: int = 200_000) -> str:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if len(text) > limit:
+            return text[:limit]
+        return text
+    except Exception:
+        return ""
+
+ -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Verifier
@@ -414,6 +766,9 @@ class RuntimeVerifier:
         token: Optional[str],
         mcp_config: Optional[Path],
         asset_db: Optional[Path],
+        file_scan_inventory_db: Optional[Path],
+        chart_assets_db: Optional[Path],
+        chart_patterns_db: Optional[Path],
         run_rest: bool,
     ) -> None:
         self.repo_root = repo_root.resolve()
@@ -425,16 +780,32 @@ class RuntimeVerifier:
         self.api_url = api_url
         self.token = token or os.getenv("SOFTR_API_TOKEN")
         self.mcp_config = mcp_config
-        self.asset_db = asset_db
         self.run_rest = run_rest
+
+        # v0.6 compatibility.
+        # asset_db means chart_assets.db unless explicitly overridden below.
+        self.asset_db = asset_db
+
+        # v0.7 explicit artifact DB inputs.
+        self.file_scan_inventory_db = file_scan_inventory_db
+        self.chart_assets_db = chart_assets_db or asset_db
+        self.chart_patterns_db = chart_patterns_db
 
         self.discovered_files = discover_files(self.repo_root)
         self.discovered_packages = discover_package_dirs(self.repo_root)
         self.discovered_assets = discover_asset_files(self.repo_root)
 
         self.results: List[CheckResult] = []
+
+        # v0.6 compatibility cache.
         self.asset_db_snapshots: List[Dict[str, Any]] = []
+
+        # v0.7 artifact database caches.
+        self.artifact_db_snapshots: Dict[str, List[Dict[str, Any]]] = {}
+        self.artifact_db_records: Dict[str, List[Dict[str, Any]]] = {}
+
         self.repository_asset_hashes: Dict[str, str] = {}
+        self.repository_file_hashes: Dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Result helpers
@@ -451,10 +822,25 @@ class RuntimeVerifier:
         if domain == "mcp" and check == "config_present" and base_status == "skipped":
             return "skipped", "info"
 
+        if domain == "rest_api" and check == "rest_verification_enabled" and base_status == "skipped":
+            return "skipped", "info"
+
         if domain == "repo" and base_status == "warning":
             if self.backend_root_mode in {"auto_discovered", "explicit", "partial_discovery"}:
                 return "warning", "warning"
             return "fail", "fail"
+
+        if domain == "flow_verification" and base_status == "skipped":
+            return "skipped", "info"
+
+        if domain == "type_B_intelligence" and base_status == "skipped":
+            return "skipped", "info"
+
+        if domain == "artifact_databases" and base_status == "warning":
+            return "warning", "warning"
+
+        if domain == "dependency_reality" and base_status == "warning":
+            return "warning", "warning"
 
         mapping = {
             "pass": "info",
@@ -504,8 +890,7 @@ class RuntimeVerifier:
             if path_text not in sys.path:
                 sys.path.insert(0, path_text)
 
-    def read_json_file(self, path: Path) -> Optional[Any]:
-        try:
+    def read_json_file(self, path: Path) -> Optionaltry:
             return json.loads(path.read_text(encoding="utf-8"))
         except Exception as exc:
             self.add(
@@ -538,26 +923,72 @@ class RuntimeVerifier:
             return json.loads(text)
 
     # ------------------------------------------------------------------
-    # Asset DB helpers
+    # Artifact DB candidate helpers
     # ------------------------------------------------------------------
 
-    def resolve_asset_db_candidates(self) -> List[Path]:
-        candidates: List[Path] = []
+    def resolve_artifact_db_candidates(self, db_name: str) -> Listcandidates: List[Path] = []
 
-        if self.asset_db:
-            candidates.append(self.asset_db.expanduser().resolve())
+        explicit_map: Dict[str, Optional[Path]] = {
+            FILE_SCAN_INVENTORY_DB_NAME: self.file_scan_inventory_db,
+            CHART_ASSETS_DB_NAME: self.chart_assets_db,
+            CHART_PATTERNS_DB_NAME: self.chart_patterns_db,
+        }
 
-        for item in self.discovered_assets.get("chart_assets_db", []):
-            path = Path(item)
-            if path not in candidates:
-                candidates.append(path)
+        explicit = explicit_map.get(db_name)
+        if explicit:
+            candidates.append(explicit.expanduser().resolve())
+
+        discovered_key_map = {
+            FILE_SCAN_INVENTORY_DB_NAME: "file_scan_inventory_db",
+            CHART_ASSETS_DB_NAME: "chart_assets_db",
+            CHART_PATTERNS_DB_NAME: "chart_patterns_db",
+        }
+
+        discovered_key = discovered_key_map.get(db_name)
+        if discovered_key:
+            for item in self.discovered_assets.get(discovered_key, []):
+                path = Path(item).resolve()
+                if path not in candidates:
+                    candidates.append(path)
+
+        # Defensive fallback: search by DB filename if discovery did not capture it.
+        if not candidates:
+            try:
+                for path in self.repo_root.rglob(db_name):
+                    resolved = path.resolve()
+                    if resolved not in candidates:
+                        candidates.append(resolved)
+            except Exception:
+                pass
 
         return candidates
 
-    def inspect_sqlite_readonly(self, path: Path, sample_limit: int = 5) -> Dict[str, Any]:
+    def resolve_all_artifact_db_candidates(self) -> Dict[str, List[Path]]:
+        return {
+            db_name: self.resolve_artifact_db_candidates(db_name)
+            for db_name in ARTIFACT_DATABASE_NAMES
+        }
+
+    # v0.6 compatibility.
+    def resolve_asset_db_candidates(self) -> List[Path]:
+        return self.resolve_artifact_db_candidates(CHART_ASSETS_DB_NAME)
+
+    # ------------------------------------------------------------------
+    # SQLite inspection helpers
+    # ------------------------------------------------------------------
+
+    def inspect_sqlite_readonly(
+        self,
+        path: Path,
+        *,
+        logical_name: Optional[str] = None,
+        sample_limit: int = 5,
+    ) -> Dict[str, Any]:
         evidence: Dict[str, Any] = {
+            "logical_name": logical_name,
             "path": str(path),
             "exists": path.exists(),
+            "readable": False,
             "tables": [],
             "table_columns": {},
             "table_row_counts": {},
@@ -569,42 +1000,62 @@ class RuntimeVerifier:
             return evidence
 
         try:
-            uri = f"file:{path}?mode=ro"
+            uri = sqlite_readonly_uri(path)
             with sqlite3.connect(uri, uri=True) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
+
                 tables = [
                     row[0]
                     for row in cursor.execute(
                         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
                     ).fetchall()
                 ]
+
+                evidence["readable"] = True
                 evidence["tables"] = tables
 
                 for table in tables:
                     quoted_table = table_quote(table)
+
                     columns = [
                         row[1]
-                        for row in cursor.execute(f"PRAGMA table_info({quoted_table})").fetchall()
+                        for row in cursor.execute(
+                            f"PRAGMA table_info({quoted_table})"
+                        ).fetchall()
                     ]
+
                     evidence["table_columns"][table] = columns
+
                     evidence["candidate_columns"][table] = {
                         "path": first_existing(columns, PATH_COLUMN_CANDIDATES),
                         "hash": first_existing(columns, HASH_COLUMN_CANDIDATES),
                         "text": first_existing(columns, TEXT_COLUMN_CANDIDATES),
                         "reference_url": first_existing(columns, REFERENCE_URL_COLUMN_CANDIDATES),
                         "type": first_existing(columns, TYPE_COLUMN_CANDIDATES),
+                        "pattern": first_existing(columns, PATTERN_COLUMN_CANDIDATES),
+                        "chart_id": first_existing(columns, CHART_ID_COLUMN_CANDIDATES),
+                        "timestamp": first_existing(columns, TIMESTAMP_COLUMN_CANDIDATES),
                     }
 
                     try:
-                        count = cursor.execute(f"SELECT COUNT(*) FROM {quoted_table}").fetchone()[0]
+                        count = cursor.execute(
+                            f"SELECT COUNT(*) FROM {quoted_table}"
+                        ).fetchone()[0]
                         evidence["table_row_counts"][table] = count
                     except Exception as exc:
                         evidence["table_row_counts"][table] = {"error": str(exc)}
 
                     try:
-                        rows = cursor.execute(f"SELECT * FROM {quoted_table} LIMIT ?", (sample_limit,)).fetchall()
-                        evidence["table_samples"][table] = [dict(row) for row in rows]
+                        rows = cursor.execute(
+                            f"SELECT * FROM {quoted_table} LIMIT ?",
+                            (sample_limit,),
+                        ).fetchall()
+
+                        evidence["table_samples"][table] = [
+                            truncate_row(dict(row))
+                            for row in rows
+                        ]
                     except Exception as exc:
                         evidence["table_samples"][table] = {"error": str(exc)}
 
@@ -614,21 +1065,48 @@ class RuntimeVerifier:
 
         return evidence
 
+    def get_artifact_db_snapshots(self, db_name: str) -> List[Dict[str, Any]]:
+        if db_name not in self.artifact_db_snapshots:
+            logical_name = ARTIFACT_DATABASE_LOGICAL_NAMES.get(db_name, db_name)
+            self.artifact_db_snapshots[db_name] = [
+                self.inspect_sqlite_readonly(
+                    path,
+                    logical_name=logical_name,
+                )
+                for path in self.resolve_artifact_db_candidates(db_name)
+            ]
+
+        return self.artifact_db_snapshots[db_name]
+
+    def get_all_artifact_db_snapshots(self) -> Dict[str, List[Dict[str, Any]]]:
+        return {
+            db_name: self.get_artifact_db_snapshots(db_name)
+            for db_name in ARTIFACT_DATABASE_NAMES
+        }
+
+    # v0.6 compatibility.
     def get_asset_db_snapshots(self) -> List[Dict[str, Any]]:
         if not self.asset_db_snapshots:
-            self.asset_db_snapshots = [self.inspect_sqlite_readonly(path) for path in self.resolve_asset_db_candidates()]
+            self.asset_db_snapshots = self.get_artifact_db_snapshots(CHART_ASSETS_DB_NAME)
         return self.asset_db_snapshots
 
-    def iter_asset_db_records(self) -> List[Dict[str, Any]]:
+    # ------------------------------------------------------------------
+    # DB record iteration helpers
+    # ------------------------------------------------------------------
+
+    def iter_artifact_db_records(self, db_name: str) -> List[Dict[str, Any]]:
+        if db_name in self.artifact_db_records:
+            return self.artifact_db_records[db_name]
+
         records: List[Dict[str, Any]] = []
 
-        for snapshot in self.get_asset_db_snapshots():
+        for snapshot in self.get_artifact_db_snapshots(db_name):
             db_path = snapshot.get("path")
             if not db_path or snapshot.get("error") or not snapshot.get("exists"):
                 continue
 
             try:
-                uri = f"file:{db_path}?mode=ro"
+                uri = sqlite_readonly_uri(Path(db_path))
                 with sqlite3.connect(uri, uri=True) as conn:
                     conn.row_factory = sqlite3.Row
                     cursor = conn.cursor()
@@ -646,6 +1124,9 @@ class RuntimeVerifier:
                                 candidate_columns.get("text"),
                                 candidate_columns.get("reference_url"),
                                 candidate_columns.get("type"),
+                                candidate_columns.get("pattern"),
+                                candidate_columns.get("chart_id"),
+                                candidate_columns.get("timestamp"),
                             ]
                             if column
                         ]
@@ -653,13 +1134,22 @@ class RuntimeVerifier:
                         if not selected_columns:
                             continue
 
-                        select_sql = ", ".join(table_quote(column) for column in selected_columns)
-                        rows = cursor.execute(f"SELECT {select_sql} FROM {quoted_table}").fetchall()
+                        select_sql = ", ".join(
+                            table_quote(column)
+                            for column in selected_columns
+                        )
+
+                        rows = cursor.execute(
+                            f"SELECT {select_sql} FROM {quoted_table}"
+                        ).fetchall()
 
                         for row in rows:
                             row_dict = dict(row)
+
                             records.append(
                                 {
+                                    "db_name": db_name,
+                                    "logical_name": ARTIFACT_DATABASE_LOGICAL_NAMES.get(db_name, db_name),
                                     "db_path": db_path,
                                     "table": table,
                                     "columns": columns,
@@ -668,12 +1158,37 @@ class RuntimeVerifier:
                                     "text": row_dict.get(candidate_columns.get("text")) if candidate_columns.get("text") else None,
                                     "reference_url": row_dict.get(candidate_columns.get("reference_url")) if candidate_columns.get("reference_url") else None,
                                     "asset_type": row_dict.get(candidate_columns.get("type")) if candidate_columns.get("type") else None,
+                                    "pattern": row_dict.get(candidate_columns.get("pattern")) if candidate_columns.get("pattern") else None,
+                                    "chart_id": row_dict.get(candidate_columns.get("chart_id")) if candidate_columns.get("chart_id") else None,
+                                    "timestamp": row_dict.get(candidate_columns.get("timestamp")) if candidate_columns.get("timestamp") else None,
                                 }
                             )
+
             except Exception:
                 continue
 
+        self.artifact_db_records[db_name] = records
         return records
+
+    def iter_all_artifact_db_records(self) -> Dict[str, List[Dict[str, Any]]]:
+        return {
+            db_name: self.iter_artifact_db_records(db_name)
+            for db_name in ARTIFACT_DATABASE_NAMES
+        }
+
+    # v0.6 compatibility.
+    def iter_asset_db_records(self) -> List[Dict[str, Any]]:
+        return self.iter_artifact_db_records(CHART_ASSETS_DB_NAME)
+
+    def iter_file_scan_inventory_records(self) -> List[Dict[str, Any]]:
+        return self.iter_artifact_db_records(FILE_SCAN_INVENTORY_DB_NAME)
+
+    def iter_chart_pattern_records(self) -> List[Dict[str, Any]]:
+        return self.iter_artifact_db_records(CHART_PATTERNS_DB_NAME)
+
+    # ------------------------------------------------------------------
+    # Hash helpers
+    # ------------------------------------------------------------------
 
     def compute_repository_asset_hashes(self) -> Dict[str, str]:
         if self.repository_asset_hashes:
@@ -683,6 +1198,7 @@ class RuntimeVerifier:
         paths += [Path(item) for item in self.discovered_assets.get("type_B", [])]
 
         hashes: Dict[str, str] = {}
+
         for path in paths:
             try:
                 hashes[str(path.resolve())] = sha256_file(path)
@@ -691,6 +1207,82 @@ class RuntimeVerifier:
 
         self.repository_asset_hashes = hashes
         return hashes
+
+    def compute_repository_file_hashes(self) -> Dict[str, str]:
+        if self.repository_file_hashes:
+            return self.repository_file_hashes
+
+        hashes: Dict[str, str] = {}
+
+        try:
+            for path in self.repo_root.rglob("*"):
+                if not path.is_file():
+                    continue
+
+                # Skip git internals and generated artifacts to avoid noisy reports.
+                normalized = normalize_path_text(path)
+                if "/.git/" in normalized or "/artifacts/" in normalized:
+                    continue
+
+                try:
+                    hashes[str(path.resolve())] = sha256_file(path)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        self.repository_file_hashes = hashes
+        return hashes
+
+    # ------------------------------------------------------------------
+    # Preconditions / capability helpers
+    # ------------------------------------------------------------------
+
+    def package_import_probe_passed(self) -> bool:
+        for result in self.results:
+            if result.domain == "package_layout" and result.check == "package_import_probe":
+                return result.status == "pass"
+        return False
+
+    def runtime_import_probe_passed(self) -> bool:
+        for result in self.results:
+            if result.domain == "runtime_import" and result.check == "recommend_module_importable":
+                return result.status == "pass"
+        return False
+
+    def dependency_reality_passed(self) -> bool:
+        for result in self.results:
+            if result.domain == "dependency_reality" and result.check == "runtime_dependency_probe":
+                return result.status == "pass"
+        return False
+
+    def artifact_db_has_readable_rows(self, db_name: str) -> bool:
+        snapshots = self.get_artifact_db_snapshots(db_name)
+
+        for snapshot in snapshots:
+            if not snapshot.get("exists") or snapshot.get("error"):
+                continue
+
+            for count in snapshot.get("table_row_counts", {}).values():
+                if isinstance(count, int) and count > 0:
+                    return True
+
+        return False
+
+    def artifact_db_present(self, db_name: str) -> bool:
+        return bool(self.resolve_artifact_db_candidates(db_name))
+
+    def readable_artifact_db_count(self) -> int:
+        count = 0
+
+        for db_name in ARTIFACT_DATABASE_NAMES:
+            for snapshot in self.get_artifact_db_snapshots(db_name):
+                if snapshot.get("exists") and snapshot.get("readable") and not snapshot.get("error"):
+                    count += 1
+
+        return count
+
+   -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------
     # Checks
@@ -720,8 +1312,15 @@ class RuntimeVerifier:
                 if token_present
                 else "SOFTR_API_TOKEN is missing. This blocks REST checks only when --rest is enabled."
             ),
-            evidence={"token_present": token_present, "rest_checks_enabled": self.run_rest},
-            suggested_fix=(None if token_present else "Set SOFTR_API_TOKEN or pass --token when running REST verification."),
+            evidence={
+                "token_present": token_present,
+                "rest_checks_enabled": self.run_rest,
+            },
+            suggested_fix=(
+                None
+                if token_present
+                else "Set SOFTR_API_TOKEN or pass --token when running REST verification."
+            ),
         )
 
     def check_repository_discovery(self) -> None:
@@ -754,6 +1353,7 @@ class RuntimeVerifier:
                 "all_candidates": candidates,
                 "discovered_files": self.discovered_files,
                 "discovered_packages": self.discovered_packages,
+                "discovered_assets": self.discovered_assets,
             },
             suggested_fix=(
                 None
@@ -764,11 +1364,16 @@ class RuntimeVerifier:
 
     def check_repository_vs_runtime(self) -> None:
         canonical_package_root = self.backend_root / "src" / EXPECTED_PACKAGE
+
         repository_reality = {
             "backend_root_exists": self.backend_root.exists(),
             "canonical_package_root_exists": canonical_package_root.exists(),
             "main_py_exists": (self.backend_root / "main.py").exists(),
             "mcp_server_py_exists": (self.backend_root / "mcp_server.py").exists(),
+            "artifact_database_candidates": {
+                db_name: [str(path) for path in paths]
+                for db_name, paths in self.resolve_all_artifact_db_candidates().items()
+            },
         }
 
         import_reality: Dict[str, Any] = {
@@ -778,6 +1383,7 @@ class RuntimeVerifier:
         }
 
         self.inject_pythonpath()
+
         try:
             module = importlib.import_module(EXPECTED_PACKAGE)
             import_reality["rhythm_ingestion_importable"] = True
@@ -812,7 +1418,11 @@ class RuntimeVerifier:
                 "import_reality": import_reality,
                 "runtime_reality": runtime_reality,
             },
-            suggested_fix=(None if status == "pass" else "Resolve package root and PYTHONPATH before diagnosing runtime wiring."),
+            suggested_fix=(
+                None
+                if status == "pass"
+                else "Resolve package root and PYTHONPATH before diagnosing runtime wiring."
+            ),
         )
 
     def check_package_layout(self) -> None:
@@ -844,7 +1454,10 @@ class RuntimeVerifier:
                     "invalid_aliases": INVALID_PACKAGE_ALIASES,
                     "invalid_alias_dirs": invalid_dirs,
                 },
-                suggested_fix="Rename invalid package directory to src/rhythm_ingestion, or restore the canonical Python package path.",
+                suggested_fix=(
+                    "Rename invalid package directory to src/rhythm_ingestion, "
+                    "or restore the canonical Python package path."
+                ),
             )
         else:
             self.add(
@@ -852,7 +1465,10 @@ class RuntimeVerifier:
                 check="package_alias_detection",
                 status="pass",
                 summary="No invalid rhythm package alias directory was detected.",
-                evidence={"expected": EXPECTED_PACKAGE, "invalid_aliases": INVALID_PACKAGE_ALIASES},
+                evidence={
+                    "expected": EXPECTED_PACKAGE,
+                    "invalid_aliases": INVALID_PACKAGE_ALIASES,
+                },
             )
 
         canonical_src = self.backend_root / "src"
@@ -862,14 +1478,22 @@ class RuntimeVerifier:
             domain="package_layout",
             check="package_root_resolution",
             status="pass" if canonical_pkg.exists() else "fail",
-            summary=("Canonical package root exists." if canonical_pkg.exists() else "Canonical package root does not exist at selected backend root."),
+            summary=(
+                "Canonical package root exists."
+                if canonical_pkg.exists()
+                else "Canonical package root does not exist at selected backend root."
+            ),
             evidence={
                 "backend_root": str(self.backend_root),
                 "expected_src": str(canonical_src),
                 "expected_package_root": str(canonical_pkg),
                 "exists": canonical_pkg.exists(),
             },
-            suggested_fix=(None if canonical_pkg.exists() else "Ensure src/rhythm_ingestion exists under the selected backend root."),
+            suggested_fix=(
+                None
+                if canonical_pkg.exists()
+                else "Ensure src/rhythm_ingestion exists under the selected backend root."
+            ),
         )
 
     def check_package_import_probe(self) -> None:
@@ -883,14 +1507,22 @@ class RuntimeVerifier:
 
         results: Dict[str, Dict[str, Any]] = {}
         any_fail = False
+        dependency_failures: List[str] = []
 
         for module_name in probes:
             try:
                 module = importlib.import_module(module_name)
-                results[module_name] = {"status": "pass", "file": getattr(module, "__file__", None)}
+                results[module_name] = {
+                    "status": "pass",
+                    "file": getattr(module, "__file__", None),
+                }
             except Exception as exc:
                 any_fail = True
                 failure_type = classify_import_failure(str(exc), self.discovered_packages)
+
+                if failure_type == "dependency_missing":
+                    dependency_failures.append(str(exc))
+
                 results[module_name] = {
                     "status": "fail",
                     "error": str(exc),
@@ -898,13 +1530,96 @@ class RuntimeVerifier:
                     "traceback": traceback.format_exc(),
                 }
 
+        if any_fail and dependency_failures:
+            suggested_fix = (
+                "Install or expose missing runtime dependencies before treating this as a package layout issue. "
+                "The package root may be valid while downstream imports fail."
+            )
+        elif any_fail:
+            suggested_fix = (
+                "Fix package directory name and PYTHONPATH. "
+                "Expected canonical package: src/rhythm_ingestion."
+            )
+        else:
+            suggested_fix = None
+
         self.add(
             domain="package_layout",
             check="package_import_probe",
             status="fail" if any_fail else "pass",
-            summary=("One or more package import probes failed." if any_fail else "Package import probes passed."),
-            evidence={"sys_path_prefix": sys.path[:5], "results": results},
-            suggested_fix=("Fix package directory name and PYTHONPATH. Expected canonical package: src/rhythm_ingestion." if any_fail else None),
+            summary=(
+                "One or more package import probes failed."
+                if any_fail
+                else "Package import probes passed."
+            ),
+            evidence={
+                "sys_path_prefix": sys.path[:5],
+                "results": results,
+                "dependency_failures": dependency_failures,
+            },
+            suggested_fix=suggested_fix,
+        )
+
+    def check_dependency_reality(self) -> None:
+        self.inject_pythonpath()
+
+        required_results: Dict[str, Dict[str, Any]] = {}
+        optional_results: Dict[str, Dict[str, Any]] = {}
+        api_runtime_results: Dict[str, Dict[str, Any]] = {}
+
+        required_missing: List[str] = []
+        api_runtime_missing: List[str] = []
+
+        for module_name in REQUIRED_RUNTIME_DEPENDENCY_MODULES:
+            result = import_module_probe(module_name)
+            required_results[module_name] = result
+
+            if result.get("status") != "pass":
+                required_missing.append(module_name)
+
+        for module_name in OPTIONAL_RUNTIME_DEPENDENCY_MODULES:
+            result = import_module_probe(module_name)
+            optional_results[module_name] = result
+
+        for module_name in API_RUNTIME_DEPENDENCY_MODULES:
+            result = import_module_probe(module_name)
+            api_runtime_results[module_name] = result
+
+            if result.get("status") != "pass":
+                api_runtime_missing.append(module_name)
+
+        # Required dependencies are hard failures.
+        # API runtime dependencies are warning unless runtime API import currently depends on them.
+        if required_missing:
+            status = "fail"
+            summary = "One or more required runtime dependencies are missing."
+        elif api_runtime_missing:
+            status = "warning"
+            summary = "One or more API runtime dependencies are missing."
+        else:
+            status = "pass"
+            summary = "Required runtime dependencies are importable."
+
+        self.add(
+            domain="dependency_reality",
+            check="runtime_dependency_probe",
+            status=status,
+            summary=summary,
+            evidence={
+                "required_modules": REQUIRED_RUNTIME_DEPENDENCY_MODULES,
+                "optional_modules": OPTIONAL_RUNTIME_DEPENDENCY_MODULES,
+                "api_runtime_modules": API_RUNTIME_DEPENDENCY_MODULES,
+                "required_results": required_results,
+                "optional_results": optional_results,
+                "api_runtime_results": api_runtime_results,
+                "required_missing": required_missing,
+                "api_runtime_missing": api_runtime_missing,
+            },
+            suggested_fix=(
+                None
+                if status == "pass"
+                else "Install missing runtime dependencies or adjust CI setup before running runtime/API verification."
+            ),
         )
 
     def check_repo_shape(self) -> None:
@@ -919,12 +1634,17 @@ class RuntimeVerifier:
 
         for name, path in expected.items():
             exists = path.exists()
+
             self.add(
                 domain="repo",
                 check=f"exists_{name}",
                 status="pass" if exists else "warning",
                 summary=f"{name} {'exists' if exists else 'was not found'} at selected backend root.",
-                evidence={"path": str(path), "exists": exists, "backend_root": str(self.backend_root)},
+                evidence={
+                    "path": str(path),
+                    "exists": exists,
+                    "backend_root": str(self.backend_root),
+                },
             )
 
     def check_python_imports(self) -> None:
@@ -960,7 +1680,10 @@ class RuntimeVerifier:
                     status="fail",
                     summary="Games recommender is not injected into the Phase 6 API runtime.",
                     evidence={"_GAMES_RECOMMENDER": None},
-                    suggested_fix="Inject a Phase 7 games_recommender through create_app(..., games_recommender=...) in the runtime builder.",
+                    suggested_fix=(
+                        "Inject a Phase 7 games_recommender through "
+                        "create_app(..., games_recommender=...) in the runtime builder."
+                    ),
                 )
             else:
                 self.add(
@@ -968,18 +1691,36 @@ class RuntimeVerifier:
                     check="games_recommender_present",
                     status="pass",
                     summary="Games recommender appears to be injected.",
-                    evidence={"games_recommender_type": str(type(games_rec))},
+                    evidence={
+                        "games_recommender_type": str(type(games_rec)),
+                    },
                 )
 
         except Exception as exc:
             failure_type = classify_import_failure(str(exc), self.discovered_packages)
+
+            if failure_type == "dependency_missing":
+                suggested_fix = (
+                    "Runtime module exists but a dependency is missing. "
+                    "Run dependency_reality checks and install missing packages before diagnosing wiring."
+                )
+            else:
+                suggested_fix = (
+                    "Verify package layout and PYTHONPATH. "
+                    "Expected importable package path: src/rhythm_ingestion."
+                )
+
             self.add(
                 domain="runtime_import",
                 check="recommend_module_importable",
                 status="fail",
                 summary="Failed to import rhythm_ingestion.api.recommend.",
-                evidence={"error": str(exc), "root_cause": failure_type, "traceback": traceback.format_exc()},
-                suggested_fix="Verify package layout and PYTHONPATH. Expected importable package path: src/rhythm_ingestion.",
+                evidence={
+                    "error": str(exc),
+                    "root_cause": failure_type,
+                    "traceback": traceback.format_exc(),
+                },
+                suggested_fix=suggested_fix,
             )
 
     def check_runtime_meta_specs(self) -> None:
@@ -997,49 +1738,379 @@ class RuntimeVerifier:
                 "localization_meta",
             ]
 
+            # v0.7 artifact runtime expectations.
+            artifact_expected = [
+                "file_scan_state",
+                "song_db",
+                "song_db_meta",
+                "tips_meta",
+            ]
+
             missing = [key for key in required if key not in specs]
+            artifact_missing = [key for key in artifact_expected if key not in specs]
+
+            if missing:
+                status = "fail"
+                summary = "Some required runtime metadata artifact specs are missing."
+            elif artifact_missing:
+                status = "warning"
+                summary = "Core runtime specs exist, but some artifact-adjacent specs are missing."
+            else:
+                status = "pass"
+                summary = "Required runtime metadata artifact specs are registered."
 
             self.add(
                 domain="runtime_meta",
                 check="artifact_specs",
-                status="pass" if not missing else "fail",
-                summary=("Required runtime metadata artifact specs are registered." if not missing else "Some runtime metadata artifact specs are missing."),
+                status=status,
+                summary=summary,
                 evidence={
                     "required": required,
+                    "artifact_expected": artifact_expected,
                     "missing": missing,
+                    "artifact_missing": artifact_missing,
                     "registered": sorted(list(specs.keys())) if isinstance(specs, dict) else [],
                 },
-                suggested_fix=(None if not missing else "Add missing artifact keys to ARTIFACT_SPECS in runtime_meta.py."),
+                suggested_fix=(
+                    None
+                    if status == "pass"
+                    else "Add missing artifact keys to ARTIFACT_SPECS in runtime_meta.py if they are intended runtime artifacts."
+                ),
             )
 
         except Exception as exc:
             failure_type = classify_import_failure(str(exc), self.discovered_packages)
+
             self.add(
                 domain="runtime_meta",
                 check="artifact_specs",
                 status="fail",
                 summary="Could not inspect runtime_meta.ARTIFACT_SPECS.",
-                evidence={"error": str(exc), "root_cause": failure_type, "traceback": traceback.format_exc()},
+                evidence={
+                    "error": str(exc),
+                    "root_cause": failure_type,
+                    "traceback": traceback.format_exc(),
+                },
             )
+
+    def check_asset_scope_policy(self) -> None:
+        scoped_type_a = self.discovered_assets.get("type_A", [])
+        scoped_type_b = self.discovered_assets.get("type_B", [])
+        excluded_candidates = self.discovered_assets.get("excluded_candidates", [])
+
+        scoped_total = len(scoped_type_a) + len(scoped_type_b)
+        excluded_total = len(excluded_candidates)
+
+        if scoped_total > 0:
+            status = "pass"
+            summary = "Asset scope policy identified scoped asset candidates."
+        elif excluded_total > 0:
+            status = "warning"
+            summary = "Asset-like files were found, but all were excluded by asset scope policy."
+        else:
+            status = "info"
+            summary = "No scoped asset candidates were discovered."
+
+        self.add(
+            domain="asset_scope_policy",
+            check="scoped_asset_inventory",
+            status=status,
+            summary=summary,
+            evidence={
+                "strategy": "explicit_scope_with_exclusions",
+                "type_A_scoped_count": len(scoped_type_a),
+                "type_B_scoped_count": len(scoped_type_b),
+                "excluded_candidate_count": excluded_total,
+                "type_A_scoped_files": scoped_type_a,
+                "type_B_scoped_files": scoped_type_b,
+                "excluded_candidates": excluded_candidates,
+                "include_root_hints": ASSET_SCOPE_INCLUDE_ROOT_HINTS,
+                "exclude_root_hints": ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
+                "exclude_filename_suffixes": ASSET_SCOPE_EXCLUDE_FILENAME_SUFFIXES,
+                "exclude_filename_contains": ASSET_SCOPE_EXCLUDE_FILENAME_CONTAINS,
+                "note": "Repository files are not automatically chart assets. v0.7 scopes broad extensions such as JSON/HTML/MHT.",
+            },
+            suggested_fix=(
+                None
+                if status == "pass"
+                else "Place chart assets under explicit asset/chart roots or update the asset scope policy if the repository intentionally uses another location."
+            ),
+        )
+
+    def check_artifact_databases(self) -> None:
+        snapshots_by_db = self.get_all_artifact_db_snapshots()
+        candidates_by_db = self.resolve_all_artifact_db_candidates()
+
+        db_status: Dict[str, Dict[str, Any]] = {}
+        missing: List[str] = []
+        unreadable: List[str] = []
+        empty: List[str] = []
+
+        for db_name in ARTIFACT_DATABASE_NAMES:
+            candidates = candidates_by_db.get(db_name, [])
+            snapshots = snapshots_by_db.get(db_name, [])
+
+            exists_count = len([snapshot for snapshot in snapshots if snapshot.get("exists")])
+            readable_count = len(
+                [
+                    snapshot
+                    for snapshot in snapshots
+                    if snapshot.get("exists")
+                    and snapshot.get("readable")
+                    and not snapshot.get("error")
+                ]
+            )
+
+            row_count_total = 0
+            for snapshot in snapshots:
+                for count in snapshot.get("table_row_counts", {}).values():
+                    if isinstance(count, int):
+                        row_count_total += count
+
+            if not candidates:
+                missing.append(db_name)
+            elif readable_count == 0:
+                unreadable.append(db_name)
+            elif row_count_total == 0:
+                empty.append(db_name)
+
+            db_status[db_name] = {
+                "logical_name": ARTIFACT_DATABASE_LOGICAL_NAMES.get(db_name, db_name),
+                "candidate_count": len(candidates),
+                "candidates": [str(path) for path in candidates],
+                "exists_count": exists_count,
+                "readable_count": readable_count,
+                "row_count_total": row_count_total,
+                "snapshots": snapshots,
+            }
+
+        if missing:
+            status = "fail"
+            summary = "One or more required artifact databases are missing."
+        elif unreadable:
+            status = "fail"
+            summary = "One or more artifact databases were found but are not readable."
+        elif empty:
+            status = "warning"
+            summary = "All required artifact databases are present/readable, but one or more appear empty."
+        else:
+            status = "pass"
+            summary = "Required artifact databases are present, readable, and contain rows."
+
+        self.add(
+            domain="artifact_databases",
+            check="artifact_database_backbone",
+            status=status,
+            summary=summary,
+            evidence={
+                "required_databases": ARTIFACT_DATABASE_NAMES,
+                "relationship_chain": ARTIFACT_RELATIONSHIP_CHAIN,
+                "missing": missing,
+                "unreadable": unreadable,
+                "empty": empty,
+                "database_status": db_status,
+                "read_mode": "sqlite_readonly",
+            },
+            suggested_fix=(
+                None
+                if status == "pass"
+                else "Create or provide file_scan_inventory.db, chart_assets.db, and chart_patterns.db, then ensure each is valid SQLite and populated."
+            ),
+        )
+
+    def check_artifact_relationships(self) -> None:
+        scan_records = self.iter_file_scan_inventory_records()
+        asset_records = self.iter_asset_db_records()
+        pattern_records = self.iter_chart_pattern_records()
+
+        scan_paths = {
+            normalize_path_text(record.get("path"))
+            for record in scan_records
+            if normalize_path_text(record.get("path"))
+        }
+
+        asset_paths = {
+            normalize_path_text(record.get("path"))
+            for record in asset_records
+            if normalize_path_text(record.get("path"))
+        }
+
+        pattern_paths = {
+            normalize_path_text(record.get("path"))
+            for record in pattern_records
+            if normalize_path_text(record.get("path"))
+        }
+
+        asset_chart_ids = {
+            str(record.get("chart_id") or "").strip()
+            for record in asset_records
+            if str(record.get("chart_id") or "").strip()
+        }
+
+        pattern_chart_ids = {
+            str(record.get("chart_id") or "").strip()
+            for record in pattern_records
+            if str(record.get("chart_id") or "").strip()
+        }
+
+        scan_to_asset_matches: Set[str] = set()
+        orphan_scans: List[str] = []
+
+        for scan_path in sorted(scan_paths):
+            matched = False
+            for asset_path in asset_paths:
+                if (
+                    scan_path == asset_path
+                    or scan_path.endswith(asset_path)
+                    or asset_path.endswith(Path(scan_path).name)
+                ):
+                    matched = True
+                    scan_to_asset_matches.add(asset_path)
+                    break
+
+            if not matched:
+                orphan_scans.append(scan_path)
+
+        orphan_assets_from_scan = sorted([path for path in asset_paths if path not in scan_to_asset_matches])
+
+        asset_to_pattern_path_matches: Set[str] = set()
+        orphan_assets_without_patterns: List[str] = []
+
+        for asset_path in sorted(asset_paths):
+            matched = False
+            for pattern_path in pattern_paths:
+                if (
+                    asset_path == pattern_path
+                    or asset_path.endswith(pattern_path)
+                    or pattern_path.endswith(Path(asset_path).name)
+                ):
+                    matched = True
+                    asset_to_pattern_path_matches.add(pattern_path)
+                    break
+
+            if not matched:
+                orphan_assets_without_patterns.append(asset_path)
+
+        orphan_patterns_by_path = sorted([path for path in pattern_paths if path not in asset_to_pattern_path_matches])
+
+        asset_to_pattern_id_matches = asset_chart_ids.intersection(pattern_chart_ids)
+        orphan_asset_chart_ids = sorted([item for item in asset_chart_ids if item not in pattern_chart_ids])
+        orphan_pattern_chart_ids = sorted([item for item in pattern_chart_ids if item not in asset_chart_ids])
+
+        scan_to_asset_coverage = 100.0 if not scan_paths else round(
+            ((len(scan_paths) - len(orphan_scans)) / len(scan_paths)) * 100,
+            2,
+        )
+
+        asset_to_pattern_coverage_by_path = 100.0 if not asset_paths else round(
+            ((len(asset_paths) - len(orphan_assets_without_patterns)) / len(asset_paths)) * 100,
+            2,
+        )
+
+        id_relationship_available = bool(asset_chart_ids or pattern_chart_ids)
+        asset_to_pattern_coverage_by_id = (
+            100.0
+            if not asset_chart_ids
+            else round((len(asset_to_pattern_id_matches) / len(asset_chart_ids)) * 100, 2)
+        )
+
+        scan_db_ready = self.artifact_db_has_readable_rows(FILE_SCAN_INVENTORY_DB_NAME)
+        asset_db_ready = self.artifact_db_has_readable_rows(CHART_ASSETS_DB_NAME)
+        pattern_db_ready = self.artifact_db_has_readable_rows(CHART_PATTERNS_DB_NAME)
+
+        pass_condition = (
+            scan_db_ready
+            and asset_db_ready
+            and pattern_db_ready
+            and not orphan_scans
+            and not orphan_assets_from_scan
+            and (
+                not asset_paths
+                or not orphan_assets_without_patterns
+                or (
+                    id_relationship_available
+                    and not orphan_asset_chart_ids
+                    and not orphan_pattern_chart_ids
+                )
+            )
+        )
+
+        if pass_condition:
+            status = "pass"
+            summary = "Artifact relationship chain is complete."
+        else:
+            status = "fail"
+            summary = "Artifact relationship chain has missing links or orphan records."
+
+        self.add(
+            domain="artifact_relationships",
+            check="scan_asset_pattern_chain",
+            status=status,
+            summary=summary,
+            evidence={
+                "relationship_chain": ARTIFACT_RELATIONSHIP_CHAIN,
+                "scan_db_ready": scan_db_ready,
+                "asset_db_ready": asset_db_ready,
+                "pattern_db_ready": pattern_db_ready,
+                "scan_record_count": len(scan_records),
+                "asset_record_count": len(asset_records),
+                "pattern_record_count": len(pattern_records),
+                "scan_path_count": len(scan_paths),
+                "asset_path_count": len(asset_paths),
+                "pattern_path_count": len(pattern_paths),
+                "scan_to_asset_coverage": scan_to_asset_coverage,
+                "asset_to_pattern_coverage_by_path": asset_to_pattern_coverage_by_path,
+                "asset_chart_id_count": len(asset_chart_ids),
+                "pattern_chart_id_count": len(pattern_chart_ids),
+                "asset_to_pattern_id_match_count": len(asset_to_pattern_id_matches),
+                "asset_to_pattern_coverage_by_id": asset_to_pattern_coverage_by_id,
+                "orphan_scans": orphan_scans,
+                "orphan_assets_from_scan": orphan_assets_from_scan,
+                "orphan_assets_without_patterns": orphan_assets_without_patterns,
+                "orphan_patterns_by_path": orphan_patterns_by_path,
+                "orphan_asset_chart_ids": orphan_asset_chart_ids,
+                "orphan_pattern_chart_ids": orphan_pattern_chart_ids,
+                "matching_strategy": "path/name suffix heuristic plus chart_id comparison where available; read-only verification",
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else "Ensure scan results persist to file_scan_inventory.db, assets persist to chart_assets.db, and pattern extraction persists to chart_patterns.db with stable path/hash/chart_id links."
+            ),
+        )
+
+   -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     def check_asset_pipeline(self) -> None:
         type_a = self.discovered_assets.get("type_A", [])
         type_b = self.discovered_assets.get("type_B", [])
+        excluded_candidates = self.discovered_assets.get("excluded_candidates", [])
         db_candidates = self.resolve_asset_db_candidates()
+        all_db_candidates = self.resolve_all_artifact_db_candidates()
 
         self.add(
             domain="asset_pipeline",
             check="asset_inventory",
             status="info",
-            summary="Chart asset inventory captured without modifying asset state.",
+            summary="Scoped chart asset inventory captured without modifying asset state.",
             evidence={
                 "type_A_count": len(type_a),
                 "type_B_count": len(type_b),
+                "excluded_candidate_count": len(excluded_candidates),
                 "type_A_files": type_a,
                 "type_B_files": type_b,
+                "excluded_candidates": excluded_candidates,
                 "chart_assets_db_candidates": [str(path) for path in db_candidates],
+                "artifact_database_candidates": {
+                    db_name: [str(path) for path in paths]
+                    for db_name, paths in all_db_candidates.items()
+                },
                 "type_A_extensions": sorted(TYPE_A_EXTENSIONS),
                 "type_B_extensions": sorted(TYPE_B_EXTENSIONS),
+                "scope_policy": {
+                    "include_root_hints": ASSET_SCOPE_INCLUDE_ROOT_HINTS,
+                    "exclude_root_hints": ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
+                },
             },
         )
 
@@ -1049,17 +2120,33 @@ class RuntimeVerifier:
                 check="chart_assets_db_presence",
                 status="warning",
                 summary="No chart_assets.db file was discovered.",
-                evidence={"searched_root": str(self.repo_root)},
+                evidence={
+                    "searched_root": str(self.repo_root),
+                    "artifact_database_candidates": {
+                        db_name: [str(path) for path in paths]
+                        for db_name, paths in all_db_candidates.items()
+                    },
+                },
                 suggested_fix="Create or provide chart_assets.db after asset pipeline persistence is available.",
             )
             return
 
         db_evidence = self.get_asset_db_snapshots()
-        sqlite_errors = [item for item in db_evidence if item.get("error")]
+
+        sqlite_errors = [
+            item
+            for item in db_evidence
+            if item.get("error")
+        ]
+
         nonempty_tables = [
             item
             for item in db_evidence
-            if any((count or 0) > 0 for count in item.get("table_row_counts", {}).values() if isinstance(count, int))
+            if any(
+                (count or 0) > 0
+                for count in item.get("table_row_counts", {}).values()
+                if isinstance(count, int)
+            )
         ]
 
         self.add(
@@ -1071,8 +2158,15 @@ class RuntimeVerifier:
                 if not sqlite_errors
                 else "One or more chart_assets.db candidates could not be inspected in read-only mode."
             ),
-            evidence={"databases": db_evidence},
-            suggested_fix=(None if not sqlite_errors else "Verify chart_assets.db is a valid SQLite database and is accessible to CI."),
+            evidence={
+                "databases": db_evidence,
+                "read_mode": "sqlite_readonly",
+            },
+            suggested_fix=(
+                None
+                if not sqlite_errors
+                else "Verify chart_assets.db is a valid SQLite database and is accessible to CI."
+            ),
         )
 
         self.add(
@@ -1084,16 +2178,32 @@ class RuntimeVerifier:
                 if nonempty_tables
                 else "No non-empty chart_assets.db table was confirmed."
             ),
-            evidence={"nonempty_database_count": len(nonempty_tables), "database_count": len(db_evidence)},
-            suggested_fix=(None if nonempty_tables else "Run the asset persistence pipeline and verify its output table names/rows."),
+            evidence={
+                "nonempty_database_count": len(nonempty_tables),
+                "database_count": len(db_evidence),
+            },
+            suggested_fix=(
+                None
+                if nonempty_tables
+                else "Run the asset persistence pipeline and verify its output table names/rows."
+            ),
         )
 
     def check_asset_coverage(self) -> None:
-        repository_assets = [str(Path(item).resolve()) for item in self.discovered_assets.get("type_A", [])]
-        repository_assets += [str(Path(item).resolve()) for item in self.discovered_assets.get("type_B", [])]
+        repository_assets = [
+            str(Path(item).resolve())
+            for item in self.discovered_assets.get("type_A", [])
+        ]
+
+        repository_assets += [
+            str(Path(item).resolve())
+            for item in self.discovered_assets.get("type_B", [])
+        ]
+
         repository_assets_set = set(repository_assets)
 
         records = self.iter_asset_db_records()
+
         db_paths = {
             normalize_path_text(record.get("path"))
             for record in records
@@ -1106,30 +2216,47 @@ class RuntimeVerifier:
         for asset in sorted(repository_assets_set):
             normalized_asset = normalize_path_text(asset)
             matched = False
+
             for db_path in db_paths:
-                if db_path and (db_path == normalized_asset or normalized_asset.endswith(db_path) or db_path.endswith(Path(asset).name)):
+                if db_path and (
+                    db_path == normalized_asset
+                    or normalized_asset.endswith(db_path)
+                    or db_path.endswith(Path(asset).name)
+                ):
                     matched = True
                     db_path_matches.add(db_path)
                     break
+
             if not matched:
                 orphan_files.append(asset)
 
-        orphan_db_entries = sorted([path for path in db_paths if path not in db_path_matches])
+        orphan_db_entries = sorted(
+            [
+                path
+                for path in db_paths
+                if path not in db_path_matches
+            ]
+        )
+
         coverage_percentage = 100.0 if not repository_assets_set else round(
             ((len(repository_assets_set) - len(orphan_files)) / len(repository_assets_set)) * 100,
             2,
         )
 
-        pass_condition = bool(repository_assets_set) and coverage_percentage == 100.0 and not orphan_db_entries
+        pass_condition = (
+            bool(repository_assets_set)
+            and coverage_percentage == 100.0
+            and not orphan_db_entries
+        )
 
         self.add(
             domain="asset_coverage",
             check="repository_db_asset_coverage",
             status="pass" if pass_condition else "fail",
             summary=(
-                "Repository asset coverage matches chart_assets.db records."
+                "Scoped repository asset coverage matches chart_assets.db records."
                 if pass_condition
-                else "Repository asset coverage has gaps or unmatched DB entries."
+                else "Scoped repository asset coverage has gaps or unmatched DB entries."
             ),
             evidence={
                 "repository_asset_count": len(repository_assets_set),
@@ -1138,11 +2265,12 @@ class RuntimeVerifier:
                 "orphan_files": orphan_files,
                 "orphan_db_entries": orphan_db_entries,
                 "matching_strategy": "path/name suffix heuristic; read-only verification",
+                "scope_note": "v0.7 asset coverage uses scoped asset candidates, not all repository JSON files.",
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Persist all scanned assets to chart_assets.db and remove or resolve orphan DB records before deletion readiness."
+                else "Persist all scoped assets to chart_assets.db and resolve orphan DB records before deletion readiness."
             ),
         )
 
@@ -1151,28 +2279,55 @@ class RuntimeVerifier:
         records = self.iter_asset_db_records()
 
         db_hashes: Dict[str, List[Dict[str, Any]]] = {}
+
         for record in records:
             hash_value = str(record.get("hash") or "").strip()
+
             if not hash_value:
                 continue
+
             db_hashes.setdefault(hash_value, []).append(record)
 
-        duplicate_hashes = {hash_value: len(rows) for hash_value, rows in db_hashes.items() if len(rows) > 1}
+        duplicate_hashes = {
+            hash_value: len(rows)
+            for hash_value, rows in db_hashes.items()
+            if len(rows) > 1
+        }
+
         file_hash_set = set(repository_hashes.values())
         db_hash_set = set(db_hashes.keys())
 
-        missing_hash_files = sorted([path for path, digest in repository_hashes.items() if digest not in db_hash_set])
-        orphan_db_hashes = sorted([digest for digest in db_hash_set if digest not in file_hash_set])
+        missing_hash_files = sorted(
+            [
+                path
+                for path, digest in repository_hashes.items()
+                if digest not in db_hash_set
+            ]
+        )
+
+        orphan_db_hashes = sorted(
+            [
+                digest
+                for digest in db_hash_set
+                if digest not in file_hash_set
+            ]
+        )
+
         matched_hash_count = len(file_hash_set.intersection(db_hash_set))
 
-        pass_condition = bool(repository_hashes) and not missing_hash_files and not orphan_db_hashes and not duplicate_hashes
+        pass_condition = (
+            bool(repository_hashes)
+            and not missing_hash_files
+            and not orphan_db_hashes
+            and not duplicate_hashes
+        )
 
         self.add(
             domain="hash_verification",
             check="repository_db_hash_consistency",
             status="pass" if pass_condition else "fail",
             summary=(
-                "Repository asset hashes are consistent with chart_assets.db."
+                "Scoped repository asset hashes are consistent with chart_assets.db."
                 if pass_condition
                 else "Hash verification found missing, orphan, or duplicate hashes."
             ),
@@ -1183,11 +2338,12 @@ class RuntimeVerifier:
                 "missing_hash_files": missing_hash_files,
                 "orphan_db_hashes": orphan_db_hashes,
                 "duplicate_hashes": duplicate_hashes,
+                "scope_note": "v0.7 hashes scoped asset candidates rather than all repository files.",
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Store SHA-256 hashes for persisted assets and resolve missing/orphan/duplicate hash records."
+                else "Store SHA-256 hashes for persisted scoped assets and resolve missing/orphan/duplicate hash records."
             ),
         )
 
@@ -1199,6 +2355,7 @@ class RuntimeVerifier:
             explicit_type = str(record.get("asset_type") or "").lower()
             path_text = normalize_path_text(record.get("path"))
             suffix_type = classify_asset_path(Path(path_text)) if path_text else "unknown"
+
             if explicit_type in {"type_a", "type-a", "a", "deterministic"} or suffix_type == "type_A":
                 type_a_records.append(record)
 
@@ -1209,6 +2366,7 @@ class RuntimeVerifier:
             text = record.get("text")
             text_value = str(text or "")
             usable = bool(text_value.strip()) and len(text_value.strip()) >= MIN_TYPE_A_TEXT_LENGTH
+
             if usable:
                 usable_count += 1
             else:
@@ -1246,47 +2404,197 @@ class RuntimeVerifier:
             ),
         )
 
-    def check_runtime_db_read(self) -> None:
-        db_candidates = self.resolve_asset_db_candidates()
-        snapshots = self.get_asset_db_snapshots()
+    def check_type_B_intelligence(self) -> None:
+        type_b_files = self.discovered_assets.get("type_B", [])
         records = self.iter_asset_db_records()
 
-        readable_db_count = len([snapshot for snapshot in snapshots if snapshot.get("exists") and not snapshot.get("error")])
-        path_resolvable_count = len([record for record in records if normalize_path_text(record.get("path"))])
-        text_readable_count = len([record for record in records if str(record.get("text") or "").strip()])
-        reference_readable_count = len([record for record in records if str(record.get("reference_url") or "").strip()])
+        type_b_records: List[Dict[str, Any]] = []
+
+        for record in records:
+            explicit_type = str(record.get("asset_type") or "").lower()
+            path_text = normalize_path_text(record.get("path"))
+            suffix_type = classify_asset_path(Path(path_text)) if path_text else "unknown"
+
+            if explicit_type in {"type_b", "type-b", "b", "reference", "reference_only"} or suffix_type == "type_B":
+                type_b_records.append(record)
+
+        if not type_b_files and not type_b_records:
+            self.add(
+                domain="type_B_intelligence",
+                check="reference_intelligence_readiness",
+                status="skipped",
+                summary="No Type B assets were discovered; Type B intelligence verification was skipped.",
+                evidence={
+                    "type_B_file_count": 0,
+                    "type_B_record_count": 0,
+                    "expected": [
+                        "reference_url",
+                        "reference_metadata",
+                        "source_classification",
+                        "runtime_reference_visibility",
+                    ],
+                },
+            )
+            return
+
+        missing_reference_url: List[Dict[str, Any]] = []
+        reference_url_count = 0
+
+        for record in type_b_records:
+            reference_url = str(record.get("reference_url") or "").strip()
+
+            if reference_url:
+                reference_url_count += 1
+            else:
+                missing_reference_url.append(
+                    {
+                        "db_path": record.get("db_path"),
+                        "table": record.get("table"),
+                        "path": record.get("path"),
+                    }
+                )
+
+        pass_condition = bool(type_b_records) and not missing_reference_url
+
+        self.add(
+            domain="type_B_intelligence",
+            check="reference_intelligence_readiness",
+            status="pass" if pass_condition else "fail",
+            summary=(
+                "Type B reference intelligence is usable."
+                if pass_condition
+                else "One or more Type B records lack reference_url evidence."
+            ),
+            evidence={
+                "type_B_file_count": len(type_b_files),
+                "type_B_record_count": len(type_b_records),
+                "reference_url_count": reference_url_count,
+                "missing_reference_url_count": len(missing_reference_url),
+                "missing_reference_url": missing_reference_url,
+                "expected": [
+                    "reference_url",
+                    "reference_metadata",
+                    "source_classification",
+                    "runtime_reference_visibility",
+                ],
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else "Persist a usable reference_url for every Type B asset before treating it as runtime-ready."
+            ),
+        )
+
+    def check_runtime_db_read(self) -> None:
+        snapshots_by_db = self.get_all_artifact_db_snapshots()
+        records_by_db = self.iter_all_artifact_db_records()
+
+        chart_asset_candidates = self.resolve_asset_db_candidates()
+        chart_asset_snapshots = self.get_asset_db_snapshots()
+        chart_asset_records = self.iter_asset_db_records()
+
+        chart_pattern_candidates = self.resolve_artifact_db_candidates(CHART_PATTERNS_DB_NAME)
+        chart_pattern_snapshots = self.get_artifact_db_snapshots(CHART_PATTERNS_DB_NAME)
+        chart_pattern_records = self.iter_chart_pattern_records()
+
+        readable_artifact_db_count = self.readable_artifact_db_count()
+
+        asset_readable_db_count = len(
+            [
+                snapshot
+                for snapshot in chart_asset_snapshots
+                if snapshot.get("exists")
+                and snapshot.get("readable")
+                and not snapshot.get("error")
+            ]
+        )
+
+        pattern_readable_db_count = len(
+            [
+                snapshot
+                for snapshot in chart_pattern_snapshots
+                if snapshot.get("exists")
+                and snapshot.get("readable")
+                and not snapshot.get("error")
+            ]
+        )
+
+        path_resolvable_count = len(
+            [
+                record
+                for record in chart_asset_records
+                if normalize_path_text(record.get("path"))
+            ]
+        )
+
+        text_readable_count = len(
+            [
+                record
+                for record in chart_asset_records
+                if str(record.get("text") or "").strip()
+            ]
+        )
+
+        reference_readable_count = len(
+            [
+                record
+                for record in chart_asset_records
+                if str(record.get("reference_url") or "").strip()
+            ]
+        )
+
+        pattern_readable_count = len(
+            [
+                record
+                for record in chart_pattern_records
+                if str(record.get("pattern") or "").strip()
+                or str(record.get("chart_id") or "").strip()
+            ]
+        )
 
         runtime_reader_modules = [
             "rhythm_ingestion.assets.readers",
             "rhythm_ingestion.asset_pipeline.readers",
             "rhythm_ingestion.readers.chart_assets",
             "rhythm_ingestion.chart_assets.reader",
+            "rhythm_ingestion.readers.chart_patterns",
+            "rhythm_ingestion.chart_patterns.reader",
+            "rhythm_ingestion.readers.file_scan_inventory",
+            "rhythm_ingestion.file_scan_inventory.reader",
         ]
 
         import_results: Dict[str, Dict[str, Any]] = {}
         any_reader_imported = False
+
         self.inject_pythonpath()
 
         for module_name in runtime_reader_modules:
-            try:
-                module = importlib.import_module(module_name)
-                any_reader_imported = True
-                import_results[module_name] = {
-                    "status": "pass",
-                    "file": getattr(module, "__file__", None),
-                }
-            except Exception as exc:
-                import_results[module_name] = {
-                    "status": "fail",
-                    "error": str(exc),
-                }
+            result = import_module_probe(module_name)
+            import_results[module_name] = result
 
-        pass_condition = (
-            bool(db_candidates)
-            and readable_db_count > 0
-            and bool(records)
+            if result.get("status") == "pass":
+                any_reader_imported = True
+
+        asset_pass_condition = (
+            bool(chart_asset_candidates)
+            and asset_readable_db_count > 0
+            and bool(chart_asset_records)
             and path_resolvable_count > 0
             and (text_readable_count > 0 or reference_readable_count > 0)
+        )
+
+        pattern_pass_condition = (
+            bool(chart_pattern_candidates)
+            and pattern_readable_db_count > 0
+            and bool(chart_pattern_records)
+            and pattern_readable_count > 0
+        )
+
+        pass_condition = (
+            readable_artifact_db_count > 0
+            and asset_pass_condition
+            and pattern_pass_condition
+            and any_reader_imported
         )
 
         self.add(
@@ -1294,56 +2602,119 @@ class RuntimeVerifier:
             check="runtime_db_asset_readiness",
             status="pass" if pass_condition else "fail",
             summary=(
-                "Runtime DB asset read readiness evidence is sufficient."
+                "Runtime DB read readiness evidence is sufficient for assets and patterns."
                 if pass_condition
-                else "Runtime DB asset read readiness is incomplete."
+                else "Runtime DB read readiness is incomplete for assets, patterns, or readers."
             ),
             evidence={
-                "db_candidate_count": len(db_candidates),
-                "readable_db_count": readable_db_count,
-                "db_record_count": len(records),
+                "artifact_database_names": ARTIFACT_DATABASE_NAMES,
+                "readable_artifact_db_count": readable_artifact_db_count,
+                "records_by_db_count": {
+                    db_name: len(records)
+                    for db_name, records in records_by_db.items()
+                },
+                "chart_asset_db_candidate_count": len(chart_asset_candidates),
+                "chart_asset_readable_db_count": asset_readable_db_count,
+                "chart_asset_record_count": len(chart_asset_records),
                 "path_resolvable_count": path_resolvable_count,
                 "text_readable_count": text_readable_count,
                 "reference_readable_count": reference_readable_count,
+                "chart_pattern_db_candidate_count": len(chart_pattern_candidates),
+                "chart_pattern_readable_db_count": pattern_readable_db_count,
+                "chart_pattern_record_count": len(chart_pattern_records),
+                "pattern_readable_count": pattern_readable_count,
+                "asset_pass_condition": asset_pass_condition,
+                "pattern_pass_condition": pattern_pass_condition,
                 "reader_import_results": import_results,
                 "any_reader_imported": any_reader_imported,
-                "note": "Reader module import is evidence only; runtime DB read readiness is based on read-only DB inspection.",
+                "note": "v0.7 runtime DB readiness requires read-only DB evidence plus at least one importable reader module.",
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Add or verify DB readers and ensure chart_assets.db contains readable asset rows for runtime use."
+                else "Verify artifact DB readers and ensure chart_assets.db and chart_patterns.db contain readable runtime rows."
             ),
         )
 
     def check_deletion_readiness(self) -> None:
-        records = self.iter_asset_db_records()
+        scan_records = self.iter_file_scan_inventory_records()
+        asset_records = self.iter_asset_db_records()
+        pattern_records = self.iter_chart_pattern_records()
         repository_assets = self.discovered_assets.get("type_A", []) + self.discovered_assets.get("type_B", [])
 
         asset_coverage_result = next(
-            (result for result in self.results if result.domain == "asset_coverage" and result.check == "repository_db_asset_coverage"),
+            (
+                result
+                for result in self.results
+                if result.domain == "asset_coverage"
+                and result.check == "repository_db_asset_coverage"
+            ),
             None,
         )
+
         hash_result = next(
-            (result for result in self.results if result.domain == "hash_verification" and result.check == "repository_db_hash_consistency"),
+            (
+                result
+                for result in self.results
+                if result.domain == "hash_verification"
+                and result.check == "repository_db_hash_consistency"
+            ),
             None,
         )
+
         type_a_result = next(
-            (result for result in self.results if result.domain == "type_A_usability" and result.check == "text_representation_usability"),
+            (
+                result
+                for result in self.results
+                if result.domain == "type_A_usability"
+                and result.check == "text_representation_usability"
+            ),
             None,
         )
+
         runtime_db_result = next(
-            (result for result in self.results if result.domain == "runtime_db_read" and result.check == "runtime_db_asset_readiness"),
+            (
+                result
+                for result in self.results
+                if result.domain == "runtime_db_read"
+                and result.check == "runtime_db_asset_readiness"
+            ),
+            None,
+        )
+
+        artifact_db_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "artifact_databases"
+                and result.check == "artifact_database_backbone"
+            ),
+            None,
+        )
+
+        artifact_relationship_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "artifact_relationships"
+                and result.check == "scan_asset_pattern_chain"
+            ),
             None,
         )
 
         required = {
-            "chart_assets_db_complete": bool(records),
+            "file_scan_inventory_complete": bool(scan_records),
+            "chart_assets_db_complete": bool(asset_records),
+            "chart_patterns_db_complete": bool(pattern_records),
             "repository_coverage_complete": bool(repository_assets),
+            "artifact_databases_verified": artifact_db_result is not None and artifact_db_result.status == "pass",
+            "scan_to_asset_verified": artifact_relationship_result is not None and artifact_relationship_result.status == "pass",
+            "asset_to_pattern_verified": artifact_relationship_result is not None and artifact_relationship_result.status == "pass",
             "asset_coverage_verified": asset_coverage_result is not None and asset_coverage_result.status == "pass",
             "hash_consistency_verified": hash_result is not None and hash_result.status == "pass",
             "type_A_text_usable": type_a_result is not None and type_a_result.status == "pass",
             "runtime_can_use_db_assets": runtime_db_result is not None and runtime_db_result.status == "pass",
+            "runtime_can_use_db_patterns": runtime_db_result is not None and runtime_db_result.status == "pass",
         }
 
         passed = all(required.values())
@@ -1360,15 +2731,212 @@ class RuntimeVerifier:
             evidence={
                 "required": required,
                 "repository_asset_count": len(repository_assets),
-                "db_record_count": len(records),
+                "file_scan_inventory_record_count": len(scan_records),
+                "chart_asset_record_count": len(asset_records),
+                "chart_pattern_record_count": len(pattern_records),
                 "failure_action": "block_deletion_recommendation" if not passed else None,
+                "v0_7_gate_note": (
+                    "Deletion readiness now requires scan, asset, and pattern artifact verification."
+                ),
             },
             suggested_fix=(
                 None
                 if passed
-                else "Keep source chart files until coverage, hashes, Type A usability, and runtime DB reads all pass."
+                else "Keep source chart files until file scan inventory, chart assets, chart patterns, hashes, Type A usability, and runtime DB reads all pass."
             ),
         )
+
+ -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+      def check_flow_verification(self) -> None:
+        dependency_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "dependency_reality"
+                and result.check == "runtime_dependency_probe"
+            ),
+            None,
+        )
+
+        runtime_import_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "runtime_import"
+                and result.check == "recommend_module_importable"
+            ),
+            None,
+        )
+
+        dependency_ready = dependency_result is not None and dependency_result.status == "pass"
+        runtime_import_ready = runtime_import_result is not None and runtime_import_result.status == "pass"
+
+        if not dependency_ready or not runtime_import_ready:
+            self.add(
+                domain="flow_verification",
+                check="runtime_flow_entrypoints",
+                status="skipped",
+                summary="Flow verification was skipped because dependency or runtime import readiness is incomplete.",
+                evidence={
+                    "dependency_ready": dependency_ready,
+                    "runtime_import_ready": runtime_import_ready,
+                    "reason": "Flow verification requires dependency reality and runtime import reality to pass first.",
+                    "flows": sorted(FLOW_KEYWORDS.keys()),
+                },
+            )
+            return
+
+        python_files: List[Path] = []
+
+        try:
+            for path in self.backend_root.rglob("*.py"):
+                if path.is_file():
+                    python_files.append(path)
+        except Exception:
+            pass
+
+        flow_evidence: Dict[str, Dict[str, Any]] = {}
+
+        for flow_name, keywords in FLOW_KEYWORDS.items():
+            matched_files: List[str] = []
+            keyword_hits: Dict[str, List[str]] = {keyword: [] for keyword in keywords}
+
+            for path in python_files:
+                normalized_path = normalize_path_text(path)
+                text = read_text_safely(path)
+                combined = f"{normalized_path}\n{text}".lower()
+
+                file_matched = False
+
+                for keyword in keywords:
+                    if keyword.lower() in combined:
+                        keyword_hits[keyword].append(str(path.resolve()))
+                        file_matched = True
+
+                if file_matched:
+                    matched_files.append(str(path.resolve()))
+
+            missing_keywords = [
+                keyword
+                for keyword, hits in keyword_hits.items()
+                if not hits
+            ]
+
+            flow_evidence[flow_name] = {
+                "expected_keywords": keywords,
+                "matched_files": sorted(set(matched_files)),
+                "keyword_hits": {
+                    keyword: sorted(set(hits))
+                    for keyword, hits in keyword_hits.items()
+                },
+                "missing_keywords": missing_keywords,
+                "ready": not missing_keywords,
+            }
+
+        failed_flows = [
+            flow_name
+            for flow_name, evidence in flow_evidence.items()
+            if not evidence.get("ready")
+        ]
+
+        pass_condition = not failed_flows
+
+        self.add(
+            domain="flow_verification",
+            check="runtime_flow_entrypoints",
+            status="pass" if pass_condition else "warning",
+            summary=(
+                "Runtime flow entrypoint evidence was found for chart-first, player-first, and progression flows."
+                if pass_condition
+                else "Some runtime flow evidence is incomplete."
+            ),
+            evidence={
+                "flow_evidence": flow_evidence,
+                "failed_flows": failed_flows,
+                "verification_style": "static_keyword_entrypoint_check",
+                "note": "v0.7 flow verification checks routing evidence only. It does not validate inference correctness.",
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else "Add or expose clear flow entrypoints/stopping points for chart-first, player-first, and progression-driven flows."
+            ),
+        )
+
+    def check_layer_separation(self) -> None:
+        python_files: List[Path] = []
+
+        try:
+            for path in self.backend_root.rglob("*.py"):
+                if path.is_file():
+                    python_files.append(path)
+        except Exception:
+            pass
+
+        layer_files: Dict[str, List[str]] = {
+            layer: []
+            for layer in LAYER_KEYWORDS
+        }
+
+        violations: List[Dict[str, Any]] = []
+
+        for path in python_files:
+            normalized_path = normalize_path_text(path).lower()
+            text = read_text_safely(path)
+
+            matched_layers: Set[str] = set()
+
+            for layer, keywords in LAYER_KEYWORDS.items():
+                if any(keyword.lower() in normalized_path for keyword in keywords):
+                    matched_layers.add(layer)
+                    layer_files[layer].append(str(path.resolve()))
+
+            if not matched_layers:
+                continue
+
+            for layer in matched_layers:
+                prohibited_hints = PROHIBITED_LAYER_IMPORT_HINTS.get(layer, [])
+
+                for hint in prohibited_hints:
+                    if hint in text:
+                        violations.append(
+                            {
+                                "layer": layer,
+                                "file": str(path.resolve()),
+                                "prohibited_hint": hint,
+                            }
+                        )
+
+        pass_condition = not violations
+
+        self.add(
+            domain="layer_separation",
+            check="layer_boundary_audit",
+            status="pass" if pass_condition else "critical",
+            summary=(
+                "Layer separation audit found no prohibited import hints."
+                if pass_condition
+                else "Layer separation audit found prohibited boundary hints."
+            ),
+            evidence={
+                "layer_files": {
+                    layer: sorted(set(files))
+                    for layer, files in layer_files.items()
+                },
+                "violations": violations,
+                "prohibited_layer_import_hints": PROHIBITED_LAYER_IMPORT_HINTS,
+                "audit_style": "static_import_hint_audit",
+                "note": "This is a conservative static audit. It flags boundary risk; it does not mutate phase logic.",
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else "Move mixed responsibilities into the correct layer. Converters/validators/readers/models should not perform persistence or orchestration side effects."
+            ),
+        )
+
+ -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     def check_mcp_config(self) -> None:
         if not self.mcp_config:
@@ -1387,11 +2955,14 @@ class RuntimeVerifier:
                 check="config_present",
                 status="warning",
                 summary="Provided MCP config path does not exist.",
-                evidence={"path": str(self.mcp_config)},
+                evidence={
+                    "path": str(self.mcp_config),
+                },
             )
             return
 
         data = self.read_json_file(self.mcp_config)
+
         if data is None:
             return
 
@@ -1404,7 +2975,10 @@ class RuntimeVerifier:
                 check="rga_server_defined",
                 status="fail",
                 summary="rhythm-game-assistant MCP server is not defined.",
-                evidence={"path": str(self.mcp_config)},
+                evidence={
+                    "path": str(self.mcp_config),
+                    "server_keys": sorted(list(servers.keys())) if isinstance(servers, dict) else [],
+                },
             )
             return
 
@@ -1412,6 +2986,14 @@ class RuntimeVerifier:
         env = server.get("env") or {}
         args = server.get("args", [])
         command = server.get("command")
+
+        command_text = str(command or "")
+        args_text = " ".join(str(item) for item in args)
+
+        references_mcp_server = "mcp_server.py" in command_text or "mcp_server.py" in args_text
+
+        env_keys = sorted(list(env.keys())) if isinstance(env, dict) else []
+        has_rest_url = "RGA_REST_URL" in env_keys or any("RGA_REST_URL" in str(item) for item in args)
 
         self.add(
             domain="mcp",
@@ -1426,12 +3008,41 @@ class RuntimeVerifier:
                 "type": server_type,
                 "command": command,
                 "args": args,
-                "env_keys": sorted(list(env.keys())) if isinstance(env, dict) else [],
+                "env_keys": env_keys,
+                "references_mcp_server": references_mcp_server,
+                "has_rest_url_evidence": has_rest_url,
             },
-            suggested_fix=(None if server_type == "stdio" else "Use mcp_server.py as a local stdio MCP adapter and forward to RGA_REST_URL."),
+            suggested_fix=(
+                None
+                if server_type == "stdio"
+                else "Use mcp_server.py as a local stdio MCP adapter and forward to RGA_REST_URL."
+            ),
+        )
+
+        self.add(
+            domain="mcp",
+            check="mcp_adapter_visibility",
+            status="pass" if references_mcp_server else "warning",
+            summary=(
+                "MCP config references mcp_server.py."
+                if references_mcp_server
+                else "MCP config does not clearly reference mcp_server.py."
+            ),
+            evidence={
+                "command": command,
+                "args": args,
+                "references_mcp_server": references_mcp_server,
+                "server_keys": sorted(list(server.keys())) if isinstance(server, dict) else [],
+            },
+            suggested_fix=(
+                None
+                if references_mcp_server
+                else "Point the rhythm-game-assistant MCP server command/args to the local mcp_server.py adapter."
+            ),
         )
 
         tool_like_keys = []
+
         if isinstance(server, dict):
             for key in ["tools", "toolsets", "capabilities"]:
                 if key in server:
@@ -1445,6 +3056,7 @@ class RuntimeVerifier:
             evidence={
                 "tool_like_keys_present": tool_like_keys,
                 "server_keys": sorted(list(server.keys())) if isinstance(server, dict) else [],
+                "note": "Some MCP adapters register tools dynamically at runtime, so absence of tool keys in config is not automatically a failure.",
             },
         )
 
@@ -1455,7 +3067,9 @@ class RuntimeVerifier:
                 check="rest_verification_enabled",
                 status="skipped",
                 summary="REST checks were skipped. Use --rest to enable REST verification.",
-                evidence={"api_url": self.api_url},
+                evidence={
+                    "api_url": self.api_url,
+                },
             )
             return
 
@@ -1492,12 +3106,15 @@ class RuntimeVerifier:
         for check, payload in payloads.items():
             try:
                 result = self.post_json(payload)
+
                 self.add(
                     domain="rest_api",
                     check=check,
                     status="pass",
                     summary=f"{check} completed.",
-                    evidence={"response_keys": sorted(list(result.keys())) if isinstance(result, dict) else []},
+                    evidence={
+                        "response_keys": sorted(list(result.keys())) if isinstance(result, dict) else [],
+                    },
                 )
 
             except urllib.error.HTTPError as exc:
@@ -1512,8 +3129,15 @@ class RuntimeVerifier:
                     check=check,
                     status="fail",
                     summary=summary,
-                    evidence={"status": exc.code, "body": body},
-                    suggested_fix=("Inject a Phase 7 games_recommender into create_app(...)." if exc.code == 501 else None),
+                    evidence={
+                        "status": exc.code,
+                        "body": body,
+                    },
+                    suggested_fix=(
+                        "Inject a Phase 7 games_recommender into create_app(...)."
+                        if exc.code == 501
+                        else None
+                    ),
                 )
 
             except Exception as exc:
@@ -1522,24 +3146,40 @@ class RuntimeVerifier:
                     check=check,
                     status="fail",
                     summary=f"{check} failed.",
-                    evidence={"error": str(exc)},
+                    evidence={
+                        "error": str(exc),
+                    },
                 )
 
     def run_all(self) -> Dict[str, Any]:
         self.check_environment()
+
         self.check_repository_discovery()
         self.check_repository_vs_runtime()
+
         self.check_package_layout()
         self.check_repo_shape()
         self.check_package_import_probe()
+
+        self.check_dependency_reality()
         self.check_python_imports()
         self.check_runtime_meta_specs()
+
+        self.check_asset_scope_policy()
+        self.check_artifact_databases()
+        self.check_artifact_relationships()
+
         self.check_asset_pipeline()
         self.check_asset_coverage()
         self.check_hash_verification()
         self.check_type_A_usability()
+        self.check_type_B_intelligence()
         self.check_runtime_db_read()
         self.check_deletion_readiness()
+
+        self.check_flow_verification()
+        self.check_layer_separation()
+
         self.check_mcp_config()
         self.check_rest_contract()
 
@@ -1550,8 +3190,18 @@ class RuntimeVerifier:
             counts[result.status] = counts.get(result.status, 0) + 1
             severities[result.severity] = severities.get(result.severity, 0) + 1
 
+        artifact_db_candidates = {
+            db_name: [str(path) for path in paths]
+            for db_name, paths in self.resolve_all_artifact_db_candidates().items()
+        }
+
+        artifact_db_record_counts = {
+            db_name: len(records)
+            for db_name, records in self.iter_all_artifact_db_records().items()
+        }
+
         return {
-            "schema": "rga.runtime_verifier.report.v6",
+            "schema": "rga.runtime_verifier.report.v7",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "repo_root": str(self.repo_root),
             "backend_root": str(self.backend_root),
@@ -1560,6 +3210,12 @@ class RuntimeVerifier:
             "discovered_files": self.discovered_files,
             "discovered_packages": self.discovered_packages,
             "discovered_assets": self.discovered_assets,
+            "artifact_databases": {
+                "required": ARTIFACT_DATABASE_NAMES,
+                "relationship_chain": ARTIFACT_RELATIONSHIP_CHAIN,
+                "candidates": artifact_db_candidates,
+                "record_counts": artifact_db_record_counts,
+            },
             "api_url": self.api_url,
             "summary": counts,
             "severity_summary": severities,
@@ -1600,6 +3256,12 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("```")
     lines.append("")
 
+    lines.append("## Artifact Databases")
+    lines.append("```json")
+    lines.append(json.dumps(report.get("artifact_databases", {}), indent=2, ensure_ascii=False))
+    lines.append("```")
+    lines.append("")
+
     lines.append("## Discovered Files")
     lines.append("```json")
     lines.append(json.dumps(report.get("discovered_files", {}), indent=2, ensure_ascii=False))
@@ -1619,6 +3281,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("")
 
     lines.append("## Results")
+
     for item in report.get("results", []):
         lines.append(
             f"### [{item['status'].upper()} / {item['severity'].upper()}] "
@@ -1628,6 +3291,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         lines.append(item.get("summary", ""))
 
         evidence = item.get("evidence") or {}
+
         if evidence:
             lines.append("")
             lines.append("```json")
@@ -1653,15 +3317,79 @@ def main() -> int:
 
     parser.add_argument("--repo-root", default=".", help="Repository root or backend root.")
     parser.add_argument("--backend-root", default=None, help="Explicit backend root. Overrides auto-discovery.")
-    parser.add_argument("--api-url", default="http://127.0.0.1:8000/api/v1/recommend", help="RGA REST recommend endpoint.")
-    parser.add_argument("--token", default=None, help="Bearer token. Defaults to SOFTR_API_TOKEN environment variable.")
-    parser.add_argument("--mcp-config", default=None, help="Optional path to VS Code mcp.json.")
-    parser.add_argument("--asset-db", default=None, help="Optional explicit path to chart_assets.db. Otherwise discovered repository-wide.")
-    parser.add_argument("--rest", action="store_true", help="Run REST endpoint checks. Requires backend to be running.")
-    parser.add_argument("--json-out", default=None, help="Optional JSON report output path.")
-    parser.add_argument("--md-out", default=None, help="Optional Markdown report output path.")
-    parser.add_argument("--strict", action="store_true", help="Exit non-zero if any fail severity results are found.")
-    parser.add_argument("--strict-severity", choices=["fail", "critical"], default="fail", help="Severity threshold used by --strict.")
+
+    parser.add_argument(
+        "--api-url",
+        default="http://127.0.0.1:8000/api/v1/recommend",
+        help="RGA REST recommend endpoint.",
+    )
+
+    parser.add_argument(
+        "--token",
+        default=None,
+        help="Bearer token. Defaults to SOFTR_API_TOKEN environment variable.",
+    )
+
+    parser.add_argument(
+        "--mcp-config",
+        default=None,
+        help="Optional path to VS Code mcp.json.",
+    )
+
+    parser.add_argument(
+        "--asset-db",
+        default=None,
+        help="Optional explicit path to chart_assets.db. Kept for v0.6 compatibility.",
+    )
+
+    parser.add_argument(
+        "--file-scan-inventory-db",
+        default=None,
+        help="Optional explicit path to file_scan_inventory.db.",
+    )
+
+    parser.add_argument(
+        "--chart-assets-db",
+        default=None,
+        help="Optional explicit path to chart_assets.db.",
+    )
+
+    parser.add_argument(
+        "--chart-patterns-db",
+        default=None,
+        help="Optional explicit path to chart_patterns.db.",
+    )
+
+    parser.add_argument(
+        "--rest",
+        action="store_true",
+        help="Run REST endpoint checks. Requires backend to be running.",
+    )
+
+    parser.add_argument(
+        "--json-out",
+        default=None,
+        help="Optional JSON report output path.",
+    )
+
+    parser.add_argument(
+        "--md-out",
+        default=None,
+        help="Optional Markdown report output path.",
+    )
+
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if any fail severity results are found.",
+    )
+
+    parser.add_argument(
+        "--strict-severity",
+        choices=["fail", "critical"],
+        default="fail",
+        help="Severity threshold used by --strict.",
+    )
 
     args = parser.parse_args()
 
@@ -1672,6 +3400,21 @@ def main() -> int:
         token=args.token,
         mcp_config=Path(args.mcp_config).expanduser() if args.mcp_config else None,
         asset_db=Path(args.asset_db).expanduser() if args.asset_db else None,
+        file_scan_inventory_db=(
+            Path(args.file_scan_inventory_db).expanduser()
+            if args.file_scan_inventory_db
+            else None
+        ),
+        chart_assets_db=(
+            Path(args.chart_assets_db).expanduser()
+            if args.chart_assets_db
+            else None
+        ),
+        chart_patterns_db=(
+            Path(args.chart_patterns_db).expanduser()
+            if args.chart_patterns_db
+            else None
+        ),
         run_rest=args.rest,
     )
 
