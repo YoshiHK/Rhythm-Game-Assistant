@@ -2,21 +2,14 @@ name: RGA Runtime Verifier
 
 on:
   push:
-    branches:
-      - main
-
   pull_request:
-
   workflow_dispatch:
 
 jobs:
-
   runtime-verification:
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -25,6 +18,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run Runtime Auditor
+      - name: Run RGA Runtime Verifier
         run: |
-          python tools/runtime_verifier.py
+          python tools/runtime_verifier.py \
+            --repo-root "engine/Unified Ingestion Manager/Unified Ingestion Manager" \
+            --json-out artifacts/runtime_verifier_report.json \
+            --md-out artifacts/runtime_verifier_report.md
+
+      - name: Upload verifier report
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-verifier-report
+          path: artifacts/
