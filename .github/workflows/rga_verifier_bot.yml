@@ -22,15 +22,35 @@ jobs:
         run: |
           echo "PWD:"
           pwd
+
           echo ""
           echo "Top-level files:"
           find . -maxdepth 2 -type f | sort
+
           echo ""
           echo "Candidate main.py files:"
           find . -type f -name "main.py" | sort
+
           echo ""
           echo "Candidate recommend.py files:"
-          find . -type f -path "*/src/rhythm_ingestion/api/recommend.py" | sort
+          find . -type f -name "recommend.py" | sort
+
+          echo ""
+          echo "Candidate app.py files:"
+          find . -type f -name "app.py" | sort
+
+          echo ""
+          echo "Candidate runtime_meta.py files:"
+          find . -type f -name "runtime_meta.py" | sort
+
+          echo ""
+          echo "Candidate mcp_server.py files:"
+          find . -type f -name "mcp_server.py" | sort
+
+          echo ""
+          echo "Candidate rhythm package directories:"
+          find . -type d | grep "rhythm" || true
+
           echo ""
           echo "Candidate runtime_verifier.py files:"
           find . -type f -name "runtime_verifier.py" | sort
@@ -38,6 +58,7 @@ jobs:
       - name: Run RGA Runtime Verifier
         run: |
           mkdir -p artifacts
+
           python tools/runtime_verifier.py \
             --repo-root . \
             --json-out artifacts/runtime_verifier_report.json \
