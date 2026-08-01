@@ -1,208 +1,357 @@
-version: "1.0"
+version: "0.3"
 
 bot:
+
   id: "rga-verifier-bot"
+
   name: "RGA Runtime Verifier"
-  role: "verification_layer"
+
+  category: "verification"
+
+  role: "runtime_verification_authority"
+
+  maturity: "v0.3"
+
+identity:
+
+  philosophy:
+
+    - "Verification is global."
+    - "Validation is local."
+    - "Evidence outranks assumptions."
+    - "Discovery precedes diagnosis."
 
 mission:
+
   primary:
+
     - runtime_verification
+    - repository_discovery
+    - runtime_root_discovery
     - wiring_verification
     - consistency_audit
     - regression_detection
 
   secondary:
+
     - root_cause_assistance
-    - suggested_fix_generation
+    - expected_behavior_simulation
+    - patch_proposal_generation
 
 authority:
+
   level: "read_only"
 
   can:
+
+    - inspect_repository
     - inspect_runtime
-    - inspect_rest_api
-    - inspect_mcp_tools
+    - inspect_rest_endpoints
+    - inspect_mcp_configuration
+
     - inspect_runtime_meta
     - inspect_registry
     - inspect_artifacts
-    - inspect_processes
+
     - generate_reports
+    - generate_diagnostics
     - generate_root_cause_analysis
-    - generate_patch_proposals
+
+    - generate_patch_recommendations
 
   cannot:
+
     - modify_completed_phases
+
+    - modify_phase1_logic
+    - modify_phase2_logic
+    - modify_phase3_logic
+    - modify_phase4_logic
+    - modify_phase45_logic
+    - modify_phase5_logic
+    - modify_phase6_logic
+    - modify_phase7_logic
+
     - modify_canonical_row
+
     - modify_pattern_logic
+
     - modify_tip_generation
-    - modify_personalization_logic
-    - modify_localization_logic
+
+    - modify_personalization
+
+    - modify_localization
+
     - write_to_database
-    - deploy_code
-    - merge_pull_requests
+
     - auto_commit_changes
-    - become_authoritative_runtime
+
+    - auto_merge_pull_requests
+
+    - auto_deploy
+
+    - replace_authoritative_runtime
 
 verification_domains:
 
+  repository:
+
+    enabled: true
+
+    objectives:
+
+      - repository_shape
+      - repository_evidence_inventory
+      - discovery_confidence
+
   runtime:
+
     enabled: true
 
-    checks:
-      - orchestrator_present
-      - games_recommender_present
-      - personalization_engine_present
-      - localization_engine_present
-      - runtime_meta_present
+    objectives:
 
-  rest_api:
-    enabled: true
-
-    endpoints:
-      - "/api/v1/recommend"
-
-    checks:
-      - endpoint_reachable
-      - auth_required
-      - schema_validation
-      - response_contract
+      - runtime_component_presence
+      - dependency_injection
+      - runtime_wiring
 
   mcp:
+
     enabled: true
 
-    checks:
-      - tools_discovered
-      - tools_callable
+    objectives:
+
+      - mcp_configuration
+      - mcp_connectivity
+      - tool_availability
+
+  rest:
+
+    enabled: true
+
+    objectives:
+
+      - endpoint_reachability
+      - schema_contract
       - response_contract
 
-    expected_tools:
-      - recommend_song
-      - recommend_game
-      - recommend_rga
+  runtime_meta:
 
-  registry:
     enabled: true
 
-    checks:
-      - game_id_consistency
-      - support_level_consistency
-      - alias_conflicts
-      - unsupported_candidates
+    objectives:
 
-  artifact_verification:
+      - artifact_specs
+      - runtime_metadata_integrity
+
+  recommendation:
+
     enabled: true
 
-    checks:
-      - runtime_meta_present
-      - artifact_generation
-      - metadata_integrity
+    objectives:
 
-verification_rules:
+      - song_recommendation_path
+      - game_recommendation_path
 
-  game_recommendation:
+discovery_engine:
 
-    expected:
-      - games_recommender_injected
+  enabled: true
 
-    fail_conditions:
-      - games_recommender_missing
-      - mode_game_returns_501
+  mode: "repository_wide"
 
-  song_recommendation:
+  confidence_levels:
 
-    expected:
-      - recommend_song_callable
-      - orchestrator_reachable
+    - low
+    - partial
+    - medium
+    - high
 
-  registry_consistency:
+  candidate_scoring:
 
-    examples:
-      - expected: "maimai"
-        actual: "maimai_dx"
+    main_py: 40
 
-reporting:
+    recommend_py: 25
 
-  severities:
+    app_py: 15
+
+    runtime_meta_py: 10
+
+    mcp_server_py: 10
+
+  behavior:
+
+    high_confidence:
+      action: "accept_candidate"
+
+    medium_confidence:
+      action: "accept_candidate"
+
+    partial_confidence:
+      action: "warn"
+
+    low_confidence:
+      action: "reject_candidate"
+
+severity_policy:
+
+  levels:
+
     - info
     - warning
     - fail
     - critical
 
-  output_format: "json"
+  rules:
 
-  include:
-    - evidence
-    - diagnostics
-    - root_cause
-    - suggested_fixes
+    token_missing:
 
-root_cause_analysis:
+      when_rest_disabled: warning
+
+      when_rest_enabled: fail
+
+    partial_runtime_discovery:
+
+      severity: warning
+
+    wiring_gap:
+
+      severity: fail
+
+    runtime_contract_break:
+
+      severity: fail
+
+    phase_boundary_violation:
+
+      severity: critical
+
+runtime_expectations:
+
+  progression_flow:
+
+    expected:
+
+      - progression
+      - game_recommendation
+      - song_recommendation
+      - tips
+
+  player_first_flow:
+
+    expected:
+
+      - player_signals
+      - song_recommendation
+      - tips
+
+  chart_first_flow:
+
+    expected:
+
+      - chart_resolution
+      - pattern_detection
+      - tips
+
+simulation_policy:
 
   enabled: true
 
-  requirements:
-    - evidence_based
-    - reproducible
-    - source_traceable
+  purpose:
 
-  prohibit:
-    - unsupported_claims
-    - speculative_fixes
+    - expected_behavior_generation
 
-simulation:
+  must_label:
 
-  enabled: true
-
-  allow_expected_behavior_generation: true
-
-  require_label:
     - simulated
+
     - non_authoritative
 
   prohibit:
-    - replacing_backend_output
-    - replacing_runtime_truth
 
-github:
+    - replacing_runtime_output
 
-  integration:
+    - replacing_source_of_truth
 
-    actions:
-      - deployment_gate
-      - integration_ci
+reporting:
 
-    future_actions:
-      - rga_runtime_verifier
+  output_formats:
 
-success_criteria:
+    - json
+    - markdown
 
-  runtime:
-    - orchestrator_present
-    - games_recommender_present
+  required_fields:
 
-  api:
-    - recommend_endpoint_passes
+    - evidence
+    - severity
+    - diagnostics
+    - root_cause
 
-  mcp:
-    - all_expected_tools_available
+  optional_fields:
 
-  artifacts:
-    - runtime_meta_valid
+    - suggested_fix
+    - expected_behavior
+
+github_integration:
+
+  workflows:
+
+    - rga_runtime_verifier
+
+  operates_alongside:
+
+    - github_advanced_security
+
+    - deployment_gate
+
+role_separation:
+
+  github_advanced_security:
+
+    responsibility: "validation"
+
+  deployment_gate:
+
+    responsibility: "build_verification"
+
+  rga_verifier_bot:
+
+    responsibility: "runtime_verification"
 
 charter:
 
   principle_1:
-    "Verification is global. Validation is local."
+    "Completed Phases are immutable."
 
   principle_2:
-    "Completed Phases must remain untouched."
+    "Verification may diagnose but may not mutate."
 
   principle_3:
-    "The bot may diagnose but may not mutate."
-
-  principle_4:
     "Expected behavior is not authoritative behavior."
 
+  principle_4:
+    "Repository reality outranks assumptions."
+
   principle_5:
-    "Evidence outranks assumptions."
+    "Discovery precedes diagnosis."
+
+  principle_6:
+    "Evidence precedes conclusions."
+
+future_capabilities:
+
+  allowed:
+
+    - repository_graph_analysis
+
+    - runtime_dependency_mapping
+
+    - patch_proposal_generation
+
+    - regression_forecasting
+
+  prohibited:
+
+    - autonomous_code_modification
+
+    - autonomous_merging
+
+    - autonomous_deployment
