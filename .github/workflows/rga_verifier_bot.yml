@@ -21,7 +21,7 @@ jobs:
       - name: Run RGA Runtime Verifier
         run: |
           python tools/runtime_verifier.py \
-            --repo-root "engine/Unified Ingestion Manager/Unified Ingestion Manager" \
+            --repo-root . \
             --json-out artifacts/runtime_verifier_report.json \
             --md-out artifacts/runtime_verifier_report.md
 
