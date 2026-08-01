@@ -521,7 +521,9 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
 
     return discovered
 
-def discover_runtime_candidates(search_root: Path) -> Listroots: Dict[str, Path] = {}
+def discover_runtime_candidates(
+    search_root: Path,
+) -> Listroots: Dict[str, Path] = {}
 
     try:
         for main_py in search_root.rglob("main.py"):
@@ -551,7 +553,6 @@ def discover_runtime_candidates(search_root: Path) -> Listroots: Dict[str, Path]
     )
 
     return candidates
-
 
 def choose_backend_root(
     repo_root: Path,
