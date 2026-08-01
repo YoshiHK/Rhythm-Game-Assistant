@@ -1,12 +1,11 @@
-
-version: "0.5"
+version: "0.6"
 
 bot:
   id: "rga-verifier-bot"
   name: "RGA Runtime Verifier"
   category: "verification"
   role: "runtime_verification_authority"
-  maturity: "v0.5"
+  maturity: "v0.6"
 
 identity:
   philosophy:
@@ -17,6 +16,7 @@ identity:
     - "Repository reality must be distinguished from import reality."
     - "Import reality must be distinguished from runtime reality."
     - "Repository reality outranks assumptions."
+    - "Coverage must be verified before deletion readiness."
 
 mission:
   primary:
@@ -29,6 +29,10 @@ mission:
     - regression_detection
     - repository_runtime_consistency_verification
     - asset_pipeline_verification
+    - asset_coverage_verification
+    - hash_consistency_verification
+    - type_A_usability_verification
+    - runtime_db_read_verification
 
   secondary:
     - root_cause_assistance
@@ -51,6 +55,9 @@ authority:
     - inspect_artifacts
     - inspect_asset_pipeline
     - inspect_chart_assets_db
+    - inspect_asset_coverage
+    - inspect_hash_inventory
+    - inspect_runtime_db_reads
     - generate_reports
     - generate_diagnostics
     - generate_root_cause_analysis
@@ -121,6 +128,39 @@ verification_domains:
       - persistence_verification
       - deletion_readiness
 
+  asset_coverage:
+    enabled: true
+    objectives:
+      - repository_asset_count
+      - db_asset_count
+      - coverage_percentage
+      - orphan_files
+      - orphan_db_entries
+
+  hash_verification:
+    enabled: true
+    objectives:
+      - file_hash_inventory
+      - db_hash_inventory
+      - hash_match_validation
+      - duplicate_hash_detection
+
+  type_A_usability:
+    enabled: true
+    objectives:
+      - text_representation_presence
+      - text_representation_length
+      - conversion_success
+      - usability_verification
+
+  runtime_db_read:
+    enabled: true
+    objectives:
+      - db_reader_availability
+      - db_asset_resolution
+      - db_asset_runtime_visibility
+      - runtime_db_asset_readiness
+
   mcp:
     enabled: true
     objectives:
@@ -170,6 +210,7 @@ asset_expectations:
       - text_representation
       - converter_success
       - usable_content
+      - usability_verified
 
   type_B:
     expected:
@@ -180,14 +221,16 @@ asset_expectations:
       - scanned_asset_count
       - registered_asset_count
       - coverage_match
+      - coverage_percentage
 
 verification_gates:
   deletion_readiness:
     required:
       - chart_assets_db_complete
       - repository_coverage_complete
+      - asset_coverage_verified
+      - hash_consistency_verified
       - type_A_text_usable
-      - hashes_verified
       - runtime_can_use_db_assets
 
     failure_action:
@@ -260,6 +303,18 @@ severity_policy:
     asset_pipeline_break:
       severity: fail
 
+    asset_coverage_failure:
+      severity: fail
+
+    hash_verification_failure:
+      severity: fail
+
+    type_A_usability_failure:
+      severity: fail
+
+    runtime_db_read_failure:
+      severity: fail
+
     deletion_readiness_failure:
       severity: fail
 
@@ -275,7 +330,14 @@ root_cause_categories:
   - runtime_wiring_gap
   - asset_db_missing
   - asset_coverage_gap
+  - orphan_file
+  - orphan_db_entry
+  - hash_mismatch
+  - duplicate_hash
+  - missing_hash
   - unusable_text_representation
+  - unusable_type_A_asset
+  - runtime_db_read_failure
   - missing_reference_url
   - deletion_gate_failed
 
@@ -335,6 +397,13 @@ reporting:
     - import_reality
     - runtime_reality
     - asset_verification
+    - asset_coverage
+    - coverage_percentage
+    - orphan_files
+    - orphan_db_entries
+    - hash_verification
+    - type_A_usability
+    - runtime_db_readiness
     - deletion_readiness
 
 github_integration:
@@ -365,6 +434,7 @@ charter:
   principle_7: "Repository reality must be distinguished from import reality."
   principle_8: "Import reality must be distinguished from runtime reality."
   principle_9: "Asset verification must not modify asset state."
+  principle_10: "Coverage verification precedes deletion readiness."
 
 future_capabilities:
   allowed:
@@ -376,6 +446,8 @@ future_capabilities:
     - regression_forecasting
     - asset_coverage_analysis
     - repository_runtime_consistency_mapping
+    - semantic_readiness_verification
+    - deletion_readiness_scoring
 
   prohibited:
     - autonomous_code_modification
