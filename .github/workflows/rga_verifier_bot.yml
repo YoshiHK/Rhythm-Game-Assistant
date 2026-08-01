@@ -9,6 +9,11 @@ jobs:
   runtime-verification:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      security-events: read
+      actions: read
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,13 +24,19 @@ jobs:
           python-version: "3.12"
 
       ############################################################
-      # Repository Discovery
+      # Artifact Directory
+      ############################################################
+
+      - name: Prepare Artifact Directory
+        run: |
+          mkdir -p artifacts
+
+      ############################################################
+      # Repository Discovery Evidence
       ############################################################
 
       - name: Repository Discovery Evidence
         run: |
-          mkdir -p artifacts
-
           pwd > artifacts/repository_root.txt
 
           find . -type f | sort \
@@ -34,8 +45,17 @@ jobs:
           find . -type d | sort \
             > artifacts/repository_directories.txt
 
+          git status --short \
+            > artifacts/git_status_short.txt || true
+
+          git rev-parse HEAD \
+            > artifacts/git_head.txt || true
+
+          git branch --show-current \
+            > artifacts/git_branch.txt || true
+
       ############################################################
-      # Runtime Discovery
+      # Runtime Discovery Evidence
       ############################################################
 
       - name: Runtime Discovery Evidence
@@ -63,22 +83,179 @@ jobs:
             > artifacts/rhythm_directories.txt || true
 
       ############################################################
+      # Package / Import Reality Evidence
+      ############################################################
+
+      - name: Package Reality Evidence
+        run: |
+          find . -type d -name "rhythm_ingestion" \
+            | sort > artifacts/rhythm_ingestion_package_dirs.txt || true
+
+          find . -type d -name "rhythm ingestion" \
+            | sort > artifacts/rhythm_invalid_alias_dirs.txt || true
+
+          find . -type f -name "__init__.py" \
+            | sort > artifacts/python_init_files.txt || true
+
+      ############################################################
+      # Dependency Reality Evidence
+      ############################################################
+
+      - name: Dependency Reality Evidence
+        run: |
+          python --version \
+            > artifacts/python_version.txt
+
+          python -m pip --version \
+            > artifacts/pip_version.txt
+
+          python -m pip freeze \
+            > artifacts/pip_freeze.txt
+
+          python - <<'PY'
+          import importlib
+          import json
+          import sys
+
+          modules = [
+              "sqlite3",
+              "fastapi",
+              "uvicorn",
+              "pydantic",
+          ]
+
+          results = {}
+
+          for mod in modules:
+              try:
+                  module = importlib.import_module(mod)
+                  results[mod] = {
+                      "status": "pass",
+                      "file": getattr(module, "__file__", None),
+                  }
+              except Exception as exc:
+                  results[mod] = {
+                      "status": "fail",
+                      "error": str(exc),
+                  }
+
+          payload = {
+              "python_executable": sys.executable,
+              "python_version": sys.version,
+              "modules": results,
+          }
+
+          with open("artifacts/runtime_dependency_probe.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, indent=2, ensure_ascii=False)
+
+          with open("artifacts/runtime_dependency_probe.txt", "w", encoding="utf-8") as f:
+              for name, result in results.items():
+                  f.write(f"{name}: {result['status']}")
+                  if result.get("error"):
+                      f.write(f": {result['error']}")
+                  f.write("\n")
+          PY
+
+      ############################################################
       # Artifact Database Discovery
       ############################################################
 
       - name: Artifact Database Discovery
         run: |
           find . -type f -name "file_scan_inventory.db" \
-            > artifacts/file_scan_inventory_db.txt || true
+            | sort > artifacts/file_scan_inventory_db.txt || true
 
           find . -type f -name "chart_assets.db" \
-            > artifacts/chart_assets_db.txt || true
+            | sort > artifacts/chart_assets_db.txt || true
 
           find . -type f -name "chart_patterns.db" \
-            > artifacts/chart_patterns_db.txt || true
+            | sort > artifacts/chart_patterns_db.txt || true
+
+          {
+            echo "file_scan_inventory.db"
+            cat artifacts/file_scan_inventory_db.txt || true
+            echo ""
+            echo "chart_assets.db"
+            cat artifacts/chart_assets_db.txt || true
+            echo ""
+            echo "chart_patterns.db"
+            cat artifacts/chart_patterns_db.txt || true
+          } > artifacts/artifact_database_discovery_summary.txt
 
       ############################################################
-      # Artifact Inventory
+      # Artifact Database Schema Evidence
+      ############################################################
+
+      - name: Artifact Database Schema Evidence
+        run: |
+          python - <<'PY'
+          import json
+          import sqlite3
+          from pathlib import Path
+
+          db_names = [
+              "file_scan_inventory.db",
+              "chart_assets.db",
+              "chart_patterns.db",
+          ]
+
+          report = {}
+
+          for db_name in db_names:
+              paths = sorted(Path(".").rglob(db_name))
+              report[db_name] = []
+
+              for path in paths:
+                  item = {
+                      "path": str(path),
+                      "exists": path.exists(),
+                      "readable": False,
+                      "tables": [],
+                      "table_columns": {},
+                      "table_row_counts": {},
+                  }
+
+                  try:
+                      uri = f"file:{path.resolve().as_posix()}?mode=ro"
+                      with sqlite3.connect(uri, uri=True) as conn:
+                          cur = conn.cursor()
+                          tables = [
+                              row[0]
+                              for row in cur.execute(
+                                  "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                              ).fetchall()
+                          ]
+
+                          item["readable"] = True
+                          item["tables"] = tables
+
+                          for table in tables:
+                              quoted = '"' + table.replace('"', '""') + '"'
+
+                              columns = [
+                                  row[1]
+                                  for row in cur.execute(f"PRAGMA table_info({quoted})").fetchall()
+                              ]
+
+                              item["table_columns"][table] = columns
+
+                              try:
+                                  count = cur.execute(f"SELECT COUNT(*) FROM {quoted}").fetchone()[0]
+                                  item["table_row_counts"][table] = count
+                              except Exception as exc:
+                                  item["table_row_counts"][table] = {"error": str(exc)}
+
+                  except Exception as exc:
+                      item["error"] = str(exc)
+
+                  report[db_name].append(item)
+
+          with open("artifacts/artifact_database_schema_probe.json", "w", encoding="utf-8") as f:
+              json.dump(report, f, indent=2, ensure_ascii=False)
+          PY
+
+      ############################################################
+      # Artifact Inventory Evidence
       ############################################################
 
       - name: Artifact Inventory Evidence
@@ -88,24 +265,53 @@ jobs:
 
           find . -type f \
             \( \
-            -name "*.aff" -o \
-            -name "*.sus" -o \
-            -name "*.json" -o \
-            -name "*.html" -o \
-            -name "*.mht" \
+              -name "*.aff" -o \
+              -name "*.sus" -o \
+              -name "*.json" -o \
+              -name "*.html" -o \
+              -name "*.mht" \
             \) \
-            > artifacts/type_a_candidates.txt || true
+            | sort > artifacts/type_a_candidates_unscoped.txt || true
 
           find . -type f \
             \( \
-            -name "*.mp4" -o \
-            -name "*.mov" -o \
-            -name "*.mkv" -o \
-            -name "*.webm" -o \
-            -name "*.url" -o \
-            -name "*.webloc" \
+              -name "*.mp4" -o \
+              -name "*.mov" -o \
+              -name "*.mkv" -o \
+              -name "*.webm" -o \
+              -name "*.url" -o \
+              -name "*.webloc" \
             \) \
-            > artifacts/type_b_candidates.txt || true
+            | sort > artifacts/type_b_candidates.txt || true
+
+      ############################################################
+      # Asset Scope Evidence
+      ############################################################
+
+      - name: Asset Scope Evidence
+        run: |
+          find . -type f \
+            \( \
+              -path "*/chart_assets/*" -o \
+              -path "*/charts/*" -o \
+              -path "*/assets/*" -o \
+              -path "*/ingestion_assets/*" \
+            \) \
+            | sort > artifacts/scoped_asset_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -path "*/.github/*" -o \
+              -path "*/.vscode/*" -o \
+              -path "*/docs/*" -o \
+              -path "*/tools/*" -o \
+              -path "*/Phase 4 - Personalization/*" -o \
+              -path "*/Phase 4.5 - Localization/*" -o \
+              -path "*/Phase 5 - Productionization/*" -o \
+              -path "*/Phase 6 - Hardening and Scaling/*" -o \
+              -path "*/Phase 7 - Games Recommendation/*" \
+            \) \
+            | sort > artifacts/excluded_scope_candidates.txt || true
 
       ############################################################
       # Artifact Relationship Evidence
@@ -113,14 +319,19 @@ jobs:
 
       - name: Artifact Relationship Evidence
         run: |
-          cat artifacts/file_scan_inventory_db.txt \
-            > artifacts/artifact_chain_discovery.txt || true
-
-          cat artifacts/chart_assets_db.txt \
-            >> artifacts/artifact_chain_discovery.txt || true
-
-          cat artifacts/chart_patterns_db.txt \
-            >> artifacts/artifact_chain_discovery.txt || true
+          {
+            echo "Artifact relationship chain:"
+            echo "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db"
+            echo ""
+            echo "file_scan_inventory.db candidates:"
+            cat artifacts/file_scan_inventory_db.txt || true
+            echo ""
+            echo "chart_assets.db candidates:"
+            cat artifacts/chart_assets_db.txt || true
+            echo ""
+            echo "chart_patterns.db candidates:"
+            cat artifacts/chart_patterns_db.txt || true
+          } > artifacts/artifact_chain_discovery.txt
 
       ############################################################
       # Hash Evidence
@@ -128,44 +339,13 @@ jobs:
 
       - name: Hash Inventory Evidence
         run: |
-          find . -type f | sort \
-            > artifacts/hash_input_inventory.txt
-
-          sha256sum $(cat artifacts/hash_input_inventory.txt) \
+          find . -type f \
+            ! -path "./.git/*" \
+            ! -path "./artifacts/*" \
+            -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
             > artifacts/repository_hashes.txt || true
-
-      ############################################################
-      # Dependency Reality Evidence
-      ############################################################
-
-      - name: Dependency Reality Evidence
-        run: |
-          python -m pip freeze \
-            > artifacts/pip_freeze.txt
-
-          python - <<'PY'
-          import importlib
-
-          modules = [
-            "fastapi",
-            "uvicorn",
-            "pydantic",
-            "sqlite3"
-          ]
-
-          with open(
-              "artifacts/runtime_dependency_probe.txt",
-              "w",
-              encoding="utf-8"
-          ) as f:
-
-              for mod in modules:
-                  try:
-                      importlib.import_module(mod)
-                      f.write(f"{mod}: PASS\n")
-                  except Exception as exc:
-                      f.write(f"{mod}: FAIL: {exc}\n")
-          PY
 
       ############################################################
       # Flow Verification Evidence
@@ -175,13 +355,26 @@ jobs:
         run: |
           find . -type f \
             \( \
-            -name "*recommend*.py" -o \
-            -name "*tips*.py" -o \
-            -name "*orchestrator*.py" -o \
-            -name "*runtime*.py" \
+              -name "*recommend*.py" -o \
+              -name "*tips*.py" -o \
+              -name "*orchestrator*.py" -o \
+              -name "*runtime*.py" -o \
+              -name "*progression*.py" -o \
+              -name "*chart*.py" -o \
+              -name "*player*.py" \
             \) \
-            | sort \
-            > artifacts/flow_candidates.txt || true
+            | sort > artifacts/flow_candidates.txt || true
+
+          grep -RIn \
+            -e "chart" \
+            -e "pattern" \
+            -e "tips" \
+            -e "player" \
+            -e "progression" \
+            -e "game" \
+            -e "recommend" \
+            engine \
+            > artifacts/flow_keyword_hits.txt || true
 
       ############################################################
       # Layer Separation Evidence
@@ -190,23 +383,30 @@ jobs:
       - name: Layer Separation Evidence
         run: |
           find . -type f -name "*.py" \
-            | sort \
-            > artifacts/python_inventory.txt
+            | sort > artifacts/python_inventory.txt
 
           find . -type d \
             \( \
-            -iname "*model*" -o \
-            -iname "*normalizer*" -o \
-            -iname "*converter*" -o \
-            -iname "*classifier*" -o \
-            -iname "*validator*" -o \
-            -iname "*reader*" -o \
-            -iname "*writer*" -o \
-            -iname "*bridge*" -o \
-            -iname "*orchestrator*" \
+              -iname "*model*" -o \
+              -iname "*normalizer*" -o \
+              -iname "*converter*" -o \
+              -iname "*classifier*" -o \
+              -iname "*validator*" -o \
+              -iname "*reader*" -o \
+              -iname "*writer*" -o \
+              -iname "*bridge*" -o \
+              -iname "*orchestrator*" \
             \) \
-            | sort \
-            > artifacts/layer_directories.txt || true
+            | sort > artifacts/layer_directories.txt || true
+
+          grep -RIn \
+            -e "sqlite3" \
+            -e ".writers" \
+            -e ".persistence" \
+            -e ".orchestrator" \
+            -e ".orchestrators" \
+            engine \
+            > artifacts/layer_boundary_import_hints.txt || true
 
       ############################################################
       # MCP Evidence
@@ -215,7 +415,36 @@ jobs:
       - name: MCP Evidence
         run: |
           find . -type f -name "mcp.json" \
-            > artifacts/mcp_configs.txt || true
+            | sort > artifacts/mcp_configs.txt || true
+
+          find . -type f -name "mcp_server.py" \
+            | sort > artifacts/mcp_server_candidates_v1.txt || true
+
+          if [ -f ".vscode/mcp.json" ]; then
+            cp .vscode/mcp.json artifacts/mcp_config_effective.json
+          fi
+
+      ############################################################
+      # REST / Runtime Surface Evidence
+      ############################################################
+
+      - name: Runtime Surface Evidence
+        run: |
+          find . -type f \
+            \( \
+              -name "app.py" -o \
+              -name "recommend.py" -o \
+              -name "main.py" \
+            \) \
+            | sort > artifacts/runtime_surface_candidates.txt || true
+
+          grep -RIn \
+            -e "@app" \
+            -e "APIRouter" \
+            -e "FastAPI" \
+            -e "recommend" \
+            engine \
+            > artifacts/runtime_surface_keyword_hits.txt || true
 
       ############################################################
       # Runtime DB Read Evidence
@@ -225,11 +454,37 @@ jobs:
         run: |
           find . -type f \
             \( \
-            -name "file_scan_inventory.db" -o \
-            -name "chart_assets.db" -o \
-            -name "chart_patterns.db" \
+              -name "file_scan_inventory.db" -o \
+              -name "chart_assets.db" -o \
+              -name "chart_patterns.db" \
             \) \
-            > artifacts/runtime_db_candidates.txt || true
+            | sort > artifacts/runtime_db_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*reader*.py" -o \
+              -iname "*readers*.py" \
+            \) \
+            | sort > artifacts/runtime_reader_candidates.txt || true
+
+      ############################################################
+      # Governance Evidence
+      ############################################################
+
+      - name: Governance Evidence
+        run: |
+          {
+            echo "RGA Verifier Governance Evidence"
+            echo ""
+            echo "Security gate source: github-advanced-security"
+            echo "Architecture gate source: rga-verifier-bot"
+            echo ""
+            echo "Verifier expected mode: read-only"
+            echo "Deletion default: blocked unless verifier passes"
+            echo ""
+            echo "Completed phase rule:"
+            echo "Do not modify Phase 1-7; only wiring/extensions/tooling are allowed."
+          } > artifacts/governance_context.txt
 
       ############################################################
       # Run Verifier
@@ -244,10 +499,32 @@ jobs:
             --md-out artifacts/runtime_verifier_report.md
 
       ############################################################
+      # Optional Summary
+      ############################################################
+
+      - name: Runtime Verifier Job Summary
+        if: always()
+        run: |
+          {
+            echo "## RGA Runtime Verifier"
+            echo ""
+            echo "- Report: \`artifacts/runtime_verifier_report.md\`"
+            echo "- JSON: \`artifacts/runtime_verifier_report.json\`"
+            echo "- Evidence bundle: \`artifacts/\`"
+            echo ""
+            if [ -f artifacts/runtime_verifier_report.md ]; then
+              echo "### Report Preview"
+              echo ""
+              head -n 80 artifacts/runtime_verifier_report.md
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      ############################################################
       # Upload Artifact Bundle
       ############################################################
 
       - name: Upload Runtime Verifier Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: runtime-verifier-report
