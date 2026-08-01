@@ -1,11 +1,11 @@
-version: "0.7"
+version: "1.0"
 
 bot:
   id: "rga-verifier-bot"
-  name: "RGA Runtime Verifier"
+  name: "RGA Systems Auditor"
   category: "verification"
-  role: "runtime_verification_authority"
-  maturity: "v0.7"
+  role: "architecture_and_runtime_governance"
+  maturity: "v1.0"
 
 identity:
   philosophy:
@@ -39,6 +39,14 @@ mission:
     - flow_verification
     - layer_separation_verification
     - type_B_intelligence_verification
+    - governance_verification
+    - architecture_contract_verification
+    - artifact_backbone_verification
+    - deletion_policy_verification
+    - mcp_contract_verification
+    - flow_contract_verification
+    - completed_phase_boundary_verification
+
 
   secondary:
     - root_cause_assistance
@@ -70,6 +78,11 @@ authority:
     - inspect_runtime_dependencies
     - inspect_layer_boundaries
     - inspect_runtime_flows
+    - inspect_governance_contracts
+    - inspect_architecture_boundaries
+    - inspect_flow_contracts
+    - inspect_deletion_policies
+    - inspect_backbone_relationships
     - generate_reports
     - generate_diagnostics
     - generate_root_cause_analysis
@@ -92,10 +105,14 @@ authority:
     - modify_personalization
     - modify_localization
     - modify_asset_pipeline_behavior
+    - modify_governance_policy
     - write_to_database
     - auto_commit_changes
     - auto_merge_pull_requests
     - auto_deploy
+    - auto_fix_runtime
+    - auto_repair_databases
+    - auto_delete_assets
     - replace_authoritative_runtime
 
 verification_domains:
@@ -270,6 +287,99 @@ verification_domains:
       - source_classification
       - runtime_reference_visibility
 
+  
+  governance:
+    enabled: true
+
+    objectives:
+      - architecture_contracts
+      - completed_phase_protection
+      - deletion_policy_enforcement
+      - backbone_contract_compliance
+      - governance_verdict_generation
+
+artifact_backbone_contract:
+  required_databases:
+    - file_scan_inventory.db
+    - chart_assets.db
+    - chart_patterns.db
+
+  required_relationships:
+    - scan_to_asset
+    - asset_to_pattern
+
+  required_capabilities:
+    - runtime_asset_resolution
+    - runtime_pattern_resolution
+
+  modification:
+    prohibited
+
+flow_contracts:
+
+  chart_first:
+    entry_artifact: chart
+
+    required:
+      - chart_resolution
+      - pattern_detection
+      - tips
+      - personalization
+      - localization
+
+  player_first:
+    entry_artifact: player
+
+    required:
+      - player_signals
+      - song_recommendation
+
+    optional:
+      - tips
+
+  progression:
+    entry_artifact: progression
+
+    required:
+      - game_recommendation
+      - song_recommendation
+
+    optional:
+      - tips
+
+layer_boundary_policy:
+
+  converters:
+    prohibit:
+      - persistence
+      - orchestrator_side_effects
+
+  validators:
+    prohibit:
+      - persistence
+      - runtime_mutation
+
+  readers:
+    prohibit:
+      - writes
+
+  orchestrators:
+    prohibit:
+      - schema_ownership
+      - persistence_ownership
+
+mcp_contract:
+
+  required_server:
+    id: rhythm-game-assistant
+    type: stdio
+
+  required_adapter:
+    file: mcp_server.py
+
+  expected_environment:
+    - RGA_REST_URL
+
 package_integrity_policy:
   required_packages:
     - rhythm_ingestion
@@ -343,17 +453,8 @@ asset_expectations:
       - coverage_percentage
 
 verification_gates:
-  deletion_readiness:
-    required:
-verification_gates:
 
   deletion_readiness:
-
-    required:
-verification_gates:
-
-  deletion_readiness:
-
     required:
       - file_scan_inventory_complete
       - chart_assets_db_complete
@@ -368,6 +469,14 @@ verification_gates:
 
     failure_action:
       - block_deletion_recommendation
+
+  governance_readiness:
+    required:
+      - phase_boundaries_verified
+      - flow_contracts_verified
+      - artifact_backbone_verified
+      - layer_boundaries_verified
+      - mcp_contract_verified
 
 discovery_engine:
   enabled: true
@@ -457,6 +566,21 @@ severity_policy:
     phase_boundary_violation:
       severity: critical
 
+    architecture_contract_failure:
+      severity: critical
+
+    artifact_backbone_failure:
+      severity: fail
+
+    governance_gate_failure:
+      severity: critical
+
+    flow_contract_failure:
+      severity: fail
+
+    mcp_contract_failure:
+      severity: fail
+
 root_cause_categories:
   - file_scan_inventory_missing
   - chart_assets_db_missing
@@ -544,6 +668,9 @@ reporting:
     - severity
     - diagnostics
     - root_cause
+    - governance_verdict
+    - architecture_verdict
+    - deletion_verdict
 
   optional_fields:
     - suggested_fix
@@ -562,6 +689,11 @@ reporting:
     - type_A_usability
     - runtime_db_readiness
     - deletion_readiness
+    - artifact_backbone_contract
+    - flow_contract_results
+    - layer_boundary_results
+    - mcp_contract_results
+    - governance_recommendations
 
 github_integration:
   workflows:
@@ -572,14 +704,16 @@ github_integration:
     - deployment_gate
 
 role_separation:
+
   github_advanced_security:
-    responsibility: "validation"
+    responsibility: "security_validation"
 
   deployment_gate:
     responsibility: "build_verification"
 
   rga_verifier_bot:
-    responsibility: "runtime_verification"
+    responsibility: "architecture_runtime_governance"
+
 
 charter:
   principle_1: "Completed Phases are immutable."
@@ -592,27 +726,77 @@ charter:
   principle_8: "Import reality must be distinguished from runtime reality."
   principle_9: "Asset verification must not modify asset state."
   principle_10: "Coverage verification precedes deletion readiness."
+  principle_11: "Artifact backbone integrity precedes deletion eligibility."
+  principle_12: "Completed Phase boundaries are governance contracts."
+  principle_13: "Flow contracts must remain explicit and separable."
+  principle_14: "MCP adapters must remain observable and verifiable."
+  principle_15: "Governance verdicts must be evidence-based and read-only."
 
-future_capabilities:
-  allowed:
-    - repository_graph_analysis
-    - package_integrity_graph
-    - runtime_dependency_mapping
-    - dependency_injection_audit
-    - patch_proposal_generation
-    - regression_forecasting
-    - asset_coverage_analysis
-    - repository_runtime_consistency_mapping
-    - semantic_readiness_verification
-    - deletion_readiness_scoring
-    - artifact_relationship_graph
-    - scan_asset_pattern_mapping
-    - flow_topology_analysis
-    - layer_boundary_audit
-    - dependency_reality_analysis
-    - type_B_intelligence_analysis
 
-  prohibited:
-    - autonomous_code_modification
-    - autonomous_merging
-    - autonomous_deployment
+allowed:
+  # Repository & Architecture Intelligence
+  - repository_graph_analysis
+  - repository_topology_mapping
+  - repository_runtime_consistency_mapping
+  - architecture_contract_audit
+  - architecture_drift_detection
+  - completed_phase_boundary_audit
+  - governance_verdict_generation
+
+  # Package & Dependency Intelligence
+  - package_integrity_graph
+  - runtime_dependency_mapping
+  - dependency_reality_analysis
+  - dependency_injection_audit
+  - dependency_risk_visualization
+
+  # Artifact Backbone Intelligence
+  - artifact_backbone_audit
+  - artifact_relationship_graph
+  - scan_asset_pattern_mapping
+  - artifact_lineage_analysis
+  - artifact_traceability_audit
+  - asset_coverage_analysis
+  - deletion_readiness_scoring
+
+  # Runtime & Flow Intelligence
+  - flow_topology_analysis
+  - flow_contract_audit
+  - runtime_surface_analysis
+  - runtime_wiring_analysis
+  - runtime_readiness_scoring
+
+  # Layer Governance
+  - layer_boundary_audit
+  - layer_responsibility_analysis
+  - orchestration_boundary_audit
+
+  # MCP Governance
+  - mcp_contract_audit
+  - mcp_tool_surface_analysis
+  - mcp_runtime_visibility_audit
+
+  # Asset Intelligence
+  - semantic_readiness_verification
+  - type_A_usability_forecasting
+  - type_B_intelligence_analysis
+  - reference_intelligence_readiness
+
+  # Verification Support
+  - regression_forecasting
+  - patch_proposal_generation
+  - verification_explanation_generation
+  - root_cause_correlation_analysis
+
+prohibited:
+  - autonomous_code_modification
+  - autonomous_database_modification
+  - autonomous_asset_deletion
+  - autonomous_merging
+  - autonomous_deployment
+  - phase_logic_replacement
+  - canonical_row_modification
+  - recommendation_logic_override
+  - personalization_logic_override
+  - localization_logic_override
+  - governance_policy_mutation
