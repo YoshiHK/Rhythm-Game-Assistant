@@ -1,11 +1,11 @@
-version: "0.6"
+version: "0.7"
 
 bot:
   id: "rga-verifier-bot"
   name: "RGA Runtime Verifier"
   category: "verification"
   role: "runtime_verification_authority"
-  maturity: "v0.6"
+  maturity: "v0.7"
 
 identity:
   philosophy:
@@ -33,6 +33,12 @@ mission:
     - hash_consistency_verification
     - type_A_usability_verification
     - runtime_db_read_verification
+    - artifact_database_verification
+    - artifact_relationship_verification
+    - dependency_reality_verification
+    - flow_verification
+    - layer_separation_verification
+    - type_B_intelligence_verification
 
   secondary:
     - root_cause_assistance
@@ -58,10 +64,17 @@ authority:
     - inspect_asset_coverage
     - inspect_hash_inventory
     - inspect_runtime_db_reads
+    - inspect_file_scan_inventory_db
+    - inspect_chart_patterns_db
+    - inspect_artifact_relationships
+    - inspect_runtime_dependencies
+    - inspect_layer_boundaries
+    - inspect_runtime_flows
     - generate_reports
     - generate_diagnostics
     - generate_root_cause_analysis
     - generate_patch_recommendations
+
 
   cannot:
     - modify_completed_phases
@@ -189,6 +202,74 @@ verification_domains:
       - song_recommendation_path
       - game_recommendation_path
 
+  artifact_databases:
+    enabled: true
+
+    objectives:
+      - file_scan_inventory_db_presence
+      - chart_assets_db_presence
+      - chart_patterns_db_presence
+      - file_scan_inventory_db_readability
+      - chart_assets_db_readability
+      - chart_patterns_db_readability
+      - schema_inventory
+      - runtime_db_availability
+
+  artifact_relationships:
+    enabled: true
+
+    objectives:
+      - scan_to_asset_coverage
+      - asset_to_pattern_coverage
+      - orphan_scans
+      - orphan_assets
+      - orphan_patterns
+      - chain_completeness
+ 
+  dependency_reality:
+    enabled: true
+
+    objectives:
+      - runtime_dependency_inventory
+      - required_dependency_presence
+      - optional_dependency_presence
+      - runtime_importability
+
+  flow_verification:
+    enabled: true
+
+    objectives:
+      - chart_first_flow
+      - player_first_flow
+      - progression_flow
+      - flow_entrypoint_presence
+      - flow_stopping_point_presence
+      - flow_wiring_consistency
+
+  layer_separation:
+    enabled: true
+
+    objectives:
+      - model_boundary
+      - normalizer_boundary
+      - converter_boundary
+      - classifier_boundary
+      - validator_boundary
+      - persistence_boundary
+      - reader_boundary
+      - bridge_boundary
+      - orchestrator_boundary
+
+  type_B_intelligence:
+    enabled: true
+
+    objectives:
+      - type_B_inventory
+      - reference_url_presence
+      - reference_metadata_presence
+      - source_classification
+      - runtime_reference_visibility
+
 package_integrity_policy:
   required_packages:
     - rhythm_ingestion
@@ -203,6 +284,44 @@ package_integrity_policy:
     - rhythm_ingestion
     - rhythm_ingestion.api
     - rhythm_ingestion.runtime_meta
+
+artifact_database_policy:
+  required_databases:
+    - file_scan_inventory.db
+    - chart_assets.db
+    - chart_patterns.db
+
+  relationship_chain:
+    - file_scan_inventory.db
+    - chart_assets.db
+    - chart_patterns.db
+
+  read_mode:
+    sqlite: readonly
+
+  modification:
+    prohibited
+
+asset_scope_policy:
+  enabled: true
+  strategy: explicit_scope
+  
+  include_roots:
+    - chart_assets
+    - charts
+    - assets
+    - ingestion_assets
+
+  exclude_roots:
+    - .github
+    - .vscode
+    - docs
+    - tools
+    - Phase 4 - Personalization
+    - Phase 4.5 - Localization
+    - Phase 5 - Productionization
+    - Phase 6 - Hardening and Scaling
+    - Phase 7 - Games Recommendation
 
 asset_expectations:
   type_A:
@@ -226,12 +345,26 @@ asset_expectations:
 verification_gates:
   deletion_readiness:
     required:
+verification_gates:
+
+  deletion_readiness:
+
+    required:
+verification_gates:
+
+  deletion_readiness:
+
+    required:
+      - file_scan_inventory_complete
       - chart_assets_db_complete
-      - repository_coverage_complete
+      - chart_patterns_db_complete
+      - scan_to_asset_verified
+      - asset_to_pattern_verified
       - asset_coverage_verified
       - hash_consistency_verified
       - type_A_text_usable
       - runtime_can_use_db_assets
+      - runtime_can_use_db_patterns
 
     failure_action:
       - block_deletion_recommendation
@@ -247,6 +380,9 @@ discovery_engine:
     - high
 
   candidate_scoring:
+    file_scan_inventory_db: 15
+    chart_assets_db: 15
+    chart_patterns_db: 15
     main_py: 40
     recommend_py: 25
     app_py: 15
@@ -322,6 +458,18 @@ severity_policy:
       severity: critical
 
 root_cause_categories:
+  - file_scan_inventory_missing
+  - chart_assets_db_missing
+  - chart_patterns_db_missing
+  - scan_asset_gap
+  - asset_pattern_gap
+  - orphan_scan
+  - orphan_asset
+  - orphan_pattern
+  - dependency_missing
+  - runtime_pattern_read_failure
+  - flow_boundary_violation
+  - layer_boundary_violation
   - missing_files
   - package_name_mismatch
   - package_root_mismatch
@@ -342,6 +490,15 @@ root_cause_categories:
   - deletion_gate_failed
 
 runtime_expectations:
+  artifact_runtime_flow:
+    expected:
+      - file_scan_inventory
+      - chart_assets
+      - chart_patterns
+      - runtime_readers
+      - recommendations
+      - tips
+      
   progression_flow:
     expected:
       - progression
@@ -448,6 +605,12 @@ future_capabilities:
     - repository_runtime_consistency_mapping
     - semantic_readiness_verification
     - deletion_readiness_scoring
+    - artifact_relationship_graph
+    - scan_asset_pattern_mapping
+    - flow_topology_analysis
+    - layer_boundary_audit
+    - dependency_reality_analysis
+    - type_B_intelligence_analysis
 
   prohibited:
     - autonomous_code_modification
