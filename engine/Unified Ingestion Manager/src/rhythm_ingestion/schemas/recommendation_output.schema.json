@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rhythm-ingestion/schema/recommendation_output.schema.json",
+  "title": "RecommendationOutput",
+  "description": "Flexible output contract for song recommendations, explanations, and gameplay guidance.",
+  "type": "object",
+
+  "required": [
+    "schema_version",
+    "game_id",
+    "recommendations"
+  ],
+
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of the recommendation output contract.",
+      "examples": ["v2"]
+    },
+
+    "game_id": {
+      "type": "string",
+      "description": "Target game for which recommendations are generated."
+    },
+
+    "recommendations": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+
+        "required": [
+          "song_id",
+          "difficulty_label",
+          "rank"
+        ],
+
+        "properties": {
+          "recommendation_id": {
+            "type": ["string", "null"],
+            "description": "Optional unique identifier for tracking."
+          },
+
+          "song_id": {
+            "type": "string"
+          },
+
+          "difficulty_label": {
+            "type": "string"
+          },
+
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+
+          "confidence": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+
+          "difficulty_profile": {
+            "$ref": "difficulty_profile.schema.json",
+            "nullable": true
+          },
+
+          "rationale": {
+            "type": ["object", "null"],
+            "required": ["summary", "key_factors"],
+            "properties": {
+              "summary": {
+                "type": "string"
+              },
+              "key_factors": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["factor"],
+                  "properties": {
+                    "factor": {
+                      "type": "string"
+                    },
+                    "direction": {
+                      "type": ["string", "null"],
+                      "enum": ["positive", "negative", "neutral", null]
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+
+          "tips_preview": {
+            "type": ["string", "null"]
+          },
+
+          "recommended_actions": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+
+          "debug_signals": {
+            "type": ["object", "null"],
+            "description": "Optional debugging signals from the ranking system.",
+            "additionalProperties": true
+          }
+        },
+
+        "additionalProperties": true
+      }
+    },
+
+    "generated_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+
+    "engine_metadata": {
+      "type": ["object", "null"],
+      "description": "Optional metadata about the recommendation engine execution.",
+      "additionalProperties": true
+    }
+  },
+
+  "additionalProperties": true
+}

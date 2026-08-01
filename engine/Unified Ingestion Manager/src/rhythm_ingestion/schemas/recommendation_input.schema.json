@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rhythm-ingestion/schema/recommendation_input_schema.json",
+  "title": "RecommendationInput",
+  "description": "Flexible input contract for recommendation engine supporting chart-first, player-first, and progression flows.",
+  "type": "object",
+
+  "required": [
+    "schema_version",
+    "player_context"
+  ],
+
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of the recommendation input contract.",
+      "examples": ["v2"]
+    },
+
+    "player_context": {
+      "type": "object",
+      "description": "Snapshot of player skill and recent performance.",
+      "required": ["game_id"],
+      "properties": {
+        "game_id": {
+          "type": "string",
+          "description": "Target game for recommendation."
+        },
+        "recent_clear_rate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "difficulty_history": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "self_reported_confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "difficulty_profile": {
+      "$ref": "difficulty_profile.schema.json",
+      "description": "Optional difficulty profile used for recommendation scoring.",
+      "nullable": true
+    },
+
+    "song_context": {
+      "type": ["object", "null"],
+      "description": "Optional context when starting from a specific chart or group.",
+      "properties": {
+        "song_id": {
+          "type": "string"
+        },
+        "difficulty_label": {
+          "type": "string"
+        },
+        "game_specific_level": {
+          "type": ["string", "number", "null"]
+        },
+        "has_tips": {
+          "type": ["boolean", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "recommendation_constraints": {
+      "type": "object",
+      "description": "Optional constraints at recommendation time.",
+      "properties": {
+        "exclude_previously_recommended": {
+          "type": "boolean",
+          "default": true
+        },
+        "prefer_new_songs": {
+          "type": "boolean"
+        },
+        "max_difficulty_jump": {
+          "type": ["number", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "debug_context": {
+      "type": ["object", "null"],
+      "description": "Optional debug / tracing context for development and QA.",
+      "additionalProperties": true
+    }
+  },
+
+  "additionalProperties": true
+}

@@ -1,0 +1,109 @@
+{
+  "schema_id": "analysis_schema.proseka.v2",
+  "game_id": "proseka",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Proseka",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "critical_tap",
+      "flick",
+      "flick_arrow",
+      "hold_body_or_start",
+      "hold_path",
+      "critical_hold_path"
+    ],
+    "combo_raw_types": [
+      "tap",
+      "tap_critical",
+      "hold_start",
+      "hold_start_critical",
+      "hold_end",
+      "hold_end_critical",
+      "hold_tick",
+      "hold_tick_critical",
+      "trace_tick",
+      "trace_tick_critical",
+      "flick",
+      "flick_critical",
+      "trace_flick",
+      "trace_flick_critical"
+    ],
+    "strict_combo_consistency": true,
+    "max_db_note_delta": 0
+  },
+
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "section_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "EXPERT": 3,
+      "MASTER": 3,
+      "APPEND": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+
+  "tips": {
+    "enabled": true,
+    "track_c_guidance": "guidance_engine_v2",
+    "track_d_narrative": "narrative_module_v2"
+  },
+
+  "calibration": {
+    "track": "A",
+    "enabled": true,
+    "best_effort": true,
+    "module": "proseka_score_calibration",
+    "config_default": "score_calibration_config_v0.2.1.json",
+    "preserve_severity_default": true
+  },
+
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping.json",
+    "analysis_schema_default": "proseka_internal_analysis_schema_v1.4.0.json"
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "P1",
+        "name": "canonical kinds alignment",
+        "expected": "all emitted note kinds must match schema.notes.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "P2",
+        "name": "combo raw types alignment",
+        "expected": "adapter/validator combo raw types must match schema.notes.combo_raw_types",
+        "severity": "error"
+      },
+      {
+        "check_id": "P3",
+        "name": "strict DB combo delta",
+        "expected": "payload combo must match DB combo exactly (delta = 0)",
+        "severity": "error"
+      }
+    ],
+    "notes": "Ensures strict structural and DB-backed consistency without referencing implementation."
+  }
+}

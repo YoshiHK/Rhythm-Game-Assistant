@@ -1,0 +1,82 @@
+{
+  "schema_id": "analysis_schema.yumesute.v2",
+  "game_id": "yumesute",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for yumesute",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path",
+      "slide",
+      "flick"
+    ],
+    "combo_definition": "stage-lane judged hit objects with directional flicks",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_lane_pattern_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "EASY": 2,
+      "NORMAL": 3,
+      "HARD": 3,
+      "EXPERT": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+
+  "tips": {
+    "enabled": true,
+    "rationale": "yumesute charts feature stable stage lanes, precise directional flicks, and dense idol-style patterns, enabling deterministic timing and hand-movement tips."
+  },
+
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_yumesute.json",
+    "analysis_schema_default": null
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "Y1",
+        "name": "canonical kinds alignment",
+        "expected": "all emitted note kinds must be within schema.notes.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "Y2",
+        "name": "lane structure invariant",
+        "expected": "note events must have valid lanes within bounds and monotonic timing",
+        "severity": "error"
+      },
+      {
+        "check_id": "Y3",
+        "name": "tips enablement gate",
+        "expected": "Phase 4 must respect schema.tips.enabled",
+        "severity": "warning"
+      }
+    ],
+    "notes": "Enforces structural correctness, lane geometry, and contract-level alignment across adapter and validator."
+  }
+}

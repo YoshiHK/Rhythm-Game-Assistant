@@ -1,0 +1,54 @@
+{
+  "schema_id": "analysis_schema.chunithm.v2",
+  "game_id": "chunithm",
+  "kind": "analysis_schema",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "critical_tap",
+      "flick_arrow",
+      "hold_path"
+    ],
+    "combo_definition": "judged hit objects including air interactions",
+    "strict_combo_consistency": false
+  },
+
+  "sections": {
+    "builder": "beat_window_metrics",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_hand_movement_based",
+    "supports_section_coverage": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "EXPERT": 3,
+      "MASTER": 3,
+      "ULTIMA": 4
+    }
+  },
+
+  "tips": {
+    "enabled": true
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "C1",
+        "expected": "adapter emits canonical-complete payload"
+      },
+      {
+        "check_id": "C2",
+        "expected": "validator performs structural validation only"
+      }
+    ]
+  }
+}

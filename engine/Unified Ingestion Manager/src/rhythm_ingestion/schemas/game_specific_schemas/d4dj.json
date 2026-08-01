@@ -1,0 +1,89 @@
+{
+  "schema_id": "analysis_schema.d4dj.v2",
+  "game_id": "d4dj",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for d4dj Groovy Mix",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "flick_arrow",
+      "hold_body_or_start",
+      "hold_path"
+    ],
+
+    "combo_definition": "lane-based hit objects with flick gestures and long-note structures on a continuous timeline",
+
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+
+  "sections": {
+    "builder": "relative_time_window",
+    "requires_bpm": false,
+    "min_sections_for_analysis": 1
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_lane_pattern_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "default": 3
+    },
+
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+
+  "tips": {
+    "enabled": true,
+    "rationale": "D4DJ charts provide clear lane structure with deterministic tap, hold, and flick input patterns, enabling reliable timing, lane control, and scratch-handling tips."
+  },
+
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_d4dj.json",
+    "analysis_schema_default": null
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "D1",
+        "name": "canonical kinds alignment",
+        "expected": "note_events kinds must match schema.notes.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "D2",
+        "name": "time monotonicity",
+        "expected": "time_beats must be non-decreasing",
+        "severity": "error"
+      },
+      {
+        "check_id": "D3",
+        "name": "lane-based structure",
+        "expected": "lane values must be valid integers representing chart lanes",
+        "severity": "error"
+      },
+      {
+        "check_id": "D4",
+        "name": "tips enablement gate",
+        "expected": "Phase 4 must respect schema.tips.enabled",
+        "severity": "warning"
+      }
+    ],
+
+    "notes": "Focuses on lane-based structural consistency and timing correctness without referencing implementation details."
+  }
+}

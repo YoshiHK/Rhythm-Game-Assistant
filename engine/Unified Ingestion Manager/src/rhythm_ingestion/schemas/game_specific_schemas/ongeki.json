@@ -1,0 +1,118 @@
+{
+  "schema_id": "analysis_schema.ongeki.v2",
+  "game_id": "ongeki",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for ONGEKI",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path"
+    ],
+
+    "combo_definition": "timing surface driven events",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+
+  "sections": {
+    "builder": "timing_surface",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "timing_surface_based",
+    "supports_section_coverage": false,
+    "preserve_severity_labels": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "BASIC": 2,
+      "ADVANCED": 3,
+      "EXPERT": 3,
+      "MASTER": 4,
+      "LUNATIC": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "element_name_asc"
+    ]
+  },
+
+  "tips": {
+    "enabled": false,
+    "rationale": "ONGEKI is timing-surface dominated and does not yet support deterministic tip extraction in Phase 4."
+  },
+
+  "gating": {
+    "phase4": {
+      "timing_surface": {
+        "required": true,
+        "min_sections": 1,
+        "acceptable_forms": [
+          "timing_surface_only"
+        ],
+        "requirements": {
+          "tick_ge_resolution_ratio_threshold": 0.05,
+          "tick_ge_resolution_ratio_notes": "Warn when (tick >= resolution) / tick_total >= threshold.",
+
+          "tick_grid_warning_cap": 50,
+          "tick_grid_warning_cap_notes": "Upper bound on grid inconsistency warnings.",
+
+          "time_beats_monotonic_epsilon": 1e-09,
+          "time_beats_monotonic_epsilon_notes": "Monotonic tolerance for time_beats.",
+
+          "timing_surface_only_requires_bpm": true,
+          "timing_surface_only_requires_bpm_notes": "timing_surface_only requires valid bpm.",
+
+          "forbid_density_fields_when_timing_surface_only": true,
+          "forbid_density_fields_when_timing_surface_only_notes": "timing-only sections cannot contain density metrics."
+        },
+
+        "notes": "ONGEKI timing surface gating for Phase 4 entry."
+      }
+    }
+  },
+
+  "artifacts": {
+    "training_mapping_default": null,
+    "analysis_schema_default": null
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "O1",
+        "name": "timing surface presence",
+        "expected": "sections must contain timing surface when bpm information exists",
+        "severity": "warning"
+      },
+      {
+        "check_id": "O2",
+        "name": "tick resolution validity",
+        "expected": "tick values must be within resolution bounds",
+        "severity": "warning"
+      },
+      {
+        "check_id": "O3",
+        "name": "monotonic timing",
+        "expected": "time_beats must be monotonic within tolerance",
+        "severity": "warning"
+      },
+      {
+        "check_id": "O4",
+        "name": "phase4 gating compliance",
+        "expected": "timing surface must meet gating conditions",
+        "severity": "error"
+      }
+    ],
+
+    "notes": "Focuses on timing surface correctness and gating readiness without referencing implementation."
+  }
+}

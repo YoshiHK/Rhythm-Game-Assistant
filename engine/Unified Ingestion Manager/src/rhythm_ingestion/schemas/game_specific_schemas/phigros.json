@@ -1,0 +1,86 @@
+{
+  "schema_id": "analysis_schema.phigros.v2",
+  "game_id": "phigros",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Phigros",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_path"
+    ],
+
+    "combo_definition": "judge-line based hit objects using continuous time and spatial positioning",
+
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+
+  "sections": {
+    "builder": "relative_time_window",
+    "requires_bpm": false,
+    "min_sections_for_analysis": 0
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "geometry_and_density_based",
+    "supports_section_coverage": false,
+    "preserve_severity_labels": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "default": 3
+    },
+
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "element_name_asc"
+    ]
+  },
+
+  "tips": {
+    "enabled": false,
+    "rationale": "Phigros requires spatial taxonomy and movement mapping before deterministic tips can be generated reliably."
+  },
+
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_phigros.json",
+    "analysis_schema_default": null
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "P1",
+        "name": "canonical kinds alignment",
+        "expected": "note_events kinds must match schema.notes.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "P2",
+        "name": "time monotonicity",
+        "expected": "time_beats must be non-decreasing",
+        "severity": "error"
+      },
+      {
+        "check_id": "P3",
+        "name": "geometry structure presence",
+        "expected": "each event should include spatial data such as position or judge line reference in extra",
+        "severity": "warning"
+      },
+      {
+        "check_id": "P4",
+        "name": "tips enablement gate",
+        "expected": "Phase 4 must respect schema.tips.enabled",
+        "severity": "warning"
+      }
+    ],
+
+    "notes": "Focuses on geometry-native structure validation and timeline consistency without referencing implementation details."
+  }
+}

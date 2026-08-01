@@ -1,0 +1,93 @@
+{
+  "schema_id": "analysis_schema.maimai.v2",
+  "game_id": "maimai",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for maimai",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "hold_body_or_start",
+      "hold_path"
+    ],
+
+    "combo_definition": "tap objects plus long-note contributions from hold and segmented slide structures",
+
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+
+  "sections": {
+    "builder": "hybrid_time_density_sections",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1,
+    "time_unit": "beats"
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_spatial_distribution_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "BASIC": 2,
+      "ADVANCED": 3,
+      "EXPERT": 3,
+      "MASTER": 4,
+      "REMASTER": 4
+    },
+
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+
+  "tips": {
+    "enabled": false,
+    "rationale": "Maimai charts require taxonomy mapping and slide-gesture classification before deterministic tips can be produced."
+  },
+
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_maimai.json",
+    "analysis_schema_default": null
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "M1",
+        "name": "canonical kinds alignment",
+        "expected": "note_events kinds must match schema.notes.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "M2",
+        "name": "time monotonicity",
+        "expected": "time_beats must be non-decreasing",
+        "severity": "error"
+      },
+      {
+        "check_id": "M3",
+        "name": "long-note structural consistency",
+        "expected": "hold and slide events must include duration or segmentation metadata",
+        "severity": "warning"
+      },
+      {
+        "check_id": "M4",
+        "name": "tips enablement gate",
+        "expected": "Phase 4 must respect schema.tips.enabled",
+        "severity": "warning"
+      }
+    ],
+
+    "notes": "Focuses on structural integrity and long-note representation for segmented slides without referencing implementation-specific functions."
+  }
+}

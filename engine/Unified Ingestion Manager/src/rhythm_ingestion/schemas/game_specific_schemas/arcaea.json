@@ -1,0 +1,89 @@
+{
+  "schema_id": "analysis_schema.arcaea.v2",
+  "game_id": "arcaea",
+  "kind": "analysis_schema",
+  "scope": "Phase 3 UMI - analysis assumptions for Arcaea",
+
+  "notes": {
+    "canonical_kinds": [
+      "tap",
+      "critical_tap",
+      "flick_arrow",
+      "hold_body_or_start",
+      "hold_path"
+    ],
+    "combo_definition": "ground taps + arc taps + flicks + long-note contributions derived from hold/arc structures",
+    "strict_combo_consistency": false,
+    "max_db_note_delta": null
+  },
+
+  "sections": {
+    "builder": "hybrid_time_combo_sections",
+    "requires_bpm": true,
+    "min_sections_for_analysis": 1
+  },
+
+  "severity_model": {
+    "track": "A",
+    "type": "density_and_spatial_pattern_based",
+    "supports_section_coverage": true,
+    "preserve_severity_labels": true
+  },
+
+  "selection": {
+    "track": "B",
+    "target_count_by_difficulty": {
+      "PST": 2,
+      "PRS": 3,
+      "FTR": 3,
+      "BYD": 4
+    },
+    "allow_fallback_sort": true,
+    "fallback_sort_key": [
+      "score_desc",
+      "severity_desc",
+      "section_coverage_desc",
+      "element_name_asc"
+    ]
+  },
+
+  "tips": {
+    "enabled": true,
+    "rationale": "Arcaea charts combine ground lanes and spatial arcs, enabling deterministic timing, spatial awareness, and trajectory-based hand movement tips."
+  },
+
+  "artifacts": {
+    "training_mapping_default": "tips_training_mapping_arcaea.json",
+    "analysis_schema_default": null
+  },
+
+  "consistency_checks": {
+    "table": [
+      {
+        "check_id": "A1",
+        "name": "canonical kinds alignment",
+        "expected": "all emitted note kinds must match schema.notes.canonical_kinds",
+        "severity": "error"
+      },
+      {
+        "check_id": "A2",
+        "name": "ground truth validation",
+        "expected": "note_events must match native chart combo and structure",
+        "severity": "error"
+      },
+      {
+        "check_id": "A3",
+        "name": "section combo consistency",
+        "expected": "per-section expected_total_combo must align with chart combination logic",
+        "severity": "error"
+      },
+      {
+        "check_id": "A4",
+        "name": "tips enablement gate",
+        "expected": "Phase 4 must respect schema.tips.enabled",
+        "severity": "warning"
+      }
+    ],
+    "notes": "Focuses on strict ground-truth alignment and hybrid spatial structure without referencing implementation details."
+  }
+}
