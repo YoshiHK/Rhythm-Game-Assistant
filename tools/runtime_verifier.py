@@ -521,7 +521,6 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
 
     return discovered
 
-
 def discover_runtime_candidates(search_root: Path) -> Listroots: Dict[str, Path] = {}
 
     try:
@@ -530,16 +529,27 @@ def discover_runtime_candidates(search_root: Path) -> Listroots: Dict[str, Path]
 
         for rec_py in search_root.rglob("recommend.py"):
             parts = list(rec_py.parts)
+
             if "src" in parts:
                 idx = parts.index("src")
+
                 if idx > 0:
                     candidate = Path(*parts[:idx])
                     roots[str(candidate.resolve())] = candidate.resolve()
+
     except Exception:
         pass
 
-    candidates = [score_candidate(root) for root in roots.values()]
-    candidates.sort(key=lambda candidate: candidate.score, reverse=True)
+    candidates = [
+        score_candidate(root)
+        for root in roots.values()
+    ]
+
+    candidates.sort(
+        key=lambda candidate: candidate.score,
+        reverse=True,
+    )
+
     return candidates
 
 
@@ -555,17 +565,23 @@ def choose_backend_root(
 
     if candidates:
         best = candidates[0]
+
         if best.score >= 60:
             return Path(best.root), candidates, "auto_discovered"
+
         return Path(best.root), candidates, "partial_discovery"
 
     return repo_root.resolve(), [], "fallback_to_repo_root"
 
 
-def classify_import_failure(error_text: str, package_dirs: Dict[str, List[str]]) -> str:
+def classify_import_failure(
+    error_text: str,
+    package_dirs: Dict[str, List[str]],
+) -> str:
     if "No module named 'rhythm_ingestion'" in error_text:
         if package_dirs.get("invalid_aliases") and not package_dirs.get("expected"):
             return "package_name_mismatch"
+
         return "missing_pythonpath_or_package"
 
     if "No module named" in error_text:
@@ -576,14 +592,20 @@ def classify_import_failure(error_text: str, package_dirs: Dict[str, List[str]])
 
 def classify_asset_path(path: Path) -> str:
     suffix = path.suffix.lower()
+
     if suffix in TYPE_A_EXTENSIONS:
         return "type_A"
+
     if suffix in TYPE_B_EXTENSIONS:
         return "type_B"
+
     return "unknown"
 
 
-def is_path_under_hint(path: Path, hints: List[str]) -> bool:
+def is_path_under_hint(
+    path: Path,
+    hints: List[str],
+) -> bool:
     normalized = normalize_path_text(path)
     parts = [part.lower() for part in normalized.split("/")]
     lowered = normalized.lower()
@@ -622,7 +644,7 @@ def is_included_asset_path(path: Path) -> bool:
         return False
 
     # Keep true chart extensions even if they live outside explicit roots.
-    # JSON/HTML/MHT are much broader and should prefer scoped roots.
+    # JSON/HTML/MHT are broader and should prefer scoped roots.
     suffix = path.suffix.lower()
 
     if suffix in {".aff", ".sus"}:
@@ -655,7 +677,6 @@ def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
                 continue
 
             if path.name in ARTIFACT_DATABASE_NAMES:
-                logical_name = ARTIFACT_DATABASE_LOGICAL_NAMES.get(path.name, path.name)
                 discovered["artifact_databases"].append(str(path.resolve()))
 
                 if path.name == FILE_SCAN_INVENTORY_DB_NAME:
@@ -674,6 +695,7 @@ def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
                     discovered[asset_type].append(str(path.resolve()))
                 else:
                     discovered["excluded_candidates"].append(str(path.resolve()))
+
     except Exception:
         pass
 
@@ -683,14 +705,21 @@ def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
     return discovered
 
 
-def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+def sha256_file(
+    path: Path,
+    chunk_size: int = 1024 * 1024,
+) -> str:
     digest = hashlib.sha256()
+
     with path.open("rb") as handle:
         while True:
             chunk = handle.read(chunk_size)
+
             if not chunk:
                 break
+
             digest.update(chunk)
+
     return digest.hexdigest()
 
 
@@ -702,10 +731,15 @@ def table_quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def first_existing(columns: Iterable[str], candidates: List[str]) -> Optionalcolumn_set = set(columns)
+def first_existing(
+    columns: Iterable[str],
+    candidates: List[str],
+) -> Optionalcolumn_set = set(columns)
+
     for candidate in candidates:
         if candidate in column_set:
             return candidate
+
     return None
 
 
@@ -715,24 +749,36 @@ def sqlite_readonly_uri(path: Path) -> str:
     return f"file:{encoded_path}?mode=ro"
 
 
-def truncate_value(value: Any, limit: int = MAX_REPORT_SAMPLE_VALUE_LENGTH) -> Any:
+def truncate_value(
+    value: Any,
+    limit: int = MAX_REPORT_SAMPLE_VALUE_LENGTH,
+) -> Any:
     # Prevent large text_representation values from bloating JSON / Markdown reports.
     if isinstance(value, str) and len(value) > limit:
         return value[:limit] + "...<truncated>"
+
     return value
 
 
-def truncate_row(row: Dict[str, Any], limit: int = MAX_REPORT_SAMPLE_VALUE_LENGTH) -> Dict[str, Any]:
-    return {key: truncate_value(value, limit=limit) for key, value in row.items()}
+def truncate_row(
+    row: Dict[str, Any],
+    limit: int = MAX_REPORT_SAMPLE_VALUE_LENGTH,
+) -> Dict[str, Any]:
+    return {
+        key: truncate_value(value, limit=limit)
+        for key, value in row.items()
+    }
 
 
 def import_module_probe(module_name: str) -> Dict[str, Any]:
     try:
         module = importlib.import_module(module_name)
+
         return {
             "status": "pass",
             "file": getattr(module, "__file__", None),
         }
+
     except Exception as exc:
         return {
             "status": "fail",
@@ -741,16 +787,24 @@ def import_module_probe(module_name: str) -> Dict[str, Any]:
         }
 
 
-def read_text_safely(path: Path, limit: int = 200_000) -> str:
+def read_text_safely(
+    path: Path,
+    limit: int = 200_000,
+) -> str:
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+
         if len(text) > limit:
             return text[:limit]
+
         return text
+
     except Exception:
         return ""
 
- -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Verifier
@@ -772,6 +826,7 @@ class RuntimeVerifier:
         run_rest: bool,
     ) -> None:
         self.repo_root = repo_root.resolve()
+
         self.backend_root, self.backend_candidates, self.backend_root_mode = choose_backend_root(
             self.repo_root,
             backend_root,
@@ -811,12 +866,20 @@ class RuntimeVerifier:
     # Result helpers
     # ------------------------------------------------------------------
 
-    def classify(self, *, domain: str, check: str, base_status: str) -> Tuple[str, str]:
+    def classify(
+        self,
+        *,
+        domain: str,
+        check: str,
+        base_status: str,
+    ) -> Tuple[str, str]:
         if domain == "environment" and check == "softr_api_token_present":
             if self.token:
                 return "pass", "info"
+
             if self.run_rest:
                 return "fail", "fail"
+
             return "warning", "warning"
 
         if domain == "mcp" and check == "config_present" and base_status == "skipped":
@@ -828,6 +891,7 @@ class RuntimeVerifier:
         if domain == "repo" and base_status == "warning":
             if self.backend_root_mode in {"auto_discovered", "explicit", "partial_discovery"}:
                 return "warning", "warning"
+
             return "fail", "fail"
 
         if domain == "flow_verification" and base_status == "skipped":
@@ -887,24 +951,43 @@ class RuntimeVerifier:
 
         for path in [src, src_pkg, self.backend_root]:
             path_text = str(path)
+
             if path_text not in sys.path:
                 sys.path.insert(0, path_text)
 
-    def read_json_file(self, path: Path) -> Optionaltry:
-            return json.loads(path.read_text(encoding="utf-8"))
+    def read_json_file(
+        self,
+        path: Path,
+    ) -> Optionaltry:
+            return json.loads(
+                path.read_text(
+                    encoding="utf-8",
+                )
+            )
+
         except Exception as exc:
             self.add(
                 domain="file",
                 check="json_parse",
                 status="fail",
                 summary=f"Could not parse JSON file: {path}",
-                evidence={"path": str(path), "error": str(exc)},
+                evidence={
+                    "path": str(path),
+                    "error": str(exc),
+                },
             )
+
             return None
 
-    def post_json(self, payload: Dict[str, Any]) -> Any:
+    def post_json(
+        self,
+        payload: Dict[str, Any],
+    ) -> Any:
         body = json.dumps(payload).encode("utf-8")
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
 
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -918,15 +1001,20 @@ class RuntimeVerifier:
 
         with urllib.request.urlopen(request, timeout=15) as response:
             text = response.read().decode("utf-8", errors="replace")
+
             if not text:
                 return {}
+
             return json.loads(text)
 
     # ------------------------------------------------------------------
     # Artifact DB candidate helpers
     # ------------------------------------------------------------------
 
-    def resolve_artifact_db_candidates(self, db_name: str) -> Listcandidates: List[Path] = []
+    def resolve_artifact_db_candidates(
+        self,
+        db_name: str,
+    ) -> Listcandidates: List[Path] = []
 
         explicit_map: Dict[str, Optional[Path]] = {
             FILE_SCAN_INVENTORY_DB_NAME: self.file_scan_inventory_db,
@@ -935,8 +1023,11 @@ class RuntimeVerifier:
         }
 
         explicit = explicit_map.get(db_name)
+
         if explicit:
-            candidates.append(explicit.expanduser().resolve())
+            candidates.append(
+                explicit.expanduser().resolve()
+            )
 
         discovered_key_map = {
             FILE_SCAN_INVENTORY_DB_NAME: "file_scan_inventory_db",
@@ -945,19 +1036,24 @@ class RuntimeVerifier:
         }
 
         discovered_key = discovered_key_map.get(db_name)
+
         if discovered_key:
             for item in self.discovered_assets.get(discovered_key, []):
                 path = Path(item).resolve()
+
                 if path not in candidates:
                     candidates.append(path)
 
-        # Defensive fallback: search by DB filename if discovery did not capture it.
+        # Defensive fallback:
+        # If repository discovery missed a DB, perform a direct filename search.
         if not candidates:
             try:
                 for path in self.repo_root.rglob(db_name):
                     resolved = path.resolve()
+
                     if resolved not in candidates:
                         candidates.append(resolved)
+
             except Exception:
                 pass
 
