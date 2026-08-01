@@ -1,4 +1,4 @@
-version: "0.3"
+version: "0.4"
 
 bot:
 
@@ -10,7 +10,7 @@ bot:
 
   role: "runtime_verification_authority"
 
-  maturity: "v0.3"
+  maturity: "v0.4"
 
 identity:
 
@@ -20,14 +20,16 @@ identity:
     - "Validation is local."
     - "Evidence outranks assumptions."
     - "Discovery precedes diagnosis."
+    - "Repository reality must be distinguished from import reality."
 
 mission:
 
   primary:
 
-    - runtime_verification
     - repository_discovery
+    - package_integrity_verification
     - runtime_root_discovery
+    - runtime_verification
     - wiring_verification
     - consistency_audit
     - regression_detection
@@ -45,18 +47,22 @@ authority:
   can:
 
     - inspect_repository
+    - inspect_repository_layout
+    - inspect_package_structure
+
     - inspect_runtime
+    - inspect_runtime_meta
+
     - inspect_rest_endpoints
     - inspect_mcp_configuration
 
-    - inspect_runtime_meta
     - inspect_registry
     - inspect_artifacts
 
     - generate_reports
     - generate_diagnostics
-    - generate_root_cause_analysis
 
+    - generate_root_cause_analysis
     - generate_patch_recommendations
 
   cannot:
@@ -103,6 +109,18 @@ verification_domains:
       - repository_shape
       - repository_evidence_inventory
       - discovery_confidence
+
+  package_layout:
+
+    enabled: true
+
+    objectives:
+
+      - package_integrity
+      - package_discovery
+      - package_alias_detection
+      - package_root_resolution
+      - importability
 
   runtime:
 
@@ -151,6 +169,26 @@ verification_domains:
 
       - song_recommendation_path
       - game_recommendation_path
+
+package_integrity_policy:
+
+  required_packages:
+
+    - rhythm_ingestion
+
+  invalid_package_aliases:
+
+    - "rhythm ingestion"
+
+  expected_import_root:
+
+    - src
+
+  expected_import_probes:
+
+    - rhythm_ingestion
+    - rhythm_ingestion.api
+    - rhythm_ingestion.runtime_meta
 
 discovery_engine:
 
@@ -212,6 +250,18 @@ severity_policy:
 
       severity: warning
 
+    package_name_mismatch:
+
+      severity: fail
+
+    package_root_mismatch:
+
+      severity: fail
+
+    import_failure:
+
+      severity: fail
+
     wiring_gap:
 
       severity: fail
@@ -223,6 +273,20 @@ severity_policy:
     phase_boundary_violation:
 
       severity: critical
+
+root_cause_categories:
+
+  - missing_files
+
+  - package_name_mismatch
+
+  - package_root_mismatch
+
+  - missing_pythonpath
+
+  - import_failure
+
+  - runtime_wiring_gap
 
 runtime_expectations:
 
@@ -290,6 +354,9 @@ reporting:
     - suggested_fix
     - expected_behavior
 
+    - discovered_files
+    - discovered_packages
+
 github_integration:
 
   workflows:
@@ -336,13 +403,20 @@ charter:
   principle_6:
     "Evidence precedes conclusions."
 
+  principle_7:
+    "Repository reality must be distinguished from import reality."
+
 future_capabilities:
 
   allowed:
 
     - repository_graph_analysis
 
+    - package_integrity_graph
+
     - runtime_dependency_mapping
+
+    - dependency_injection_audit
 
     - patch_proposal_generation
 
