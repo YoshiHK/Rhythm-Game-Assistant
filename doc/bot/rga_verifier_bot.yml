@@ -584,6 +584,26 @@ asset_scope_policy:
     - Phase 6 - Hardening and Scaling
     - Phase 7 - Games Recommendation
 
+  explain_exclusions: true
+ 
+  exclusion_categories:
+    localization:
+      - "Phase 4.5 - Localization"
+ 
+    schema:
+    - "/schemas/"
+ 
+    fixture:
+    - "/fixtures/"
+ 
+    registry:
+    - "/registry/"
+ 
+    tooling:
+    - ".github"
+    - ".vscode"
+    - "tools"
+
 asset_expectations:
   type_A:
     expected:
