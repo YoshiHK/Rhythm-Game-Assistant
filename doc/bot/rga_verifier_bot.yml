@@ -545,11 +545,20 @@ package_integrity_policy:
 
 artifact_database_policy:
 
+  role: root_contract
+
   read_mode:
     sqlite: readonly
 
   modification:
     prohibited
+
+  verification_scope:
+    - presence
+    - readability
+    - schema_inventory
+    - record_count
+    - relationship_seed_validation
 
   allowed_operations:
     - schema_inventory
@@ -562,6 +571,28 @@ artifact_database_policy:
     - update
     - delete
     - schema_mutation
+
+  relationship_chain:
+    - file_scan_inventory.db
+    - chart_assets.db
+    - chart_patterns.db
+
+  root_failure_effects:
+
+    artifact_database_policy:
+      blocks:
+        - artifact_relationships
+        - artifact_backbone_contract
+        - asset_coverage
+        - hash_integrity
+        - type_A_usability
+        - runtime_artifact_readiness
+
+  governance_principles:
+    - verifier_read_only
+    - dependency_awareness
+    - root_cause_isolation
+    - derived_failure_classification
 
 asset_scope_policy:
   enabled: true
