@@ -4943,6 +4943,65 @@ class RuntimeVerifier:
             governance_domain="flow_contracts",
             contract_type="flow_contract",
         )
+        
+    def classify_governance_failure_lineage(
+        self,
+        *,
+        governance_failures: List[Dict[str, Any]],
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        #
+        # ----------------------------------------------------------
+        # Root vs Derived Failure Classification
+        #
+        # Root failures are independently actionable blockers.
+        #
+        # Derived failures are downstream consequences of an upstream
+        # root failure and should be re-evaluated after the root
+        # contract passes.
+        # ----------------------------------------------------------
+        #
+
+        root_failures: List[Dict[str, Any]] = []
+        derived_failures: List[Dict[str, Any]] = []
+
+        failed_contract_types: Set[str] = {
+            item.get("contract_type")
+            for item in governance_failures
+            if item.get("contract_type")
+        }
+
+        for item in governance_failures:
+            contract_type = item.get("contract_type")
+
+            if contract_type in GOVERNANCE_META_CONTRACT_TYPES:
+                continue
+
+            dependency_of = DERIVED_FAILURE_POLICY.get(contract_type)
+
+            if (
+                dependency_of
+                and dependency_of in failed_contract_types
+            ):
+                derived_item = dict(item)
+                derived_item["failure_class"] = "derived"
+                derived_item["dependency_of"] = dependency_of
+
+                derived_failures.append(derived_item)
+                continue
+
+            root_item = dict(item)
+            root_item["failure_class"] = "root"
+
+            if dependency_of:
+                root_item["expected_dependency_of"] = dependency_of
+                root_item["lineage_note"] = (
+                    "This contract is normally derived, but its upstream "
+                    "root contract was not present in the current failure set."
+                )
+
+            root_failures.append(root_item)
+
+        return root_failures, derived_failures
 
     def check_governance_verdict(self) -> None:
         blocking_reasons = list(
@@ -4961,79 +5020,15 @@ class RuntimeVerifier:
 
         #
         # ----------------------------------------------------------
-        # Separate governance failures from dependency failures.
+        # Separate dependency failures from governance failures.
+        #
+        # Dependency failures do not automatically block architecture
+        # governance.
         # ----------------------------------------------------------
         #
 
         dependency_failures: List[Dict[str, Any]] = []
         governance_failures: List[Dict[str, Any]] = []
-        
-        #
-        # ----------------------------------------------------------
-        # Root vs Derived Failure Classification
-        #
-        # Root failures represent problems that can independently
-        # invalidate a governance contract.
-        #
-        # Derived failures are expected consequences of an
-        # upstream root failure.
-        # ----------------------------------------------------------
-        #
-
-        dependency_failures: List[Dict[str, Any]] = []
-        governance_failures: List[Dict[str, Any]] = []
-
-        root_failures: List[Dict[str, Any]] = []
-        derived_failures: List[Dict[str, Any]] = []
-
-        DERIVED_FAILURE_POLICY = {
-
-            #
-            # Artifact backbone cascade
-            #
-
-            "artifact_relationships":
-                "artifact_database_policy",
-
-            "artifact_backbone_contract":
-                "artifact_database_policy",
-
-            "asset_coverage":
-                "artifact_database_policy",
-
-            "hash_integrity":
-                "artifact_database_policy",
-
-            "type_A_usability":
-                "artifact_database_policy",
-
-            "runtime_artifact_readiness":
-                "artifact_database_policy",
-        }
-        
-        for item in governance_failures:
-
-            contract_type = item.get("contract_type")
-
-            dependency_of = (
-                DERIVED_FAILURE_POLICY.get(
-                    contract_type
-                )
-            )
-
-            if dependency_of:
-                item["dependency_of"] = (
-                    dependency_of
-                )
-            
-                derived_failures.append(
-                    item
-                )
-                
-            else:
-                root_failures.append(
-                    item
-                )
 
         critical_results: List[Any] = []
         fail_results: List[Any] = []
