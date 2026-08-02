@@ -2466,6 +2466,41 @@ class RuntimeVerifier:
         scoped_type_a = self.discovered_assets.get("type_A", [])
         scoped_type_b = self.discovered_assets.get("type_B", [])
         excluded_candidates = self.discovered_assets.get("excluded_candidates", [])
+        
+        excluded_by_reason = {
+            "localization": [],
+            "schema": [],
+            "fixture": [],
+            "registry": [],
+            "tooling": [],
+            "other": [],
+        }
+        
+        for path in excluded_candidates:
+
+            lowered = path.lower()
+
+            if "localization" in lowered:
+                excluded_by_reason["localization"].append(path)
+
+            elif "/schemas/" in lowered:
+                excluded_by_reason["schema"].append(path)
+
+            elif "/fixtures/" in lowered:
+                excluded_by_reason["fixture"].append(path)
+
+            elif "/registry/" in lowered:
+                excluded_by_reason["registry"].append(path)
+
+            elif (
+                ".github" in lowered
+                or ".vscode" in lowered
+                or "/tools/" in lowered
+            ):
+                excluded_by_reason["tooling"].append(path)
+
+            else:
+                excluded_by_reason["other"].append(path)
 
         scoped_total = len(scoped_type_a) + len(scoped_type_b)
         excluded_total = len(excluded_candidates)
@@ -2497,6 +2532,17 @@ class RuntimeVerifier:
                 "exclude_root_hints": ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
                 "exclude_filename_suffixes": ASSET_SCOPE_EXCLUDE_FILENAME_SUFFIXES,
                 "exclude_filename_contains": ASSET_SCOPE_EXCLUDE_FILENAME_CONTAINS,
+                "excluded_by_reason": {
+                    key: len(value)
+                    for key, value in excluded_by_reason.items()
+                },
+
+                "excluded_examples": {
+                    key: value[:10]
+                    for key, value in excluded_by_reason.items()
+                    if value
+                },
+                
                 "note": (
                     "Repository files are not automatically chart assets. "
                     "v1.0 keeps asset scope explicit so schema/config/localization JSON files "
@@ -4451,6 +4497,36 @@ class RuntimeVerifier:
 
         dependency_failures: List[Dict[str, Any]] = []
         governance_failures: List[Dict[str, Any]] = []
+        root_failures = []
+        derived_failures = []
+        
+        DERIVED_FAILURE_POLICY = {
+            "asset_coverage":
+                "artifact_database_policy",
+
+            "hash_integrity":
+                "artifact_database_policy",
+
+            "type_A_usability":
+                "artifact_database_policy",
+
+            "runtime_artifact_readiness":
+                "artifact_database_policy",
+        }
+        
+        for item in governance_failures:
+
+            contract_type = item.get("contract_type")
+
+            dependency_of = DERIVED_FAILURE_POLICY.get(
+                contract_type
+            )
+
+            if dependency_of:
+                item["dependency_of"] = dependency_of
+                derived_failures.append(item)
+            else:
+                root_failures.append(item)
 
         critical_results: List[Any] = []
         fail_results: List[Any] = []
@@ -4666,10 +4742,26 @@ class RuntimeVerifier:
         # architecture governance.
         # ----------------------------------------------------------
         #
+        
+        architecture_failure_contracts = {
+            "repository_discovery",
+            "repository_runtime_alignment",
+            "package_layout",
+            "import_reality",
+            "layer_boundary",
+            "flow_contract",
+        }
+        
+        architecture_blockers = [
+            item
+            for item in governance_failures
+            if item.get("contract_type")
+            in architecture_failure_contracts
+        ]
 
         architecture_verdict = (
             "blocked"
-            if governance_fail_count > 0
+            if architecture_blockers
             else "ready"
         )
 
@@ -4804,6 +4896,12 @@ class RuntimeVerifier:
 
                 "governance_failures":
                     governance_failures,
+                    
+                "root_failures":
+                    root_failures,
+
+                "derived_failures":
+                    derived_failures,
 
                 "blocking_reasons":
                     blocking_reasons,
@@ -4939,6 +5037,31 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("")
 
     lines.append("## Governance Verdict")
+    lines.append("## Root Failures")
+    lines.append("")
+
+    for item in governance.get(
+        "root_failures",
+        [],
+    ):
+        lines.append(
+            f"- {item['contract_type']}"
+        )
+
+    lines.append("")
+
+    lines.append("## Derived Failures")
+    lines.append("")
+
+    for item in governance.get(
+        "derived_failures",
+        [],
+    ):
+        lines.append(
+            f"- {item['contract_type']} "
+            f"(dependency_of={item['dependency_of']})"
+        )
+        
     lines.append("```json")
     lines.append(
         json.dumps(
