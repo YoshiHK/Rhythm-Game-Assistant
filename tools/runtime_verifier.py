@@ -3650,7 +3650,90 @@ class RuntimeVerifier:
             for layer in LAYER_KEYWORDS
         }
 
-        violations: List[Dict[str, Any]] = []
+        hint_findings: List[Dict[str, Any]] = []
+        suspicion_findings: List[Dict[str, Any]] = []
+        evidence_findings: List[Dict[str, Any]] = []
+
+        def classify_boundary_signal(
+            *,
+            layer: str,
+            hint: str,
+            line_text: str,
+        ) -> Tuple[str, str]:
+            stripped = line_text.strip()
+            lowered = stripped.lower()
+            hint_lower = hint.lower()
+
+            #
+            # Ignore obvious comments.
+            # This reduces false positives from documentation such as:
+            # "# readers should not write"
+            #
+            if not stripped or stripped.startswith("#"):
+                return (
+                    "ignored",
+                    "Comment or empty line; not treated as boundary evidence.",
+                )
+
+            #
+            # Tier 3 — evidence.
+            #
+            # These indicate likely executable side-effect or ownership crossing.
+            #
+            evidence_tokens = [
+                ".commit(",
+                ".execute(",
+                ".executemany(",
+                "insert into",
+                "update ",
+                "delete from",
+                "create table",
+                "drop table",
+                "alter table",
+                ".persist(",
+                ".save(",
+                ".write(",
+                "open(",
+            ]
+
+            if any(token in lowered for token in evidence_tokens):
+                return (
+                    "evidence",
+                    "Executable side-effect or persistence-like operation detected.",
+                )
+
+            #
+            # Tier 2 — suspicion.
+            #
+            # Imports from prohibited layers are stronger than plain text hits,
+            # but still not automatically proof of mutation.
+            #
+            import_like = (
+                lowered.startswith("import ")
+                or lowered.startswith("from ")
+            )
+
+            if import_like and hint_lower in lowered:
+                return (
+                    "suspicion",
+                    "Import-like reference to prohibited layer detected.",
+                )
+
+            #
+            # Tier 1 — hint.
+            #
+            # Plain string match. Useful for audit context, but not enough to block governance.
+            #
+            if hint_lower in lowered:
+                return (
+                    "hint",
+                    "Textual hint only; requires corroborating evidence.",
+                )
+
+            return (
+                "ignored",
+                "No actionable boundary signal.",
+            )
 
         for path in python_files:
             normalized_path = normalize_path_text(path).lower()
@@ -3666,59 +3749,117 @@ class RuntimeVerifier:
             if not matched_layers:
                 continue
 
+            lines = text.splitlines()
+
             for layer in matched_layers:
                 prohibited_hints = PROHIBITED_LAYER_IMPORT_HINTS.get(layer, [])
 
-                for hint in prohibited_hints:
-                    if hint in text:
-                        violations.append(
-                            {
-                                "layer": layer,
-                                "file": str(path.resolve()),
-                                "prohibited_hint": hint,
-                            }
+                for line_number, line_text in enumerate(lines, start=1):
+                    for hint in prohibited_hints:
+                        if hint not in line_text:
+                            continue
+
+                        confidence, justification = classify_boundary_signal(
+                            layer=layer,
+                            hint=hint,
+                            line_text=line_text,
                         )
 
-        pass_condition = not violations
+                        if confidence == "ignored":
+                            continue
+
+                        finding = {
+                            "layer": layer,
+                            "file": str(path.resolve()),
+                            "line": line_number,
+                            "matched_hint": hint,
+                            "confidence": confidence,
+                            "snippet": line_text.strip()[:300],
+                            "justification": justification,
+                        }
+
+                        if confidence == "evidence":
+                            evidence_findings.append(finding)
+                        elif confidence == "suspicion":
+                            suspicion_findings.append(finding)
+                        else:
+                            hint_findings.append(finding)
+
+        evidence_count = len(evidence_findings)
+        suspicion_count = len(suspicion_findings)
+        hint_count = len(hint_findings)
+
+        if evidence_count > 0:
+            status = "critical"
+            summary = "Layer boundary audit found evidence-level prohibited boundary violations."
+        elif suspicion_count > 0:
+            status = "warning"
+            summary = "Layer boundary audit found suspicious boundary references, but no evidence-level violations."
+        elif hint_count > 0:
+            status = "info"
+            summary = "Layer boundary audit found textual boundary hints only; no actionable violations confirmed."
+        else:
+            status = "pass"
+            summary = "Layer boundary audit found no prohibited boundary signals."
 
         self.add(
             domain="layer_separation",
             check="layer_boundary_audit",
-            status="pass" if pass_condition else "critical",
-            summary=(
-                "Layer separation audit found no prohibited boundary hints."
-                if pass_condition
-                else
-                "Layer separation audit found prohibited boundary violations."
-            ),
+            status=status,
+            summary=summary,
             evidence={
                 "layer_files": {
                     layer: sorted(set(files))
                     for layer, files in layer_files.items()
                 },
-
-                "violations":
-                    violations,
-
-                "prohibited_layer_import_hints":
-                    PROHIBITED_LAYER_IMPORT_HINTS,
-
-                "audit_style":
-                    "static_boundary_governance",
-
-                "verification_scope":
-                    "layer_responsibility",
-
-                "layer_model":
-                    list(LAYER_KEYWORDS.keys()),
+                "risk_summary": {
+                    "evidence_count": evidence_count,
+                    "suspicion_count": suspicion_count,
+                    "hint_count": hint_count,
+                    "governance_blocking": evidence_count > 0,
+                },
+                "evidence_findings": evidence_findings,
+                "suspicion_findings": suspicion_findings,
+                "hint_findings": hint_findings,
+                "prohibited_layer_import_hints": PROHIBITED_LAYER_IMPORT_HINTS,
+                "audit_style": "tiered_static_boundary_governance",
+                "verification_scope": "layer_responsibility",
+                "layer_model": list(LAYER_KEYWORDS.keys()),
+                "confidence_model": {
+                    "hint": {
+                        "meaning": "Textual keyword match only.",
+                        "severity": "info",
+                        "governance_blocking": False,
+                    },
+                    "suspicion": {
+                        "meaning": "Import-like or structural reference to prohibited responsibility.",
+                        "severity": "warning",
+                        "governance_blocking": False,
+                    },
+                    "evidence": {
+                        "meaning": "Executable side-effect or persistence-like operation detected in wrong layer.",
+                        "severity": "critical",
+                        "governance_blocking": True,
+                    },
+                },
+                "false_positive_controls": [
+                    "Comments and empty lines are ignored.",
+                    "Plain keyword hits are classified as hint, not violation.",
+                    "Import-like references are classified as suspicion, not critical violation.",
+                    "Only executable side-effect evidence escalates to critical.",
+                ],
+                "note": (
+                    "This audit separates hints, suspicions, and evidence-level violations. "
+                    "Only evidence-level findings should block governance."
+                ),
             },
             suggested_fix=(
                 None
-                if pass_condition
+                if evidence_count == 0
                 else (
-                    "Move responsibilities into the correct layer. "
-                    "Converters, validators, readers, models, "
-                    "normalizers and classifiers must remain separated."
+                    "Move executable side effects or persistence ownership into the correct layer. "
+                    "Converters, validators, readers, models, normalizers, and classifiers "
+                    "must remain responsibility-separated."
                 )
             ),
             governance_domain="layer_boundaries",
