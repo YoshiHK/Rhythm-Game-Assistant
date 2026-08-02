@@ -5693,74 +5693,213 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         [],
     )
 
-    lines.append("## Governance Verdict")
+    dependency_failures = governance.get(
+        "dependency_failures",
+        [],
+    )
+
+    governance_failures = governance.get(
+        "governance_failures",
+        [],
+    )
+
+    lines.append("## Governance Overview")
+    lines.append("")
+
+    governance_overview = [
+        (
+            "Governance verdict",
+            governance.get("governance_verdict"),
+        ),
+        (
+            "Architecture verdict",
+            governance.get("architecture_verdict"),
+        ),
+        (
+            "Runtime verdict",
+            governance.get("runtime_verdict"),
+        ),
+        (
+            "Artifact backbone verdict",
+            governance.get("artifact_backbone_verdict"),
+        ),
+        (
+            "Flow contract verdict",
+            governance.get("flow_contract_verdict"),
+        ),
+        (
+            "Layer boundary verdict",
+            governance.get("layer_boundary_verdict"),
+        ),
+        (
+            "MCP contract verdict",
+            governance.get("mcp_contract_verdict"),
+        ),
+        (
+            "Deletion verdict",
+            governance.get("deletion_verdict"),
+        ),
+    ]
+
+    for label, value in governance_overview:
+        lines.append(
+            f"- {label}: `{value}`"
+        )
+
     lines.append("")
 
     lines.append(
-        f"- Governance verdict: `{governance.get('governance_verdict')}`"
+        f"- Dependency failures: "
+        f"`{governance.get('dependency_fail_count', 0)}`"
     )
+
     lines.append(
-        f"- Architecture verdict: `{governance.get('architecture_verdict')}`"
+        f"- Governance failures: "
+        f"`{governance.get('governance_fail_count', 0)}`"
     )
+
     lines.append(
-        f"- Runtime verdict: `{governance.get('runtime_verdict')}`"
+        f"- Root failures: "
+        f"`{governance.get('root_failure_count', 0)}`"
     )
+
     lines.append(
-        f"- Artifact backbone verdict: `{governance.get('artifact_backbone_verdict')}`"
+        f"- Derived failures: "
+        f"`{governance.get('derived_failure_count', 0)}`"
     )
-    lines.append(
-        f"- Layer boundary verdict: `{governance.get('layer_boundary_verdict')}`"
-    )
-    lines.append(
-        f"- MCP contract verdict: `{governance.get('mcp_contract_verdict')}`"
-    )
-    lines.append(
-        f"- Deletion verdict: `{governance.get('deletion_verdict')}`"
-    )
+
     lines.append("")
 
-    lines.append("### Root Failures")
+    #
+    # Root Failures
+    #
+
+    lines.append("## Root Failures")
     lines.append("")
 
     if not root_failures:
         lines.append("(none)")
     else:
         for item in root_failures:
+
+            contract_type = item.get(
+                "contract_type",
+                "unknown",
+            )
+
             lines.append(
-                f"- `{item.get('contract_type')}` "
+                f"- `{contract_type}` "
                 f"({item.get('domain')} / {item.get('check')})"
             )
 
-            if item.get("summary"):
+            summary = item.get("summary")
+
+            if summary:
                 lines.append(
-                    f"  - {item.get('summary')}"
+                    f"  - {summary}"
                 )
 
     lines.append("")
 
-    lines.append("### Derived Failures")
+    #
+    # Derived Failures
+    #
+
+    lines.append("## Derived Failures")
     lines.append("")
 
     if not derived_failures:
         lines.append("(none)")
     else:
         for item in derived_failures:
-            lines.append(
-                f"- `{item.get('contract_type')}` "
-                f"depends on `{item.get('dependency_of')}` "
-                f"({item.get('domain')} / {item.get('check')})"
+
+            contract_type = item.get(
+                "contract_type",
+                "unknown",
             )
 
-            if item.get("summary"):
+            dependency_of = item.get(
+                "dependency_of",
+                "unknown",
+            )
+
+            lines.append(
+                f"- `{contract_type}` "
+                f"(dependency_of=`{dependency_of}`)"
+            )
+
+            summary = item.get("summary")
+
+            if summary:
                 lines.append(
-                    f"  - {item.get('summary')}"
+                    f"  - {summary}"
                 )
 
     lines.append("")
 
-    lines.append("### Governance State")
+    #
+    # Dependency Failures
+    #
+
+    lines.append("## Dependency Failures")
     lines.append("")
+
+    if not dependency_failures:
+        lines.append("(none)")
+    else:
+
+        for item in dependency_failures:
+
+            lines.append(
+                f"- `{item.get('contract_type')}` "
+                f"({item.get('domain')} / {item.get('check')})"
+            )
+
+            summary = item.get("summary")
+
+            if summary:
+                lines.append(
+                    f"  - {summary}"
+                )
+
+    lines.append("")
+
+    #
+    # Governance Failures
+    #
+
+    lines.append("## Governance Failures")
+    lines.append("")
+
+    if not governance_failures:
+        lines.append("(none)")
+    else:
+
+        for item in governance_failures:
+
+            lines.append(
+                f"- `{item.get('contract_type')}` "
+                f"({item.get('domain')} / {item.get('check')})"
+            )
+
+            summary = item.get("summary")
+
+            if summary:
+                lines.append(
+                    f"  - {summary}"
+                )
+
+    lines.append("")
+
+    #
+    # Governance State
+    #
+
+    lines.append("## Governance State")
+    lines.append("")
+
     lines.append("```json")
+
     lines.append(
         json.dumps(
             governance,
@@ -5768,6 +5907,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
             ensure_ascii=False,
         )
     )
+
     lines.append("```")
     lines.append("")
 
