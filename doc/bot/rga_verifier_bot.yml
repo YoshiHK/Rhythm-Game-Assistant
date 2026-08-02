@@ -681,6 +681,13 @@ verification_gates:
       - mcp_contract_verified
       - architecture_contracts_verified
 
+  governance_failure_lineage_readiness:
+    required:
+      - root_failures_classified
+      - derived_failures_classified
+      - root_cause_summary_generated
+      - lineage_renderable
+
 discovery_engine:
   enabled: true
   mode: "repository_wide"
@@ -791,6 +798,15 @@ severity_policy:
     mcp_contract_failure:
       severity: fail
 
+    root_failure_detected:
+      severity: critical
+
+    derived_failure_detected:
+      severity: fail
+
+    lineage_classification_failure:
+      severity: warning
+
 root_cause_categories:
   - file_scan_inventory_missing
   - chart_assets_db_missing
@@ -822,6 +838,94 @@ root_cause_categories:
   - runtime_db_read_failure
   - missing_reference_url
   - deletion_gate_failed
+  - root_contract_failure
+  - derived_contract_failure
+  - artifact_database_policy_failure
+  - governance_lineage_failure
+  - dependency_governance_misclassification
+
+governance_failure_accounting:
+
+  principles:
+    dependency_failures_are_separate: true
+    governance_failures_are_actionable: true
+    root_failures_are_primary_causes: true
+    derived_failures_are_downstream_effects: true
+
+  reporting:
+    include_dependency_failures: true
+    include_governance_failures: true
+    include_root_failures: true
+    include_derived_failures: true
+    include_root_failure_count: true
+    include_derived_failure_count: true
+
+governance_failure_lineage:
+
+  root_contracts:
+
+    artifact_database_policy:
+
+      role: root_contract
+
+      derived_failures_if_missing:
+        - artifact_relationships
+        - artifact_backbone_contract
+        - asset_coverage
+        - hash_integrity
+        - type_A_usability
+        - runtime_artifact_readiness
+
+    deletion_readiness:
+      role: root_contract
+      independent: true
+
+  derived_contracts:
+
+    artifact_relationships:
+      dependency_of:
+        - artifact_database_policy
+
+    artifact_backbone_contract:
+      dependency_of:
+        - artifact_database_policy
+
+    asset_coverage:
+      dependency_of:
+        - artifact_database_policy
+
+    hash_integrity:
+      dependency_of:
+        - artifact_database_policy
+
+    type_A_usability:
+      dependency_of:
+        - artifact_database_policy
+
+    runtime_artifact_readiness:
+      dependency_of:
+        - artifact_database_policy
+
+  meta_contracts:
+    - governance_verdict
+
+runtime_reader_policy:
+
+  discovery_mode:
+    strategy: repository_driven
+
+  prohibit:
+    - fixed_reader_assumptions
+    - hardcoded_package_topology
+
+  expectations:
+    discover_existing_readers: true
+    discover_existing_validators: true
+    discover_existing_runtime_bridges: true
+
+  reporting:
+    show_discovered_reader_modules: true
+    show_reader_import_results: true
 
 runtime_expectations:
   artifact_runtime_flow:
@@ -868,28 +972,238 @@ simulation_policy:
     - replacing_runtime_output
     - replacing_source_of_truth
 
+advisor_support:
+  enabled: true
+  outputs:
+    - root_cause_summary
+    - remediation_order
+    - dependency_mapping
+    - maintenance_guidance
+
+  remediation_strategy:
+    resolve_root_failures_first: true
+    revalidate_derived_failures_after_root_resolution: true
+    separate_dependency_gaps_from_governance_gaps: true
+
+  advisory_mode:
+    read_only: true
+    evidence_based: true
+
 reporting:
-  output_formats:
-    - json
-    - markdown
+
+  strategy:
+
+    primary_format:
+      - markdown
+
+    secondary_format:
+      - json
+
+    human_readable_priority: true
+    evidence_first: true
+    governance_first: true
+    auditor_mode: true
+    advisor_mode: true
+
+  markdown_sections:
+
+    #
+    # Executive / Governance
+    #
+
+    - governance_overview
+    - root_cause_summary
+    - root_failures
+    - derived_failures
+    - dependency_failures
+    - failure_lineage
+    - layer_boundary_risk
+    - governance_policy
+
+    #
+    # Report Health
+    #
+
+    - summary
+    - severity_summary
+
+    #
+    # Artifact Backbone
+    #
+
+    - artifact_backbone
+
+    #
+    # Discovery
+    #
+
+    - repository_discovery
+    - asset_discovery
+
+    #
+    # Raw Governance Snapshot
+    #
+
+    - governance_state_snapshot
+
+    #
+    # Detailed Evidence
+    #
+
+    - detailed_results
+
+  json_sections:
+
+    #
+    # Governance
+    #
+
+    - governance
+    - dependency_failures
+    - governance_failures
+    - root_failures
+    - derived_failures
+
+    #
+    # Governance Intelligence
+    #
+
+    - root_cause_summary
+    - lineage
+    - policy
+    - layer_boundary_risk
+
+    #
+    # Discovery
+    #
+
+    - backend_root_candidates
+    - discovered_files
+    - discovered_packages
+    - discovered_assets
+
+    #
+    # Artifact Backbone
+    #
+
+    - artifact_databases
+
+    #
+    # Verification Evidence
+    #
+
+    - results
+
+  raw_json_snapshot:
+    enabled: true
+    position:
+      - after_human_readable_sections
+
+  governance_reporting:
+    include_dependency_failures: true
+    include_governance_failures: true
+    include_root_failures: true
+    include_derived_failures: true
+    include_root_failure_count: true
+    include_derived_failure_count: true
+    separate_dependency_failures: true
+    separate_root_and_derived_failures: true
+    prioritize_root_causes: true
+
+  advisor_reporting:
+    enabled: true
+    include_root_cause_summary: true
+    include_failure_lineage: true
+    include_remediation_order: true
+    include_recommendations: true
+
+    recommendation_style:
+      - evidence_based
+      - read_only
+      - non_mutating
 
   required_fields:
+
+    #
+    # Core Result Contract
+    #
+
     - evidence
     - severity
     - diagnostics
-    - root_cause
+
+    #
+    # Governance Verdicts
+    #
+
     - governance_verdict
     - architecture_verdict
+    - runtime_verdict
+    - artifact_backbone_verdict
     - deletion_verdict
 
+    #
+    # Failure Accounting
+    #
+
+    - dependency_failures
+    - governance_failures
+    - root_failures
+    - derived_failures
+
+    - dependency_fail_count
+    - governance_fail_count
+    - root_failure_count
+    - derived_failure_count
+
   optional_fields:
+
+    #
+    # Remediation
+    #
+
     - suggested_fix
+    - governance_recommendations
+
+    #
+    # Advisor Layer
+    #
+
+    - root_cause_summary
+    - failure_lineage
+    - lineage
+    - remediation_order
+    - dependency_mapping
+
+    #
+    # Expected Behavior
+    #
+
     - expected_behavior
+
+    #
+    # Discovery
+    #
+
     - discovered_files
     - discovered_packages
+    - discovered_assets
+
+    #
+    # Runtime Reality
+    #
+
     - repository_reality
     - import_reality
     - runtime_reality
+
+    #
+    # Artifact Verification
+    #
+    
+    - artifact_verification
+    - artifact_backbone_contract
+    - artifact_relationships
     - asset_verification
     - asset_coverage
     - coverage_percentage
@@ -899,11 +1213,30 @@ reporting:
     - type_A_usability
     - runtime_db_readiness
     - deletion_readiness
-    - artifact_backbone_contract
+
+    #
+    # Governance Domains
+    #
+
     - flow_contract_results
     - layer_boundary_results
+    - layer_boundary_risk
     - mcp_contract_results
-    - governance_recommendations
+
+  rendering_rules:
+    root_failures_before_derived_failures: true
+    dependency_failures_before_governance_failures: true
+    root_cause_summary_before_failure_inventory: true
+    failure_lineage_before_raw_json_snapshot: true
+    governance_state_snapshot_after_summaries: true
+    avoid_duplicate_failure_rendering: true
+
+  evidence_policy:
+    summarize_large_evidence_collections: true
+    preserve_full_json_artifacts: true
+    show_excluded_asset_reason_breakdown: true
+    human_readable_first: true
+    raw_evidence_second: true
 
 github_integration:
   workflows:
@@ -950,73 +1283,100 @@ charter:
   principle_13: "Flow contracts must remain explicit and separable."
   principle_14: "MCP adapters must remain observable and verifiable."
   principle_15: "Governance verdicts must be evidence-based and read-only."
+  principle_16: "Dependency failures are not governance failures."
+  principle_17: "Root causes must be distinguished from derived effects."
+  principle_18: "Root failures must be rendered before derived failures."
+  principle_19: "Governance reports should prioritize actionable causes."
+  principle_20: "Verification outputs may support advisory reasoning but remain read-only."
+  principle_21: "Derived failures must never obscure independently actionable root contracts."
 
-future capabilities:
+future_capabilities:
 
-allowed:
-  # Repository & Architecture Intelligence
-  - repository_graph_analysis
-  - repository_topology_mapping
-  - repository_runtime_consistency_mapping
-  - architecture_contract_audit
-  - architecture_drift_detection
-  - completed_phase_boundary_audit
-  - governance_verdict_generation
+  allowed:
 
-  # Package & Dependency Intelligence
-  - package_integrity_graph
-  - runtime_dependency_mapping
-  - dependency_reality_analysis
-  - dependency_injection_audit
-  - dependency_risk_visualization
+    #
+    # Repository & Architecture Intelligence
+    #
 
-  # Artifact Backbone Intelligence
-  - artifact_backbone_audit
-  - artifact_relationship_graph
-  - scan_asset_pattern_mapping
-  - artifact_lineage_analysis
-  - artifact_traceability_audit
-  - asset_coverage_analysis
-  - deletion_readiness_scoring
+    - repository_graph_analysis
+    - repository_topology_mapping
+    - repository_runtime_consistency_mapping
+    - architecture_drift_detection
 
-  # Runtime & Flow Intelligence
-  - flow_topology_analysis
-  - flow_contract_audit
-  - runtime_surface_analysis
-  - runtime_wiring_analysis
-  - runtime_readiness_scoring
+    #
+    # Package & Dependency Intelligence
+    #
 
-  # Layer Governance
-  - layer_boundary_audit
-  - layer_responsibility_analysis
-  - orchestration_boundary_audit
+    - package_integrity_graph
+    - dependency_injection_audit
+    - dependency_risk_visualization
 
-  # MCP Governance
-  - mcp_contract_audit
-  - mcp_tool_surface_analysis
-  - mcp_runtime_visibility_audit
+    #
+    # Artifact Backbone Intelligence
+    #
 
-  # Asset Intelligence
-  - semantic_readiness_verification
-  - type_A_usability_forecasting
-  - type_B_intelligence_analysis
-  - reference_intelligence_readiness
+    - artifact_relationship_graph
+    - scan_asset_pattern_mapping
+    - artifact_lineage_analysis
+    - artifact_traceability_audit
 
-  # Verification Support
-  - regression_forecasting
-  - patch_proposal_generation
-  - verification_explanation_generation
-  - root_cause_correlation_analysis
+    #
+    # Runtime & Flow Intelligence
+    #
 
-prohibited:
-  - autonomous_code_modification
-  - autonomous_database_modification
-  - autonomous_asset_deletion
-  - autonomous_merging
-  - autonomous_deployment
-  - phase_logic_replacement
-  - canonical_row_modification
-  - recommendation_logic_override
-  - personalization_logic_override
-  - localization_logic_override
-  - governance_policy_mutation
+    - flow_topology_analysis
+    - runtime_surface_analysis
+    - runtime_readiness_scoring
+
+    #
+    # Layer Governance
+    #
+
+    - layer_responsibility_analysis
+    - orchestration_boundary_audit
+
+    #
+    # MCP Governance
+    #
+
+    - mcp_tool_surface_analysis
+    - mcp_runtime_visibility_audit
+
+    #
+    # Asset Intelligence
+    #
+
+    - semantic_readiness_verification
+    - type_A_usability_forecasting
+    - type_B_intelligence_analysis
+
+    #
+    # Auditor / Advisor Intelligence
+    #
+
+    - remediation_order_generation
+    - governance_failure_lineage_analysis
+    - repository_impact_analysis
+    - maintenance_planning_support
+    - governance_risk_forecasting
+
+    #
+    # Verification Support
+    #
+
+    - regression_forecasting
+    - patch_proposal_generation
+    - root_cause_correlation_analysis
+
+  prohibited:
+    - autonomous_code_modification
+    - autonomous_database_modification
+    - autonomous_asset_deletion
+    - autonomous_merging
+    - autonomous_deployment
+    - phase_logic_replacement
+    - canonical_row_modification
+    - recommendation_logic_override
+    - personalization_logic_override
+    - localization_logic_override
+    - governance_policy_mutation
