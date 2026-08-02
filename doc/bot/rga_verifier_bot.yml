@@ -272,7 +272,7 @@ verification_domains:
       - flow_boundary_integrity
       - contract_compliance
 
-  layer_separation:
+   layer_separation:
     enabled: true
 
     objectives:
@@ -285,6 +285,25 @@ verification_domains:
       - reader_boundary
       - bridge_boundary
       - orchestrator_boundary
+      - boundary_signal_tiering
+      - false_positive_isolation
+      - evidence_confidence_classification
+
+    confidence_model:
+      hint:
+        meaning: "Textual signal only; not governance-blocking."
+        severity: info
+        governance_blocking: false
+
+      suspicion:
+        meaning: "Import-like or structural reference to prohibited responsibility; requires review."
+        severity: warning
+        governance_blocking: false
+
+      evidence:
+        meaning: "Executable side-effect or ownership crossing detected."
+        severity: critical
+        governance_blocking: true
 
   type_B_intelligence:
     enabled: true
@@ -360,59 +379,143 @@ flow_contracts:
 
 layer_boundary_policy:
 
+  philosophy:
+    - "Layer boundaries are responsibility contracts."
+    - "Keyword hints are not sufficient evidence for governance blocking."
+    - "Only evidence-level side effects should become critical violations."
+    - "Suspicious imports should be reviewable warnings, not automatic blockers."
+
+  confidence_levels:
+    hint:
+      description: "Textual reference to a prohibited responsibility."
+      example:
+        - "A comment mentions persistence."
+        - "A docstring mentions writer."
+      governance_blocking: false
+      severity: info
+
+    suspicion:
+      description: "Import-like or structural reference to a prohibited responsibility."
+      example:
+        - "from rhythm_ingestion.persistence import ..."
+        - "import writers"
+      governance_blocking: false
+      severity: warning
+
+    evidence:
+      description: "Executable side-effect or ownership crossing in the wrong layer."
+      example:
+        - "sqlite3 connection commit in converter"
+        - "INSERT / UPDATE / DELETE inside reader"
+        - "writer.persist() inside validator"
+      governance_blocking: true
+      severity: critical
+
   models:
+    responsibility: data
     prohibit:
       - persistence_ownership
       - orchestration
       - runtime_mutation
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   normalizers:
+    responsibility: identity
     prohibit:
       - persistence_ownership
       - orchestration
       - recommendation_logic
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   classifiers:
+    responsibility: asset_type_decision
     prohibit:
       - persistence_ownership
       - runtime_mutation
       - orchestration
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   converters:
+    responsibility: file_to_text
     prohibit:
       - persistence_ownership
       - orchestration
       - recommendation_logic
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   validators:
+    responsibility: correctness
     prohibit:
       - persistence_ownership
       - runtime_mutation
       - orchestration
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   persistence:
+    responsibility: database_writes
     prohibit:
       - recommendation_logic
       - tip_generation
       - orchestration
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   readers:
+    responsibility: database_reads
     prohibit:
       - writes
       - schema_ownership
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   bridges:
+    responsibility: glue
     prohibit:
       - business_logic
       - persistence_ownership
       - recommendation_logic
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
   orchestrators:
+    responsibility: control_flow
     prohibit:
       - schema_ownership
       - persistence_ownership
       - domain_logic_ownership
+    escalation:
+      hint: info
+      suspicion: warning
+      evidence: critical
 
+  false_positive_controls:
+    - ignore_comments
+    - ignore_empty_lines
+    - do_not_escalate_plain_keyword_hits
+    - require_executable_side_effect_for_critical
+    - classify_import_like_matches_as_suspicion
+    
 mcp_contract:
 
   required_server:
