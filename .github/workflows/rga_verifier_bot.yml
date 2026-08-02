@@ -39,29 +39,82 @@ jobs:
         run: |
           cat > artifacts/evidence_taxonomy.json <<'JSON'
           {
-            "v": "1.0",
+            "schema": "rga.evidence.taxonomy.v1.0",
+            "mode": "read_only",
+            "bot_role": {
+              "checker": true,
+              "validator": true,
+              "verifier": true,
+              "auditor": true,
+              "advisor": true,
+              "governor": false,
+              "maintainer": false
+            },
             "classification": {
               "repository_reality": {
+                "description": "Files, folders, package roots, and discovered repository surfaces.",
                 "governance_blocking": true
               },
               "dependency_reality": {
-                "governance_blocking": false
+                "description": "Python/package dependency availability and import prerequisites.",
+                "governance_blocking": false,
+                "affects": [
+                  "runtime_verdict",
+                  "flow_verification"
+                ]
+              },
+              "import_reality": {
+                "description": "Whether Python modules import successfully in the current runtime context.",
+                "governance_blocking": false,
+                "affects": [
+                  "runtime_verdict"
+                ]
               },
               "runtime_reality": {
+                "description": "Runtime availability and operational surface evidence.",
                 "governance_blocking": false
               },
               "artifact_backbone": {
+                "description": "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db backbone.",
+                "governance_blocking": true
+              },
+              "deletion_governance": {
+                "description": "Deletion readiness and source asset retention gates.",
                 "governance_blocking": true
               },
               "layer_boundary": {
+                "description": "Layer responsibility separation evidence.",
                 "confidence_model": [
                   "hint",
                   "suspicion",
                   "evidence"
+                ],
+                "governance_blocking_confidence": [
+                  "evidence"
                 ]
+              },
+              "root_failure": {
+                "description": "Independently actionable governance blocker.",
+                "render_before": [
+                  "derived_failure"
+                ]
+              },
+              "derived_failure": {
+                "description": "Downstream consequence of an upstream root contract failure.",
+                "revalidate_after_root_resolution": true
               }
+            },
+            "governance_principles": {
+              "completed_phases": "immutable",
+              "verifier_mode": "read_only",
+              "dependency_failures_are_not_governance_failures": true,
+              "root_failures_should_be_resolved_first": true,
+              "derived_failures_should_be_revalidated_after_root_resolution": true,
+              "false_positive_isolation": true,
+              "maintenance_mode": "advisor_only"
             }
           }
+          JSON
 
       ############################################################
       # Repository Discovery Evidence
@@ -86,6 +139,24 @@ jobs:
           git branch --show-current \
             > artifacts/git_branch.txt || true
 
+          {
+            echo "Repository Discovery Evidence"
+            echo ""
+            echo "Repository root:"
+            cat artifacts/repository_root.txt || true
+            echo ""
+            echo "Git HEAD:"
+            cat artifacts/git_head.txt || true
+            echo ""
+            echo "Git branch:"
+            cat artifacts/git_branch.txt || true
+            echo ""
+            echo "Inventory files:"
+            echo "- repository_inventory.txt"
+            echo "- repository_directories.txt"
+            echo "- git_status_short.txt"
+          } > artifacts/repository_discovery_summary.txt
+
       ############################################################
       # Runtime Discovery Evidence
       ############################################################
@@ -93,26 +164,61 @@ jobs:
       - name: Runtime Discovery Evidence
         run: |
           find . -type f -name "main.py" \
-            | sort > artifacts/main_candidates.txt
+            | sort > artifacts/main_candidates.txt || true
 
           find . -type f -name "recommend.py" \
-            | sort > artifacts/recommend_candidates.txt
+            | sort > artifacts/recommend_candidates.txt || true
 
           find . -type f -name "app.py" \
-            | sort > artifacts/app_candidates.txt
+            | sort > artifacts/app_candidates.txt || true
 
           find . -type f -name "runtime_meta.py" \
-            | sort > artifacts/runtime_meta_candidates.txt
+            | sort > artifacts/runtime_meta_candidates.txt || true
 
           find . -type f -name "mcp_server.py" \
-            | sort > artifacts/mcp_server_candidates.txt
+            | sort > artifacts/mcp_server_candidates.txt || true
 
           find . -type f -name "runtime_verifier.py" \
-            | sort > artifacts/runtime_verifier_candidates.txt
+            | sort > artifacts/runtime_verifier_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -name "recommend.py" -o \
+              -name "recommendation*.py" -o \
+              -name "*recommender*.py" \
+            \) \
+            | sort > artifacts/recommendation_entrypoints.txt || true
+
+          find . -type f \
+            \( \
+              -name "*orchestrator*.py" -o \
+              -name "*workflow*.py" -o \
+              -name "*runtime*.py" \
+            \) \
+            | sort > artifacts/orchestration_entrypoints.txt || true
 
           find . -type d \
             | grep "rhythm" \
             > artifacts/rhythm_directories.txt || true
+
+          {
+            echo "Runtime Discovery Evidence"
+            echo ""
+            echo "main.py candidates:"
+            cat artifacts/main_candidates.txt || true
+            echo ""
+            echo "recommend.py candidates:"
+            cat artifacts/recommend_candidates.txt || true
+            echo ""
+            echo "app.py candidates:"
+            cat artifacts/app_candidates.txt || true
+            echo ""
+            echo "runtime_meta.py candidates:"
+            cat artifacts/runtime_meta_candidates.txt || true
+            echo ""
+            echo "mcp_server.py candidates:"
+            cat artifacts/mcp_server_candidates.txt || true
+          } > artifacts/runtime_discovery_summary.txt
 
       ############################################################
       # Package / Import Reality Evidence
@@ -128,6 +234,19 @@ jobs:
 
           find . -type f -name "__init__.py" \
             | sort > artifacts/python_init_files.txt || true
+
+          {
+            echo "Package Reality Evidence"
+            echo ""
+            echo "Canonical package dirs:"
+            cat artifacts/rhythm_ingestion_package_dirs.txt || true
+            echo ""
+            echo "Invalid alias dirs:"
+            cat artifacts/rhythm_invalid_alias_dirs.txt || true
+            echo ""
+            echo "__init__.py files:"
+            wc -l artifacts/python_init_files.txt || true
+          } > artifacts/package_reality_summary.txt
 
       ############################################################
       # Dependency Reality Evidence
@@ -149,43 +268,139 @@ jobs:
           import json
           import sys
 
-          modules = [
+          required_modules = [
               "sqlite3",
+          ]
+
+          optional_modules = [
               "fastapi",
               "uvicorn",
               "pydantic",
           ]
 
-          results = {}
+          api_runtime_modules = [
+              "fastapi",
+              "pydantic",
+          ]
 
-          for mod in modules:
+          def probe(module_name):
               try:
-                  module = importlib.import_module(mod)
-                  results[mod] = {
+                  module = importlib.import_module(module_name)
+                  return {
                       "status": "pass",
                       "file": getattr(module, "__file__", None),
                   }
               except Exception as exc:
-                  results[mod] = {
+                  return {
                       "status": "fail",
                       "error": str(exc),
                   }
 
           payload = {
+              "schema": "rga.runtime_dependency_probe.v1.0",
               "python_executable": sys.executable,
               "python_version": sys.version,
-              "modules": results,
+              "required_modules": {
+                  name: probe(name)
+                  for name in required_modules
+              },
+              "optional_modules": {
+                  name: probe(name)
+                  for name in optional_modules
+              },
+              "api_runtime_modules": {
+                  name: probe(name)
+                  for name in api_runtime_modules
+              },
+              "classification": {
+                  "required_missing": "runtime_blocker",
+                  "api_runtime_missing": "capability_reduction",
+                  "optional_missing": "non_blocking"
+              },
+              "governance_note": (
+                  "Dependency failures affect runtime readiness but should not "
+                  "automatically become governance failures."
+              )
           }
 
           with open("artifacts/runtime_dependency_probe.json", "w", encoding="utf-8") as f:
               json.dump(payload, f, indent=2, ensure_ascii=False)
 
           with open("artifacts/runtime_dependency_probe.txt", "w", encoding="utf-8") as f:
-              for name, result in results.items():
-                  f.write(f"{name}: {result['status']}")
-                  if result.get("error"):
-                      f.write(f": {result['error']}")
+              for section in [
+                  "required_modules",
+                  "optional_modules",
+                  "api_runtime_modules",
+              ]:
+                  f.write(f"[{section}]\n")
+                  for name, result in payload[section].items():
+                      f.write(f"{name}: {result['status']}")
+                      if result.get("error"):
+                          f.write(f": {result['error']}")
+                      f.write("\n")
                   f.write("\n")
+          PY
+
+      ############################################################
+      # Import Reality Evidence
+      ############################################################
+
+      - name: Import Reality Evidence
+        run: |
+          python - <<'PY'
+          import importlib
+          import json
+          import sys
+
+          modules = [
+              "rhythm_ingestion",
+              "rhythm_ingestion.api",
+              "rhythm_ingestion.api.recommend",
+              "rhythm_ingestion.runtime_meta",
+          ]
+
+          results = {}
+
+          for module_name in modules:
+              try:
+                  module = importlib.import_module(module_name)
+
+                  results[module_name] = {
+                      "status": "pass",
+                      "file": getattr(
+                          module,
+                          "__file__",
+                          None,
+                      ),
+                  }
+
+              except Exception as exc:
+                  results[module_name] = {
+                      "status": "fail",
+                      "error": str(exc),
+                  }
+
+          payload = {
+              "schema": "rga.import_reality_probe.v1.0",
+              "python_executable": sys.executable,
+              "modules": results,
+              "governance_note": (
+                  "Import failures should be interpreted against dependency "
+                  "reality before being treated as wiring or package layout defects."
+              )
+          }
+
+          with open(
+              "artifacts/import_reality_probe.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
           PY
 
       ############################################################
@@ -204,13 +419,18 @@ jobs:
             | sort > artifacts/chart_patterns_db.txt || true
 
           {
-            echo "file_scan_inventory.db"
+            echo "Artifact Database Discovery"
+            echo ""
+            echo "Relationship chain:"
+            echo "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db"
+            echo ""
+            echo "file_scan_inventory.db candidates:"
             cat artifacts/file_scan_inventory_db.txt || true
             echo ""
-            echo "chart_assets.db"
+            echo "chart_assets.db candidates:"
             cat artifacts/chart_assets_db.txt || true
             echo ""
-            echo "chart_patterns.db"
+            echo "chart_patterns.db candidates:"
             cat artifacts/chart_patterns_db.txt || true
           } > artifacts/artifact_database_discovery_summary.txt
 
@@ -241,6 +461,8 @@ jobs:
                   item = {
                       "path": str(path),
                       "exists": path.exists(),
+                      "read_mode": "sqlite_readonly",
+                      "modification": "prohibited",
                       "readable": False,
                       "tables": [],
                       "table_columns": {},
@@ -282,58 +504,15 @@ jobs:
 
                   report[db_name].append(item)
 
+          payload = {
+              "schema": "rga.artifact_database_schema_probe.v1.0",
+              "read_mode": "sqlite_readonly",
+              "modification": "prohibited",
+              "databases": report,
+          }
+
           with open("artifacts/artifact_database_schema_probe.json", "w", encoding="utf-8") as f:
-              json.dump(report, f, indent=2, ensure_ascii=False)
-          PY
-
-      ############################################################
-      # Import Reality Evidence
-      ############################################################
-
-      - name: Import Reality Evidence
-        run: |
-          python - <<'PY'
-          import importlib
-          import json
-
-          modules = [
-              "rhythm_ingestion",
-              "rhythm_ingestion.api",
-              "rhythm_ingestion.api.recommend",
-          ]
-
-          results = {}
-
-          for module_name in modules:
-              try:
-                  module = importlib.import_module(module_name)
-
-                  results[module_name] = {
-                      "status": "pass",
-                      "file": getattr(
-                          module,
-                          "__file__",
-                          None,
-                      ),
-                  }
-
-              except Exception as exc:
-                  results[module_name] = {
-                      "status": "fail",
-                      "error": str(exc),
-                  }
-
-          with open(
-              "artifacts/import_reality_probe.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  results,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
+              json.dump(payload, f, indent=2, ensure_ascii=False)
           PY
 
       ############################################################
@@ -349,11 +528,14 @@ jobs:
             \( \
               -name "*.aff" -o \
               -name "*.sus" -o \
-              -name "*.json" -o \
               -name "*.html" -o \
               -name "*.mht" \
             \) \
-            | sort > artifacts/type_a_candidates_unscoped.txt || true
+            | sort > artifacts/type_a_candidates_without_json.txt || true
+
+          find . -type f \
+            -name "*.json" \
+            | sort > artifacts/json_inventory.txt || true
 
           find . -type f \
             \( \
@@ -366,16 +548,28 @@ jobs:
             \) \
             | sort > artifacts/type_b_candidates.txt || true
 
+          {
+            echo "Artifact Inventory Evidence"
+            echo ""
+            echo "Repository files:"
+            wc -l artifacts/repository_files.txt || true
+            echo ""
+            echo "Type A candidates excluding JSON:"
+            wc -l artifacts/type_a_candidates_without_json.txt || true
+            echo ""
+            echo "JSON inventory:"
+            wc -l artifacts/json_inventory.txt || true
+            echo ""
+            echo "Type B candidates:"
+            wc -l artifacts/type_b_candidates.txt || true
+          } > artifacts/artifact_inventory_summary.txt
+
       ############################################################
       # Asset Classification Evidence
       ############################################################
 
       - name: Asset Classification Evidence
         run: |
-          find . -type f -name "*.json" \
-            | sort \
-            > artifacts/json_inventory.txt
-
           grep "/translations/" \
             artifacts/json_inventory.txt \
             > artifacts/localization_json.txt || true
@@ -391,6 +585,51 @@ jobs:
           grep "/registry/" \
             artifacts/json_inventory.txt \
             > artifacts/registry_json.txt || true
+
+          grep "/artifacts/" \
+            artifacts/json_inventory.txt \
+            > artifacts/generated_artifact_json.txt || true
+
+          grep "/.github/\|/.vscode/\|/tools/" \
+            artifacts/json_inventory.txt \
+            > artifacts/tooling_json.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          categories = {
+              "localization": Path("artifacts/localization_json.txt"),
+              "schema": Path("artifacts/schema_json.txt"),
+              "fixture": Path("artifacts/fixture_json.txt"),
+              "registry": Path("artifacts/registry_json.txt"),
+              "generated_artifact": Path("artifacts/generated_artifact_json.txt"),
+              "tooling": Path("artifacts/tooling_json.txt"),
+          }
+
+          payload = {
+              "schema": "rga.asset_classification_evidence.v1.0",
+              "categories": {},
+          }
+
+          for name, path in categories.items():
+              if path.exists():
+                  lines = [
+                      line.strip()
+                      for line in path.read_text(encoding="utf-8").splitlines()
+                      if line.strip()
+                  ]
+              else:
+                  lines = []
+
+              payload["categories"][name] = {
+                  "count": len(lines),
+                  "examples": lines[:10],
+              }
+
+          with open("artifacts/asset_classification_summary.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, indent=2, ensure_ascii=False)
+          PY
 
       ############################################################
       # Asset Scope Evidence
@@ -413,6 +652,7 @@ jobs:
               -path "*/.vscode/*" -o \
               -path "*/docs/*" -o \
               -path "*/tools/*" -o \
+              -path "*/artifacts/*" -o \
               -path "*/Phase 4 - Personalization/*" -o \
               -path "*/Phase 4.5 - Localization/*" -o \
               -path "*/Phase 5 - Productionization/*" -o \
@@ -420,6 +660,16 @@ jobs:
               -path "*/Phase 7 - Games Recommendation/*" \
             \) \
             | sort > artifacts/excluded_scope_candidates.txt || true
+
+          {
+            echo "Asset Scope Evidence"
+            echo ""
+            echo "Scoped asset candidates:"
+            wc -l artifacts/scoped_asset_candidates.txt || true
+            echo ""
+            echo "Excluded scope candidates:"
+            wc -l artifacts/excluded_scope_candidates.txt || true
+          } > artifacts/asset_scope_summary.txt
 
       ############################################################
       # Artifact Relationship Evidence
@@ -439,6 +689,17 @@ jobs:
             echo ""
             echo "chart_patterns.db candidates:"
             cat artifacts/chart_patterns_db.txt || true
+            echo ""
+            echo "Root failure policy:"
+            echo "artifact_database_policy is a root contract."
+            echo ""
+            echo "Derived failures when missing:"
+            echo "- artifact_relationships"
+            echo "- artifact_backbone_contract"
+            echo "- asset_coverage"
+            echo "- hash_integrity"
+            echo "- type_A_usability"
+            echo "- runtime_artifact_readiness"
           } > artifacts/artifact_chain_discovery.txt
 
       ############################################################
@@ -454,6 +715,13 @@ jobs:
             | sort -z \
             | xargs -0 sha256sum \
             > artifacts/repository_hashes.txt || true
+
+          {
+            echo "Hash Inventory Evidence"
+            echo ""
+            echo "Repository hash entries:"
+            wc -l artifacts/repository_hashes.txt || true
+          } > artifacts/hash_inventory_summary.txt
 
       ############################################################
       # Flow Verification Evidence
