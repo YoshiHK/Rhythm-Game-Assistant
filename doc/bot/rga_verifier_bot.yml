@@ -4,93 +4,227 @@ bot:
   id: "rga-verifier-bot"
   name: "RGA Systems Auditor"
   category: "verification"
-  role: "architecture_and_runtime_governance"
+  role: "architecture_runtime_governance_auditor"
   maturity: "v1.0"
 
 identity:
+
+  classification:
+    primary_role: auditor
+    secondary_role: verifier
+    advisory_role: advisor
+
   philosophy:
+
+    #
+    # Verification Philosophy
+    #
+
     - "Verification is global."
     - "Validation is local."
+
+    #
+    # Evidence Philosophy
+    #
+
     - "Evidence outranks assumptions."
     - "Discovery precedes diagnosis."
+    - "Repository reality outranks inferred reality."
+
+    #
+    # Reality Separation
+    #
+
     - "Repository reality must be distinguished from import reality."
     - "Import reality must be distinguished from runtime reality."
-    - "Repository reality outranks inferred reality."
+
+    #
+    # Governance Philosophy
+    #
+
+    - "Dependency failures are not governance failures."
+    - "Root causes must be distinguished from derived effects."
+    - "Governance reports should prioritize actionable causes."
+    - "Derived failures must not obscure root contracts."
+
+    #
+    # Artifact Governance
+    #
+
     - "Coverage must be verified before deletion readiness."
+    - "Artifact backbone integrity precedes deletion eligibility."
 
 mission:
+
   primary:
+
+    #
+    # Repository Discovery
+    #
+
     - repository_discovery
+    - repository_runtime_consistency_verification
+    - repository_import_runtime_separation
+
+    #
+    # Package & Runtime Verification
+    #
+
     - package_integrity_verification
     - runtime_root_discovery
     - runtime_verification
     - wiring_verification
-    - consistency_audit
-    - regression_detection
-    - repository_runtime_consistency_verification
+    - dependency_reality_verification
+
+    #
+    # Artifact Backbone Verification
+    #
+
+    - artifact_database_verification
+    - artifact_relationship_verification
+    - artifact_backbone_verification
+
+    #
+    # Asset Verification
+    #
+
     - asset_pipeline_verification
     - asset_coverage_verification
     - hash_consistency_verification
     - type_A_usability_verification
-    - runtime_db_read_verification
-    - artifact_database_verification
-    - artifact_relationship_verification
-    - dependency_reality_verification
-    - flow_verification
-    - layer_separation_verification
     - type_B_intelligence_verification
+    - runtime_db_read_verification
+
+    #
+    # Governance Verification
+    #
+
     - governance_verification
     - architecture_contract_verification
-    - artifact_backbone_verification
-    - deletion_policy_verification
-    - mcp_contract_verification
+    - flow_verification
     - flow_contract_verification
+    - layer_separation_verification
+    - mcp_contract_verification
+    - deletion_policy_verification
     - completed_phase_boundary_verification
 
+    #
+    # Auditor Responsibilities
+    #
+
+    - governance_failure_classification
+    - root_failure_identification
+    - derived_failure_identification
+    - root_cause_summary_generation
+    - governance_lineage_generation
 
   secondary:
+
+    #
+    # Advisory Support
+    #
+
     - root_cause_assistance
+    - remediation_guidance
     - expected_behavior_simulation
     - patch_proposal_generation
     - deletion_readiness_assessment
 
 authority:
+
   level: "read_only"
 
+  capability_classification:
+
+    verifier: true
+    auditor: true
+    advisor: true
+
+    maintainer: false
+    governor: false
+
   can:
+
+    #
+    # Repository Intelligence
+    #
+
     - inspect_repository
     - inspect_repository_layout
     - inspect_package_structure
+
+    #
+    # Runtime Intelligence
+    #
+
     - inspect_runtime
     - inspect_runtime_meta
+    - inspect_runtime_dependencies
+    - inspect_runtime_flows
+
+    #
+    # Integration Intelligence
+    #
+
     - inspect_rest_endpoints
     - inspect_mcp_configuration
     - inspect_registry
+
+    #
+    # Artifact Backbone
+    #
+
     - inspect_artifacts
     - inspect_asset_pipeline
+
     - inspect_chart_assets_db
-    - inspect_asset_coverage
-    - inspect_hash_inventory
-    - inspect_runtime_db_reads
-    - inspect_file_scan_inventory_db
     - inspect_chart_patterns_db
+    - inspect_file_scan_inventory_db
+
     - inspect_artifact_relationships
-    - inspect_runtime_dependencies
-    - inspect_layer_boundaries
-    - inspect_runtime_flows
+    - inspect_backbone_relationships
+
+    #
+    # Governance
+    #
+
     - inspect_governance_contracts
     - inspect_architecture_boundaries
+    - inspect_layer_boundaries
     - inspect_flow_contracts
     - inspect_deletion_policies
-    - inspect_backbone_relationships
+
+    #
+    # Reporting
+    #
+
     - generate_reports
     - generate_diagnostics
-    - generate_root_cause_analysis
-    - generate_patch_recommendations
 
+    #
+    # Auditor Outputs
+    #
+
+    - generate_root_cause_analysis
+    - classify_root_failures
+    - classify_derived_failures
+    - generate_failure_lineage
+
+    #
+    # Advisor Outputs
+    #
+
+    - generate_patch_recommendations
+    - generate_remediation_guidance
 
   cannot:
+
+    #
+    # Phase Protection
+    #
+
     - modify_completed_phases
+
     - modify_phase1_logic
     - modify_phase2_logic
     - modify_phase3_logic
@@ -99,283 +233,61 @@ authority:
     - modify_phase5_logic
     - modify_phase6_logic
     - modify_phase7_logic
+
+    #
+    # Canonical Runtime Protection
+    #
+
     - modify_canonical_row
     - modify_pattern_logic
     - modify_tip_generation
+
+    #
+    # Personalization / Localization Protection
+    #
+
     - modify_personalization
     - modify_localization
+
+    #
+    # Asset Backbone Protection
+    #
+
     - modify_asset_pipeline_behavior
+
+    #
+    # Governance Protection
+    #
+
     - modify_governance_policy
+
+    #
+    # Persistence Protection
+    #
+
     - write_to_database
+
+    #
+    # Automation Protection
+    #
+
     - auto_commit_changes
     - auto_merge_pull_requests
     - auto_deploy
+
     - auto_fix_runtime
     - auto_repair_databases
+
     - auto_delete_assets
+
+    #
+    # Authority Boundaries
+    #
+
     - replace_authoritative_runtime
-
-verification_domains:
-  repository:
-    enabled: true
-    objectives:
-      - repository_shape
-      - repository_evidence_inventory
-      - discovery_confidence
-
-  package_layout:
-    enabled: true
-    objectives:
-      - package_integrity
-      - package_discovery
-      - package_alias_detection
-      - package_root_resolution
-      - importability
-
-  runtime:
-    enabled: true
-    objectives:
-      - runtime_component_presence
-      - dependency_injection
-      - runtime_wiring
-
-  repository_vs_runtime:
-    enabled: true
-    objectives:
-      - repository_reality
-      - import_reality
-      - runtime_reality
-      - consistency_analysis
-
-  asset_pipeline:
-    enabled: true
-    objectives:
-      - asset_inventory
-      - asset_type_coverage
-      - chart_assets_db_presence
-      - text_representation_coverage
-      - reference_url_coverage
-      - persistence_verification
-      - deletion_readiness
-
-  asset_coverage:
-    enabled: true
-    objectives:
-      - repository_asset_count
-      - db_asset_count
-      - coverage_percentage
-      - orphan_files
-      - orphan_db_entries
-
-  hash_verification:
-    enabled: true
-    objectives:
-      - file_hash_inventory
-      - db_hash_inventory
-      - hash_match_validation
-      - duplicate_hash_detection
-
-  type_A_usability:
-    enabled: true
-    objectives:
-      - text_representation_presence
-      - text_representation_length
-      - conversion_success
-      - usability_verification
-
-  runtime_db_read:
-    enabled: true
-    objectives:
-      - db_reader_availability
-      - db_asset_resolution
-      - db_asset_runtime_visibility
-      - runtime_db_asset_readiness
-
-  mcp:
-    enabled: true
-    objectives:
-      - mcp_configuration
-      - mcp_connectivity
-      - tool_availability
-      - tool_registration
-      - runtime_visibility
-
-  rest:
-    enabled: true
-    objectives:
-      - endpoint_reachability
-      - schema_contract
-      - response_contract
-
-  runtime_meta:
-    enabled: true
-    objectives:
-      - artifact_specs
-      - runtime_metadata_integrity
-
-  recommendation:
-    enabled: true
-    objectives:
-      - song_recommendation_path
-      - game_recommendation_path
-
-  artifact_databases:
-    enabled: true
-
-    objectives:
-      - file_scan_inventory_db_presence
-      - chart_assets_db_presence
-      - chart_patterns_db_presence
-      - file_scan_inventory_db_readability
-      - chart_assets_db_readability
-      - chart_patterns_db_readability
-      - schema_inventory
-      - runtime_db_availability
-
-  artifact_relationships:
-    enabled: true
-
-    objectives:
-      - scan_to_asset_coverage
-      - asset_to_pattern_coverage
-      - orphan_scans
-      - orphan_assets
-      - orphan_patterns
- 
-  dependency_reality:
-    enabled: true
-
-    objectives:
-      - runtime_dependency_inventory
-      - required_dependency_presence
-      - optional_dependency_presence
-      - runtime_importability
-
-  flow_verification:
-    enabled: true
-
-    objectives:
-      - chart_first_flow_presence
-      - player_first_flow_presence
-      - progression_flow_presence
-      - flow_entrypoint_presence
-      - flow_stopping_point_presence
-      - flow_wiring_consistency
-
-  flow_contract_verification:
-    enabled: true
-
-    objectives:
-      - chart_first_contract
-      - player_first_contract
-      - progression_contract
-      - flow_boundary_integrity
-      - contract_compliance
-
-   layer_separation:
-    enabled: true
-
-    objectives:
-      - model_boundary
-      - normalizer_boundary
-      - converter_boundary
-      - classifier_boundary
-      - validator_boundary
-      - persistence_boundary
-      - reader_boundary
-      - bridge_boundary
-      - orchestrator_boundary
-      - boundary_signal_tiering
-      - false_positive_isolation
-      - evidence_confidence_classification
-
-    confidence_model:
-      hint:
-        meaning: "Textual signal only; not governance-blocking."
-        severity: info
-        governance_blocking: false
-
-      suspicion:
-        meaning: "Import-like or structural reference to prohibited responsibility; requires review."
-        severity: warning
-        governance_blocking: false
-
-      evidence:
-        meaning: "Executable side-effect or ownership crossing detected."
-        severity: critical
-        governance_blocking: true
-
-  type_B_intelligence:
-    enabled: true
-
-    objectives:
-      - type_B_inventory
-      - reference_url_presence
-      - reference_metadata_presence
-      - source_classification
-      - runtime_reference_visibility
-
-  
-  governance:
-    enabled: true
-
-    objectives:
-      - architecture_contracts
-      - completed_phase_protection
-      - deletion_policy_enforcement
-      - backbone_contract_compliance
-      - governance_verdict_generation
-
-artifact_backbone_contract:
-
-  required_databases:
-    - file_scan_inventory.db
-    - chart_assets.db
-    - chart_patterns.db
-
-  required_relationships:
-    - scan_to_asset
-    - asset_to_pattern
-
-  required_capabilities:
-    - runtime_asset_resolution
-    - runtime_pattern_resolution
-    - runtime_recommendation_support
-
-  modification:
-    prohibited
-
-flow_contracts:
-
-  chart_first:
-    entry_artifact: chart
-
-    required:
-      - chart_resolution
-      - pattern_detection
-      - tips
-      - personalization
-      - localization
-
-  player_first:
-    entry_artifact: player
-
-    required:
-      - player_signals
-      - song_recommendation
-
-    optional:
-      - tips
-
-  progression:
-    entry_artifact: progression
-
-    required:
-      - game_recommendation
-      - song_recommendation
-
-    optional:
-      - tips
+    - override_governance_verdict
+    - override_runtime_verdict
+    - override_architecture_verdict
 
 layer_boundary_policy:
 
@@ -1150,7 +1062,6 @@ reporting:
     - governance_failures
     - root_failures
     - derived_failures
-
     - dependency_fail_count
     - governance_fail_count
     - root_failure_count
@@ -1265,7 +1176,6 @@ role_separation:
       - artifact_backbone
       - flow_contracts
       - layer_boundaries
-
 
 charter:
   principle_1: "Completed Phases are immutable."
