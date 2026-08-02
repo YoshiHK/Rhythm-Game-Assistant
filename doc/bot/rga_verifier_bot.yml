@@ -291,154 +291,228 @@ authority:
 
 layer_boundary_policy:
 
+  purpose:
+    - responsibility_separation
+    - governance_contract_enforcement
+    - false_positive_reduction
+    - evidence_based_escalation
+
   philosophy:
+
     - "Layer boundaries are responsibility contracts."
     - "Keyword hints are not sufficient evidence for governance blocking."
     - "Only evidence-level side effects should become critical violations."
     - "Suspicious imports should be reviewable warnings, not automatic blockers."
+    - "Repository structure must be evaluated separately from executable behavior."
+    - "Evidence outranks suspicion."
+    - "Suspicion outranks hints."
+    - "Governance blocking requires executable evidence."
+
+  governance_model:
+
+    blocking_confidence:
+      - evidence
+
+    non_blocking_confidence:
+      - hint
+      - suspicion
+
+    require_executable_side_effect_for_critical: true
+
+    support_false_positive_isolation: true
 
   confidence_levels:
+
     hint:
-      description: "Textual reference to a prohibited responsibility."
+
+      description:
+        "Textual reference to a prohibited responsibility."
+
       example:
-        - "A comment mentions persistence."
-        - "A docstring mentions writer."
+        - "comment mentions persistence"
+        - "docstring references writer"
+        - "string literal contains database"
+
       governance_blocking: false
       severity: info
 
     suspicion:
-      description: "Import-like or structural reference to a prohibited responsibility."
+
+      description:
+        "Import-like or structural reference to a prohibited responsibility."
+
       example:
-        - "from rhythm_ingestion.persistence import ..."
+        - "from persistence import ..."
         - "import writers"
+        - "cross-layer module reference"
+
       governance_blocking: false
       severity: warning
 
     evidence:
-      description: "Executable side-effect or ownership crossing in the wrong layer."
+
+      description:
+        "Executable side-effect or ownership crossing."
+
       example:
-        - "sqlite3 connection commit in converter"
-        - "INSERT / UPDATE / DELETE inside reader"
+        - "sqlite3 write operation in converter"
+        - "INSERT statement in reader"
         - "writer.persist() inside validator"
+        - "runtime mutation in normalizer"
+
       governance_blocking: true
       severity: critical
 
-  models:
-    responsibility: data
-    prohibit:
-      - persistence_ownership
-      - orchestration
-      - runtime_mutation
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+  layers:
 
-  normalizers:
-    responsibility: identity
-    prohibit:
-      - persistence_ownership
-      - orchestration
-      - recommendation_logic
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+    models:
 
-  classifiers:
-    responsibility: asset_type_decision
-    prohibit:
-      - persistence_ownership
-      - runtime_mutation
-      - orchestration
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+      responsibility:
+        - data_representation
 
-  converters:
-    responsibility: file_to_text
-    prohibit:
-      - persistence_ownership
-      - orchestration
-      - recommendation_logic
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+      prohibit:
+        - persistence_ownership
+        - orchestration
+        - runtime_mutation
 
-  validators:
-    responsibility: correctness
-    prohibit:
-      - persistence_ownership
-      - runtime_mutation
-      - orchestration
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+    normalizers:
 
-  persistence:
-    responsibility: database_writes
-    prohibit:
-      - recommendation_logic
-      - tip_generation
-      - orchestration
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+      responsibility:
+        - identity_normalization
 
-  readers:
-    responsibility: database_reads
-    prohibit:
-      - writes
-      - schema_ownership
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+      prohibit:
+        - persistence_ownership
+        - orchestration
+        - recommendation_logic
 
-  bridges:
-    responsibility: glue
-    prohibit:
-      - business_logic
-      - persistence_ownership
-      - recommendation_logic
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+    classifiers:
 
-  orchestrators:
-    responsibility: control_flow
-    prohibit:
-      - schema_ownership
-      - persistence_ownership
-      - domain_logic_ownership
-    escalation:
-      hint: info
-      suspicion: warning
-      evidence: critical
+      responsibility:
+        - asset_type_decision
+
+      prohibit:
+        - persistence_ownership
+        - runtime_mutation
+        - orchestration
+
+    converters:
+
+      responsibility:
+        - file_to_text_conversion
+
+      prohibit:
+        - persistence_ownership
+        - orchestration
+        - recommendation_logic
+
+    validators:
+
+      responsibility:
+        - correctness_verification
+
+      prohibit:
+        - persistence_ownership
+        - runtime_mutation
+        - orchestration
+
+    persistence:
+
+      responsibility:
+        - database_writes
+
+      prohibit:
+        - recommendation_logic
+        - tip_generation
+        - orchestration
+
+    readers:
+
+      responsibility:
+        - database_reads
+
+      prohibit:
+        - writes
+        - schema_ownership
+
+    bridges:
+
+      responsibility:
+        - integration_glue
+
+      prohibit:
+        - business_logic
+        - persistence_ownership
+        - recommendation_logic
+
+    orchestrators:
+
+      responsibility:
+        - control_flow
+
+      prohibit:
+        - schema_ownership
+        - persistence_ownership
+        - domain_logic_ownership
+
+  escalation:
+
+    hint: info
+    suspicion: warning
+    evidence: critical
 
   false_positive_controls:
+
     - ignore_comments
     - ignore_empty_lines
-    - do_not_escalate_plain_keyword_hits
-    - require_executable_side_effect_for_critical
+    - ignore_docstrings
+    - ignore_plain_keyword_occurrences
+
     - classify_import_like_matches_as_suspicion
+
+    - require_runtime_effect_before_evidence
+
+    - require_executable_side_effect_for_critical
+
+    - evidence_overrides_suspicion
+    - suspicion_overrides_hint
+
+  reporting:
+
+    expose_hint_count: true
+    expose_suspicion_count: true
+    expose_evidence_count: true
+
+    expose_governance_blocking_state: true
+
+    generate_layer_boundary_risk: true
     
 mcp_contract:
 
   required_server:
+
     id: rhythm-game-assistant
     type: stdio
 
   required_adapter:
+
     file: mcp_server.py
 
   expected_environment:
+
     - RGA_REST_URL
+
+  verification_scope:
+
+    - configuration
+    - runtime_visibility
+    - tool_surface
+    - adapter_presence
+
+  governance:
+
+    read_only: true
+
+    generate_runtime_visibility_audit: true
 
 package_integrity_policy:
   required_packages:
@@ -459,13 +533,19 @@ artifact_database_policy:
 
   role: root_contract
 
+  classification:
+    contract_type: artifact_backbone
+    failure_class: root
+
   read_mode:
+
     sqlite: readonly
 
   modification:
     prohibited
 
   verification_scope:
+
     - presence
     - readability
     - schema_inventory
@@ -473,18 +553,21 @@ artifact_database_policy:
     - relationship_seed_validation
 
   allowed_operations:
+
     - schema_inventory
     - readability_check
     - record_count
     - relationship_verification
 
   prohibited_operations:
+
     - insert
     - update
     - delete
     - schema_mutation
 
   relationship_chain:
+
     - file_scan_inventory.db
     - chart_assets.db
     - chart_patterns.db
@@ -492,7 +575,9 @@ artifact_database_policy:
   root_failure_effects:
 
     artifact_database_policy:
+
       blocks:
+
         - artifact_relationships
         - artifact_backbone_contract
         - asset_coverage
@@ -501,26 +586,32 @@ artifact_database_policy:
         - runtime_artifact_readiness
 
   governance_principles:
+
     - verifier_read_only
     - dependency_awareness
     - root_cause_isolation
     - derived_failure_classification
-
+    
 asset_scope_policy:
+
   enabled: true
+
   strategy: explicit_scope
-  
+
   include_roots:
+
     - chart_assets
     - charts
     - assets
     - ingestion_assets
 
   exclude_roots:
+
     - .github
     - .vscode
     - docs
     - tools
+
     - Phase 4 - Personalization
     - Phase 4.5 - Localization
     - Phase 5 - Productionization
@@ -528,63 +619,123 @@ asset_scope_policy:
     - Phase 7 - Games Recommendation
 
   explain_exclusions: true
- 
+
+  summarize_large_exclusions: true
+
   exclusion_categories:
+
     localization:
       - "Phase 4.5 - Localization"
- 
-    schema:
-    - "/schemas/"
- 
-    fixture:
-    - "/fixtures/"
- 
-    registry:
-    - "/registry/"
- 
-    tooling:
-    - ".github"
-    - ".vscode"
-    - "tools"
 
+    schema:
+      - "/schemas/"
+
+    fixture:
+      - "/fixtures/"
+
+    registry:
+      - "/registry/"
+
+    tooling:
+      - ".github"
+      - ".vscode"
+      - "tools"
+
+  reporting:
+
+    expose_excluded_candidate_count: true
+
+    expose_exclusion_reason_summary: true
+
+    expose_example_paths: true
+    
 asset_expectations:
+
+  philosophy:
+
+    - asset_verification_precedes_deletion_readiness
+    - repository_reality_precedes_coverage_analysis
+    - asset_backbone_integrity_precedes_runtime_readiness
+
   type_A:
+
+    classification:
+      deterministic
+
     expected:
       - text_representation
       - converter_success
       - usable_content
       - usability_verified
 
+    verification:
+      - text_presence
+      - conversion_success
+      - content_non_empty
+      - usability_contract
+
   type_B:
+
+    classification:
+      reference_only
+
     expected:
       - reference_url
 
+    verification:
+      - reference_url_presence
+      - reference_visibility
+
   repository:
+
     expected:
       - scanned_asset_count
       - registered_asset_count
       - coverage_match
       - coverage_percentage
 
+    reporting:
+      show_scanned_asset_count: true
+      show_registered_asset_count: true
+      show_coverage_percentage: true
+
+
 verification_gates:
 
   deletion_readiness:
+
+    purpose:
+      - deletion_safety
+      - asset_backbone_protection
+
     required:
       - file_scan_inventory_complete
       - chart_assets_db_complete
       - chart_patterns_db_complete
+
       - scan_to_asset_verified
       - asset_to_pattern_verified
+
       - asset_coverage_verified
       - hash_consistency_verified
+
       - type_A_text_usable
+
       - runtime_can_use_db_assets
       - runtime_can_use_db_patterns
 
     failure_action:
       - block_deletion_recommendation
 
+    classification:
+      governance_gate
+      root_contract
+
   governance_readiness:
+
+    purpose:
+      - governance_verdict_generation
+
     required:
       - phase_boundaries_verified
       - flow_contracts_verified
@@ -594,50 +745,90 @@ verification_gates:
       - architecture_contracts_verified
 
   governance_failure_lineage_readiness:
+
+    purpose:
+      - auditor_mode
+      - advisor_mode
+
     required:
       - root_failures_classified
       - derived_failures_classified
       - root_cause_summary_generated
       - lineage_renderable
 
+
 discovery_engine:
+
   enabled: true
-  mode: "repository_wide"
+
+  mode: repository_wide
+
+  philosophy:
+
+    - discovery_precedes_diagnosis
+    - repository_reality_precedes_assumptions
+    - evidence_precedes_verdicts
 
   confidence_levels:
+
     - low
     - partial
     - medium
     - high
 
   candidate_scoring:
+
     file_scan_inventory_db: 15
     chart_assets_db: 15
     chart_patterns_db: 15
+
     main_py: 40
     recommend_py: 25
     app_py: 15
+
     runtime_meta_py: 10
     mcp_server_py: 10
-    chart_assets_db: 15
+
     asset_orchestrator_py: 15
+
     classifier_py: 5
     converter_py: 5
 
   behavior:
+
     high_confidence:
-      action: "accept_candidate"
+      action: accept_candidate
 
     medium_confidence:
-      action: "accept_candidate"
+      action: accept_candidate
 
     partial_confidence:
-      action: "warn"
+      action: warn
 
     low_confidence:
-      action: "reject_candidate"
+      action: reject_candidate
+
+  runtime_reader_discovery:
+
+    enabled: true
+
+    strategy:
+      - repository_driven
+      - package_inventory
+      - runtime_module_inventory
+
+    prohibit:
+      - hardcoded_reader_packages
+      - hardcoded_runtime_topology
+      - fixed_reader_assumptions
+
+    reporting:
+      show_discovered_reader_modules: true
+      show_reader_import_results: true
+
 
 severity_policy:
+
   levels:
     - pass
     - info
@@ -645,8 +836,13 @@ severity_policy:
     - fail
     - critical
 
+  governance_blocking:
+    - critical
+
   rules:
+
     token_missing:
+
       when_rest_disabled: warning
       when_rest_enabled: fail
 
@@ -710,6 +906,10 @@ severity_policy:
     mcp_contract_failure:
       severity: fail
 
+    #
+    # Auditor Layer
+    #
+
     root_failure_detected:
       severity: critical
 
@@ -719,60 +919,144 @@ severity_policy:
     lineage_classification_failure:
       severity: warning
 
+    dependency_governance_misclassification:
+      severity: warning
+
+
 root_cause_categories:
+
+  #
+  # Artifact Backbone
+  #
+
   - file_scan_inventory_missing
   - chart_assets_db_missing
   - chart_patterns_db_missing
+
   - scan_asset_gap
   - asset_pattern_gap
+
   - orphan_scan
   - orphan_asset
   - orphan_pattern
+
+  #
+  # Dependency Reality
+  #
+
   - dependency_missing
+
+  #
+  # Runtime Reality
+  #
+
   - runtime_pattern_read_failure
+  - runtime_db_read_failure
+  - runtime_wiring_gap
+
+  #
+  # Architecture
+  #
+
   - flow_boundary_violation
   - layer_boundary_violation
+
+  #
+  # Package Integrity
+  #
+
   - missing_files
   - package_name_mismatch
   - package_root_mismatch
   - missing_pythonpath
   - import_failure
-  - runtime_wiring_gap
-  - asset_db_missing
+
+  #
+  # Coverage
+  #
+
   - asset_coverage_gap
   - orphan_file
   - orphan_db_entry
+
+  #
+  # Hash Verification
+  #
+
   - hash_mismatch
   - duplicate_hash
   - missing_hash
+
+  #
+  # Type A
+  #
+
   - unusable_text_representation
   - unusable_type_A_asset
-  - runtime_db_read_failure
+
+  #
+  # Type B
+  #
+
   - missing_reference_url
+
+  #
+  # Governance
+  #
+
   - deletion_gate_failed
+
+  #
+  # Auditor Layer
+  #
+
   - root_contract_failure
   - derived_contract_failure
+
   - artifact_database_policy_failure
   - governance_lineage_failure
+
   - dependency_governance_misclassification
+
 
 governance_failure_accounting:
 
   principles:
+
     dependency_failures_are_separate: true
+
     governance_failures_are_actionable: true
+
     root_failures_are_primary_causes: true
+
     derived_failures_are_downstream_effects: true
 
+    root_failures_take_priority: true
+
   reporting:
+
     include_dependency_failures: true
+
     include_governance_failures: true
+
     include_root_failures: true
+
     include_derived_failures: true
+
     include_root_failure_count: true
+
     include_derived_failure_count: true
 
+    separate_dependency_failures: true
+
+
 governance_failure_lineage:
+
+  objective:
+
+    - root_cause_isolation
+    - failure_deduplication
+    - remediation_prioritization
 
   root_contracts:
 
@@ -780,7 +1064,10 @@ governance_failure_lineage:
 
       role: root_contract
 
+      category: artifact_backbone
+
       derived_failures_if_missing:
+
         - artifact_relationships
         - artifact_backbone_contract
         - asset_coverage
@@ -789,7 +1076,11 @@ governance_failure_lineage:
         - runtime_artifact_readiness
 
     deletion_readiness:
+
       role: root_contract
+
+      category: governance_gate
+
       independent: true
 
   derived_contracts:
@@ -821,26 +1112,48 @@ governance_failure_lineage:
   meta_contracts:
     - governance_verdict
 
+  reporting:
+
+    render_root_failures: true
+    render_derived_failures: true
+
+    root_before_derived: true
+
+    include_dependency_map: true
+
+
 runtime_reader_policy:
 
   discovery_mode:
+
     strategy: repository_driven
 
   prohibit:
+
     - fixed_reader_assumptions
     - hardcoded_package_topology
+    - assumed_runtime_structures
 
   expectations:
+
     discover_existing_readers: true
+
     discover_existing_validators: true
+
     discover_existing_runtime_bridges: true
 
+    repository_reality_over_assumptions: true
+
   reporting:
+
     show_discovered_reader_modules: true
     show_reader_import_results: true
 
+
 runtime_expectations:
+
   artifact_runtime_flow:
+
     expected:
       - file_scan_inventory
       - chart_assets
@@ -848,8 +1161,9 @@ runtime_expectations:
       - runtime_readers
       - recommendations
       - tips
-      
+
   progression_flow:
+
     expected:
       - progression
       - game_recommendation
@@ -857,21 +1171,26 @@ runtime_expectations:
       - tips
 
   player_first_flow:
+
     expected:
       - player_signals
       - song_recommendation
       - tips
 
   chart_first_flow:
+
     expected:
       - chart_resolution
       - pattern_detection
       - tips
 
+
 simulation_policy:
+
   enabled: true
 
   purpose:
+
     - expected_behavior_generation
     - flow_prediction
     - runtime_gap_explanation
@@ -884,22 +1203,42 @@ simulation_policy:
     - replacing_runtime_output
     - replacing_source_of_truth
 
+  governance:
+    read_only: true
+
+
 advisor_support:
+
   enabled: true
+
   outputs:
+
     - root_cause_summary
     - remediation_order
     - dependency_mapping
     - maintenance_guidance
 
   remediation_strategy:
+
     resolve_root_failures_first: true
+
     revalidate_derived_failures_after_root_resolution: true
+
     separate_dependency_gaps_from_governance_gaps: true
 
   advisory_mode:
+
     read_only: true
+
     evidence_based: true
+
+    non_mutating: true
+
+  reporting:
+
+    include_root_cause_summary: true
+    include_failure_lineage: true
+    include_recommendations: true
 
 reporting:
 
@@ -914,21 +1253,33 @@ reporting:
     human_readable_priority: true
     evidence_first: true
     governance_first: true
+
+    verifier_mode: true
     auditor_mode: true
     advisor_mode: true
 
   markdown_sections:
 
     #
-    # Executive / Governance
+    # Governance Overview
     #
 
     - governance_overview
     - root_cause_summary
+
+    #
+    # Failure Accounting
+    #
+
     - root_failures
     - derived_failures
     - dependency_failures
     - failure_lineage
+
+    #
+    # Governance Domains
+    #
+
     - layer_boundary_risk
     - governance_policy
 
@@ -953,15 +1304,10 @@ reporting:
     - asset_discovery
 
     #
-    # Raw Governance Snapshot
+    # Evidence
     #
 
     - governance_state_snapshot
-
-    #
-    # Detailed Evidence
-    #
-
     - detailed_results
 
   json_sections:
@@ -971,8 +1317,10 @@ reporting:
     #
 
     - governance
+
     - dependency_failures
     - governance_failures
+
     - root_failures
     - derived_failures
 
@@ -983,6 +1331,7 @@ reporting:
     - root_cause_summary
     - lineage
     - policy
+
     - layer_boundary_risk
 
     #
@@ -1001,32 +1350,50 @@ reporting:
     - artifact_databases
 
     #
-    # Verification Evidence
+    # Evidence
     #
 
     - results
 
   raw_json_snapshot:
+
     enabled: true
+
     position:
       - after_human_readable_sections
 
   governance_reporting:
+
     include_dependency_failures: true
+
     include_governance_failures: true
+
     include_root_failures: true
+
     include_derived_failures: true
+
     include_root_failure_count: true
+
     include_derived_failure_count: true
+
     separate_dependency_failures: true
+
     separate_root_and_derived_failures: true
+
     prioritize_root_causes: true
 
+    render_failure_lineage: true
+
   advisor_reporting:
+
     enabled: true
+
     include_root_cause_summary: true
+
     include_failure_lineage: true
+
     include_remediation_order: true
+
     include_recommendations: true
 
     recommendation_style:
@@ -1052,6 +1419,9 @@ reporting:
     - architecture_verdict
     - runtime_verdict
     - artifact_backbone_verdict
+    - flow_contract_verdict
+    - layer_boundary_verdict
+    - mcp_contract_verdict
     - deletion_verdict
 
     #
@@ -1060,10 +1430,13 @@ reporting:
 
     - dependency_failures
     - governance_failures
+
     - root_failures
     - derived_failures
+
     - dependency_fail_count
     - governance_fail_count
+
     - root_failure_count
     - derived_failure_count
 
@@ -1081,10 +1454,11 @@ reporting:
     #
 
     - root_cause_summary
-    - failure_lineage
-    - lineage
     - remediation_order
     - dependency_mapping
+
+    - lineage
+    - failure_lineage
 
     #
     # Expected Behavior
@@ -1101,7 +1475,7 @@ reporting:
     - discovered_assets
 
     #
-    # Runtime Reality
+    # Reality Separation
     #
 
     - repository_reality
@@ -1111,18 +1485,24 @@ reporting:
     #
     # Artifact Verification
     #
-    
+
     - artifact_verification
     - artifact_backbone_contract
     - artifact_relationships
+
     - asset_verification
     - asset_coverage
     - coverage_percentage
+
     - orphan_files
     - orphan_db_entries
+
     - hash_verification
+
     - type_A_usability
+
     - runtime_db_readiness
+
     - deletion_readiness
 
     #
@@ -1130,26 +1510,44 @@ reporting:
     #
 
     - flow_contract_results
+
     - layer_boundary_results
     - layer_boundary_risk
+
     - mcp_contract_results
 
   rendering_rules:
-    root_failures_before_derived_failures: true
-    dependency_failures_before_governance_failures: true
+
     root_cause_summary_before_failure_inventory: true
-    failure_lineage_before_raw_json_snapshot: true
-    governance_state_snapshot_after_summaries: true
+
+    root_failures_before_derived_failures: true
+
+    dependency_failures_before_governance_failures: true
+
+    failure_lineage_before_governance_snapshot: true
+
+    governance_snapshot_after_summaries: true
+
     avoid_duplicate_failure_rendering: true
 
+    prioritize_actionable_root_causes: true
+
   evidence_policy:
+
     summarize_large_evidence_collections: true
+
     preserve_full_json_artifacts: true
+
+    preserve_raw_governance_state: true
+
     show_excluded_asset_reason_breakdown: true
+
     human_readable_first: true
     raw_evidence_second: true
 
+
 github_integration:
+
   workflows:
     - rga_runtime_verifier
 
@@ -1157,64 +1555,144 @@ github_integration:
     - github_advanced_security
     - deployment_gate
 
+
 role_separation:
 
   github_advanced_security:
+
     responsibility: security_validation
+
     owns:
       - secrets
       - dependencies
       - vulnerabilities
 
   deployment_gate:
-    responsibility: "build_verification"
+
+    responsibility: build_verification
 
   rga_verifier_bot:
+
     responsibility: architecture_runtime_governance
+
     owns:
+      - repository_reality
+      - import_reality
       - runtime_reality
+
+      - dependency_reality
+
       - artifact_backbone
+
+      - asset_verification
+
       - flow_contracts
+
       - layer_boundaries
 
+      - mcp_contracts
+
+      - governance_failure_classification
+
+      - root_cause_analysis
+
+    cannot:
+      - modify_runtime
+      - modify_databases
+      - modify_governance_policy
+
+
 charter:
-  principle_1: "Completed Phases are immutable."
-  principle_2: "Verification may diagnose but may not mutate."
-  principle_3: "Expected behavior is not authoritative behavior."
-  principle_4: "Repository reality outranks assumptions."
-  principle_5: "Discovery precedes diagnosis."
-  principle_6: "Evidence precedes conclusions."
-  principle_7: "Repository reality must be distinguished from import reality."
-  principle_8: "Import reality must be distinguished from runtime reality."
-  principle_9: "Asset verification must not modify asset state."
-  principle_10: "Coverage verification precedes deletion readiness."
-  principle_11: "Artifact backbone integrity precedes deletion eligibility."
-  principle_12: "Completed Phase boundaries are governance contracts."
-  principle_13: "Flow contracts must remain explicit and separable."
-  principle_14: "MCP adapters must remain observable and verifiable."
-  principle_15: "Governance verdicts must be evidence-based and read-only."
-  principle_16: "Dependency failures are not governance failures."
-  principle_17: "Root causes must be distinguished from derived effects."
-  principle_18: "Root failures must be rendered before derived failures."
-  principle_19: "Governance reports should prioritize actionable causes."
-  principle_20: "Verification outputs may support advisory reasoning but remain read-only."
-  principle_21: "Derived failures must never obscure independently actionable root contracts."
+
+  principle_1:
+    "Completed Phases are immutable."
+
+  principle_2:
+    "Verification may diagnose but may not mutate."
+
+  principle_3:
+    "Expected behavior is not authoritative behavior."
+
+  principle_4:
+    "Repository reality outranks assumptions."
+
+  principle_5:
+    "Discovery precedes diagnosis."
+
+  principle_6:
+    "Evidence precedes conclusions."
+
+  principle_7:
+    "Repository reality must be distinguished from import reality."
+
+  principle_8:
+    "Import reality must be distinguished from runtime reality."
+
+  principle_9:
+    "Asset verification must not modify asset state."
+
+  principle_10:
+    "Coverage verification precedes deletion readiness."
+
+  principle_11:
+    "Artifact backbone integrity precedes deletion eligibility."
+
+  principle_12:
+    "Completed Phase boundaries are governance contracts."
+
+  principle_13:
+    "Flow contracts must remain explicit and separable."
+
+  principle_14:
+    "MCP adapters must remain observable and verifiable."
+
+  principle_15:
+    "Governance verdicts must be evidence-based and read-only."
+
+  principle_16:
+    "Dependency failures are not governance failures."
+
+  principle_17:
+    "Root causes must be distinguished from derived effects."
+
+  principle_18:
+    "Root failures must be rendered before derived failures."
+
+  principle_19:
+    "Governance reports should prioritize actionable causes."
+
+  principle_20:
+    "Verification outputs may support advisory reasoning but remain read-only."
+
+  principle_21:
+    "Derived failures must never obscure independently actionable root contracts."
+
+  principle_22:
+    "Root cause isolation precedes remediation planning."
+
+  principle_23:
+    "Repository reality outranks hardcoded topology assumptions."
+
+  principle_24:
+    "Failure lineage should explain impact without duplicating evidence."
+
 
 future_capabilities:
 
   allowed:
 
     #
-    # Repository & Architecture Intelligence
+    # Repository Intelligence
     #
 
     - repository_graph_analysis
     - repository_topology_mapping
     - repository_runtime_consistency_mapping
+
     - architecture_drift_detection
 
     #
-    # Package & Dependency Intelligence
+    # Dependency Intelligence
     #
 
     - package_integrity_graph
@@ -1222,16 +1700,15 @@ future_capabilities:
     - dependency_risk_visualization
 
     #
-    # Artifact Backbone Intelligence
+    # Artifact Intelligence
     #
 
     - artifact_relationship_graph
-    - scan_asset_pattern_mapping
     - artifact_lineage_analysis
     - artifact_traceability_audit
 
     #
-    # Runtime & Flow Intelligence
+    # Runtime Intelligence
     #
 
     - flow_topology_analysis
@@ -1239,54 +1716,60 @@ future_capabilities:
     - runtime_readiness_scoring
 
     #
-    # Layer Governance
+    # Governance Intelligence
     #
 
     - layer_responsibility_analysis
     - orchestration_boundary_audit
 
-    #
-    # MCP Governance
-    #
-
     - mcp_tool_surface_analysis
     - mcp_runtime_visibility_audit
 
     #
-    # Asset Intelligence
+    # Advanced Asset Intelligence
     #
 
     - semantic_readiness_verification
+
     - type_A_usability_forecasting
+
     - type_B_intelligence_analysis
 
     #
-    # Auditor / Advisor Intelligence
+    # Advanced Advisor Layer
     #
 
     - remediation_order_generation
-    - governance_failure_lineage_analysis
+
     - repository_impact_analysis
-    - maintenance_planning_support
+
     - governance_risk_forecasting
 
+    - maintenance_planning_support
+
     #
-    # Verification Support
+    # Forecasting
     #
 
     - regression_forecasting
-    - patch_proposal_generation
+
     - root_cause_correlation_analysis
 
   prohibited:
+
     - autonomous_code_modification
     - autonomous_database_modification
     - autonomous_asset_deletion
+
     - autonomous_merging
     - autonomous_deployment
+
     - phase_logic_replacement
     - canonical_row_modification
+
     - recommendation_logic_override
     - personalization_logic_override
     - localization_logic_override
+
     - governance_policy_mutation
+    - governance_verdict_override
