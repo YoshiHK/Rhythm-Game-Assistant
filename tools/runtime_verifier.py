@@ -965,8 +965,26 @@ class RuntimeVerifier:
         self.repository_asset_hashes: Dict[str, str] = {}
         self.repository_file_hashes: Dict[str, str] = {}
 
-        # v1.0 governance state.
+        # ------------------------------------------------------------------
+        # v1.0 governance state
+        #
+        # Governance must distinguish:
+        #
+        #   hint
+        #       != suspicion
+        #       != evidence
+        #
+        # Layer boundary governance should not automatically
+        # escalate keyword matches into architecture blockers.
+        #
+        # Completed phases remain immutable.
+        # Verifier remains read-only.
+        # ------------------------------------------------------------------
+
         self.governance_state: Dict[str, Any] = {
+            #
+            # Top-level verdicts
+            #
             "architecture_verdict": None,
             "runtime_verdict": None,
             "artifact_backbone_verdict": None,
@@ -975,8 +993,55 @@ class RuntimeVerifier:
             "mcp_contract_verdict": None,
             "deletion_verdict": None,
             "governance_verdict": None,
+
+            #
+            # Layer boundary audit telemetry
+            #
+            "layer_boundary_risk": {
+                "status": None,
+                "evidence_count": 0,
+                "suspicion_count": 0,
+                "hint_count": 0,
+                "governance_blocking": False,
+            },
+
+            #
+            # Governance accounting
+            #
             "blocking_reasons": [],
             "warnings": [],
+
+            #
+            # Evidence confidence accounting
+            #
+            "confidence_summary": {
+                "evidence": 0,
+                "suspicion": 0,
+                "hint": 0,
+            },
+
+            #
+            # Audit policy metadata
+            #
+            "policy": {
+                "completed_phases": "immutable",
+                "verifier_mode": "read_only",
+                "false_positive_isolation": True,
+                "boundary_confidence_model": {
+                    "hint": {
+                        "governance_blocking": False,
+                        "severity": "info",
+                    },
+                    "suspicion": {
+                        "governance_blocking": False,
+                        "severity": "warning",
+                    },
+                    "evidence": {
+                        "governance_blocking": True,
+                        "severity": "critical",
+                    },
+                },
+            },
         }
 
     # ------------------------------------------------------------------
@@ -1023,23 +1088,62 @@ class RuntimeVerifier:
         if domain == "artifact_databases" and base_status == "warning":
             return "warning", "warning"
 
-        if domain == "dependency_reality" and base_status == "warning":
-            return "warning", "warning"
+        if domain == "dependency_reality":
+            if base_status == "pass":
+                return "pass", "info"
+
+            if base_status == "warning":
+                return "warning", "warning"
+
+            if base_status == "fail":
+                #
+                # Dependency failure.
+                #
+                # Runtime blocker,
+                # NOT governance blocker.
+                #
+                return "fail", "warning"
+                
+        if domain == "runtime_import":
+
+            if base_status == "fail":
+                #
+                # Runtime import failure.
+                #
+                # Runtime blocker,
+                # not architecture blocker.
+                #
+                return "fail", "warning"
 
         #
         # v1.0 governance severity rules.
         #
+        
+        if domain == "governance" and base_status == "warning":
+            return "warning", "warning"
+        
         if domain == "governance" and base_status == "fail":
             return "fail", "critical"
 
         if domain == "governance" and base_status == "critical":
             return "critical", "critical"
 
-        if domain == "layer_separation" and base_status == "critical":
-            return "critical", "critical"
+        if domain == "layer_separation":
 
-        if domain == "layer_separation" and base_status == "fail":
-            return "fail", "fail"
+            if base_status == "pass":
+                return "pass", "info"
+
+            if base_status == "info":
+                return "info", "info"
+
+            if base_status == "warning":
+                return "warning", "warning"
+
+            if base_status == "critical":
+                #
+                # Evidence-level boundary violation.
+                #
+                return "critical", "critical"
 
         if domain == "artifact_relationships" and base_status == "fail":
             return "fail", "fail"
@@ -1202,6 +1306,39 @@ class RuntimeVerifier:
                 return {}
 
             return json.loads(text)
+            
+    def record_boundary_signal(
+    self,
+    *,
+    confidence: str,
+    ) -> None:
+
+    summary = self.governance_state.setdefault(
+        "confidence_summary",
+        {},
+    )
+
+    summary[confidence] = (
+        summary.get(confidence, 0)
+        + 1
+    )
+    
+    def update_layer_boundary_risk(
+    self,
+    *,
+    evidence_count: int,
+    suspicion_count: int,
+    hint_count: int,
+    status: str,
+    ) -> None:
+
+    self.governance_state["layer_boundary_risk"] = {
+        "status": status,
+        "evidence_count": evidence_count,
+        "suspicion_count": suspicion_count,
+        "hint_count": hint_count,
+        "governance_blocking": evidence_count > 0,
+    }
 
     # ------------------------------------------------------------------
     # Artifact DB candidate helpers
@@ -2029,13 +2166,27 @@ class RuntimeVerifier:
 
         if required_missing:
             status = "fail"
-            summary = "One or more required runtime dependencies are missing."
+            summary = (
+                "One or more required runtime dependencies are missing."
+            )
+
+            runtime_impact = "blocked_by_dependency"
+
         elif api_runtime_missing:
             status = "warning"
-            summary = "One or more API runtime dependencies are missing."
+            summary = (
+                "One or more API runtime dependencies are missing."
+            )
+
+            runtime_impact = "capability_reduced"
+
         else:
             status = "pass"
-            summary = "Required runtime dependencies are importable."
+            summary = (
+                "Required runtime dependencies are importable."
+            )
+
+            runtime_impact = "ready"
 
         self.add(
             domain="dependency_reality",
@@ -2043,21 +2194,60 @@ class RuntimeVerifier:
             status=status,
             summary=summary,
             evidence={
-                "required_modules": REQUIRED_RUNTIME_DEPENDENCY_MODULES,
-                "optional_modules": OPTIONAL_RUNTIME_DEPENDENCY_MODULES,
-                "api_runtime_modules": API_RUNTIME_DEPENDENCY_MODULES,
-                "required_results": required_results,
-                "optional_results": optional_results,
-                "api_runtime_results": api_runtime_results,
-                "required_missing": required_missing,
-                "api_runtime_missing": api_runtime_missing,
+                "runtime_impact":
+                    runtime_impact,
+
+                "required_modules":
+                    REQUIRED_RUNTIME_DEPENDENCY_MODULES,
+
+                "optional_modules":
+                    OPTIONAL_RUNTIME_DEPENDENCY_MODULES,
+
+                "api_runtime_modules":
+                    API_RUNTIME_DEPENDENCY_MODULES,
+
+                "required_results":
+                    required_results,
+
+                "optional_results":
+                    optional_results,
+
+                "api_runtime_results":
+                    api_runtime_results,
+
+                "required_missing":
+                    required_missing,
+
+                "api_runtime_missing":
+                    api_runtime_missing,
+
+                "dependency_classification": {
+                    "required_missing":
+                        "runtime_blocker",
+
+                    "api_runtime_missing":
+                        "capability_reduction",
+
+                    "optional_missing":
+                        "non_blocking",
+                },
+
+                "governance_note":
+                    (
+                        "Dependency failures should influence "
+                        "runtime readiness but should not "
+                        "automatically become governance failures."
+                    ),
             },
             suggested_fix=(
                 None
                 if status == "pass"
-                else "Install missing runtime dependencies or adjust CI setup before running runtime/API verification."
+                else (
+                    "Install missing runtime dependencies or "
+                    "adjust CI setup before running runtime/API verification."
+                )
             ),
-            governance_domain="architecture_contracts",
+            governance_domain="runtime_dependencies",
             contract_type="dependency_reality",
         )
 
@@ -3865,6 +4055,13 @@ class RuntimeVerifier:
             governance_domain="layer_boundaries",
             contract_type="layer_boundary",
         )
+        
+        self.update_layer_boundary_risk(
+            evidence_count=evidence_count,
+            suspicion_count=suspicion_count,
+            hint_count=hint_count,
+            status=status,
+        )
 
     def check_mcp_config(self) -> None:
         if not self.mcp_config:
@@ -4233,28 +4430,119 @@ class RuntimeVerifier:
 
     def check_governance_verdict(self) -> None:
         blocking_reasons = list(
-            self.governance_state.get("blocking_reasons", [])
+            self.governance_state.get(
+                "blocking_reasons",
+                [],
+            )
         )
 
         warnings = list(
-            self.governance_state.get("warnings", [])
+            self.governance_state.get(
+                "warnings",
+                [],
+            )
         )
 
-        critical_count = len(
-            [
-                result
-                for result in self.results
-                if result.severity == "critical"
-            ]
+        #
+        # ----------------------------------------------------------
+        # Separate governance failures from dependency failures.
+        # ----------------------------------------------------------
+        #
+
+        dependency_failures: List[Dict[str, Any]] = []
+        governance_failures: List[Dict[str, Any]] = []
+
+        critical_results: List[Any] = []
+        fail_results: List[Any] = []
+
+        for result in self.results:
+            if result.severity == "critical":
+                critical_results.append(result)
+
+            if result.severity == "fail":
+                fail_results.append(result)
+
+        dependency_contracts = {
+            "dependency_reality",
+            "import_reality",
+            "runtime_import_reality",
+        }
+
+        for result in (critical_results + fail_results):
+            contract_type = getattr(
+                result,
+                "contract_type",
+                None,
+            )
+
+            item = {
+                "domain": result.domain,
+                "check": result.check,
+                "severity": result.severity,
+                "summary": result.summary,
+                "governance_domain": getattr(
+                    result,
+                    "governance_domain",
+                    None,
+                ),
+                "contract_type": contract_type,
+            }
+
+            if contract_type in dependency_contracts:
+                dependency_failures.append(item)
+            else:
+                governance_failures.append(item)
+
+        dependency_fail_count = len(
+            dependency_failures
         )
 
-        fail_count = len(
-            [
+        governance_fail_count = len(
+            governance_failures
+        )
+
+        #
+        # ----------------------------------------------------------
+        # Runtime dependency reality
+        # ----------------------------------------------------------
+        #
+
+        runtime_dependency_result = next(
+            (
                 result
                 for result in self.results
-                if result.severity == "fail"
-            ]
+                if result.domain == "dependency_reality"
+                and result.check == "runtime_dependency_probe"
+            ),
+            None,
         )
+
+        runtime_import_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "runtime_import"
+                and result.check == "recommend_module_importable"
+            ),
+            None,
+        )
+
+        runtime_verdict = (
+            "ready"
+            if (
+                runtime_dependency_result is not None
+                and runtime_dependency_result.status == "pass"
+                and runtime_import_result is not None
+                and runtime_import_result.status == "pass"
+            )
+            else "blocked_by_dependency"
+        )
+
+        #
+        # ----------------------------------------------------------
+        # Deletion readiness
+        # ----------------------------------------------------------
+        #
 
         deletion_result = next(
             (
@@ -4266,6 +4554,19 @@ class RuntimeVerifier:
             None,
         )
 
+        deletion_verdict = (
+            "ready"
+            if deletion_result is not None
+            and deletion_result.status == "pass"
+            else "blocked"
+        )
+
+        #
+        # ----------------------------------------------------------
+        # Artifact backbone
+        # ----------------------------------------------------------
+        #
+
         artifact_backbone_result = next(
             (
                 result
@@ -4276,15 +4577,45 @@ class RuntimeVerifier:
             None,
         )
 
-        layer_result = next(
-            (
-                result
-                for result in self.results
-                if result.domain == "layer_separation"
-                and result.check == "layer_boundary_audit"
-            ),
-            None,
+        artifact_backbone_verdict = (
+            "ready"
+            if artifact_backbone_result is not None
+            and artifact_backbone_result.status == "pass"
+            else "blocked"
         )
+
+        #
+        # ----------------------------------------------------------
+        # Layer audit
+        # ----------------------------------------------------------
+        #
+
+        layer_risk = self.governance_state.get(
+            "layer_boundary_risk",
+            {},
+        )
+
+        layer_boundary_verdict = (
+            "blocked"
+            if layer_risk.get(
+                "evidence_count",
+                0,
+            ) > 0
+            else (
+                "review_needed"
+                if layer_risk.get(
+                    "suspicion_count",
+                    0,
+                ) > 0
+                else "ready"
+            )
+        )
+
+        #
+        # ----------------------------------------------------------
+        # MCP
+        # ----------------------------------------------------------
+        #
 
         mcp_result = next(
             (
@@ -4296,6 +4627,19 @@ class RuntimeVerifier:
             None,
         )
 
+        mcp_contract_verdict = (
+            "ready"
+            if mcp_result is not None
+            and mcp_result.status == "pass"
+            else "partial_or_blocked"
+        )
+
+        #
+        # ----------------------------------------------------------
+        # Flow contracts
+        # ----------------------------------------------------------
+        #
+
         flow_contract_result = next(
             (
                 result
@@ -4306,40 +4650,6 @@ class RuntimeVerifier:
             None,
         )
 
-        architecture_verdict = (
-            "blocked"
-            if critical_count > 0 or fail_count > 0
-            else "ready"
-        )
-
-        deletion_verdict = (
-            "ready"
-            if deletion_result is not None
-            and deletion_result.status == "pass"
-            else "blocked"
-        )
-
-        artifact_backbone_verdict = (
-            "ready"
-            if artifact_backbone_result is not None
-            and artifact_backbone_result.status == "pass"
-            else "blocked"
-        )
-
-        layer_boundary_verdict = (
-            "ready"
-            if layer_result is not None
-            and layer_result.status == "pass"
-            else "blocked"
-        )
-
-        mcp_contract_verdict = (
-            "ready"
-            if mcp_result is not None
-            and mcp_result.status == "pass"
-            else "partial_or_blocked"
-        )
-
         flow_contract_verdict = (
             "ready"
             if flow_contract_result is not None
@@ -4347,71 +4657,187 @@ class RuntimeVerifier:
             else "partial_or_blocked"
         )
 
+        #
+        # ----------------------------------------------------------
+        # Architecture verdict
+        #
+        # IMPORTANT:
+        # Dependency failures do NOT automatically block
+        # architecture governance.
+        # ----------------------------------------------------------
+        #
+
+        architecture_verdict = (
+            "blocked"
+            if governance_fail_count > 0
+            else "ready"
+        )
+
+        #
+        # ----------------------------------------------------------
+        # Governance verdict
+        #
+        # Dependency failures influence runtime readiness,
+        # but should not automatically be treated as
+        # architecture-governance failures.
+        # ----------------------------------------------------------
+        #
+
         governance_verdict = (
             "blocked"
             if (
-                critical_count > 0
-                or fail_count > 0
+                architecture_verdict == "blocked"
                 or deletion_verdict == "blocked"
                 or artifact_backbone_verdict == "blocked"
                 or layer_boundary_verdict == "blocked"
             )
-            else "ready"
+            else (
+                "review_needed"
+                if (
+                    layer_boundary_verdict == "review_needed"
+                    or runtime_verdict == "blocked_by_dependency"
+                )
+                else "ready"
+            )
         )
 
         self.governance_state.update(
             {
-                "architecture_verdict": architecture_verdict,
-                "artifact_backbone_verdict": artifact_backbone_verdict,
-                "flow_contract_verdict": flow_contract_verdict,
-                "layer_boundary_verdict": layer_boundary_verdict,
-                "mcp_contract_verdict": mcp_contract_verdict,
-                "deletion_verdict": deletion_verdict,
-                "governance_verdict": governance_verdict,
-                "blocking_reasons": blocking_reasons,
-                "warnings": warnings,
+                "architecture_verdict":
+                    architecture_verdict,
+
+                "runtime_verdict":
+                    runtime_verdict,
+
+                "artifact_backbone_verdict":
+                    artifact_backbone_verdict,
+
+                "flow_contract_verdict":
+                    flow_contract_verdict,
+
+                "layer_boundary_verdict":
+                    layer_boundary_verdict,
+
+                "mcp_contract_verdict":
+                    mcp_contract_verdict,
+
+                "deletion_verdict":
+                    deletion_verdict,
+
+                "governance_verdict":
+                    governance_verdict,
+
+                "dependency_failures":
+                    dependency_failures,
+
+                "governance_failures":
+                    governance_failures,
+
+                "dependency_fail_count":
+                    dependency_fail_count,
+
+                "governance_fail_count":
+                    governance_fail_count,
+
+                "blocking_reasons":
+                    blocking_reasons,
+
+                "warnings":
+                    warnings,
             }
         )
 
         self.add(
             domain="governance",
             check="governance_verdict",
-            status="pass" if governance_verdict == "ready" else "fail",
+            status=(
+                "pass"
+                if governance_verdict == "ready"
+                else (
+                    "warning"
+                    if governance_verdict == "review_needed"
+                    else "fail"
+                )
+            ),
             summary=(
                 "RGA governance verdict is ready."
                 if governance_verdict == "ready"
-                else "RGA governance verdict is blocked."
+                else (
+                    "RGA governance verdict requires review."
+                    if governance_verdict == "review_needed"
+                    else "RGA governance verdict is blocked."
+                )
             ),
             evidence={
-                "governance_verdict": governance_verdict,
-                "architecture_verdict": architecture_verdict,
-                "artifact_backbone_verdict": artifact_backbone_verdict,
-                "flow_contract_verdict": flow_contract_verdict,
-                "layer_boundary_verdict": layer_boundary_verdict,
-                "mcp_contract_verdict": mcp_contract_verdict,
-                "deletion_verdict": deletion_verdict,
-                "critical_count": critical_count,
-                "fail_count": fail_count,
-                "blocking_reasons": blocking_reasons,
-                "warnings": warnings,
+                "governance_verdict":
+                    governance_verdict,
+
+                "architecture_verdict":
+                    architecture_verdict,
+
+                "runtime_verdict":
+                    runtime_verdict,
+
+                "artifact_backbone_verdict":
+                    artifact_backbone_verdict,
+
+                "flow_contract_verdict":
+                    flow_contract_verdict,
+
+                "layer_boundary_verdict":
+                    layer_boundary_verdict,
+
+                "mcp_contract_verdict":
+                    mcp_contract_verdict,
+
+                "deletion_verdict":
+                    deletion_verdict,
+
+                "dependency_fail_count":
+                    dependency_fail_count,
+
+                "governance_fail_count":
+                    governance_fail_count,
+
+                "dependency_failures":
+                    dependency_failures,
+
+                "governance_failures":
+                    governance_failures,
+
+                "blocking_reasons":
+                    blocking_reasons,
+
+                "warnings":
+                    warnings,
+
                 "policy": {
-                    "default_deletion": "blocked",
-                    "completed_phases": "immutable",
-                    "verifier_mode": "read_only",
+                    "default_deletion":
+                        "blocked",
+
+                    "completed_phases":
+                        "immutable",
+
+                    "verifier_mode":
+                        "read_only",
+
+                    "dependency_failures_are_not_governance_failures":
+                        True,
                 },
             },
             suggested_fix=(
                 None
                 if governance_verdict == "ready"
                 else (
-                    "Resolve fail/critical findings before treating the repository "
-                    "as architecture-governance-ready."
+                    "Resolve governance blockers first. "
+                    "Dependency failures should be handled separately "
+                    "from architecture governance violations."
                 )
             ),
             governance_domain="governance",
             contract_type="governance_verdict",
         )
-
+        
     def run_all(self) -> Dict[str, Any]:
         self.check_environment()
 
