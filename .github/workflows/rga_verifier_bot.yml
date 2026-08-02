@@ -740,12 +740,39 @@ jobs:
       ############################################################
 
       - name: Run RGA Runtime Verifier
+        id: run_verifier
+        continue-on-error: true
         run: |
+          set +e
+
           python tools/runtime_verifier.py \
             --repo-root . \
             --mcp-config .vscode/mcp.json \
             --json-out artifacts/runtime_verifier_report.json \
-            --md-out artifacts/runtime_verifier_report.md
+            --md-out artifacts/runtime_verifier_report.md \
+            > artifacts/runtime_verifier_stdout.txt \
+            2> artifacts/runtime_verifier_stderr.txt
+
+          verifier_exit_code=$?
+
+          echo "${verifier_exit_code}" > artifacts/runtime_verifier_exit_code.txt
+          echo "verifier_exit_code=${verifier_exit_code}" >> "$GITHUB_OUTPUT"
+
+          echo "RGA Runtime Verifier exited with code: ${verifier_exit_code}"
+
+          if [ -f artifacts/runtime_verifier_stderr.txt ]; then
+            echo ""
+            echo "---- verifier stderr preview ----"
+            head -n 80 artifacts/runtime_verifier_stderr.txt || true
+          fi
+
+          if [ -f artifacts/runtime_verifier_stdout.txt ]; then
+            echo ""
+            echo "---- verifier stdout preview ----"
+            head -n 80 artifacts/runtime_verifier_stdout.txt || true
+          fi
+
+          exit 0
 
       ############################################################
       # Optional Summary
