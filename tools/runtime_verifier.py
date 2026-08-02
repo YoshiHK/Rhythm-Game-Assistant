@@ -5801,6 +5801,139 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append("## Governance Overview")
     lines.append("")
+    
+    root_cause_summary = governance.get(
+        "root_cause_summary",
+        {},
+    )
+
+    if root_cause_summary:
+        lines.append("## Root Cause Summary")
+        lines.append("")
+
+        primary_root_contracts = (
+            root_cause_summary.get(
+                "primary_root_contracts",
+                [],
+            )
+        )
+
+        derived_contracts = (
+            root_cause_summary.get(
+                "derived_contracts",
+                [],
+            )
+        )
+
+        if primary_root_contracts:
+            lines.append("### Primary Root Contracts")
+            lines.append("")
+
+            for item in primary_root_contracts:
+                lines.append(
+                    f"- `{item}`"
+                )
+
+            lines.append("")
+
+        if derived_contracts:
+            lines.append("### Derived Contracts")
+            lines.append("")
+
+            for item in derived_contracts:
+                lines.append(
+                    f"- `{item}`"
+                )
+
+            lines.append("")
+
+        recommendation = (
+            root_cause_summary.get(
+                "recommendation",
+            )
+        )
+
+        if recommendation:
+            lines.append("### Recommendation")
+            lines.append("")
+            lines.append(recommendation)
+            lines.append("")
+            
+    lineage = governance.get(
+        "lineage",
+        {},
+    )
+
+    if lineage:
+        lines.append("## Failure Lineage")
+        lines.append("")
+
+        derived_policy = lineage.get(
+            "derived_failure_policy",
+            {},
+        )
+
+        root_contracts = lineage.get(
+            "root_failure_contract_types",
+            [],
+        )
+
+        for root_contract in root_contracts:
+
+            lines.append(
+                f"- `{root_contract}`"
+            )
+
+            downstream = [
+                child
+                for child, parent
+                in derived_policy.items()
+                if parent == root_contract
+            ]
+
+            for child in sorted(downstream):
+                lines.append(
+                    f"  - `{child}`"
+                )
+
+        lines.append("")
+
+    risk = governance.get(
+        "layer_boundary_risk",
+        {},
+    )
+
+    if risk:
+        lines.append(
+            "## Layer Boundary Risk"
+        )
+        lines.append("")
+
+        for k, v in risk.items():
+            lines.append(
+                f"- **{k}**: {v}"
+            )
+
+        lines.append("")
+
+    policy = governance.get(
+        "policy",
+        {},
+    )
+
+    if policy:
+        lines.append(
+            "## Governance Policy"
+        )
+
+        lines.append("")
+
+        for k, v in policy.items():
+            lines.append(
+                f"- **{k}**: {v}"
+            )
+
+        lines.append("")        
 
     governance_overview = [
         (
@@ -5844,38 +5977,169 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append("")
 
+    #
+    # --------------------------------------------------
+    # Failure Overview
+    # --------------------------------------------------
+    #
+
+    dependency_fail_count = (
+        governance.get(
+            "dependency_fail_count",
+            0,
+        )
+    )
+
+    governance_fail_count = (
+        governance.get(
+            "governance_fail_count",
+            0,
+        )
+    )
+
+    root_failure_count = (
+        governance.get(
+            "root_failure_count",
+            0,
+        )
+    )
+
+    derived_failure_count = (
+        governance.get(
+            "derived_failure_count",
+            0,
+        )
+    )
+
     lines.append(
         f"- Dependency failures: "
-        f"`{governance.get('dependency_fail_count', 0)}`"
+        f"`{dependency_fail_count}`"
     )
 
     lines.append(
         f"- Governance failures: "
-        f"`{governance.get('governance_fail_count', 0)}`"
+        f"`{governance_fail_count}`"
     )
 
     lines.append(
         f"- Root failures: "
-        f"`{governance.get('root_failure_count', 0)}`"
+        f"`{root_failure_count}`"
     )
 
     lines.append(
         f"- Derived failures: "
-        f"`{governance.get('derived_failure_count', 0)}`"
+        f"`{derived_failure_count}`"
     )
 
     lines.append("")
 
     #
-    # Root Failures
+    # --------------------------------------------------
+    # Root Cause Summary
+    # --------------------------------------------------
     #
 
-    lines.append("## Root Failures")
+    root_cause_summary = governance.get(
+        "root_cause_summary",
+        {},
+    )
+
+    if root_cause_summary:
+
+        lines.append(
+            "## Root Cause Summary"
+        )
+
+        lines.append("")
+
+        primary_root_contracts = (
+            root_cause_summary.get(
+                "primary_root_contracts",
+                [],
+            )
+        )
+
+        derived_contracts = (
+            root_cause_summary.get(
+                "derived_contracts",
+                [],
+            )
+        )
+
+        recommendation = (
+            root_cause_summary.get(
+                "recommendation",
+            )
+        )
+
+        if primary_root_contracts:
+
+            lines.append(
+                "### Primary Root Contracts"
+            )
+
+            lines.append("")
+
+            for contract in (
+                primary_root_contracts
+            ):
+                lines.append(
+                    f"- `{contract}`"
+                )
+
+            lines.append("")
+
+        if derived_contracts:
+
+            lines.append(
+                "### Derived Contracts"
+            )
+
+            lines.append("")
+
+            for contract in (
+                derived_contracts
+            ):
+                lines.append(
+                    f"- `{contract}`"
+                )
+
+            lines.append("")
+
+        if recommendation:
+
+            lines.append(
+                "### Recommendation"
+            )
+
+            lines.append("")
+
+            lines.append(
+                recommendation
+            )
+
+            lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Root Failures
+    # --------------------------------------------------
+    #
+
+    lines.append(
+        "## Root Failures"
+    )
+
     lines.append("")
 
     if not root_failures:
-        lines.append("(none)")
+
+        lines.append(
+            "(none)"
+        )
+
     else:
+
         for item in root_failures:
 
             contract_type = item.get(
@@ -5885,12 +6149,16 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
             lines.append(
                 f"- `{contract_type}` "
-                f"({item.get('domain')} / {item.get('check')})"
+                f"({item.get('domain')} / "
+                f"{item.get('check')})"
             )
 
-            summary = item.get("summary")
+            summary = item.get(
+                "summary"
+            )
 
             if summary:
+
                 lines.append(
                     f"  - {summary}"
                 )
@@ -5898,15 +6166,25 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("")
 
     #
+    # --------------------------------------------------
     # Derived Failures
+    # --------------------------------------------------
     #
 
-    lines.append("## Derived Failures")
+    lines.append(
+        "## Derived Failures"
+    )
+
     lines.append("")
 
     if not derived_failures:
-        lines.append("(none)")
+
+        lines.append(
+            "(none)"
+        )
+
     else:
+
         for item in derived_failures:
 
             contract_type = item.get(
@@ -5921,12 +6199,16 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
             lines.append(
                 f"- `{contract_type}` "
-                f"(dependency_of=`{dependency_of}`)"
+                f"(dependency_of="
+                f"`{dependency_of}`)"
             )
 
-            summary = item.get("summary")
+            summary = item.get(
+                "summary"
+            )
 
             if summary:
+
                 lines.append(
                     f"  - {summary}"
                 )
@@ -5934,26 +6216,41 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("")
 
     #
+    # --------------------------------------------------
     # Dependency Failures
+    # --------------------------------------------------
     #
 
-    lines.append("## Dependency Failures")
+    lines.append(
+        "## Dependency Failures"
+    )
+
     lines.append("")
 
     if not dependency_failures:
-        lines.append("(none)")
+
+        lines.append(
+            "(none)"
+        )
+
     else:
 
-        for item in dependency_failures:
+        for item in (
+            dependency_failures
+        ):
 
             lines.append(
                 f"- `{item.get('contract_type')}` "
-                f"({item.get('domain')} / {item.get('check')})"
+                f"({item.get('domain')} / "
+                f"{item.get('check')})"
             )
 
-            summary = item.get("summary")
+            summary = item.get(
+                "summary"
+            )
 
             if summary:
+
                 lines.append(
                     f"  - {summary}"
                 )
@@ -5961,29 +6258,97 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("")
 
     #
-    # Governance Failures
+    # --------------------------------------------------
+    # Failure Lineage
+    # --------------------------------------------------
     #
 
-    lines.append("## Governance Failures")
-    lines.append("")
+    lineage = governance.get(
+        "lineage",
+        {},
+    )
 
-    if not governance_failures:
-        lines.append("(none)")
-    else:
+    if lineage:
 
-        for item in governance_failures:
+        lines.append(
+            "## Failure Lineage"
+        )
+
+        lines.append("")
+
+        root_contracts = (
+            lineage.get(
+                "root_failure_contract_types",
+                [],
+            )
+        )
+
+        derived_policy = (
+            lineage.get(
+                "derived_failure_policy",
+                {},
+            )
+        )
+
+        for root_contract in (
+            root_contracts
+        ):
 
             lines.append(
-                f"- `{item.get('contract_type')}` "
-                f"({item.get('domain')} / {item.get('check')})"
+                f"- `{root_contract}`"
             )
 
-            summary = item.get("summary")
+            downstream_contracts = sorted(
+                child
+                for child, parent
+                in derived_policy.items()
+                if parent == root_contract
+            )
 
-            if summary:
+            for child in (
+                downstream_contracts
+            ):
                 lines.append(
-                    f"  - {summary}"
+                    f"  - `{child}`"
                 )
+
+        lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Failure Inventory Summary
+    #
+    # Avoid re-listing all governance failures,
+    # because Root + Derived already contains
+    # the detailed breakdown.
+    # --------------------------------------------------
+    #
+
+    lines.append(
+        "## Failure Inventory Summary"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"- Total governance failures: "
+        f"`{governance_fail_count}`"
+    )
+
+    lines.append(
+        f"- Root governance failures: "
+        f"`{root_failure_count}`"
+    )
+
+    lines.append(
+        f"- Derived governance failures: "
+        f"`{derived_failure_count}`"
+    )
+
+    lines.append(
+        f"- Dependency failures: "
+        f"`{dependency_fail_count}`"
+    )
 
     lines.append("")
 
