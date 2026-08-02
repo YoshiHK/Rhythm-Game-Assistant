@@ -588,9 +588,8 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
 
     return discovered
 
-def discover_runtime_candidates(
-    search_root: Path,
-) -> Listroots: Dict[str, Path] = {}
+def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
+    roots: Dict[str, Path] = {}
 
     try:
         for main_py in search_root.rglob("main.py"):
@@ -1211,7 +1210,8 @@ class RuntimeVerifier:
     def resolve_artifact_db_candidates(
         self,
         db_name: str,
-    ) -> Listcandidates: List[Path] = []
+    ) -> List[Path]:
+        candidates: List[Path] = []
 
         explicit_map: Dict[str, Optional[Path]] = {
             FILE_SCAN_INVENTORY_DB_NAME: self.file_scan_inventory_db,
@@ -1255,6 +1255,7 @@ class RuntimeVerifier:
                 pass
 
         return candidates
+    
 
     def resolve_all_artifact_db_candidates(self) -> Dict[str, List[Path]]:
         return {
@@ -3824,8 +3825,8 @@ class RuntimeVerifier:
         )
 
         self.add(
-            domain="mcp_contract"
-            check="mcp_adapter_contract"
+            domain="mcp_contract",
+            check="mcp_adapter_contract",
             status="pass" if references_mcp_server else "warning",
             summary=(
                 "MCP config references mcp_server.py."
@@ -3855,8 +3856,8 @@ class RuntimeVerifier:
                     tool_like_keys.append(key)
 
         self.add(
-            domain="mcp_contract"
-            check="tool_surface_evidence"
+            domain="mcp_contract",
+            check="tool_surface_evidence",
             status="info",
             summary="MCP tool registration visibility evidence captured from config.",
             evidence={
