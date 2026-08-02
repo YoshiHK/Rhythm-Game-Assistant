@@ -1308,37 +1308,37 @@ class RuntimeVerifier:
             return json.loads(text)
             
     def record_boundary_signal(
-    self,
-    *,
-    confidence: str,
+        self,
+        *,
+        confidence: str,
     ) -> None:
 
-    summary = self.governance_state.setdefault(
-        "confidence_summary",
-        {},
-    )
+        summary = self.governance_state.setdefault(
+            "confidence_summary",
+            {},
+        )
 
-    summary[confidence] = (
-        summary.get(confidence, 0)
-        + 1
-    )
+        summary[confidence] = (
+            summary.get(confidence, 0)
+            + 1
+        )
     
     def update_layer_boundary_risk(
-    self,
-    *,
-    evidence_count: int,
-    suspicion_count: int,
-    hint_count: int,
-    status: str,
+        self,
+        *,
+        evidence_count: int,
+        suspicion_count: int,
+        hint_count: int,
+        status: str,
     ) -> None:
 
-    self.governance_state["layer_boundary_risk"] = {
-        "status": status,
-        "evidence_count": evidence_count,
-        "suspicion_count": suspicion_count,
-        "hint_count": hint_count,
-        "governance_blocking": evidence_count > 0,
-    }
+        self.governance_state["layer_boundary_risk"] = {
+            "status": status,
+            "evidence_count": evidence_count,
+            "suspicion_count": suspicion_count,
+            "hint_count": hint_count,
+            "governance_blocking": evidence_count > 0,
+        }
 
     # ------------------------------------------------------------------
     # Artifact DB candidate helpers
