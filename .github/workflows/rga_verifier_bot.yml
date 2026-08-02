@@ -790,8 +790,8 @@ jobs:
             echo "player_first"
             echo "progression"
             echo ""
-            echo "Artifacts"
-            echo "---------"
+            echo "Generated files"
+            echo "---------------"
             echo "flow_candidates.txt"
             echo "flow_keyword_hits.txt"
           } > artifacts/flow_verification_summary.txt
@@ -821,9 +821,9 @@ jobs:
             | sort \
             > artifacts/layer_directories.txt || true
 
-          #
-          # Hint
-          #
+          ########################################################
+          # Tier 1: Hint-level evidence
+          ########################################################
 
           grep -RIn \
             -e "sqlite3" \
@@ -837,9 +837,9 @@ jobs:
             engine \
             > artifacts/layer_boundary_hints.txt || true
 
-          #
-          # Suspicion
-          #
+          ########################################################
+          # Tier 2: Suspicion-level evidence
+          ########################################################
 
           grep -RInE \
             '^[[:space:]]*import .*writer|^[[:space:]]*from .*writer' \
@@ -862,9 +862,9 @@ jobs:
             artifacts/layer_boundary_orchestrator_imports.txt \
             > artifacts/layer_boundary_suspicions.txt || true
 
-          #
-          # Evidence
-          #
+          ########################################################
+          # Tier 3: Evidence-level signals
+          ########################################################
 
           grep -RIn \
             -e ".commit(" \
@@ -900,13 +900,14 @@ jobs:
           import json
           from pathlib import Path
 
-          def count(path):
-              p = Path(path)
-              if not p.exists():
+          def count_lines(path_text):
+              path = Path(path_text)
+              if not path.exists():
                   return 0
+
               return sum(
                   1
-                  for line in p.read_text(
+                  for line in path.read_text(
                       encoding="utf-8",
                       errors="ignore",
                   ).splitlines()
@@ -914,20 +915,23 @@ jobs:
               )
 
           payload = {
-              "hint_count":
-                  count("artifacts/layer_boundary_hints.txt"),
-              "suspicion_count":
-                  count("artifacts/layer_boundary_suspicions.txt"),
-              "evidence_count":
-                  count("artifacts/layer_boundary_evidence.txt"),
+              "schema": "rga.layer_boundary_risk.v1.0",
+              "hint_count": count_lines("artifacts/layer_boundary_hints.txt"),
+              "suspicion_count": count_lines("artifacts/layer_boundary_suspicions.txt"),
+              "evidence_count": count_lines("artifacts/layer_boundary_evidence.txt"),
               "confidence_model": [
                   "hint",
                   "suspicion",
-                  "evidence",
+                  "evidence"
               ],
               "governance_blocking_confidence": [
-                  "evidence",
+                  "evidence"
               ],
+              "policy": {
+                  "hints_block_governance": False,
+                  "suspicions_block_governance": False,
+                  "evidence_blocks_governance": True
+              }
           }
 
           with open(
@@ -942,6 +946,29 @@ jobs:
                   ensure_ascii=False,
               )
           PY
+
+          {
+            echo "Layer Boundary Evidence Summary"
+            echo ""
+            echo "Confidence Model"
+            echo "---------------"
+            echo "hint"
+            echo "suspicion"
+            echo "evidence"
+            echo ""
+            echo "Generated Files"
+            echo "---------------"
+            echo "layer_boundary_hints.txt"
+            echo "layer_boundary_suspicions.txt"
+            echo "layer_boundary_evidence.txt"
+            echo "layer_boundary_risk.json"
+            echo ""
+            echo "Governance Policy"
+            echo "-----------------"
+            echo "Hints do not block governance."
+            echo "Suspicions require review."
+            echo "Only evidence-level findings may block governance."
+          } > artifacts/layer_boundary_summary.txt
 
       ############################################################
       # MCP Evidence
@@ -967,9 +994,13 @@ jobs:
             echo "rhythm-game-assistant"
             echo "type=stdio"
             echo ""
-            echo "Adapter"
-            echo "-------"
+            echo "Required Adapter"
+            echo "----------------"
             echo "mcp_server.py"
+            echo ""
+            echo "Expected Environment"
+            echo "--------------------"
+            echo "RGA_REST_URL"
           } > artifacts/mcp_contract_summary.txt
 
       ############################################################
@@ -993,6 +1024,15 @@ jobs:
             -e "recommend" \
             engine \
             > artifacts/runtime_surface_keyword_hits.txt || true
+
+          {
+            echo "Runtime Surface Evidence"
+            echo ""
+            echo "Generated files"
+            echo "---------------"
+            echo "runtime_surface_candidates.txt"
+            echo "runtime_surface_keyword_hits.txt"
+          } > artifacts/runtime_surface_summary.txt
 
       ############################################################
       # Runtime Reader Discovery Evidence
@@ -1021,6 +1061,19 @@ jobs:
             \) \
             | sort > artifacts/runtime_bridge_candidates.txt || true
 
+          {
+            echo "Runtime Reader Discovery Evidence"
+            echo ""
+            echo "Reader candidates:"
+            wc -l artifacts/runtime_reader_candidates.txt || true
+            echo ""
+            echo "Validator candidates:"
+            wc -l artifacts/runtime_validator_candidates.txt || true
+            echo ""
+            echo "Bridge candidates:"
+            wc -l artifacts/runtime_bridge_candidates.txt || true
+          } > artifacts/runtime_reader_discovery_summary.txt
+
       ############################################################
       # Runtime DB Read Evidence
       ############################################################
@@ -1035,6 +1088,13 @@ jobs:
             \) \
             | sort > artifacts/runtime_db_candidates.txt || true
 
+          {
+            echo "Runtime DB Read Evidence"
+            echo ""
+            echo "Runtime DB candidates:"
+            cat artifacts/runtime_db_candidates.txt || true
+          } > artifacts/runtime_db_read_summary.txt
+
       ############################################################
       # Governance Evidence
       ############################################################
@@ -1048,26 +1108,24 @@ jobs:
             echo "Verifier Mode: read_only"
             echo "Completed Phases: immutable"
             echo "Default Deletion Policy: blocked"
-
+            echo "Maintenance Mode: advisor_only"
             echo ""
+
             echo "Reality Separation"
             echo "------------------"
-
-            echo "Repository Reality"
-            echo "Import Reality"
-            echo "Runtime Reality"
-
+            echo "Repository Reality != Import Reality"
+            echo "Import Reality != Runtime Reality"
+            echo "Dependency Reality != Governance"
             echo ""
-            echo "Governance Separation"
-            echo "---------------------"
 
-            echo "Dependency Failures"
-            echo "Governance Failures"
-
+            echo "Layer Boundary Confidence"
+            echo "-------------------------"
+            echo "Hint != Suspicion != Evidence"
+            echo "Only evidence-level findings may block governance."
             echo ""
+
             echo "Failure Lineage"
             echo "---------------"
-
             echo "artifact_database_policy"
             echo " -> artifact_relationships"
             echo " -> artifact_backbone_contract"
@@ -1075,17 +1133,15 @@ jobs:
             echo " -> hash_integrity"
             echo " -> type_A_usability"
             echo " -> runtime_artifact_readiness"
-
             echo ""
+
             echo "Independent Root Contract"
             echo "-------------------------"
-
             echo "deletion_readiness"
-
             echo ""
+
             echo "Deletion Requirements"
             echo "---------------------"
-
             echo "artifact_backbone_verified"
             echo "asset_coverage_verified"
             echo "hash_consistency_verified"
@@ -1095,29 +1151,169 @@ jobs:
           } > artifacts/governance_context.txt
 
       ############################################################
-      # Governance Lineage Evidence
+      # Governance Failure Lineage Evidence
       ############################################################
 
       - name: Governance Failure Lineage Evidence
         run: |
           cat > artifacts/governance_failure_lineage.json <<'JSON'
           {
+            "schema": "rga.governance_failure_lineage.v1.0",
             "root_contracts": [
               "artifact_database_policy",
               "deletion_readiness"
             ],
             "derived_contracts": {
-              "artifact_relationships":
-                "artifact_database_policy",
-              "artifact_backbone_contract":
-                "artifact_database_policy",
-              "asset_coverage":
-                "artifact_database_policy",
-              "hash_integrity":
-                "artifact_database_policy",
-              "type_A_usability":
-                "artifact_database_policy",
-              "runtime_artifact_readiness":
-                "artifact_database_policy"
+              "artifact_relationships": "artifact_database_policy",
+              "artifact_backbone_contract": "artifact_database_policy",
+              "asset_coverage": "artifact_database_policy",
+              "hash_integrity": "artifact_database_policy",
+              "type_A_usability": "artifact_database_policy",
+              "runtime_artifact_readiness": "artifact_database_policy"
+            },
+            "meta_contracts": [
+              "governance_verdict"
+            ],
+            "policy": {
+              "resolve_root_failures_first": true,
+              "revalidate_derived_failures_after_root_resolution": true,
+              "dependency_failures_are_not_governance_failures": true
             }
           }
+          JSON
+
+      ############################################################
+      # Run Verifier
+      ############################################################
+
+      - name: Run RGA Runtime Verifier
+        id: run_verifier
+        continue-on-error: true
+        run: |
+          set +e
+
+          python tools/runtime_verifier.py \
+            --repo-root . \
+            --mcp-config .vscode/mcp.json \
+            --json-out artifacts/runtime_verifier_report.json \
+            --md-out artifacts/runtime_verifier_report.md \
+            > artifacts/runtime_verifier_stdout.txt \
+            2> artifacts/runtime_verifier_stderr.txt
+
+          verifier_exit_code=$?
+
+          echo "${verifier_exit_code}" > artifacts/runtime_verifier_exit_code.txt
+          echo "verifier_exit_code=${verifier_exit_code}" >> "$GITHUB_OUTPUT"
+
+          echo "RGA Runtime Verifier exited with code: ${verifier_exit_code}"
+
+          if [ -f artifacts/runtime_verifier_stderr.txt ]; then
+            echo ""
+            echo "---- verifier stderr preview ----"
+            head -n 80 artifacts/runtime_verifier_stderr.txt || true
+          fi
+
+          if [ -f artifacts/runtime_verifier_stdout.txt ]; then
+            echo ""
+            echo "---- verifier stdout preview ----"
+            head -n 80 artifacts/runtime_verifier_stdout.txt || true
+          fi
+
+          exit 0
+
+      ############################################################
+      # Artifact Bundle Manifest
+      ############################################################
+
+      - name: Artifact Bundle Manifest
+        if: always()
+        run: |
+          {
+            echo "RGA Runtime Verifier Artifact Bundle"
+            echo ""
+            echo "Generated at:"
+            date -u +"%Y-%m-%dT%H:%M:%SZ"
+            echo ""
+            echo "Verifier exit code:"
+            cat artifacts/runtime_verifier_exit_code.txt || true
+            echo ""
+            echo "Files:"
+            find artifacts -type f | sort
+          } > artifacts/artifact_bundle_manifest.txt
+
+      ############################################################
+      # Create Downloadable Zip Bundle
+      ############################################################
+
+      - name: Create Downloadable Zip Bundle
+        if: always()
+        run: |
+          cd artifacts
+          zip -r ../runtime-verifier-report.zip . || true
+          cd ..
+
+          if [ -f runtime-verifier-report.zip ]; then
+            cp runtime-verifier-report.zip artifacts/runtime-verifier-report.zip
+          fi
+
+      ############################################################
+      # Runtime Verifier Job Summary
+      ############################################################
+
+      - name: Runtime Verifier Job Summary
+        if: always()
+        run: |
+          {
+            echo "## RGA Runtime Verifier"
+            echo ""
+            echo "- Report: \`artifacts/runtime_verifier_report.md\`"
+            echo "- JSON: \`artifacts/runtime_verifier_report.json\`"
+            echo "- Evidence bundle folder: \`artifacts/\`"
+            echo "- Downloadable zip: \`runtime-verifier-report.zip\`"
+            echo ""
+
+            if [ -f artifacts/runtime_verifier_exit_code.txt ]; then
+              echo "- Verifier exit code: \`$(cat artifacts/runtime_verifier_exit_code.txt)\`"
+              echo ""
+            fi
+
+            if [ -f artifacts/runtime_verifier_report.md ]; then
+              echo "### Report Preview"
+              echo ""
+              head -n 120 artifacts/runtime_verifier_report.md
+              echo ""
+            fi
+
+            if [ -f artifacts/runtime_verifier_stderr.txt ]; then
+              echo "### stderr Preview"
+              echo ""
+              echo '```text'
+              head -n 80 artifacts/runtime_verifier_stderr.txt || true
+              echo '```'
+              echo ""
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      ############################################################
+      # Upload Artifact Folder
+      ############################################################
+
+      - name: Upload Runtime Verifier Artifact Folder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-verifier-artifacts
+          path: artifacts/
+          if-no-files-found: warn
+
+      ############################################################
+      # Upload Downloadable Zip Bundle
+      ############################################################
+
+      - name: Upload Runtime Verifier Zip
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-verifier-report-zip
+          path: runtime-verifier-report.zip
+          if-no-files-found: warn
