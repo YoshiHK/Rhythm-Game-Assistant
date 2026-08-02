@@ -6353,10 +6353,336 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("")
 
     #
-    # Governance State
+    # --------------------------------------------------
+    # Layer Boundary Risk
+    # --------------------------------------------------
     #
 
-    lines.append("## Governance State")
+    layer_boundary_risk = governance.get(
+        "layer_boundary_risk",
+        {},
+    )
+
+    if layer_boundary_risk:
+
+        lines.append(
+            "## Layer Boundary Risk"
+        )
+        lines.append("")
+
+        lines.append(
+            f"- Status: "
+            f"`{layer_boundary_risk.get('status')}`"
+        )
+
+        lines.append(
+            f"- Evidence count: "
+            f"`{layer_boundary_risk.get('evidence_count', 0)}`"
+        )
+
+        lines.append(
+            f"- Suspicion count: "
+            f"`{layer_boundary_risk.get('suspicion_count', 0)}`"
+        )
+
+        lines.append(
+            f"- Hint count: "
+            f"`{layer_boundary_risk.get('hint_count', 0)}`"
+        )
+
+        lines.append(
+            f"- Governance blocking: "
+            f"`{layer_boundary_risk.get('governance_blocking', False)}`"
+        )
+
+        lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Governance Policy
+    # --------------------------------------------------
+    #
+
+    policy = governance.get(
+        "policy",
+        {},
+    )
+
+    if policy:
+
+        lines.append(
+            "## Governance Policy"
+        )
+        lines.append("")
+
+        for key, value in sorted(
+            policy.items()
+        ):
+            lines.append(
+                f"- **{key}**: {value}"
+            )
+
+        lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Summary
+    # --------------------------------------------------
+    #
+
+    lines.append("## Summary")
+    lines.append("")
+
+    for key, value in sorted(
+        report.get(
+            "summary",
+            {},
+        ).items()
+    ):
+        lines.append(
+            f"- **{key}**: {value}"
+        )
+
+    lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Severity Summary
+    # --------------------------------------------------
+    #
+
+    lines.append(
+        "## Severity Summary"
+    )
+    lines.append("")
+
+    for key, value in sorted(
+        report.get(
+            "severity_summary",
+            {},
+        ).items()
+    ):
+        lines.append(
+            f"- **{key}**: {value}"
+        )
+
+    lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Artifact Backbone
+    # --------------------------------------------------
+    #
+
+    artifact_databases = report.get(
+        "artifact_databases",
+        {},
+    )
+
+    lines.append(
+        "## Artifact Backbone"
+    )
+    lines.append("")
+
+    lines.append(
+        f"- Required databases: "
+        f"`{len(artifact_databases.get('required', []))}`"
+    )
+
+    lines.append(
+        f"- Relationship chain entries: "
+        f"`{len(artifact_databases.get('relationship_chain', []))}`"
+    )
+
+    record_counts = (
+        artifact_databases.get(
+            "record_counts",
+            {},
+        )
+    )
+
+    total_records = sum(
+        value
+        for value in record_counts.values()
+        if isinstance(
+            value,
+            (int, float),
+        )
+    )
+
+    lines.append(
+        f"- Total records: "
+        f"`{total_records}`"
+    )
+
+    lines.append("")
+
+    lines.append("```json")
+
+    lines.append(
+        json.dumps(
+            artifact_databases,
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+    lines.append("```")
+    lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Repository Discovery
+    # --------------------------------------------------
+    #
+
+    lines.append(
+        "## Repository Discovery"
+    )
+    lines.append("")
+
+    lines.append(
+        f"- Backend candidates: "
+        f"`{len(report.get('backend_root_candidates', []))}`"
+    )
+
+    lines.append(
+        f"- File groups discovered: "
+        f"`{len(report.get('discovered_files', {}))}`"
+    )
+
+    lines.append(
+        f"- Package groups discovered: "
+        f"`{len(report.get('discovered_packages', {}))}`"
+    )
+
+    lines.append("")
+
+    lines.append(
+        "### Backend Candidates"
+    )
+    lines.append("")
+    lines.append("```json")
+
+    lines.append(
+        json.dumps(
+            report.get(
+                "backend_root_candidates",
+                [],
+            ),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+    lines.append("```")
+    lines.append("")
+
+    lines.append(
+        "### Discovered Files"
+    )
+    lines.append("")
+    lines.append("```json")
+
+    lines.append(
+        json.dumps(
+            report.get(
+                "discovered_files",
+                {},
+            ),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+    lines.append("```")
+    lines.append("")
+
+    lines.append(
+        "### Discovered Packages"
+    )
+    lines.append("")
+    lines.append("```json")
+
+    lines.append(
+        json.dumps(
+            report.get(
+                "discovered_packages",
+                {},
+            ),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+    lines.append("```")
+    lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Asset Discovery
+    # --------------------------------------------------
+    #
+
+    discovered_assets = report.get(
+        "discovered_assets",
+        {},
+    )
+
+    lines.append(
+        "## Asset Discovery"
+    )
+    lines.append("")
+
+    excluded_by_reason = (
+        discovered_assets.get(
+            "excluded_by_reason",
+            {},
+        )
+    )
+
+    if excluded_by_reason:
+
+        lines.append(
+            "### Excluded Asset Candidates"
+        )
+        lines.append("")
+
+        for reason, count in sorted(
+            excluded_by_reason.items()
+        ):
+            lines.append(
+                f"- **{reason}**: {count}"
+            )
+
+        lines.append("")
+
+    lines.append("```json")
+
+    lines.append(
+        json.dumps(
+            discovered_assets,
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+    lines.append("```")
+    lines.append("")
+
+    #
+    # --------------------------------------------------
+    # Governance State Snapshot
+    #
+    # Full raw governance JSON.
+    # Keep this after summaries so the report remains
+    # human-readable first and evidence-rich second.
+    # --------------------------------------------------
+    #
+
+    lines.append(
+        "## Governance State Snapshot"
+    )
     lines.append("")
 
     lines.append("```json")
@@ -6372,74 +6698,15 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("```")
     lines.append("")
 
-    lines.append("## Summary")
-    for key, value in sorted(report.get("summary", {}).items()):
-        lines.append(f"- **{key}**: {value}")
-    lines.append("")
+    #
+    # --------------------------------------------------
+    # Detailed Results
+    # --------------------------------------------------
+    #
 
-    lines.append("## Severity Summary")
-    for key, value in sorted(report.get("severity_summary", {}).items()):
-        lines.append(f"- **{key}**: {value}")
-    lines.append("")
-
-    lines.append("## Backend Candidates")
-    lines.append("```json")
     lines.append(
-        json.dumps(
-            report.get("backend_root_candidates", []),
-            indent=2,
-            ensure_ascii=False,
-        )
+        "## Detailed Results"
     )
-    lines.append("```")
-    lines.append("")
-
-    lines.append("## Artifact Databases")
-    lines.append("```json")
-    lines.append(
-        json.dumps(
-            report.get("artifact_databases", {}),
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-    lines.append("```")
-    lines.append("")
-
-    lines.append("## Discovered Files")
-    lines.append("```json")
-    lines.append(
-        json.dumps(
-            report.get("discovered_files", {}),
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-    lines.append("```")
-    lines.append("")
-
-    lines.append("## Discovered Packages")
-    lines.append("```json")
-    lines.append(
-        json.dumps(
-            report.get("discovered_packages", {}),
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-    lines.append("```")
-    lines.append("")
-
-    lines.append("## Discovered Assets")
-    lines.append("```json")
-    lines.append(
-        json.dumps(
-            report.get("discovered_assets", {}),
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-    lines.append("```")
     lines.append("")
 
     lines.append("## Results")
