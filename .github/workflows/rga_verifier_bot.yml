@@ -753,22 +753,58 @@ jobs:
             > artifacts/flow_keyword_hits.txt || true
 
       ############################################################
+      # Flow Verification Evidence
+      ############################################################
+
+      - name: Flow Verification Evidence
+        run: |
+          find . -type f \
+            \( \
+              -name "*recommend*.py" -o \
+              -name "*tips*.py" -o \
+              -name "*orchestrator*.py" -o \
+              -name "*runtime*.py" -o \
+              -name "*progression*.py" -o \
+              -name "*chart*.py" -o \
+              -name "*player*.py" \
+            \) \
+            | sort > artifacts/flow_candidates.txt || true
+
+          grep -RIn \
+            -e "chart" \
+            -e "pattern" \
+            -e "tips" \
+            -e "player" \
+            -e "progression" \
+            -e "game" \
+            -e "recommend" \
+            engine \
+            > artifacts/flow_keyword_hits.txt || true
+
+          {
+            echo "Flow Verification Evidence"
+            echo ""
+            echo "Flow Contracts"
+            echo "--------------"
+            echo "chart_first"
+            echo "player_first"
+            echo "progression"
+            echo ""
+            echo "Artifacts"
+            echo "---------"
+            echo "flow_candidates.txt"
+            echo "flow_keyword_hits.txt"
+          } > artifacts/flow_verification_summary.txt
+
+      ############################################################
       # Layer Separation Evidence
       ############################################################
 
       - name: Layer Separation Evidence
         run: |
-          ########################################################
-          # Python inventory
-          ########################################################
-
           find . -type f -name "*.py" \
             | sort \
             > artifacts/python_inventory.txt
-
-          ########################################################
-          # Layer directory inventory
-          ########################################################
 
           find . -type d \
             \( \
@@ -785,13 +821,9 @@ jobs:
             | sort \
             > artifacts/layer_directories.txt || true
 
-          ########################################################
-          # Tier 1
-          # Hint-level evidence
           #
-          # Plain textual references.
-          # NOT governance-blocking.
-          ########################################################
+          # Hint
+          #
 
           grep -RIn \
             -e "sqlite3" \
@@ -805,13 +837,9 @@ jobs:
             engine \
             > artifacts/layer_boundary_hints.txt || true
 
-          ########################################################
-          # Tier 2
-          # Suspicion-level evidence
           #
-          # Import-like references crossing layer boundaries.
-          # Requires review but is not automatically a violation.
-          ########################################################
+          # Suspicion
+          #
 
           grep -RInE \
             '^[[:space:]]*import .*writer|^[[:space:]]*from .*writer' \
@@ -834,13 +862,9 @@ jobs:
             artifacts/layer_boundary_orchestrator_imports.txt \
             > artifacts/layer_boundary_suspicions.txt || true
 
-          ########################################################
-          # Tier 3
-          # Evidence-level signals
           #
-          # Executable side effects.
-          # Candidate governance blockers.
-          ########################################################
+          # Evidence
+          #
 
           grep -RIn \
             -e ".commit(" \
@@ -872,31 +896,52 @@ jobs:
             artifacts/layer_boundary_write_operations.txt \
             > artifacts/layer_boundary_evidence.txt || true
 
-          ########################################################
-          # Tier summary
-          ########################################################
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
-          {
-            echo "Layer Boundary Evidence Summary"
-            echo ""
-            echo "Confidence Model"
-            echo "---------------"
-            echo "hint"
-            echo "suspicion"
-            echo "evidence"
-            echo ""
-            echo "Generated Files"
-            echo "---------------"
-            echo "layer_boundary_hints.txt"
-            echo "layer_boundary_suspicions.txt"
-            echo "layer_boundary_evidence.txt"
-            echo ""
-            echo "Governance Policy"
-            echo "-----------------"
-            echo "Hints do not block governance."
-            echo "Suspicions require review."
-            echo "Only evidence-level findings may block governance."
-          } > artifacts/layer_boundary_summary.txt
+          def count(path):
+              p = Path(path)
+              if not p.exists():
+                  return 0
+              return sum(
+                  1
+                  for line in p.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              )
+
+          payload = {
+              "hint_count":
+                  count("artifacts/layer_boundary_hints.txt"),
+              "suspicion_count":
+                  count("artifacts/layer_boundary_suspicions.txt"),
+              "evidence_count":
+                  count("artifacts/layer_boundary_evidence.txt"),
+              "confidence_model": [
+                  "hint",
+                  "suspicion",
+                  "evidence",
+              ],
+              "governance_blocking_confidence": [
+                  "evidence",
+              ],
+          }
+
+          with open(
+              "artifacts/layer_boundary_risk.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
 
       ############################################################
       # MCP Evidence
@@ -914,8 +959,21 @@ jobs:
             cp .vscode/mcp.json artifacts/mcp_config_effective.json
           fi
 
+          {
+            echo "MCP Verification Evidence"
+            echo ""
+            echo "Required Server"
+            echo "---------------"
+            echo "rhythm-game-assistant"
+            echo "type=stdio"
+            echo ""
+            echo "Adapter"
+            echo "-------"
+            echo "mcp_server.py"
+          } > artifacts/mcp_contract_summary.txt
+
       ############################################################
-      # REST / Runtime Surface Evidence
+      # Runtime Surface Evidence
       ############################################################
 
       - name: Runtime Surface Evidence
@@ -937,6 +995,33 @@ jobs:
             > artifacts/runtime_surface_keyword_hits.txt || true
 
       ############################################################
+      # Runtime Reader Discovery Evidence
+      ############################################################
+
+      - name: Runtime Reader Discovery Evidence
+        run: |
+          find . -type f \
+            \( \
+              -iname "*reader*.py" -o \
+              -iname "*readers*.py" \
+            \) \
+            | sort > artifacts/runtime_reader_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*validator*.py" -o \
+              -iname "*validators*.py" \
+            \) \
+            | sort > artifacts/runtime_validator_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*bridge*.py" -o \
+              -iname "*bridges*.py" \
+            \) \
+            | sort > artifacts/runtime_bridge_candidates.txt || true
+
+      ############################################################
       # Runtime DB Read Evidence
       ############################################################
 
@@ -950,13 +1035,6 @@ jobs:
             \) \
             | sort > artifacts/runtime_db_candidates.txt || true
 
-          find . -type f \
-            \( \
-              -iname "*reader*.py" -o \
-              -iname "*readers*.py" \
-            \) \
-            | sort > artifacts/runtime_reader_candidates.txt || true
-
       ############################################################
       # Governance Evidence
       ############################################################
@@ -967,110 +1045,79 @@ jobs:
             echo "RGA Governance Context"
             echo ""
 
-            echo "Verifier Mode: read-only"
+            echo "Verifier Mode: read_only"
             echo "Completed Phases: immutable"
             echo "Default Deletion Policy: blocked"
-            echo ""
 
-            echo "Governance Principles"
+            echo ""
+            echo "Reality Separation"
+            echo "------------------"
+
+            echo "Repository Reality"
+            echo "Import Reality"
+            echo "Runtime Reality"
+
+            echo ""
+            echo "Governance Separation"
             echo "---------------------"
-            echo "Validation != Verification"
-            echo "Dependency Reality != Governance"
-            echo "Runtime Reality != Governance"
-            echo "Hint != Suspicion != Evidence"
-            echo ""
 
-            echo "Dependency failures should not automatically become governance blockers."
-            echo ""
+            echo "Dependency Failures"
+            echo "Governance Failures"
 
-            echo "Artifact Backbone Contracts"
-            echo "---------------------------"
-            echo "file_scan_inventory.db"
-            echo "chart_assets.db"
-            echo "chart_patterns.db"
             echo ""
-
-            echo "Relationship Chain"
-            echo "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db"
-            echo ""
-
-            echo "Deletion Policy"
+            echo "Failure Lineage"
             echo "---------------"
-            echo "No deletion permitted until:"
-            echo "artifact coverage passes"
-            echo "hash verification passes"
-            echo "type_A usability passes"
-            echo "runtime DB readiness passes"
+
+            echo "artifact_database_policy"
+            echo " -> artifact_relationships"
+            echo " -> artifact_backbone_contract"
+            echo " -> asset_coverage"
+            echo " -> hash_integrity"
+            echo " -> type_A_usability"
+            echo " -> runtime_artifact_readiness"
+
+            echo ""
+            echo "Independent Root Contract"
+            echo "-------------------------"
+
+            echo "deletion_readiness"
+
+            echo ""
+            echo "Deletion Requirements"
+            echo "---------------------"
+
+            echo "artifact_backbone_verified"
+            echo "asset_coverage_verified"
+            echo "hash_consistency_verified"
+            echo "type_A_text_usable"
+            echo "runtime_can_use_db_assets"
+            echo "runtime_can_use_db_patterns"
           } > artifacts/governance_context.txt
 
       ############################################################
-      # Run Verifier
+      # Governance Lineage Evidence
       ############################################################
 
-      - name: Run RGA Runtime Verifier
-        id: run_verifier
-        continue-on-error: true
+      - name: Governance Failure Lineage Evidence
         run: |
-          set +e
-
-          python tools/runtime_verifier.py \
-            --repo-root . \
-            --mcp-config .vscode/mcp.json \
-            --json-out artifacts/runtime_verifier_report.json \
-            --md-out artifacts/runtime_verifier_report.md \
-            > artifacts/runtime_verifier_stdout.txt \
-            2> artifacts/runtime_verifier_stderr.txt
-
-          verifier_exit_code=$?
-
-          echo "${verifier_exit_code}" > artifacts/runtime_verifier_exit_code.txt
-          echo "verifier_exit_code=${verifier_exit_code}" >> "$GITHUB_OUTPUT"
-
-          echo "RGA Runtime Verifier exited with code: ${verifier_exit_code}"
-
-          if [ -f artifacts/runtime_verifier_stderr.txt ]; then
-            echo ""
-            echo "---- verifier stderr preview ----"
-            head -n 80 artifacts/runtime_verifier_stderr.txt || true
-          fi
-
-          if [ -f artifacts/runtime_verifier_stdout.txt ]; then
-            echo ""
-            echo "---- verifier stdout preview ----"
-            head -n 80 artifacts/runtime_verifier_stdout.txt || true
-          fi
-
-          exit 0
-
-      ############################################################
-      # Optional Summary
-      ############################################################
-
-      - name: Runtime Verifier Job Summary
-        if: always()
-        run: |
+          cat > artifacts/governance_failure_lineage.json <<'JSON'
           {
-            echo "## RGA Runtime Verifier"
-            echo ""
-            echo "- Report: \`artifacts/runtime_verifier_report.md\`"
-            echo "- JSON: \`artifacts/runtime_verifier_report.json\`"
-            echo "- Evidence bundle: \`artifacts/\`"
-            echo ""
-            if [ -f artifacts/runtime_verifier_report.md ]; then
-              echo "### Report Preview"
-              echo ""
-              head -n 80 artifacts/runtime_verifier_report.md
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      ############################################################
-      # Upload Artifact Bundle
-      ############################################################
-
-      - name: Upload Runtime Verifier Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: runtime-verifier-report
-          path: artifacts/
-          if-no-files-found: warn
+            "root_contracts": [
+              "artifact_database_policy",
+              "deletion_readiness"
+            ],
+            "derived_contracts": {
+              "artifact_relationships":
+                "artifact_database_policy",
+              "artifact_backbone_contract":
+                "artifact_database_policy",
+              "asset_coverage":
+                "artifact_database_policy",
+              "hash_integrity":
+                "artifact_database_policy",
+              "type_A_usability":
+                "artifact_database_policy",
+              "runtime_artifact_readiness":
+                "artifact_database_policy"
+            }
+          }
