@@ -32,6 +32,38 @@ jobs:
           mkdir -p artifacts
 
       ############################################################
+      # Evidence Taxonomy
+      ############################################################
+
+      - name: Evidence Taxonomy
+        run: |
+          cat > artifacts/evidence_taxonomy.json <<'JSON'
+          {
+            "v": "1.0",
+            "classification": {
+              "repository_reality": {
+                "governance_blocking": true
+              },
+              "dependency_reality": {
+                "governance_blocking": false
+              },
+              "runtime_reality": {
+                "governance_blocking": false
+              },
+              "artifact_backbone": {
+                "governance_blocking": true
+              },
+              "layer_boundary": {
+                "confidence_model": [
+                  "hint",
+                  "suspicion",
+                  "evidence"
+                ]
+              }
+            }
+          }
+
+      ############################################################
       # Repository Discovery Evidence
       ############################################################
 
@@ -255,6 +287,56 @@ jobs:
           PY
 
       ############################################################
+      # Import Reality Evidence
+      ############################################################
+
+      - name: Import Reality Evidence
+        run: |
+          python - <<'PY'
+          import importlib
+          import json
+
+          modules = [
+              "rhythm_ingestion",
+              "rhythm_ingestion.api",
+              "rhythm_ingestion.api.recommend",
+          ]
+
+          results = {}
+
+          for module_name in modules:
+              try:
+                  module = importlib.import_module(module_name)
+
+                  results[module_name] = {
+                      "status": "pass",
+                      "file": getattr(
+                          module,
+                          "__file__",
+                          None,
+                      ),
+                  }
+
+              except Exception as exc:
+                  results[module_name] = {
+                      "status": "fail",
+                      "error": str(exc),
+                  }
+
+          with open(
+              "artifacts/import_reality_probe.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  results,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+      ############################################################
       # Artifact Inventory Evidence
       ############################################################
 
@@ -283,6 +365,32 @@ jobs:
               -name "*.webloc" \
             \) \
             | sort > artifacts/type_b_candidates.txt || true
+
+      ############################################################
+      # Asset Classification Evidence
+      ############################################################
+
+      - name: Asset Classification Evidence
+        run: |
+          find . -type f -name "*.json" \
+            | sort \
+            > artifacts/json_inventory.txt
+
+          grep "/translations/" \
+            artifacts/json_inventory.txt \
+            > artifacts/localization_json.txt || true
+
+          grep "/schemas/" \
+            artifacts/json_inventory.txt \
+            > artifacts/schema_json.txt || true
+
+          grep "/fixtures/" \
+            artifacts/json_inventory.txt \
+            > artifacts/fixture_json.txt || true
+
+          grep "/registry/" \
+            artifacts/json_inventory.txt \
+            > artifacts/registry_json.txt || true
 
       ############################################################
       # Asset Scope Evidence
@@ -382,8 +490,17 @@ jobs:
 
       - name: Layer Separation Evidence
         run: |
+          ########################################################
+          # Python inventory
+          ########################################################
+
           find . -type f -name "*.py" \
-            | sort > artifacts/python_inventory.txt
+            | sort \
+            > artifacts/python_inventory.txt
+
+          ########################################################
+          # Layer directory inventory
+          ########################################################
 
           find . -type d \
             \( \
@@ -397,16 +514,121 @@ jobs:
               -iname "*bridge*" -o \
               -iname "*orchestrator*" \
             \) \
-            | sort > artifacts/layer_directories.txt || true
+            | sort \
+            > artifacts/layer_directories.txt || true
+
+          ########################################################
+          # Tier 1
+          # Hint-level evidence
+          #
+          # Plain textual references.
+          # NOT governance-blocking.
+          ########################################################
 
           grep -RIn \
             -e "sqlite3" \
             -e ".writers" \
+            -e ".writer" \
             -e ".persistence" \
             -e ".orchestrator" \
             -e ".orchestrators" \
+            -e "recommendation_logic" \
+            -e "runtime_mutation" \
             engine \
-            > artifacts/layer_boundary_import_hints.txt || true
+            > artifacts/layer_boundary_hints.txt || true
+
+          ########################################################
+          # Tier 2
+          # Suspicion-level evidence
+          #
+          # Import-like references crossing layer boundaries.
+          # Requires review but is not automatically a violation.
+          ########################################################
+
+          grep -RInE \
+            '^[[:space:]]*import .*writer|^[[:space:]]*from .*writer' \
+            engine \
+            > artifacts/layer_boundary_writer_imports.txt || true
+
+          grep -RInE \
+            '^[[:space:]]*import .*persistence|^[[:space:]]*from .*persistence' \
+            engine \
+            > artifacts/layer_boundary_persistence_imports.txt || true
+
+          grep -RInE \
+            '^[[:space:]]*import .*orchestrator|^[[:space:]]*from .*orchestrator' \
+            engine \
+            > artifacts/layer_boundary_orchestrator_imports.txt || true
+
+          cat \
+            artifacts/layer_boundary_writer_imports.txt \
+            artifacts/layer_boundary_persistence_imports.txt \
+            artifacts/layer_boundary_orchestrator_imports.txt \
+            > artifacts/layer_boundary_suspicions.txt || true
+
+          ########################################################
+          # Tier 3
+          # Evidence-level signals
+          #
+          # Executable side effects.
+          # Candidate governance blockers.
+          ########################################################
+
+          grep -RIn \
+            -e ".commit(" \
+            -e ".execute(" \
+            -e ".executemany(" \
+            engine \
+            > artifacts/layer_boundary_db_operations.txt || true
+
+          grep -RIn \
+            -e "INSERT INTO" \
+            -e "UPDATE " \
+            -e "DELETE FROM" \
+            -e "CREATE TABLE" \
+            -e "DROP TABLE" \
+            -e "ALTER TABLE" \
+            engine \
+            > artifacts/layer_boundary_sql_statements.txt || true
+
+          grep -RIn \
+            -e ".persist(" \
+            -e ".save(" \
+            -e ".write(" \
+            engine \
+            > artifacts/layer_boundary_write_operations.txt || true
+
+          cat \
+            artifacts/layer_boundary_db_operations.txt \
+            artifacts/layer_boundary_sql_statements.txt \
+            artifacts/layer_boundary_write_operations.txt \
+            > artifacts/layer_boundary_evidence.txt || true
+
+          ########################################################
+          # Tier summary
+          ########################################################
+
+          {
+            echo "Layer Boundary Evidence Summary"
+            echo ""
+            echo "Confidence Model"
+            echo "---------------"
+            echo "hint"
+            echo "suspicion"
+            echo "evidence"
+            echo ""
+            echo "Generated Files"
+            echo "---------------"
+            echo "layer_boundary_hints.txt"
+            echo "layer_boundary_suspicions.txt"
+            echo "layer_boundary_evidence.txt"
+            echo ""
+            echo "Governance Policy"
+            echo "-----------------"
+            echo "Hints do not block governance."
+            echo "Suspicions require review."
+            echo "Only evidence-level findings may block governance."
+          } > artifacts/layer_boundary_summary.txt
 
       ############################################################
       # MCP Evidence
@@ -474,16 +696,43 @@ jobs:
       - name: Governance Evidence
         run: |
           {
-            echo "RGA Verifier Governance Evidence"
+            echo "RGA Governance Context"
             echo ""
-            echo "Security gate source: github-advanced-security"
-            echo "Architecture gate source: rga-verifier-bot"
+
+            echo "Verifier Mode: read-only"
+            echo "Completed Phases: immutable"
+            echo "Default Deletion Policy: blocked"
             echo ""
-            echo "Verifier expected mode: read-only"
-            echo "Deletion default: blocked unless verifier passes"
+
+            echo "Governance Principles"
+            echo "---------------------"
+            echo "Validation != Verification"
+            echo "Dependency Reality != Governance"
+            echo "Runtime Reality != Governance"
+            echo "Hint != Suspicion != Evidence"
             echo ""
-            echo "Completed phase rule:"
-            echo "Do not modify Phase 1-7; only wiring/extensions/tooling are allowed."
+
+            echo "Dependency failures should not automatically become governance blockers."
+            echo ""
+
+            echo "Artifact Backbone Contracts"
+            echo "---------------------------"
+            echo "file_scan_inventory.db"
+            echo "chart_assets.db"
+            echo "chart_patterns.db"
+            echo ""
+
+            echo "Relationship Chain"
+            echo "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db"
+            echo ""
+
+            echo "Deletion Policy"
+            echo "---------------"
+            echo "No deletion permitted until:"
+            echo "artifact coverage passes"
+            echo "hash verification passes"
+            echo "type_A usability passes"
+            echo "runtime DB readiness passes"
           } > artifacts/governance_context.txt
 
       ############################################################
