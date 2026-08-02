@@ -5316,6 +5316,12 @@ class RuntimeVerifier:
 
         self.governance_state.update(
             {
+                #
+                # --------------------------------------------------
+                # Top-Level Governance Verdicts
+                # --------------------------------------------------
+                #
+
                 "architecture_verdict":
                     architecture_verdict,
 
@@ -5340,49 +5346,144 @@ class RuntimeVerifier:
                 "governance_verdict":
                     governance_verdict,
 
+                #
+                # --------------------------------------------------
+                # Failure Inventories
+                # --------------------------------------------------
+                #
+
                 "dependency_failures":
                     dependency_failures,
 
                 "governance_failures":
                     governance_failures,
-                    
+
                 "root_failures":
                     root_failures,
 
                 "derived_failures":
                     derived_failures,
 
+                #
+                # --------------------------------------------------
+                # Failure Counts
+                # --------------------------------------------------
+                #
+
                 "dependency_fail_count":
                     dependency_fail_count,
 
                 "governance_fail_count":
                     governance_fail_count,
-                    
+
                 "root_failure_count":
                     root_failure_count,
-                 
+
                 "derived_failure_count":
                     derived_failure_count,
+
+                #
+                # --------------------------------------------------
+                # Root Cause Summary
+                #
+                # Used by:
+                #   Auditor
+                #   Advisor
+                #   Maintenance Planner
+                # --------------------------------------------------
+                #
+
+                "root_cause_summary": {
+                    "primary_root_contracts": [
+                        item.get("contract_type")
+                        for item in root_failures
+                    ],
+
+                    "derived_contracts": [
+                        item.get("contract_type")
+                        for item in derived_failures
+                    ],
+
+                    "derived_dependency_map": {
+                        item.get("contract_type"):
+                            item.get("dependency_of")
+                        for item in derived_failures
+                    },
+
+                    "recommendation": (
+                        "Resolve root failures first, then re-run all derived verification contracts."
+                    ),
+                },
+
+                #
+                # --------------------------------------------------
+                # Failure Lineage Policy
+                # --------------------------------------------------
+                #
+
+                "lineage": {
+                    "root_failure_contract_types":
+                        sorted(
+                            ROOT_FAILURE_CONTRACT_TYPES
+                        ),
+
+                    "derived_failure_policy":
+                        DERIVED_FAILURE_POLICY,
+
+                    "governance_meta_contract_types":
+                        sorted(
+                            GOVERNANCE_META_CONTRACT_TYPES
+                        ),
+
+                    "lineage_principle": (
+                        "Root failures are independently actionable blockers. "
+                        "Derived failures are downstream consequences and "
+                        "should be re-evaluated after root resolution."
+                    ),
+                },
+
+                #
+                # --------------------------------------------------
+                # Governance Accounting
+                # --------------------------------------------------
+                #
 
                 "blocking_reasons":
                     blocking_reasons,
 
                 "warnings":
                     warnings,
-                    
-                "root_cause_summary": {
-                    "primary_root_contracts": [
-                        item.get("contract_type")
-                        for item in root_failures
-                    ],
-                    "derived_contracts": [
-                        item.get("contract_type")
-                        for item in derived_failures
-                    ],
-                    "derived_dependency_map": {
-                        item.get("contract_type"): item.get("dependency_of")
-                        for item in derived_failures
-                    },
+
+                #
+                # --------------------------------------------------
+                # Governance Policy
+                # --------------------------------------------------
+                #
+
+                "policy": {
+                    "default_deletion":
+                        "blocked",
+
+                    "completed_phases":
+                        "immutable",
+
+                    "verifier_mode":
+                        "read_only",
+
+                    "dependency_failures_are_not_governance_failures":
+                        True,
+
+                    "root_failures_should_be_resolved_first":
+                        True,
+
+                    "derived_failures_should_be_revalidated_after_root_resolution":
+                        True,
+
+                    "false_positive_isolation":
+                        True,
+
+                    "maintenance_mode":
+                        "advisor_only",
                 },
             }
         )
