@@ -385,6 +385,123 @@ GOVERNANCE_VERDICTS = [
 ]
 
 # -----------------------------------------------------------------------------
+# Governance failure lineage policy
+# -----------------------------------------------------------------------------
+#
+# Purpose
+# -------
+#
+# Governance failures are not all equal.
+#
+# Some failures represent independently actionable root causes.
+#
+# Other failures are expected downstream consequences of a root
+# contract failure and should be rendered as derived failures.
+#
+# Example:
+#
+#     artifact_database_policy
+#         ↓
+#     artifact_relationships
+#         ↓
+#     artifact_backbone_contract
+#         ↓
+#     asset_coverage
+#         ↓
+#     hash_integrity
+#         ↓
+#     type_A_usability
+#         ↓
+#     runtime_artifact_readiness
+#
+# In this case:
+#
+#     artifact_database_policy
+#
+# is the root failure.
+#
+# All downstream failures should be rendered as derived failures.
+#
+# -----------------------------------------------------------------------------
+
+#
+# Contracts that should always be treated as
+# independently actionable governance blockers.
+#
+ROOT_FAILURE_CONTRACT_TYPES: Set[str] = {
+
+    #
+    # Artifact backbone root contract.
+    #
+    "artifact_database_policy",
+
+    #
+    # Governance deletion gate.
+    #
+    # Even if its status depends on upstream failures,
+    # deletion_readiness remains an independently visible
+    # governance blocker because source file deletion
+    # must remain prohibited until all required contracts pass.
+    #
+    "deletion_readiness",
+}
+
+
+#
+# Contracts whose failures are normally consequences
+# of another root contract failure.
+#
+DERIVED_FAILURE_POLICY: Dict[str, str] = {
+
+    #
+    # Artifact backbone cascade.
+    #
+    # Missing or unreadable artifact databases
+    # naturally prevent all downstream artifact validation
+    # and verification contracts from succeeding.
+    #
+
+    "artifact_relationships":
+        "artifact_database_policy",
+
+    "artifact_backbone_contract":
+        "artifact_database_policy",
+
+    "asset_coverage":
+        "artifact_database_policy",
+
+    "hash_integrity":
+        "artifact_database_policy",
+
+    "type_A_usability":
+        "artifact_database_policy",
+
+    "runtime_artifact_readiness":
+        "artifact_database_policy",
+}
+
+
+#
+# Governance meta-results.
+#
+# These are verdicts, not causes.
+#
+# They should never be counted as root failures.
+#
+GOVERNANCE_META_CONTRACT_TYPES: Set[str] = {
+
+    "governance_verdict",
+
+    #
+    # Potential future additions:
+    #
+    # "architecture_verdict",
+    # "runtime_verdict",
+    # "artifact_backbone_verdict",
+    #
+}
+
+# -----------------------------------------------------------------------------
 # Flow / layer separation constants
 # -----------------------------------------------------------------------------
 
@@ -1011,6 +1128,69 @@ def governance_candidate_score(
     ) * 25
 
     return score
+    
+def classify_governance_failure_lineage(
+    self,
+    *,
+    governance_failures: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+
+    root_failures: List[Dict[str, Any]] = []
+    derived_failures: List[Dict[str, Any]] = []
+
+    failed_contract_types: Set[str] = {
+        item.get("contract_type")
+        for item in governance_failures
+        if item.get("contract_type")
+    }
+
+    for item in governance_failures:
+        contract_type = item.get(
+            "contract_type",
+        )
+
+        if contract_type in GOVERNANCE_META_CONTRACT_TYPES:
+            continue
+
+        dependency_of = DERIVED_FAILURE_POLICY.get(
+            contract_type,
+        )
+
+        #
+        # If a contract is known to be derived, only render it as
+        # derived when the upstream root failure is also present.
+        #
+        # If the upstream root is not currently failing, keep it as
+        # a root failure so an independent issue is not hidden.
+        #
+        if (
+            dependency_of
+            and dependency_of in failed_contract_types
+        ):
+            derived_item = dict(item)
+            derived_item["failure_class"] = "derived"
+            derived_item["dependency_of"] = dependency_of
+
+            derived_failures.append(
+                derived_item,
+            )
+            continue
+
+        root_item = dict(item)
+        root_item["failure_class"] = "root"
+
+        if dependency_of:
+            root_item["expected_dependency_of"] = dependency_of
+            root_item["lineage_note"] = (
+                "This contract is usually derived, but its upstream "
+                "root contract was not present in the current failure set."
+            )
+
+        root_failures.append(
+            root_item,
+        )
+
+    return root_failures, derived_failures
 
 # -----------------------------------------------------------------------------
 # Verifier
@@ -4896,12 +5076,26 @@ class RuntimeVerifier:
             else:
                 governance_failures.append(item)
 
+        root_failures, derived_failures = (
+            self.classify_governance_failure_lineage(
+                governance_failures=governance_failures,
+            )
+        )
+
         dependency_fail_count = len(
             dependency_failures
         )
 
         governance_fail_count = len(
             governance_failures
+        )
+
+        root_failure_count = len(
+            root_failures
+        )
+
+        derived_failure_count = len(
+            derived_failures
         )
 
         #
@@ -5163,12 +5357,33 @@ class RuntimeVerifier:
 
                 "governance_fail_count":
                     governance_fail_count,
+                    
+                "root_failure_count":
+                    root_failure_count,
+                 
+                "derived_failure_count":
+                    derived_failure_count,
 
                 "blocking_reasons":
                     blocking_reasons,
 
                 "warnings":
                     warnings,
+                    
+                "root_cause_summary": {
+                    "primary_root_contracts": [
+                        item.get("contract_type")
+                        for item in root_failures
+                    ],
+                    "derived_contracts": [
+                        item.get("contract_type")
+                        for item in derived_failures
+                    ],
+                    "derived_dependency_map": {
+                        item.get("contract_type"): item.get("dependency_of")
+                        for item in derived_failures
+                    },
+                },
             }
         )
 
@@ -5194,6 +5409,12 @@ class RuntimeVerifier:
                 )
             ),
             evidence={
+                #
+                # --------------------------------------------------
+                # Top-level verdicts
+                # --------------------------------------------------
+                #
+
                 "governance_verdict":
                     governance_verdict,
 
@@ -5217,18 +5438,30 @@ class RuntimeVerifier:
 
                 "deletion_verdict":
                     deletion_verdict,
-                    
+
+                #
+                # --------------------------------------------------
+                # Failure classes
+                # --------------------------------------------------
+                #
+
                 "dependency_failures":
                     dependency_failures,
 
                 "governance_failures":
                     governance_failures,
-                    
+
                 "root_failures":
                     root_failures,
 
                 "derived_failures":
                     derived_failures,
+
+                #
+                # --------------------------------------------------
+                # Failure counts
+                # --------------------------------------------------
+                #
 
                 "dependency_fail_count":
                     dependency_fail_count,
@@ -5236,11 +5469,80 @@ class RuntimeVerifier:
                 "governance_fail_count":
                     governance_fail_count,
 
+                "root_failure_count":
+                    root_failure_count,
+
+                "derived_failure_count":
+                    derived_failure_count,
+
+                #
+                # --------------------------------------------------
+                # Compact root-cause summary
+                #
+                # This is intended for downstream Advisor /
+                # Maintenance Planner bots.
+                # --------------------------------------------------
+                #
+
+                "root_cause_summary": {
+                    "primary_root_contracts": [
+                        item.get("contract_type")
+                        for item in root_failures
+                    ],
+
+                    "derived_contracts": [
+                        item.get("contract_type")
+                        for item in derived_failures
+                    ],
+
+                    "derived_dependency_map": {
+                        item.get("contract_type"):
+                            item.get("dependency_of")
+                        for item in derived_failures
+                    },
+                },
+
+                #
+                # --------------------------------------------------
+                # Governance accounting
+                # --------------------------------------------------
+                #
+
                 "blocking_reasons":
                     blocking_reasons,
 
                 "warnings":
                     warnings,
+
+                #
+                # --------------------------------------------------
+                # Root / derived lineage policy
+                # --------------------------------------------------
+                #
+
+                "lineage_policy": {
+                    "root_failure_contract_types":
+                        sorted(ROOT_FAILURE_CONTRACT_TYPES),
+
+                    "derived_failure_policy":
+                        DERIVED_FAILURE_POLICY,
+
+                    "governance_meta_contract_types":
+                        sorted(GOVERNANCE_META_CONTRACT_TYPES),
+
+                    "classification_note": (
+                        "Root failures represent independently actionable "
+                        "governance blockers. Derived failures are downstream "
+                        "consequences of an upstream root contract failure and "
+                        "should be re-evaluated after the root contract passes."
+                    ),
+                },
+
+                #
+                # --------------------------------------------------
+                # Governance policy
+                # --------------------------------------------------
+                #
 
                 "policy": {
                     "default_deletion":
@@ -5254,15 +5556,22 @@ class RuntimeVerifier:
 
                     "dependency_failures_are_not_governance_failures":
                         True,
+
+                    "root_failures_should_be_resolved_first":
+                        True,
+
+                    "derived_failures_should_not_be_counted_as_independent_root_causes":
+                        True,
                 },
             },
             suggested_fix=(
                 None
                 if governance_verdict == "ready"
                 else (
-                    "Resolve governance blockers first. "
-                    "Dependency failures should be handled separately "
-                    "from architecture governance violations."
+                    "Resolve root governance blockers first. "
+                    "Derived failures should be re-evaluated after their "
+                    "upstream root contracts pass. Dependency failures should "
+                    "remain separated from architecture governance violations."
                 )
             ),
             governance_domain="governance",
@@ -5358,7 +5667,17 @@ class RuntimeVerifier:
 
 def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines: List[str] = []
-    
+
+    lines.append("# RGA Runtime Verifier Report")
+    lines.append("")
+    lines.append(f"Schema: `{report.get('schema')}`")
+    lines.append(f"Generated: `{report.get('generated_at')}`")
+    lines.append(f"Repo root: `{report.get('repo_root')}`")
+    lines.append(f"Backend root: `{report.get('backend_root')}`")
+    lines.append(f"Backend root mode: `{report.get('backend_root_mode')}`")
+    lines.append(f"API URL: `{report.get('api_url')}`")
+    lines.append("")
+
     governance = report.get(
         "governance",
         {},
@@ -5374,54 +5693,77 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         [],
     )
 
-    lines.append("# RGA Runtime Verifier Report")
-    lines.append("")
-    lines.append(f"Schema: `{report.get('schema')}`")
-    lines.append(f"Generated: `{report.get('generated_at')}`")
-    lines.append(f"Repo root: `{report.get('repo_root')}`")
-    lines.append(f"Backend root: `{report.get('backend_root')}`")
-    lines.append(f"Backend root mode: `{report.get('backend_root_mode')}`")
-    lines.append(f"API URL: `{report.get('api_url')}`")
-    lines.append("")
-
     lines.append("## Governance Verdict")
-    lines.append("## Root Failures")
     lines.append("")
 
-    for item in governance.get(
-        "root_failures",
-        [],
-    ):
-        lines.append(
-            f"- {item['contract_type']}"
-        )
-        
+    lines.append(
+        f"- Governance verdict: `{governance.get('governance_verdict')}`"
+    )
+    lines.append(
+        f"- Architecture verdict: `{governance.get('architecture_verdict')}`"
+    )
+    lines.append(
+        f"- Runtime verdict: `{governance.get('runtime_verdict')}`"
+    )
+    lines.append(
+        f"- Artifact backbone verdict: `{governance.get('artifact_backbone_verdict')}`"
+    )
+    lines.append(
+        f"- Layer boundary verdict: `{governance.get('layer_boundary_verdict')}`"
+    )
+    lines.append(
+        f"- MCP contract verdict: `{governance.get('mcp_contract_verdict')}`"
+    )
+    lines.append(
+        f"- Deletion verdict: `{governance.get('deletion_verdict')}`"
+    )
+    lines.append("")
+
+    lines.append("### Root Failures")
+    lines.append("")
+
     if not root_failures:
         lines.append("(none)")
     else:
         for item in root_failures:
             lines.append(
-                f"- {item.get('contract_type')}"
+                f"- `{item.get('contract_type')}` "
+                f"({item.get('domain')} / {item.get('check')})"
             )
 
+            if item.get("summary"):
+                lines.append(
+                    f"  - {item.get('summary')}"
+                )
+
     lines.append("")
 
-    lines.append("## Derived Failures")
+    lines.append("### Derived Failures")
     lines.append("")
 
-    for item in governance.get(
-        "derived_failures",
-        [],
-    ):
-        lines.append(
-            f"- {item['contract_type']} "
-            f"(dependency_of={item['dependency_of']})"
-        )
-        
+    if not derived_failures:
+        lines.append("(none)")
+    else:
+        for item in derived_failures:
+            lines.append(
+                f"- `{item.get('contract_type')}` "
+                f"depends on `{item.get('dependency_of')}` "
+                f"({item.get('domain')} / {item.get('check')})"
+            )
+
+            if item.get("summary"):
+                lines.append(
+                    f"  - {item.get('summary')}"
+                )
+
+    lines.append("")
+
+    lines.append("### Governance State")
+    lines.append("")
     lines.append("```json")
     lines.append(
         json.dumps(
-            report.get("governance", {}),
+            governance,
             indent=2,
             ensure_ascii=False,
         )
