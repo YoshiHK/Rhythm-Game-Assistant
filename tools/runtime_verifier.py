@@ -733,41 +733,113 @@ def is_included_asset_path(path: Path) -> bool:
         return True
 
     return False
+    
+def classify_excluded_asset_reason(path_text: str) -> str:
+    normalized = path_text.replace("\\", "/").lower()
+
+    if (
+        "phase 4.5 - localization" in normalized
+        or "/translations/" in normalized
+        or "/locale" in normalized
+    ):
+        return "localization"
+
+    if (
+        "/schemas/" in normalized
+        or normalized.endswith(".schema.json")
+        or ".schema." in normalized
+    ):
+        return "schema"
+
+    if (
+        "/fixtures/" in normalized
+        or "/test_cases/" in normalized
+        or "/tests/" in normalized
+        or "fixture_" in normalized
+    ):
+        return "fixture"
+
+    if (
+        "/registry/" in normalized
+        or "template_registry" in normalized
+        or "capability_registry" in normalized
+    ):
+        return "registry"
+
+    if (
+        "/.github/" in normalized
+        or "/.vscode/" in normalized
+        or "/tools/" in normalized
+    ):
+        return "tooling"
+
+    if (
+        "/artifacts/" in normalized
+        or normalized.endswith("runtime_verifier_report.json")
+        or normalized.endswith("runtime_verifier_report.md")
+    ):
+        return "generated_artifact"
+
+    return "other"
 
 
-def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
-    discovered: Dict[str, List[str]] = {
-    "type_A": [],
-    "type_B": [],
-
-    "excluded_candidates": [],
-
-    "chart_assets_db": [],
-    "file_scan_inventory_db": [],
-    "chart_patterns_db": [],
-
-    "artifact_databases": [],
-
-    # v1.0 governance evidence
-    "artifact_backbone_candidates": [],
+def discover_asset_files(search_root: Path) -> Dict[str, Any]:
+    excluded_by_reason: Dict[str, List[str]] = {
+        "localization": [],
+        "schema": [],
+        "fixture": [],
+        "registry": [],
+        "tooling": [],
+        "generated_artifact": [],
+        "other": [],
     }
+
+    discovered: Dict[str, Any] = {
+        "type_A": [],
+        "type_B": [],
+
+        #
+        # v1.0 evidence-volume refinement:
+        #
+        # Keep excluded candidates summarized by reason rather than
+        # dumping every excluded path into the top-level report.
+        #
+        "excluded_candidate_count": 0,
+        "excluded_candidates_sample": [],
+        "excluded_candidates_truncated": False,
+        "excluded_by_reason": {},
+        "excluded_examples": {},
+
+        "chart_assets_db": [],
+        "file_scan_inventory_db": [],
+        "chart_patterns_db": [],
+
+        "artifact_databases": [],
+
+        # v1.0 governance evidence
+        "artifact_backbone_candidates": [],
+    }
+
+    max_excluded_examples = 50
+    max_examples_per_reason = 10
 
     try:
         for path in search_root.rglob("*"):
             if not path.is_file():
                 continue
 
+            resolved = str(path.resolve())
+
             if path.name in ARTIFACT_DATABASE_NAMES:
-                discovered["artifact_databases"].append(str(path.resolve()))
-                discovered["artifact_databases"].append(str(path.resolve()))
-                discovered["artifact_backbone_candidates"].append(str(path.resolve()))
+                discovered["artifact_databases"].append(resolved)
+                discovered["artifact_backbone_candidates"].append(resolved)
 
                 if path.name == FILE_SCAN_INVENTORY_DB_NAME:
-                    discovered["file_scan_inventory_db"].append(str(path.resolve()))
+                    discovered["file_scan_inventory_db"].append(resolved)
                 elif path.name == CHART_ASSETS_DB_NAME:
-                    discovered["chart_assets_db"].append(str(path.resolve()))
+                    discovered["chart_assets_db"].append(resolved)
                 elif path.name == CHART_PATTERNS_DB_NAME:
-                    discovered["chart_patterns_db"].append(str(path.resolve()))
+                    discovered["chart_patterns_db"].append(resolved)
 
                 continue
 
@@ -775,18 +847,49 @@ def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
 
             if asset_type in {"type_A", "type_B"}:
                 if is_included_asset_path(path):
-                    discovered[asset_type].append(str(path.resolve()))
+                    discovered[asset_type].append(resolved)
                 else:
-                    discovered["excluded_candidates"].append(str(path.resolve()))
+                    reason = classify_excluded_asset_reason(resolved)
+                    excluded_by_reason.setdefault(reason, []).append(resolved)
 
     except Exception:
         pass
 
-    for key in discovered:
-        discovered[key] = sorted(discovered[key])
+    for key in [
+        "type_A",
+        "type_B",
+        "chart_assets_db",
+        "file_scan_inventory_db",
+        "chart_patterns_db",
+        "artifact_databases",
+        "artifact_backbone_candidates",
+    ]:
+        discovered[key] = sorted(set(discovered.get(key, [])))
+
+    excluded_flat: List[str] = sorted(
+        item
+        for values in excluded_by_reason.values()
+        for item in values
+    )
+
+    discovered["excluded_candidate_count"] = len(excluded_flat)
+    discovered["excluded_candidates_sample"] = excluded_flat[:max_excluded_examples]
+    discovered["excluded_candidates_truncated"] = (
+        len(excluded_flat) > max_excluded_examples
+    )
+
+    discovered["excluded_by_reason"] = {
+        reason: len(values)
+        for reason, values in excluded_by_reason.items()
+    }
+
+    discovered["excluded_examples"] = {
+        reason: sorted(values)[:max_examples_per_reason]
+        for reason, values in excluded_by_reason.items()
+        if values
+    }
 
     return discovered
-
 
 def sha256_file(
     path: Path,
@@ -2467,52 +2570,43 @@ class RuntimeVerifier:
     def check_asset_scope_policy(self) -> None:
         scoped_type_a = self.discovered_assets.get("type_A", [])
         scoped_type_b = self.discovered_assets.get("type_B", [])
-        excluded_candidates = self.discovered_assets.get("excluded_candidates", [])
-        
-        excluded_by_reason = {
-            "localization": [],
-            "schema": [],
-            "fixture": [],
-            "registry": [],
-            "tooling": [],
-            "other": [],
-        }
-        
-        for path in excluded_candidates:
 
-            lowered = path.lower()
+        excluded_total = int(
+            self.discovered_assets.get(
+                "excluded_candidate_count",
+                0,
+            )
+        )
 
-            if "localization" in lowered:
-                excluded_by_reason["localization"].append(path)
+        excluded_by_reason = self.discovered_assets.get(
+            "excluded_by_reason",
+            {},
+        )
 
-            elif "/schemas/" in lowered:
-                excluded_by_reason["schema"].append(path)
-
-            elif "/fixtures/" in lowered:
-                excluded_by_reason["fixture"].append(path)
-
-            elif "/registry/" in lowered:
-                excluded_by_reason["registry"].append(path)
-
-            elif (
-                ".github" in lowered
-                or ".vscode" in lowered
-                or "/tools/" in lowered
-            ):
-                excluded_by_reason["tooling"].append(path)
-
-            else:
-                excluded_by_reason["other"].append(path)
+        excluded_examples = self.discovered_assets.get(
+            "excluded_examples",
+            {},
+        )
 
         scoped_total = len(scoped_type_a) + len(scoped_type_b)
-        excluded_total = len(excluded_candidates)
 
         if scoped_total > 0:
             status = "pass"
             summary = "Asset scope policy identified scoped asset candidates."
+
         elif excluded_total > 0:
-            status = "warning"
-            summary = "Asset-like files were found, but all were excluded by asset scope policy."
+            #
+            # v1.0 refinement:
+            #
+            # If all asset-like files are excluded by explicit policy,
+            # this is informational evidence, not automatically a warning.
+            #
+            status = "info"
+            summary = (
+                "Asset-like files were found, but all were excluded by "
+                "explicit asset scope policy."
+            )
+
         else:
             status = "info"
             summary = "No scoped asset candidates were discovered."
@@ -2523,38 +2617,73 @@ class RuntimeVerifier:
             status=status,
             summary=summary,
             evidence={
-                "strategy": "explicit_scope_with_exclusions",
-                "type_A_scoped_count": len(scoped_type_a),
-                "type_B_scoped_count": len(scoped_type_b),
-                "excluded_candidate_count": excluded_total,
-                "type_A_scoped_files": scoped_type_a,
-                "type_B_scoped_files": scoped_type_b,
-                "excluded_candidates": excluded_candidates,
-                "include_root_hints": ASSET_SCOPE_INCLUDE_ROOT_HINTS,
-                "exclude_root_hints": ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
-                "exclude_filename_suffixes": ASSET_SCOPE_EXCLUDE_FILENAME_SUFFIXES,
-                "exclude_filename_contains": ASSET_SCOPE_EXCLUDE_FILENAME_CONTAINS,
-                "excluded_by_reason": {
-                    key: len(value)
-                    for key, value in excluded_by_reason.items()
+                "strategy":
+                    "explicit_scope_with_exclusions",
+
+                "type_A_scoped_count":
+                    len(scoped_type_a),
+
+                "type_B_scoped_count":
+                    len(scoped_type_b),
+
+                "excluded_candidate_count":
+                    excluded_total,
+
+                #
+                # Keep scoped files because they are usually the useful
+                # positive evidence.
+                #
+                "type_A_scoped_files":
+                    scoped_type_a,
+
+                "type_B_scoped_files":
+                    scoped_type_b,
+
+                #
+                # v1.0 evidence-volume refinement:
+                #
+                # Do not dump every excluded candidate into the report.
+                # Summarize by reason and provide small examples instead.
+                #
+                "excluded_by_reason":
+                    excluded_by_reason,
+
+                "excluded_examples":
+                    excluded_examples,
+
+                "include_root_hints":
+                    ASSET_SCOPE_INCLUDE_ROOT_HINTS,
+
+                "exclude_root_hints":
+                    ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
+
+                "exclude_filename_suffixes":
+                    ASSET_SCOPE_EXCLUDE_FILENAME_SUFFIXES,
+
+                "exclude_filename_contains":
+                    ASSET_SCOPE_EXCLUDE_FILENAME_CONTAINS,
+
+                "evidence_volume_policy": {
+                    "full_excluded_candidate_dump": False,
+                    "examples_per_reason": 10,
+                    "reason_summary_required": True,
                 },
 
-                "excluded_examples": {
-                    key: value[:10]
-                    for key, value in excluded_by_reason.items()
-                    if value
-                },
-                
                 "note": (
                     "Repository files are not automatically chart assets. "
-                    "v1.0 keeps asset scope explicit so schema/config/localization JSON files "
-                    "are not treated as chart assets by default."
+                    "v1.0 keeps asset scope explicit so schema, config, "
+                    "fixture, registry, generated artifact, and localization "
+                    "JSON files are not treated as chart assets by default."
                 ),
             },
             suggested_fix=(
                 None
-                if status == "pass"
-                else "Place chart assets under explicit asset/chart roots or update the asset scope policy if the repository intentionally uses another location."
+                if scoped_total > 0 or excluded_total > 0
+                else (
+                    "If chart assets are expected, place them under explicit "
+                    "asset/chart roots or update the asset scope policy if "
+                    "the repository intentionally uses another location."
+                )
             ),
             governance_domain="artifact_backbone",
             contract_type="asset_scope_policy",
@@ -2933,9 +3062,28 @@ class RuntimeVerifier:
     def check_asset_pipeline(self) -> None:
         type_a = self.discovered_assets.get("type_A", [])
         type_b = self.discovered_assets.get("type_B", [])
-        excluded_candidates = self.discovered_assets.get("excluded_candidates", [])
+
+        excluded_total = int(
+            self.discovered_assets.get(
+                "excluded_candidate_count",
+                0,
+            )
+        )
+
+        excluded_by_reason = self.discovered_assets.get(
+            "excluded_by_reason",
+            {},
+        )
+
+        excluded_examples = self.discovered_assets.get(
+            "excluded_examples",
+            {},
+        )
+
         db_candidates = self.resolve_asset_db_candidates()
         all_db_candidates = self.resolve_all_artifact_db_candidates()
+
+        max_file_examples = 50
 
         self.add(
             domain="asset_pipeline",
@@ -2943,23 +3091,68 @@ class RuntimeVerifier:
             status="info",
             summary="Scoped chart asset inventory captured without modifying asset state.",
             evidence={
-                "type_A_count": len(type_a),
-                "type_B_count": len(type_b),
-                "excluded_candidate_count": len(excluded_candidates),
-                "type_A_files": type_a,
-                "type_B_files": type_b,
-                "excluded_candidates": excluded_candidates,
-                "chart_assets_db_candidates": [str(path) for path in db_candidates],
+                "type_A_count":
+                    len(type_a),
+
+                "type_B_count":
+                    len(type_b),
+
+                "excluded_candidate_count":
+                    excluded_total,
+
+                #
+                # v1.0 evidence-volume refinement:
+                #
+                # Keep examples instead of dumping every path.
+                #
+                "type_A_files_sample":
+                    type_a[:max_file_examples],
+
+                "type_A_files_truncated":
+                    len(type_a) > max_file_examples,
+
+                "type_B_files_sample":
+                    type_b[:max_file_examples],
+
+                "type_B_files_truncated":
+                    len(type_b) > max_file_examples,
+
+                "excluded_by_reason":
+                    excluded_by_reason,
+
+                "excluded_examples":
+                    excluded_examples,
+
+                "chart_assets_db_candidates":
+                    [str(path) for path in db_candidates],
+
                 "artifact_database_candidates": {
                     db_name: [str(path) for path in paths]
                     for db_name, paths in all_db_candidates.items()
                 },
-                "type_A_extensions": sorted(TYPE_A_EXTENSIONS),
-                "type_B_extensions": sorted(TYPE_B_EXTENSIONS),
+
+                "type_A_extensions":
+                    sorted(TYPE_A_EXTENSIONS),
+
+                "type_B_extensions":
+                    sorted(TYPE_B_EXTENSIONS),
+
                 "scope_policy": {
-                    "include_root_hints": ASSET_SCOPE_INCLUDE_ROOT_HINTS,
-                    "exclude_root_hints": ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
+                    "include_root_hints":
+                        ASSET_SCOPE_INCLUDE_ROOT_HINTS,
+
+                    "exclude_root_hints":
+                        ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
+
+                    "excluded_candidate_dump":
+                        "summarized",
                 },
+
+                "note": (
+                    "Asset inventory is summarized to keep the verifier report "
+                    "readable. Full repository inventory remains available from "
+                    "workflow artifacts when needed."
+                ),
             },
             governance_domain="artifact_backbone",
             contract_type="asset_pipeline_inventory",
@@ -2972,15 +3165,26 @@ class RuntimeVerifier:
                 status="warning",
                 summary="No chart_assets.db file was discovered.",
                 evidence={
-                    "searched_root": str(self.repo_root),
+                    "searched_root":
+                        str(self.repo_root),
+
                     "artifact_database_candidates": {
                         db_name: [str(path) for path in paths]
                         for db_name, paths in all_db_candidates.items()
                     },
+
+                    "dependency_note": (
+                        "Missing chart_assets.db may cause downstream asset "
+                        "coverage, hash verification, Type A usability, and "
+                        "runtime DB readiness checks to fail as derived issues."
+                    ),
                 },
-                suggested_fix="Create or provide chart_assets.db after asset pipeline persistence is available.",
+                suggested_fix=(
+                    "Create or provide chart_assets.db after asset pipeline "
+                    "persistence is available."
+                ),
                 governance_domain="artifact_backbone",
-                contract_type="asset_pipeline_persistence"
+                contract_type="asset_pipeline_persistence",
             )
             return
 
@@ -3009,19 +3213,31 @@ class RuntimeVerifier:
             summary=(
                 "chart_assets.db was inspected in read-only mode."
                 if not sqlite_errors
-                else "One or more chart_assets.db candidates could not be inspected in read-only mode."
+                else (
+                    "One or more chart_assets.db candidates could not be "
+                    "inspected in read-only mode."
+                )
             ),
             evidence={
-                "databases": db_evidence,
-                "read_mode": "sqlite_readonly",
+                "databases":
+                    db_evidence,
+
+                "read_mode":
+                    "sqlite_readonly",
+
+                "modification":
+                    "prohibited",
             },
             suggested_fix=(
                 None
                 if not sqlite_errors
-                else "Verify chart_assets.db is a valid SQLite database and is accessible to CI."
+                else (
+                    "Verify chart_assets.db is a valid SQLite database and "
+                    "is accessible to CI."
+                )
             ),
             governance_domain="artifact_backbone",
-            contract_type="asset_pipeline_persistence"
+            contract_type="asset_pipeline_persistence",
         )
 
         self.add(
@@ -3034,16 +3250,28 @@ class RuntimeVerifier:
                 else "No non-empty chart_assets.db table was confirmed."
             ),
             evidence={
-                "nonempty_database_count": len(nonempty_tables),
-                "database_count": len(db_evidence),
+                "nonempty_database_count":
+                    len(nonempty_tables),
+
+                "database_count":
+                    len(db_evidence),
+
+                "dependency_note": (
+                    "Empty chart asset databases may cause downstream "
+                    "coverage and runtime readiness checks to remain blocked "
+                    "or review-needed."
+                ),
             },
             suggested_fix=(
                 None
                 if nonempty_tables
-                else "Run the asset persistence pipeline and verify its output table names/rows."
+                else (
+                    "Run the asset persistence pipeline and verify its output "
+                    "table names and rows."
+                )
             ),
             governance_domain="artifact_backbone",
-            contract_type="asset_pipeline_population"
+            contract_type="asset_pipeline_population",
         )
 
     def check_asset_coverage(self) -> None:
