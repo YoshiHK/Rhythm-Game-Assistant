@@ -1,21 +1,26 @@
-#!/usr/bin/env python3
 """
 runtime_verifier.py
 
-RGA Runtime Verifier Bot — v0.7
+MCP Verifier Bot v1.0
+RGA Systems Auditor
 
-New in v0.7:
+New in v1.0:
+- Governance Verification
+- Architecture Contract Verification
+- Artifact Backbone Verification
+- Flow Contract Verification
+- MCP Contract Verification
+- Completed Phase Boundary Verification
+- Layer Governance Verification
+
+Carried forward from v0.7:
 - Artifact Database Verification
-  - file_scan_inventory.db
-  - chart_assets.db
-  - chart_patterns.db
 - Artifact Relationship Verification
-  - file_scan_inventory.db -> chart_assets.db -> chart_patterns.db
 - Dependency Reality Verification
 - Asset Scope Policy Verification
-- Flow Verification scaffolding
-- Layer Separation Audit scaffolding
-- Type B Intelligence Verification scaffolding
+- Flow Verification
+- Layer Separation Audit
+- Type B Intelligence Verification
 
 Carried forward from v0.6:
 - Asset Coverage Verification
@@ -30,44 +35,34 @@ Carried forward from v0.6:
 - MCP tool visibility / registration evidence
 
 Purpose:
-- Read-only runtime / wiring verification for Rhythm Game Assistant (RGA).
-- Detect missing runtime components, package layout issues, runtime dependency
-  issues, REST contract issues, MCP config issues, artifact database gaps,
-  artifact relationship gaps, asset coverage gaps, hash gaps, Type A usability
-  gaps, Type B reference gaps, runtime DB read gaps, flow boundary gaps,
-  layer separation violations, and wiring gaps such as games_recommender not
-  being injected.
+- Read-only architecture, runtime, artifact and governance verification
+  for Rhythm Game Assistant (RGA).
+
+Verifier responsibilities:
+- repository reality verification
+- runtime reality verification
+- architecture governance verification
+- artifact backbone verification
+- flow contract verification
+- deletion readiness governance
 
 Boundary:
 - Verification-only.
+- Read-only.
 - Must not modify Completed Phases 1–7.
-- Must not write to production databases.
-- Must not change canonical_row, pattern/tag logic, tips generation,
-  personalization, localization, recommendation internals, or asset pipeline behavior.
-- Asset and database inspection is read-only.
-- Artifact databases are inspected only through read-only SQLite access.
+- Must not write to databases.
+- Must not mutate runtime behavior.
+- Must not replace authoritative runtime output.
+
+Governance model:
+- GitHub Advanced Security:
+    security validation
+
+- RGA Verifier:
+    architecture and runtime governance
 
 Recommended placement:
 - tools/runtime_verifier.py
-
-Typical CI usage from repository root:
-
-  python tools/runtime_verifier.py \
-    --repo-root . \
-    --json-out artifacts/runtime_verifier_report.json \
-    --md-out artifacts/runtime_verifier_report.md
-
-With MCP config:
-
-  python tools/runtime_verifier.py \
-    --repo-root . \
-    --mcp-config .vscode/mcp.json \
-    --json-out artifacts/runtime_verifier_report.json \
-    --md-out artifacts/runtime_verifier_report.md
-
-Strict mode:
-
-  python tools/runtime_verifier.py --repo-root . --strict
 """
 
 from __future__ import annotations
@@ -98,20 +93,29 @@ from urllib.parse import quote
 class CheckResult:
     domain: str
     check: str
-    status: str      # pass | warning | fail | skipped | info
-    severity: str    # info | warning | fail | critical
+
+    status: str
+    severity: str
+
     summary: str
     evidence: Dict[str, Any]
+
     suggested_fix: Optional[str] = None
 
+    governance_domain: Optional[str] = None
+    contract_type: Optional[str] = None
 
 @dataclass
 class RuntimeCandidate:
     root: str
+
     score: int
     confidence: str
+
     matched: List[str]
     missing: List[str]
+
+    governance_score: int = 0
 
 
 @dataclass
@@ -352,6 +356,33 @@ API_RUNTIME_DEPENDENCY_MODULES = [
     "pydantic",
 ]
 
+# -----------------------------------------------------------------------------
+# Governance constants (v1.0)
+# -----------------------------------------------------------------------------
+
+GOVERNANCE_DOMAINS = [
+    "architecture_contracts",
+    "artifact_backbone",
+    "flow_contracts",
+    "layer_boundaries",
+    "mcp_contracts",
+]
+
+GOVERNANCE_REQUIRED_GATES = [
+    "phase_boundaries_verified",
+    "architecture_contracts_verified",
+    "artifact_backbone_verified",
+    "flow_contracts_verified",
+    "layer_boundaries_verified",
+    "mcp_contract_verified",
+]
+
+GOVERNANCE_VERDICTS = [
+    "pass",
+    "warning",
+    "fail",
+    "critical",
+]
 
 # -----------------------------------------------------------------------------
 # Flow / layer separation constants
@@ -389,6 +420,22 @@ LAYER_KEYWORDS = {
 }
 
 PROHIBITED_LAYER_IMPORT_HINTS = {
+    "models": [
+        ".persistence",
+        ".writers",
+        ".orchestrator",
+        ".orchestrators",
+    ],
+    "normalizers": [
+        ".persistence",
+        ".writers",
+        ".orchestrator",
+    ],
+    "classifiers": [
+        ".persistence",
+        ".writers",
+        "sqlite3",
+    ],
     "converters": [
         ".writers",
         ".persistence",
@@ -403,14 +450,11 @@ PROHIBITED_LAYER_IMPORT_HINTS = {
         ".writers",
         ".persistence",
     ],
-    "models": [
-        ".orchestrator",
-        ".orchestrators",
+    "bridges": [
         ".writers",
         ".persistence",
     ],
 }
-
 
 # -----------------------------------------------------------------------------
 # General helpers
@@ -436,10 +480,15 @@ def artifact_exists_with_alias(root: Path, artifact: str) -> Tuple[bool, Optiona
 def score_candidate(root: Path) -> RuntimeCandidate:
     matched: List[str] = []
     missing: List[str] = []
+
     score = 0
 
     for artifact, weight in ARTIFACT_WEIGHTS.items():
-        exists, _matched_path = artifact_exists_with_alias(root, artifact)
+        exists, _matched_path = artifact_exists_with_alias(
+            root,
+            artifact,
+        )
+
         if exists:
             matched.append(artifact)
             score += weight
@@ -455,14 +504,32 @@ def score_candidate(root: Path) -> RuntimeCandidate:
     else:
         confidence = "low"
 
+    governance_score = 0
+
+    #
+    # Governance readiness hints
+    #
+
+    if FILE_SCAN_INVENTORY_DB_NAME in matched:
+        governance_score += 25
+
+    if CHART_ASSETS_DB_NAME in matched:
+        governance_score += 25
+
+    if CHART_PATTERNS_DB_NAME in matched:
+        governance_score += 25
+
+    if "mcp_server.py" in matched:
+        governance_score += 25
+
     return RuntimeCandidate(
         root=str(root.resolve()),
         score=score,
         confidence=confidence,
         matched=matched,
         missing=missing,
+        governance_score=governance_score,
     )
-
 
 def discover_files(search_root: Path) -> Dict[str, List[str]]:
     patterns = {
@@ -521,13 +588,14 @@ def discover_package_dirs(search_root: Path) -> Dict[str, List[str]]:
 
     return discovered
 
-
-def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
-    roots: Dict[str, Path] = {}
+def discover_runtime_candidates(
+    search_root: Path,
+) -> Listroots: Dict[str, Path] = {}
 
     try:
         for main_py in search_root.rglob("main.py"):
-            roots[str(main_py.parent.resolve())] = main_py.parent.resolve()
+            root = main_py.parent.resolve()
+            roots[str(root)] = root
 
         for rec_py in search_root.rglob("recommend.py"):
             parts = list(rec_py.parts)
@@ -536,18 +604,26 @@ def discover_runtime_candidates(search_root: Path) -> List[RuntimeCandidate]:
                 idx = parts.index("src")
 
                 if idx > 0:
-                    candidate = Path(*parts[:idx])
-                    roots[str(candidate.resolve())] = candidate.resolve()
+                    candidate = Path(*parts[:idx]).resolve()
+                    roots[str(candidate)] = candidate
 
     except Exception:
         pass
 
-    candidates = [score_candidate(root) for root in roots.values()]
+    candidates = [
+        score_candidate(root)
+        for root in roots.values()
+    ]
 
-    candidates.sort(key=lambda candidate: candidate.score, reverse=True)
+    candidates.sort(
+        key=lambda candidate: (
+            candidate.score,
+            candidate.governance_score,
+        ),
+        reverse=True,
+    )
 
     return candidates
-
 
 def choose_backend_root(
     repo_root: Path,
@@ -569,13 +645,16 @@ def choose_backend_root(
 
     return repo_root.resolve(), [], "fallback_to_repo_root"
 
-
 def classify_import_failure(
     error_text: str,
     package_dirs: Dict[str, List[str]],
 ) -> str:
     if "No module named 'rhythm_ingestion'" in error_text:
-        if package_dirs.get("invalid_aliases") and not package_dirs.get("expected"):
+
+        if (
+            package_dirs.get("invalid_aliases")
+            and not package_dirs.get("expected")
+        ):
             return "package_name_mismatch"
 
         return "missing_pythonpath_or_package"
@@ -583,8 +662,10 @@ def classify_import_failure(
     if "No module named" in error_text:
         return "dependency_missing"
 
-    return "import_failure"
+    if "cannot import name" in error_text:
+        return "runtime_contract_break"
 
+    return "import_failure"
 
 def classify_asset_path(path: Path) -> str:
     suffix = path.suffix.lower()
@@ -657,14 +738,19 @@ def is_included_asset_path(path: Path) -> bool:
 
 def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
     discovered: Dict[str, List[str]] = {
-        "type_A": [],
-        "type_B": [],
-        "unknown": [],
-        "excluded_candidates": [],
-        "chart_assets_db": [],
-        "file_scan_inventory_db": [],
-        "chart_patterns_db": [],
-        "artifact_databases": [],
+    "type_A": [],
+    "type_B": [],
+
+    "excluded_candidates": [],
+
+    "chart_assets_db": [],
+    "file_scan_inventory_db": [],
+    "chart_patterns_db": [],
+
+    "artifact_databases": [],
+
+    # v1.0 governance evidence
+    "artifact_backbone_candidates": [],
     }
 
     try:
@@ -674,6 +760,8 @@ def discover_asset_files(search_root: Path) -> Dict[str, List[str]]:
 
             if path.name in ARTIFACT_DATABASE_NAMES:
                 discovered["artifact_databases"].append(str(path.resolve()))
+                discovered["artifact_databases"].append(str(path.resolve()))
+                discovered["artifact_backbone_candidates"].append(str(path.resolve()))
 
                 if path.name == FILE_SCAN_INVENTORY_DB_NAME:
                     discovered["file_scan_inventory_db"].append(str(path.resolve()))
@@ -802,6 +890,25 @@ def read_text_safely(
     except Exception:
         return ""
 
+def governance_candidate_score(
+    candidate: RuntimeCandidate,
+) -> int:
+    score = 0
+
+    matched = set(candidate.matched)
+
+    required = {
+        FILE_SCAN_INVENTORY_DB_NAME,
+        CHART_ASSETS_DB_NAME,
+        CHART_PATTERNS_DB_NAME,
+        "mcp_server.py",
+    }
+
+    score += len(
+        required.intersection(matched)
+    ) * 25
+
+    return score
 
 # -----------------------------------------------------------------------------
 # Verifier
@@ -838,7 +945,7 @@ class RuntimeVerifier:
         # asset_db means chart_assets.db unless explicitly overridden below.
         self.asset_db = asset_db
 
-        # v0.7 explicit artifact DB inputs.
+        # v0.7+ explicit artifact DB inputs.
         self.file_scan_inventory_db = file_scan_inventory_db
         self.chart_assets_db = chart_assets_db or asset_db
         self.chart_patterns_db = chart_patterns_db
@@ -852,12 +959,26 @@ class RuntimeVerifier:
         # v0.6 compatibility cache.
         self.asset_db_snapshots: List[Dict[str, Any]] = []
 
-        # v0.7 artifact database caches.
+        # v0.7+ artifact database caches.
         self.artifact_db_snapshots: Dict[str, List[Dict[str, Any]]] = {}
         self.artifact_db_records: Dict[str, List[Dict[str, Any]]] = {}
 
         self.repository_asset_hashes: Dict[str, str] = {}
         self.repository_file_hashes: Dict[str, str] = {}
+
+        # v1.0 governance state.
+        self.governance_state: Dict[str, Any] = {
+            "architecture_verdict": None,
+            "runtime_verdict": None,
+            "artifact_backbone_verdict": None,
+            "flow_contract_verdict": None,
+            "layer_boundary_verdict": None,
+            "mcp_contract_verdict": None,
+            "deletion_verdict": None,
+            "governance_verdict": None,
+            "blocking_reasons": [],
+            "warnings": [],
+        }
 
     # ------------------------------------------------------------------
     # Result helpers
@@ -894,6 +1015,9 @@ class RuntimeVerifier:
         if domain == "flow_verification" and base_status == "skipped":
             return "skipped", "info"
 
+        if domain == "flow_contract_verification" and base_status == "skipped":
+            return "skipped", "info"
+
         if domain == "type_B_intelligence" and base_status == "skipped":
             return "skipped", "info"
 
@@ -902,6 +1026,33 @@ class RuntimeVerifier:
 
         if domain == "dependency_reality" and base_status == "warning":
             return "warning", "warning"
+
+        #
+        # v1.0 governance severity rules.
+        #
+        if domain == "governance" and base_status == "fail":
+            return "fail", "critical"
+
+        if domain == "governance" and base_status == "critical":
+            return "critical", "critical"
+
+        if domain == "layer_separation" and base_status == "critical":
+            return "critical", "critical"
+
+        if domain == "layer_separation" and base_status == "fail":
+            return "fail", "fail"
+
+        if domain == "artifact_relationships" and base_status == "fail":
+            return "fail", "fail"
+
+        if domain == "artifact_backbone" and base_status == "fail":
+            return "fail", "fail"
+
+        if domain == "flow_contract_verification" and base_status == "fail":
+            return "fail", "fail"
+
+        if domain == "mcp_contract" and base_status == "fail":
+            return "fail", "fail"
 
         mapping = {
             "pass": "info",
@@ -923,6 +1074,8 @@ class RuntimeVerifier:
         summary: str,
         evidence: Optional[Dict[str, Any]] = None,
         suggested_fix: Optional[str] = None,
+        governance_domain: Optional[str] = None,
+        contract_type: Optional[str] = None,
     ) -> None:
         final_status, severity = self.classify(
             domain=domain,
@@ -930,17 +1083,47 @@ class RuntimeVerifier:
             base_status=status,
         )
 
-        self.results.append(
-            CheckResult(
-                domain=domain,
-                check=check,
-                status=final_status,
-                severity=severity,
-                summary=summary,
-                evidence=evidence or {},
-                suggested_fix=suggested_fix,
-            )
+        result = CheckResult(
+            domain=domain,
+            check=check,
+            status=final_status,
+            severity=severity,
+            summary=summary,
+            evidence=evidence or {},
+            suggested_fix=suggested_fix,
+            governance_domain=governance_domain,
+            contract_type=contract_type,
         )
+
+        self.results.append(result)
+
+        #
+        # v1.0 lightweight governance state collection.
+        # This does not make final decisions by itself; it records blockers
+        # for later governance verdict generation.
+        #
+        if severity in {"fail", "critical"}:
+            self.governance_state.setdefault("blocking_reasons", []).append(
+                {
+                    "domain": domain,
+                    "check": check,
+                    "severity": severity,
+                    "summary": summary,
+                    "governance_domain": governance_domain,
+                    "contract_type": contract_type,
+                }
+            )
+
+        elif final_status == "warning":
+            self.governance_state.setdefault("warnings", []).append(
+                {
+                    "domain": domain,
+                    "check": check,
+                    "summary": summary,
+                    "governance_domain": governance_domain,
+                    "contract_type": contract_type,
+                }
+            )
 
     def inject_pythonpath(self) -> None:
         src = self.backend_root / "src"
@@ -957,11 +1140,27 @@ class RuntimeVerifier:
         path: Path,
     ) -> Optional[Dict[str, Any]]:
         try:
-            return json.loads(
+            data = json.loads(
                 path.read_text(
                     encoding="utf-8",
                 )
             )
+
+            if isinstance(data, dict):
+                return data
+
+            self.add(
+                domain="file",
+                check="json_shape",
+                status="fail",
+                summary=f"JSON file is valid but does not contain an object: {path}",
+                evidence={
+                    "path": str(path),
+                    "actual_type": type(data).__name__,
+                },
+            )
+
+            return None
 
         except Exception as exc:
             self.add(
@@ -1012,8 +1211,7 @@ class RuntimeVerifier:
     def resolve_artifact_db_candidates(
         self,
         db_name: str,
-    ) -> List[Path]:
-        candidates: List[Path] = []
+    ) -> Listcandidates: List[Path] = []
 
         explicit_map: Dict[str, Optional[Path]] = {
             FILE_SCAN_INVENTORY_DB_NAME: self.file_scan_inventory_db,
@@ -1089,6 +1287,7 @@ class RuntimeVerifier:
             "table_row_counts": {},
             "table_samples": {},
             "candidate_columns": {},
+            "read_mode": "sqlite_readonly",
         }
 
         if not path.exists():
@@ -1096,6 +1295,7 @@ class RuntimeVerifier:
 
         try:
             uri = sqlite_readonly_uri(path)
+
             with sqlite3.connect(uri, uri=True) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
@@ -1137,9 +1337,13 @@ class RuntimeVerifier:
                         count = cursor.execute(
                             f"SELECT COUNT(*) FROM {quoted_table}"
                         ).fetchone()[0]
+
                         evidence["table_row_counts"][table] = count
+
                     except Exception as exc:
-                        evidence["table_row_counts"][table] = {"error": str(exc)}
+                        evidence["table_row_counts"][table] = {
+                            "error": str(exc),
+                        }
 
                     try:
                         rows = cursor.execute(
@@ -1151,8 +1355,11 @@ class RuntimeVerifier:
                             truncate_row(dict(row))
                             for row in rows
                         ]
+
                     except Exception as exc:
-                        evidence["table_samples"][table] = {"error": str(exc)}
+                        evidence["table_samples"][table] = {
+                            "error": str(exc),
+                        }
 
         except Exception as exc:
             evidence["error"] = str(exc)
@@ -1160,9 +1367,16 @@ class RuntimeVerifier:
 
         return evidence
 
-    def get_artifact_db_snapshots(self, db_name: str) -> List[Dict[str, Any]]:
+    def get_artifact_db_snapshots(
+        self,
+        db_name: str,
+    ) -> List[Dict[str, Any]]:
         if db_name not in self.artifact_db_snapshots:
-            logical_name = ARTIFACT_DATABASE_LOGICAL_NAMES.get(db_name, db_name)
+            logical_name = ARTIFACT_DATABASE_LOGICAL_NAMES.get(
+                db_name,
+                db_name,
+            )
+
             self.artifact_db_snapshots[db_name] = [
                 self.inspect_sqlite_readonly(
                     path,
@@ -1182,7 +1396,10 @@ class RuntimeVerifier:
     # v0.6 compatibility.
     def get_asset_db_snapshots(self) -> List[Dict[str, Any]]:
         if not self.asset_db_snapshots:
-            self.asset_db_snapshots = self.get_artifact_db_snapshots(CHART_ASSETS_DB_NAME)
+            self.asset_db_snapshots = self.get_artifact_db_snapshots(
+                CHART_ASSETS_DB_NAME
+            )
+
         return self.asset_db_snapshots
 
     # ------------------------------------------------------------------
@@ -1244,18 +1461,67 @@ class RuntimeVerifier:
                             records.append(
                                 {
                                     "db_name": db_name,
-                                    "logical_name": ARTIFACT_DATABASE_LOGICAL_NAMES.get(db_name, db_name),
+                                    "logical_name": ARTIFACT_DATABASE_LOGICAL_NAMES.get(
+                                        db_name,
+                                        db_name,
+                                    ),
                                     "db_path": db_path,
+
                                     "table": table,
                                     "columns": columns,
-                                    "path": row_dict.get(candidate_columns.get("path")) if candidate_columns.get("path") else None,
-                                    "hash": row_dict.get(candidate_columns.get("hash")) if candidate_columns.get("hash") else None,
-                                    "text": row_dict.get(candidate_columns.get("text")) if candidate_columns.get("text") else None,
-                                    "reference_url": row_dict.get(candidate_columns.get("reference_url")) if candidate_columns.get("reference_url") else None,
-                                    "asset_type": row_dict.get(candidate_columns.get("type")) if candidate_columns.get("type") else None,
-                                    "pattern": row_dict.get(candidate_columns.get("pattern")) if candidate_columns.get("pattern") else None,
-                                    "chart_id": row_dict.get(candidate_columns.get("chart_id")) if candidate_columns.get("chart_id") else None,
-                                    "timestamp": row_dict.get(candidate_columns.get("timestamp")) if candidate_columns.get("timestamp") else None,
+
+                                    "path": (
+                                        row_dict.get(candidate_columns.get("path"))
+                                        if candidate_columns.get("path")
+                                        else None
+                                    ),
+
+                                    "hash": (
+                                        row_dict.get(candidate_columns.get("hash"))
+                                        if candidate_columns.get("hash")
+                                        else None
+                                    ),
+
+                                    "text": (
+                                        row_dict.get(candidate_columns.get("text"))
+                                        if candidate_columns.get("text")
+                                        else None
+                                    ),
+
+                                    "reference_url": (
+                                        row_dict.get(candidate_columns.get("reference_url"))
+                                        if candidate_columns.get("reference_url")
+                                        else None
+                                    ),
+
+                                    "asset_type": (
+                                        row_dict.get(candidate_columns.get("type"))
+                                        if candidate_columns.get("type")
+                                        else None
+                                    ),
+
+                                    "pattern": (
+                                        row_dict.get(candidate_columns.get("pattern"))
+                                        if candidate_columns.get("pattern")
+                                        else None
+                                    ),
+
+                                    "chart_id": (
+                                        row_dict.get(candidate_columns.get("chart_id"))
+                                        if candidate_columns.get("chart_id")
+                                        else None
+                                    ),
+
+                                    "timestamp": (
+                                        row_dict.get(candidate_columns.get("timestamp"))
+                                        if candidate_columns.get("timestamp")
+                                        else None
+                                    ),
+
+                                    # v1.0 governance metadata
+                                    "artifact_backbone_member": (
+                                        db_name in ARTIFACT_DATABASE_NAMES
+                                    ),
                                 }
                             )
 
@@ -1366,6 +1632,12 @@ class RuntimeVerifier:
 
     def artifact_db_present(self, db_name: str) -> bool:
         return bool(self.resolve_artifact_db_candidates(db_name))
+        
+    def artifact_backbone_present(self) -> bool:
+        return all(
+            self.artifact_db_present(db_name)
+            for db_name in ARTIFACT_DATABASE_NAMES
+        )
 
     def readable_artifact_db_count(self) -> int:
         count = 0
@@ -1376,6 +1648,62 @@ class RuntimeVerifier:
                     count += 1
 
         return count
+        
+    def artifact_backbone_readable(self) -> bool:
+        for db_name in ARTIFACT_DATABASE_NAMES:
+
+            snapshots = self.get_artifact_db_snapshots(
+                db_name
+            )
+
+            if not snapshots:
+                return False
+
+            readable = any(
+                snapshot.get("exists")
+                and snapshot.get("readable")
+                and not snapshot.get("error")
+                for snapshot in snapshots
+            )
+
+            if not readable:
+                return False
+
+        return True
+        
+    def artifact_relationship_readiness(self) -> Dict[str, bool]:
+        return {
+            "scan_db_has_rows": self.artifact_db_has_readable_rows(
+                FILE_SCAN_INVENTORY_DB_NAME
+            ),
+
+            "asset_db_has_rows": self.artifact_db_has_readable_rows(
+                CHART_ASSETS_DB_NAME
+            ),
+
+            "pattern_db_has_rows": self.artifact_db_has_readable_rows(
+                CHART_PATTERNS_DB_NAME
+            ),
+        }
+        
+    def governance_readiness_snapshot(self) -> Dict[str, Any]:
+        relationship_state = (
+            self.artifact_relationship_readiness()
+        )
+
+        return {
+            "artifact_backbone_present":
+                self.artifact_backbone_present(),
+
+            "artifact_backbone_readable":
+                self.artifact_backbone_readable(),
+
+            "relationship_state":
+                relationship_state,
+
+            "relationship_ready":
+                all(relationship_state.values()),
+        }
 
     # ------------------------------------------------------------------
     # Checks
@@ -1453,6 +1781,8 @@ class RuntimeVerifier:
                 if status == "pass"
                 else "Ensure backend root contains main.py, mcp_server.py, and importable src/rhythm_ingestion package files."
             ),
+            governance_domain="architecture_contracts",
+            contract_type="repository_discovery",
         )
 
     def check_repository_vs_runtime(self) -> None:
@@ -1516,6 +1846,8 @@ class RuntimeVerifier:
                 if status == "pass"
                 else "Resolve package root and PYTHONPATH before diagnosing runtime wiring."
             ),
+            governance_domain="architecture_contracts",
+            contract_type="repository_import_runtime_separation",
         )
 
     def check_package_layout(self) -> None:
@@ -1534,6 +1866,8 @@ class RuntimeVerifier:
                 "invalid_alias_dirs": invalid_dirs,
                 "other_rhythm_like_dirs": other_dirs,
             },
+            governance_domain="architecture_contracts",
+            contract_type="package_layout_inventory",
         )
 
         if invalid_dirs:
@@ -1551,6 +1885,8 @@ class RuntimeVerifier:
                     "Rename invalid package directory to src/rhythm_ingestion, "
                     "or restore the canonical Python package path."
                 ),
+                governance_domain="architecture_contracts",
+                contract_type="package_identity",
             )
         else:
             self.add(
@@ -1562,6 +1898,8 @@ class RuntimeVerifier:
                     "expected": EXPECTED_PACKAGE,
                     "invalid_aliases": INVALID_PACKAGE_ALIASES,
                 },
+                governance_domain="architecture_contracts",
+                contract_type="package_identity",
             )
 
         canonical_src = self.backend_root / "src"
@@ -1587,6 +1925,8 @@ class RuntimeVerifier:
                 if canonical_pkg.exists()
                 else "Ensure src/rhythm_ingestion exists under the selected backend root."
             ),
+            governance_domain="architecture_contracts",
+            contract_type="package_root_resolution",
         )
 
     def check_package_import_probe(self) -> None:
@@ -1611,7 +1951,10 @@ class RuntimeVerifier:
                 }
             except Exception as exc:
                 any_fail = True
-                failure_type = classify_import_failure(str(exc), self.discovered_packages)
+                failure_type = classify_import_failure(
+                    str(exc),
+                    self.discovered_packages,
+                )
 
                 if failure_type == "dependency_missing":
                     dependency_failures.append(str(exc))
@@ -1651,6 +1994,8 @@ class RuntimeVerifier:
                 "dependency_failures": dependency_failures,
             },
             suggested_fix=suggested_fix,
+            governance_domain="architecture_contracts",
+            contract_type="import_reality",
         )
 
     def check_dependency_reality(self) -> None:
@@ -1681,8 +2026,6 @@ class RuntimeVerifier:
             if result.get("status") != "pass":
                 api_runtime_missing.append(module_name)
 
-        # Required dependencies are hard failures.
-        # API runtime dependencies are warning unless runtime API import currently depends on them.
         if required_missing:
             status = "fail"
             summary = "One or more required runtime dependencies are missing."
@@ -1713,6 +2056,8 @@ class RuntimeVerifier:
                 if status == "pass"
                 else "Install missing runtime dependencies or adjust CI setup before running runtime/API verification."
             ),
+            governance_domain="architecture_contracts",
+            contract_type="dependency_reality",
         )
 
     def check_repo_shape(self) -> None:
@@ -1738,6 +2083,8 @@ class RuntimeVerifier:
                     "exists": exists,
                     "backend_root": str(self.backend_root),
                 },
+                governance_domain="architecture_contracts",
+                contract_type="repository_shape",
             )
 
     def check_python_imports(self) -> None:
@@ -1764,6 +2111,8 @@ class RuntimeVerifier:
                     "orchestrator_type": str(type(orchestrator)),
                     "backend_root": str(self.backend_root),
                 },
+                governance_domain="architecture_contracts",
+                contract_type="runtime_import_reality",
             )
 
             if games_rec is None:
@@ -1772,11 +2121,20 @@ class RuntimeVerifier:
                     check="games_recommender_present",
                     status="fail",
                     summary="Games recommender is not injected into the Phase 6 API runtime.",
-                    evidence={"_GAMES_RECOMMENDER": None},
+                    evidence={
+                        "_GAMES_RECOMMENDER": None,
+                        "expected_wiring": "create_app(..., games_recommender=...)",
+                        "boundary_note": (
+                            "This check verifies wiring only. It must not modify "
+                            "Phase 6 or Phase 7 recommendation internals."
+                        ),
+                    },
                     suggested_fix=(
                         "Inject a Phase 7 games_recommender through "
                         "create_app(..., games_recommender=...) in the runtime builder."
                     ),
+                    governance_domain="architecture_contracts",
+                    contract_type="runtime_wiring",
                 )
             else:
                 self.add(
@@ -1787,6 +2145,8 @@ class RuntimeVerifier:
                     evidence={
                         "games_recommender_type": str(type(games_rec)),
                     },
+                    governance_domain="architecture_contracts",
+                    contract_type="runtime_wiring",
                 )
 
         except Exception as exc:
@@ -1814,6 +2174,8 @@ class RuntimeVerifier:
                     "traceback": traceback.format_exc(),
                 },
                 suggested_fix=suggested_fix,
+                governance_domain="architecture_contracts",
+                contract_type="runtime_import_reality",
             )
 
     def check_runtime_meta_specs(self) -> None:
@@ -1831,7 +2193,9 @@ class RuntimeVerifier:
                 "localization_meta",
             ]
 
-            # v0.7 artifact runtime expectations.
+            # v1.0 artifact/runtime-adjacent expectations.
+            # These remain verification-only. Missing keys are reported;
+            # this verifier must not modify runtime_meta.py automatically.
             artifact_expected = [
                 "file_scan_state",
                 "song_db",
@@ -1839,8 +2203,17 @@ class RuntimeVerifier:
                 "tips_meta",
             ]
 
-            missing = [key for key in required if key not in specs]
-            artifact_missing = [key for key in artifact_expected if key not in specs]
+            missing = [
+                key
+                for key in required
+                if key not in specs
+            ]
+
+            artifact_missing = [
+                key
+                for key in artifact_expected
+                if key not in specs
+            ]
 
             if missing:
                 status = "fail"
@@ -1862,13 +2235,23 @@ class RuntimeVerifier:
                     "artifact_expected": artifact_expected,
                     "missing": missing,
                     "artifact_missing": artifact_missing,
-                    "registered": sorted(list(specs.keys())) if isinstance(specs, dict) else [],
+                    "registered": (
+                        sorted(list(specs.keys()))
+                        if isinstance(specs, dict)
+                        else []
+                    ),
+                    "boundary_note": (
+                        "Runtime metadata is inspected as a contract surface. "
+                        "The verifier must not rewrite runtime_meta.py."
+                    ),
                 },
                 suggested_fix=(
                     None
                     if status == "pass"
                     else "Add missing artifact keys to ARTIFACT_SPECS in runtime_meta.py if they are intended runtime artifacts."
                 ),
+                governance_domain="architecture_contracts",
+                contract_type="runtime_metadata_contract",
             )
 
         except Exception as exc:
@@ -1884,6 +2267,8 @@ class RuntimeVerifier:
                     "root_cause": failure_type,
                     "traceback": traceback.format_exc(),
                 },
+                governance_domain="architecture_contracts",
+                contract_type="runtime_metadata_contract",
             )
 
     def check_asset_scope_policy(self) -> None:
@@ -1921,13 +2306,19 @@ class RuntimeVerifier:
                 "exclude_root_hints": ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
                 "exclude_filename_suffixes": ASSET_SCOPE_EXCLUDE_FILENAME_SUFFIXES,
                 "exclude_filename_contains": ASSET_SCOPE_EXCLUDE_FILENAME_CONTAINS,
-                "note": "Repository files are not automatically chart assets. v0.7 scopes broad extensions such as JSON/HTML/MHT.",
+                "note": (
+                    "Repository files are not automatically chart assets. "
+                    "v1.0 keeps asset scope explicit so schema/config/localization JSON files "
+                    "are not treated as chart assets by default."
+                ),
             },
             suggested_fix=(
                 None
                 if status == "pass"
                 else "Place chart assets under explicit asset/chart roots or update the asset scope policy if the repository intentionally uses another location."
             ),
+            governance_domain="artifact_backbone",
+            contract_type="asset_scope_policy",
         )
 
     def check_artifact_databases(self) -> None:
@@ -1943,7 +2334,14 @@ class RuntimeVerifier:
             candidates = candidates_by_db.get(db_name, [])
             snapshots = snapshots_by_db.get(db_name, [])
 
-            exists_count = len([snapshot for snapshot in snapshots if snapshot.get("exists")])
+            exists_count = len(
+                [
+                    snapshot
+                    for snapshot in snapshots
+                    if snapshot.get("exists")
+                ]
+            )
+
             readable_count = len(
                 [
                     snapshot
@@ -1955,6 +2353,7 @@ class RuntimeVerifier:
             )
 
             row_count_total = 0
+
             for snapshot in snapshots:
                 for count in snapshot.get("table_row_counts", {}).values():
                     if isinstance(count, int):
@@ -1992,7 +2391,7 @@ class RuntimeVerifier:
 
         self.add(
             domain="artifact_databases",
-            check="artifact_database_backbone",
+            check="artifact_database_policy",
             status=status,
             summary=summary,
             evidence={
@@ -2003,12 +2402,31 @@ class RuntimeVerifier:
                 "empty": empty,
                 "database_status": db_status,
                 "read_mode": "sqlite_readonly",
+                "allowed_operations": [
+                    "schema_inventory",
+                    "readability_check",
+                    "record_count",
+                    "relationship_verification",
+                ],
+                "prohibited_operations": [
+                    "insert",
+                    "update",
+                    "delete",
+                    "schema_mutation",
+                ],
+                "policy_note": (
+                    "This check verifies artifact database presence, readability, "
+                    "and row evidence only. Runtime operability is evaluated by "
+                    "artifact backbone and runtime DB readiness checks."
+                ),
             },
             suggested_fix=(
                 None
                 if status == "pass"
                 else "Create or provide file_scan_inventory.db, chart_assets.db, and chart_patterns.db, then ensure each is valid SQLite and populated."
             ),
+            governance_domain="artifact_backbone",
+            contract_type="artifact_database_policy",
         )
 
     def check_artifact_relationships(self) -> None:
@@ -2137,39 +2555,80 @@ class RuntimeVerifier:
 
         self.add(
             domain="artifact_relationships",
-            check="scan_asset_pattern_chain",
+            check="artifact_relationship_chain",
             status=status,
             summary=summary,
             evidence={
                 "relationship_chain": ARTIFACT_RELATIONSHIP_CHAIN,
+
                 "scan_db_ready": scan_db_ready,
                 "asset_db_ready": asset_db_ready,
                 "pattern_db_ready": pattern_db_ready,
+
                 "scan_record_count": len(scan_records),
                 "asset_record_count": len(asset_records),
                 "pattern_record_count": len(pattern_records),
+
                 "scan_path_count": len(scan_paths),
                 "asset_path_count": len(asset_paths),
                 "pattern_path_count": len(pattern_paths),
+
                 "scan_to_asset_coverage": scan_to_asset_coverage,
-                "asset_to_pattern_coverage_by_path": asset_to_pattern_coverage_by_path,
-                "asset_chart_id_count": len(asset_chart_ids),
-                "pattern_chart_id_count": len(pattern_chart_ids),
-                "asset_to_pattern_id_match_count": len(asset_to_pattern_id_matches),
-                "asset_to_pattern_coverage_by_id": asset_to_pattern_coverage_by_id,
+
+                "asset_to_pattern_coverage_by_path":
+                    asset_to_pattern_coverage_by_path,
+
+                "asset_chart_id_count":
+                    len(asset_chart_ids),
+
+                "pattern_chart_id_count":
+                    len(pattern_chart_ids),
+
+                "asset_to_pattern_id_match_count":
+                    len(asset_to_pattern_id_matches),
+
+                "asset_to_pattern_coverage_by_id":
+                    asset_to_pattern_coverage_by_id,
+
                 "orphan_scans": orphan_scans,
                 "orphan_assets_from_scan": orphan_assets_from_scan,
-                "orphan_assets_without_patterns": orphan_assets_without_patterns,
-                "orphan_patterns_by_path": orphan_patterns_by_path,
-                "orphan_asset_chart_ids": orphan_asset_chart_ids,
-                "orphan_pattern_chart_ids": orphan_pattern_chart_ids,
-                "matching_strategy": "path/name suffix heuristic plus chart_id comparison where available; read-only verification",
+
+                "orphan_assets_without_patterns":
+                    orphan_assets_without_patterns,
+
+                "orphan_patterns_by_path":
+                    orphan_patterns_by_path,
+
+                "orphan_asset_chart_ids":
+                    orphan_asset_chart_ids,
+
+                "orphan_pattern_chart_ids":
+                    orphan_pattern_chart_ids,
+
+                "relationship_type":
+                    "data_connectivity",
+
+                "matching_strategy":
+                    (
+                        "path/name suffix heuristic "
+                        "plus chart_id comparison "
+                        "where available"
+                    ),
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Ensure scan results persist to file_scan_inventory.db, assets persist to chart_assets.db, and pattern extraction persists to chart_patterns.db with stable path/hash/chart_id links."
+                else (
+                    "Ensure scan results persist to "
+                    "file_scan_inventory.db, "
+                    "assets persist to chart_assets.db, "
+                    "and pattern extraction persists "
+                    "to chart_patterns.db using "
+                    "stable path/hash/chart_id links."
+                )
             ),
+            governance_domain="artifact_backbone",
+            contract_type="artifact_relationships",
         )
 
     def check_asset_pipeline(self) -> None:
@@ -2203,6 +2662,8 @@ class RuntimeVerifier:
                     "exclude_root_hints": ASSET_SCOPE_EXCLUDE_ROOT_HINTS,
                 },
             },
+            governance_domain="artifact_backbone",
+            contract_type="asset_pipeline_inventory",
         )
 
         if not db_candidates:
@@ -2219,6 +2680,8 @@ class RuntimeVerifier:
                     },
                 },
                 suggested_fix="Create or provide chart_assets.db after asset pipeline persistence is available.",
+                governance_domain="artifact_backbone",
+                contract_type="asset_pipeline_persistence"
             )
             return
 
@@ -2258,6 +2721,8 @@ class RuntimeVerifier:
                 if not sqlite_errors
                 else "Verify chart_assets.db is a valid SQLite database and is accessible to CI."
             ),
+            governance_domain="artifact_backbone",
+            contract_type="asset_pipeline_persistence"
         )
 
         self.add(
@@ -2278,6 +2743,8 @@ class RuntimeVerifier:
                 if nonempty_tables
                 else "Run the asset persistence pipeline and verify its output table names/rows."
             ),
+            governance_domain="artifact_backbone",
+            contract_type="asset_pipeline_population"
         )
 
     def check_asset_coverage(self) -> None:
@@ -2345,24 +2812,125 @@ class RuntimeVerifier:
             check="repository_db_asset_coverage",
             status="pass" if pass_condition else "fail",
             summary=(
-                "Scoped repository asset coverage matches chart_assets.db records."
+                "Scoped repository asset coverage "
+                "matches chart_assets.db records."
                 if pass_condition
-                else "Scoped repository asset coverage has gaps or unmatched DB entries."
+                else
+                "Scoped repository asset coverage "
+                "has gaps or unmatched DB entries."
             ),
             evidence={
-                "repository_asset_count": len(repository_assets_set),
-                "db_asset_path_count": len(db_paths),
-                "coverage_percentage": coverage_percentage,
-                "orphan_files": orphan_files,
-                "orphan_db_entries": orphan_db_entries,
-                "matching_strategy": "path/name suffix heuristic; read-only verification",
-                "scope_note": "v0.7 asset coverage uses scoped asset candidates, not all repository JSON files.",
+                "repository_asset_count":
+                    len(repository_assets_set),
+
+                "db_asset_path_count":
+                    len(db_paths),
+
+                "coverage_percentage":
+                    coverage_percentage,
+
+                "orphan_files":
+                    orphan_files,
+
+                "orphan_db_entries":
+                    orphan_db_entries,
+
+                "verification_layer":
+                    "coverage",
+
+                "matching_strategy":
+                    "path/name suffix heuristic",
+
+                "scope_note":
+                    (
+                        "Coverage operates on "
+                        "scoped assets only."
+                    ),
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Persist all scoped assets to chart_assets.db and resolve orphan DB records before deletion readiness."
+                else (
+                    "Persist all scoped assets "
+                    "to chart_assets.db and "
+                    "resolve orphan DB records."
+                )
             ),
+            governance_domain="artifact_backbone",
+            contract_type="asset_coverage",
+        )
+        
+    def check_artifact_backbone_contract(self) -> None:
+        readiness = self.governance_readiness_snapshot()
+
+        backbone_present = (
+            readiness.get(
+                "artifact_backbone_present",
+                False,
+            )
+        )
+
+        backbone_readable = (
+            readiness.get(
+                "artifact_backbone_readable",
+                False,
+            )
+        )
+
+        relationship_ready = (
+            readiness.get(
+                "relationship_ready",
+                False,
+            )
+        )
+
+        pass_condition = (
+            backbone_present
+            and backbone_readable
+            and relationship_ready
+        )
+
+        self.add(
+            domain="artifact_backbone",
+            check="artifact_backbone_contract",
+            status="pass" if pass_condition else "fail",
+            summary=(
+                "Artifact backbone contract satisfied."
+                if pass_condition
+                else
+                "Artifact backbone contract not satisfied."
+            ),
+            evidence={
+                "required_databases":
+                    ARTIFACT_DATABASE_NAMES,
+
+                "required_relationships":
+                    [
+                        "scan_to_asset",
+                        "asset_to_pattern",
+                    ],
+
+                "required_capabilities":
+                    [
+                        "runtime_asset_resolution",
+                        "runtime_pattern_resolution",
+                        "runtime_recommendation_support",
+                    ],
+
+                "readiness":
+                    readiness,
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else (
+                    "Restore missing database, "
+                    "relationship, or runtime "
+                    "artifact capability."
+                )
+            ),
+            governance_domain="artifact_backbone",
+            contract_type="artifact_backbone_contract",
         )
 
     def check_hash_verification(self) -> None:
@@ -2404,7 +2972,9 @@ class RuntimeVerifier:
             ]
         )
 
-        matched_hash_count = len(file_hash_set.intersection(db_hash_set))
+        matched_hash_count = len(
+            file_hash_set.intersection(db_hash_set)
+        )
 
         pass_condition = (
             bool(repository_hashes)
@@ -2429,13 +2999,21 @@ class RuntimeVerifier:
                 "missing_hash_files": missing_hash_files,
                 "orphan_db_hashes": orphan_db_hashes,
                 "duplicate_hashes": duplicate_hashes,
-                "scope_note": "v0.7 hashes scoped asset candidates rather than all repository files.",
+                "verification_layer": "hash_integrity",
+                "scope_note": (
+                    "v1.0 hashes scoped asset candidates rather than all repository files."
+                ),
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Store SHA-256 hashes for persisted scoped assets and resolve missing/orphan/duplicate hash records."
+                else (
+                    "Store SHA-256 hashes for persisted scoped assets and "
+                    "resolve missing/orphan/duplicate hash records."
+                )
             ),
+            governance_domain="artifact_backbone",
+            contract_type="hash_integrity",
         )
 
     def check_type_A_usability(self) -> None:
@@ -2445,9 +3023,16 @@ class RuntimeVerifier:
         for record in records:
             explicit_type = str(record.get("asset_type") or "").lower()
             path_text = normalize_path_text(record.get("path"))
-            suffix_type = classify_asset_path(Path(path_text)) if path_text else "unknown"
+            suffix_type = (
+                classify_asset_path(Path(path_text))
+                if path_text
+                else "unknown"
+            )
 
-            if explicit_type in {"type_a", "type-a", "a", "deterministic"} or suffix_type == "type_A":
+            if (
+                explicit_type in {"type_a", "type-a", "a", "deterministic"}
+                or suffix_type == "type_A"
+            ):
                 type_a_records.append(record)
 
         unusable: List[Dict[str, Any]] = []
@@ -2456,7 +3041,10 @@ class RuntimeVerifier:
         for record in type_a_records:
             text = record.get("text")
             text_value = str(text or "")
-            usable = bool(text_value.strip()) and len(text_value.strip()) >= MIN_TYPE_A_TEXT_LENGTH
+            usable = (
+                bool(text_value.strip())
+                and len(text_value.strip()) >= MIN_TYPE_A_TEXT_LENGTH
+            )
 
             if usable:
                 usable_count += 1
@@ -2487,12 +3075,26 @@ class RuntimeVerifier:
                 "unusable_count": len(unusable),
                 "minimum_text_length": MIN_TYPE_A_TEXT_LENGTH,
                 "unusable_records": unusable,
+                "verification_layer": "type_A_runtime_usability",
+                "type_A_contract": {
+                    "expected": [
+                        "text_representation",
+                        "converter_success",
+                        "usable_content",
+                        "usability_verified",
+                    ],
+                },
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Convert Type A assets into non-empty text_representation values before deletion readiness."
+                else (
+                    "Convert Type A assets into non-empty text_representation "
+                    "values before deletion readiness."
+                )
             ),
+            governance_domain="artifact_backbone",
+            contract_type="type_A_usability",
         )
 
     def check_type_B_intelligence(self) -> None:
@@ -2504,9 +3106,22 @@ class RuntimeVerifier:
         for record in records:
             explicit_type = str(record.get("asset_type") or "").lower()
             path_text = normalize_path_text(record.get("path"))
-            suffix_type = classify_asset_path(Path(path_text)) if path_text else "unknown"
+            suffix_type = (
+                classify_asset_path(Path(path_text))
+                if path_text
+                else "unknown"
+            )
 
-            if explicit_type in {"type_b", "type-b", "b", "reference", "reference_only"} or suffix_type == "type_B":
+            if (
+                explicit_type in {
+                    "type_b",
+                    "type-b",
+                    "b",
+                    "reference",
+                    "reference_only",
+                }
+                or suffix_type == "type_B"
+            ):
                 type_b_records.append(record)
 
         if not type_b_files and not type_b_records:
@@ -2524,7 +3139,10 @@ class RuntimeVerifier:
                         "source_classification",
                         "runtime_reference_visibility",
                     ],
+                    "skip_reason": "No Type B file or DB record candidates were discovered.",
                 },
+                governance_domain="artifact_backbone",
+                contract_type="type_B_reference_intelligence",
             )
             return
 
@@ -2562,6 +3180,7 @@ class RuntimeVerifier:
                 "reference_url_count": reference_url_count,
                 "missing_reference_url_count": len(missing_reference_url),
                 "missing_reference_url": missing_reference_url,
+                "verification_layer": "type_B_reference_intelligence",
                 "expected": [
                     "reference_url",
                     "reference_metadata",
@@ -2572,8 +3191,13 @@ class RuntimeVerifier:
             suggested_fix=(
                 None
                 if pass_condition
-                else "Persist a usable reference_url for every Type B asset before treating it as runtime-ready."
+                else (
+                    "Persist a usable reference_url for every Type B asset "
+                    "before treating it as runtime-ready."
+                )
             ),
+            governance_domain="artifact_backbone",
+            contract_type="type_B_reference_intelligence",
         )
 
     def check_runtime_db_read(self) -> None:
@@ -2584,8 +3208,12 @@ class RuntimeVerifier:
         chart_asset_snapshots = self.get_asset_db_snapshots()
         chart_asset_records = self.iter_asset_db_records()
 
-        chart_pattern_candidates = self.resolve_artifact_db_candidates(CHART_PATTERNS_DB_NAME)
-        chart_pattern_snapshots = self.get_artifact_db_snapshots(CHART_PATTERNS_DB_NAME)
+        chart_pattern_candidates = self.resolve_artifact_db_candidates(
+            CHART_PATTERNS_DB_NAME
+        )
+        chart_pattern_snapshots = self.get_artifact_db_snapshots(
+            CHART_PATTERNS_DB_NAME
+        )
         chart_pattern_records = self.iter_chart_pattern_records()
 
         readable_artifact_db_count = self.readable_artifact_db_count()
@@ -2671,7 +3299,10 @@ class RuntimeVerifier:
             and asset_readable_db_count > 0
             and bool(chart_asset_records)
             and path_resolvable_count > 0
-            and (text_readable_count > 0 or reference_readable_count > 0)
+            and (
+                text_readable_count > 0
+                or reference_readable_count > 0
+            )
         )
 
         pattern_pass_condition = (
@@ -2690,7 +3321,7 @@ class RuntimeVerifier:
 
         self.add(
             domain="runtime_db_read",
-            check="runtime_db_asset_readiness",
+            check="runtime_db_asset_pattern_readiness",
             status="pass" if pass_condition else "fail",
             summary=(
                 "Runtime DB read readiness evidence is sufficient for assets and patterns."
@@ -2703,6 +3334,10 @@ class RuntimeVerifier:
                 "records_by_db_count": {
                     db_name: len(records)
                     for db_name, records in records_by_db.items()
+                },
+                "snapshots_by_db_count": {
+                    db_name: len(snapshots)
+                    for db_name, snapshots in snapshots_by_db.items()
                 },
                 "chart_asset_db_candidate_count": len(chart_asset_candidates),
                 "chart_asset_readable_db_count": asset_readable_db_count,
@@ -2718,13 +3353,23 @@ class RuntimeVerifier:
                 "pattern_pass_condition": pattern_pass_condition,
                 "reader_import_results": import_results,
                 "any_reader_imported": any_reader_imported,
-                "note": "v0.7 runtime DB readiness requires read-only DB evidence plus at least one importable reader module.",
+                "runtime_operability_layer": "artifact_db_readiness",
+                "note": (
+                    "v1.0 runtime DB readiness requires read-only DB evidence, "
+                    "usable asset rows, usable pattern rows, and at least one "
+                    "importable reader module."
+                ),
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Verify artifact DB readers and ensure chart_assets.db and chart_patterns.db contain readable runtime rows."
+                else (
+                    "Verify artifact DB readers and ensure chart_assets.db and "
+                    "chart_patterns.db contain readable runtime rows."
+                )
             ),
+            governance_domain="artifact_backbone",
+            contract_type="runtime_artifact_readiness",
         )
 
     def check_deletion_readiness(self) -> None:
@@ -2768,7 +3413,7 @@ class RuntimeVerifier:
                 result
                 for result in self.results
                 if result.domain == "runtime_db_read"
-                and result.check == "runtime_db_asset_readiness"
+                and result.check == "runtime_db_asset_pattern_readiness"
             ),
             None,
         )
@@ -2778,7 +3423,7 @@ class RuntimeVerifier:
                 result
                 for result in self.results
                 if result.domain == "artifact_databases"
-                and result.check == "artifact_database_backbone"
+                and result.check == "artifact_database_policy"
             ),
             None,
         )
@@ -2788,7 +3433,7 @@ class RuntimeVerifier:
                 result
                 for result in self.results
                 if result.domain == "artifact_relationships"
-                and result.check == "scan_asset_pattern_chain"
+                and result.check == "artifact_relationship_chain"
             ),
             None,
         )
@@ -2811,30 +3456,53 @@ class RuntimeVerifier:
         passed = all(required.values())
 
         self.add(
-            domain="asset_pipeline",
+            domain="governance",
             check="deletion_readiness",
             status="pass" if passed else "fail",
             summary=(
                 "Deletion readiness gate passed."
                 if passed
-                else "Deletion readiness gate failed; do not delete source chart files."
+                else
+                "Deletion readiness gate failed. Source chart files must be retained."
             ),
             evidence={
                 "required": required,
-                "repository_asset_count": len(repository_assets),
-                "file_scan_inventory_record_count": len(scan_records),
-                "chart_asset_record_count": len(asset_records),
-                "chart_pattern_record_count": len(pattern_records),
-                "failure_action": "block_deletion_recommendation" if not passed else None,
-                "v0_7_gate_note": (
-                    "Deletion readiness now requires scan, asset, and pattern artifact verification."
-                ),
+
+                "repository_asset_count":
+                    len(repository_assets),
+
+                "file_scan_inventory_record_count":
+                    len(scan_records),
+
+                "chart_asset_record_count":
+                    len(asset_records),
+
+                "chart_pattern_record_count":
+                    len(pattern_records),
+
+                "failure_action":
+                    (
+                        "block_deletion_recommendation"
+                        if not passed
+                        else None
+                    ),
+
+                "verification_layer":
+                    "deletion_governance",
             },
             suggested_fix=(
                 None
                 if passed
-                else "Keep source chart files until file scan inventory, chart assets, chart patterns, hashes, Type A usability, and runtime DB reads all pass."
+                else (
+                    "Keep source chart files until "
+                    "artifact coverage, hashes, "
+                    "Type A usability, "
+                    "relationship verification, "
+                    "and runtime DB readiness pass."
+                )
             ),
+            governance_domain="artifact_backbone",
+            contract_type="deletion_readiness",
         )
 
     def check_flow_verification(self) -> None:
@@ -2938,19 +3606,32 @@ class RuntimeVerifier:
             summary=(
                 "Runtime flow entrypoint evidence was found for chart-first, player-first, and progression flows."
                 if pass_condition
-                else "Some runtime flow evidence is incomplete."
+                else
+                "Some runtime flow evidence is incomplete."
             ),
             evidence={
                 "flow_evidence": flow_evidence,
                 "failed_flows": failed_flows,
-                "verification_style": "static_keyword_entrypoint_check",
-                "note": "v0.7 flow verification checks routing evidence only. It does not validate inference correctness.",
+                "verification_style":
+                    "static_keyword_entrypoint_check",
+
+                "verification_scope":
+                    "flow_existence",
+
+                "note":
+                    "Flow verification checks flow presence and wiring evidence only.",
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Add or expose clear flow entrypoints/stopping points for chart-first, player-first, and progression-driven flows."
+                else (
+                    "Expose clearer entrypoints and stopping points "
+                    "for chart-first, player-first, "
+                    "and progression-driven flows."
+                )
             ),
+            governance_domain="flow_contracts",
+            contract_type="flow_existence",
         )
 
     def check_layer_separation(self) -> None:
@@ -3004,25 +3685,43 @@ class RuntimeVerifier:
             check="layer_boundary_audit",
             status="pass" if pass_condition else "critical",
             summary=(
-                "Layer separation audit found no prohibited import hints."
+                "Layer separation audit found no prohibited boundary hints."
                 if pass_condition
-                else "Layer separation audit found prohibited boundary hints."
+                else
+                "Layer separation audit found prohibited boundary violations."
             ),
             evidence={
                 "layer_files": {
                     layer: sorted(set(files))
                     for layer, files in layer_files.items()
                 },
-                "violations": violations,
-                "prohibited_layer_import_hints": PROHIBITED_LAYER_IMPORT_HINTS,
-                "audit_style": "static_import_hint_audit",
-                "note": "This is a conservative static audit. It flags boundary risk; it does not mutate phase logic.",
+
+                "violations":
+                    violations,
+
+                "prohibited_layer_import_hints":
+                    PROHIBITED_LAYER_IMPORT_HINTS,
+
+                "audit_style":
+                    "static_boundary_governance",
+
+                "verification_scope":
+                    "layer_responsibility",
+
+                "layer_model":
+                    list(LAYER_KEYWORDS.keys()),
             },
             suggested_fix=(
                 None
                 if pass_condition
-                else "Move mixed responsibilities into the correct layer. Converters/validators/readers/models should not perform persistence or orchestration side effects."
+                else (
+                    "Move responsibilities into the correct layer. "
+                    "Converters, validators, readers, models, "
+                    "normalizers and classifiers must remain separated."
+                )
             ),
+            governance_domain="layer_boundaries",
+            contract_type="layer_boundary",
         )
 
     def check_mcp_config(self) -> None:
@@ -3083,32 +3782,50 @@ class RuntimeVerifier:
         has_rest_url = "RGA_REST_URL" in env_keys or any("RGA_REST_URL" in str(item) for item in args)
 
         self.add(
-            domain="mcp",
-            check="rga_server_shape",
+            domain="mcp_contract",
+            check="mcp_server_contract",
             status="pass" if server_type == "stdio" else "fail",
             summary=(
-                "RGA MCP server is configured as stdio."
+                "MCP contract satisfied."
                 if server_type == "stdio"
-                else "RGA MCP server should use stdio adapter mode, not direct REST HTTP mode."
+                else
+                "RGA MCP server does not satisfy stdio contract."
             ),
             evidence={
                 "type": server_type,
                 "command": command,
                 "args": args,
-                "env_keys": env_keys,
-                "references_mcp_server": references_mcp_server,
-                "has_rest_url_evidence": has_rest_url,
+
+                "env_keys":
+                    env_keys,
+
+                "references_mcp_server":
+                    references_mcp_server,
+
+                "has_rest_url_evidence":
+                    has_rest_url,
+
+                "required_server":
+                    {
+                        "id": "rhythm-game-assistant",
+                        "type": "stdio",
+                    },
             },
             suggested_fix=(
                 None
                 if server_type == "stdio"
-                else "Use mcp_server.py as a local stdio MCP adapter and forward to RGA_REST_URL."
+                else (
+                    "Use mcp_server.py as the stdio MCP adapter "
+                    "and forward requests through RGA_REST_URL."
+                )
             ),
+            governance_domain="mcp_contracts",
+            contract_type="mcp_server_contract",
         )
 
         self.add(
-            domain="mcp",
-            check="mcp_adapter_visibility",
+            domain="mcp_contract"
+            check="mcp_adapter_contract"
             status="pass" if references_mcp_server else "warning",
             summary=(
                 "MCP config references mcp_server.py."
@@ -3126,6 +3843,8 @@ class RuntimeVerifier:
                 if references_mcp_server
                 else "Point the rhythm-game-assistant MCP server command/args to the local mcp_server.py adapter."
             ),
+            governance_domain="mcp_contracts",
+            contract_type="mcp_adapter_contract",
         )
 
         tool_like_keys = []
@@ -3136,8 +3855,8 @@ class RuntimeVerifier:
                     tool_like_keys.append(key)
 
         self.add(
-            domain="mcp",
-            check="tool_registration_visibility",
+            domain="mcp_contract"
+            check="tool_surface_evidence"
             status="info",
             summary="MCP tool registration visibility evidence captured from config.",
             evidence={
@@ -3145,6 +3864,8 @@ class RuntimeVerifier:
                 "server_keys": sorted(list(server.keys())) if isinstance(server, dict) else [],
                 "note": "Some MCP adapters register tools dynamically at runtime, so absence of tool keys in config is not automatically a failure.",
             },
+            governance_domain="mcp_contracts",
+            contract_type="mcp_tool_surface",
         )
 
     def check_rest_contract(self) -> None:
@@ -3157,6 +3878,8 @@ class RuntimeVerifier:
                 evidence={
                     "api_url": self.api_url,
                 },
+                governance_domain="architecture_contracts",
+                contract_type="rest_contract",
             )
             return
 
@@ -3200,15 +3923,26 @@ class RuntimeVerifier:
                     status="pass",
                     summary=f"{check} completed.",
                     evidence={
-                        "response_keys": sorted(list(result.keys())) if isinstance(result, dict) else [],
+                        "response_keys": (
+                            sorted(list(result.keys()))
+                            if isinstance(result, dict)
+                            else []
+                        ),
+                        "contract_type": "rest_response_contract",
                     },
+                    governance_domain="architecture_contracts",
+                    contract_type="rest_contract",
                 )
 
             except urllib.error.HTTPError as exc:
                 body = exc.read().decode("utf-8", errors="replace")
                 summary = f"{check} returned HTTP {exc.code}."
 
-                if check == "game_mode_post" and exc.code == 501 and "Games recommender not configured" in body:
+                if (
+                    check == "game_mode_post"
+                    and exc.code == 501
+                    and "Games recommender not configured" in body
+                ):
                     summary = "Game mode confirms games_recommender is not configured."
 
                 self.add(
@@ -3219,12 +3953,15 @@ class RuntimeVerifier:
                     evidence={
                         "status": exc.code,
                         "body": body,
+                        "contract_type": "rest_response_contract",
                     },
                     suggested_fix=(
                         "Inject a Phase 7 games_recommender into create_app(...)."
                         if exc.code == 501
                         else None
                     ),
+                    governance_domain="architecture_contracts",
+                    contract_type="rest_contract",
                 )
 
             except Exception as exc:
@@ -3235,8 +3972,303 @@ class RuntimeVerifier:
                     summary=f"{check} failed.",
                     evidence={
                         "error": str(exc),
+                        "contract_type": "rest_response_contract",
                     },
+                    governance_domain="architecture_contracts",
+                    contract_type="rest_contract",
                 )
+
+    def check_flow_contract_verification(self) -> None:
+        flow_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "flow_verification"
+                and result.check == "runtime_flow_entrypoints"
+            ),
+            None,
+        )
+
+        if flow_result is None:
+            self.add(
+                domain="flow_contract_verification",
+                check="flow_contract_compliance",
+                status="skipped",
+                summary="Flow contract verification was skipped because flow verification has not produced evidence.",
+                evidence={
+                    "reason": "runtime_flow_entrypoints result not found",
+                    "required_flows": sorted(FLOW_KEYWORDS.keys()),
+                },
+                governance_domain="flow_contracts",
+                contract_type="flow_contract",
+            )
+            return
+
+        if flow_result.status == "skipped":
+            self.add(
+                domain="flow_contract_verification",
+                check="flow_contract_compliance",
+                status="skipped",
+                summary="Flow contract verification was skipped because flow verification preconditions were not met.",
+                evidence={
+                    "source_status": flow_result.status,
+                    "source_summary": flow_result.summary,
+                    "required_flows": sorted(FLOW_KEYWORDS.keys()),
+                },
+                governance_domain="flow_contracts",
+                contract_type="flow_contract",
+            )
+            return
+
+        flow_evidence = flow_result.evidence.get("flow_evidence", {})
+        failed_flows = flow_result.evidence.get("failed_flows", [])
+
+        contract_expectations = {
+            "chart_first": {
+                "entry_artifact": "chart",
+                "required": [
+                    "chart_resolution",
+                    "pattern_detection",
+                    "tips",
+                    "personalization",
+                    "localization",
+                ],
+            },
+            "player_first": {
+                "entry_artifact": "player",
+                "required": [
+                    "player_signals",
+                    "song_recommendation",
+                ],
+                "optional": [
+                    "tips",
+                ],
+            },
+            "progression": {
+                "entry_artifact": "progression",
+                "required": [
+                    "game_recommendation",
+                    "song_recommendation",
+                ],
+                "optional": [
+                    "tips",
+                ],
+            },
+        }
+
+        pass_condition = flow_result.status == "pass" and not failed_flows
+
+        self.add(
+            domain="flow_contract_verification",
+            check="flow_contract_compliance",
+            status="pass" if pass_condition else "fail",
+            summary=(
+                "Flow contracts are supported by runtime flow evidence."
+                if pass_condition
+                else "One or more flow contracts lack supporting runtime flow evidence."
+            ),
+            evidence={
+                "contract_expectations": contract_expectations,
+                "flow_evidence": flow_evidence,
+                "failed_flows": failed_flows,
+                "verification_scope": "flow_contract_compliance",
+                "note": (
+                    "This check verifies flow boundary evidence only. "
+                    "It does not validate recommendation quality or gameplay inference correctness."
+                ),
+            },
+            suggested_fix=(
+                None
+                if pass_condition
+                else (
+                    "Expose clearer entrypoints, main artifacts, and stopping points "
+                    "for chart-first, player-first, and progression-driven flows."
+                )
+            ),
+            governance_domain="flow_contracts",
+            contract_type="flow_contract",
+        )
+
+    def check_governance_verdict(self) -> None:
+        blocking_reasons = list(
+            self.governance_state.get("blocking_reasons", [])
+        )
+
+        warnings = list(
+            self.governance_state.get("warnings", [])
+        )
+
+        critical_count = len(
+            [
+                result
+                for result in self.results
+                if result.severity == "critical"
+            ]
+        )
+
+        fail_count = len(
+            [
+                result
+                for result in self.results
+                if result.severity == "fail"
+            ]
+        )
+
+        deletion_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "governance"
+                and result.check == "deletion_readiness"
+            ),
+            None,
+        )
+
+        artifact_backbone_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "artifact_backbone"
+                and result.check == "artifact_backbone_contract"
+            ),
+            None,
+        )
+
+        layer_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "layer_separation"
+                and result.check == "layer_boundary_audit"
+            ),
+            None,
+        )
+
+        mcp_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "mcp_contract"
+                and result.check == "mcp_server_contract"
+            ),
+            None,
+        )
+
+        flow_contract_result = next(
+            (
+                result
+                for result in self.results
+                if result.domain == "flow_contract_verification"
+                and result.check == "flow_contract_compliance"
+            ),
+            None,
+        )
+
+        architecture_verdict = (
+            "blocked"
+            if critical_count > 0 or fail_count > 0
+            else "ready"
+        )
+
+        deletion_verdict = (
+            "ready"
+            if deletion_result is not None
+            and deletion_result.status == "pass"
+            else "blocked"
+        )
+
+        artifact_backbone_verdict = (
+            "ready"
+            if artifact_backbone_result is not None
+            and artifact_backbone_result.status == "pass"
+            else "blocked"
+        )
+
+        layer_boundary_verdict = (
+            "ready"
+            if layer_result is not None
+            and layer_result.status == "pass"
+            else "blocked"
+        )
+
+        mcp_contract_verdict = (
+            "ready"
+            if mcp_result is not None
+            and mcp_result.status == "pass"
+            else "partial_or_blocked"
+        )
+
+        flow_contract_verdict = (
+            "ready"
+            if flow_contract_result is not None
+            and flow_contract_result.status == "pass"
+            else "partial_or_blocked"
+        )
+
+        governance_verdict = (
+            "blocked"
+            if (
+                critical_count > 0
+                or fail_count > 0
+                or deletion_verdict == "blocked"
+                or artifact_backbone_verdict == "blocked"
+                or layer_boundary_verdict == "blocked"
+            )
+            else "ready"
+        )
+
+        self.governance_state.update(
+            {
+                "architecture_verdict": architecture_verdict,
+                "artifact_backbone_verdict": artifact_backbone_verdict,
+                "flow_contract_verdict": flow_contract_verdict,
+                "layer_boundary_verdict": layer_boundary_verdict,
+                "mcp_contract_verdict": mcp_contract_verdict,
+                "deletion_verdict": deletion_verdict,
+                "governance_verdict": governance_verdict,
+                "blocking_reasons": blocking_reasons,
+                "warnings": warnings,
+            }
+        )
+
+        self.add(
+            domain="governance",
+            check="governance_verdict",
+            status="pass" if governance_verdict == "ready" else "fail",
+            summary=(
+                "RGA governance verdict is ready."
+                if governance_verdict == "ready"
+                else "RGA governance verdict is blocked."
+            ),
+            evidence={
+                "governance_verdict": governance_verdict,
+                "architecture_verdict": architecture_verdict,
+                "artifact_backbone_verdict": artifact_backbone_verdict,
+                "flow_contract_verdict": flow_contract_verdict,
+                "layer_boundary_verdict": layer_boundary_verdict,
+                "mcp_contract_verdict": mcp_contract_verdict,
+                "deletion_verdict": deletion_verdict,
+                "critical_count": critical_count,
+                "fail_count": fail_count,
+                "blocking_reasons": blocking_reasons,
+                "warnings": warnings,
+                "policy": {
+                    "default_deletion": "blocked",
+                    "completed_phases": "immutable",
+                    "verifier_mode": "read_only",
+                },
+            },
+            suggested_fix=(
+                None
+                if governance_verdict == "ready"
+                else (
+                    "Resolve fail/critical findings before treating the repository "
+                    "as architecture-governance-ready."
+                )
+            ),
+            governance_domain="governance",
+            contract_type="governance_verdict",
+        )
 
     def run_all(self) -> Dict[str, Any]:
         self.check_environment()
@@ -3255,6 +4287,7 @@ class RuntimeVerifier:
         self.check_asset_scope_policy()
         self.check_artifact_databases()
         self.check_artifact_relationships()
+        self.check_artifact_backbone_contract()
 
         self.check_asset_pipeline()
         self.check_asset_coverage()
@@ -3265,10 +4298,13 @@ class RuntimeVerifier:
         self.check_deletion_readiness()
 
         self.check_flow_verification()
+        self.check_flow_contract_verification()
         self.check_layer_separation()
 
         self.check_mcp_config()
         self.check_rest_contract()
+
+        self.check_governance_verdict()
 
         counts: Dict[str, int] = {}
         severities: Dict[str, int] = {}
@@ -3288,12 +4324,15 @@ class RuntimeVerifier:
         }
 
         return {
-            "schema": "rga.runtime_verifier.report.v7",
+            "schema": "rga.runtime_verifier.report.v1.0",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "repo_root": str(self.repo_root),
             "backend_root": str(self.backend_root),
             "backend_root_mode": self.backend_root_mode,
-            "backend_root_candidates": [asdict(candidate) for candidate in self.backend_candidates],
+            "backend_root_candidates": [
+                asdict(candidate)
+                for candidate in self.backend_candidates
+            ],
             "discovered_files": self.discovered_files,
             "discovered_packages": self.discovered_packages,
             "discovered_assets": self.discovered_assets,
@@ -3303,10 +4342,14 @@ class RuntimeVerifier:
                 "candidates": artifact_db_candidates,
                 "record_counts": artifact_db_record_counts,
             },
+            "governance": self.governance_state,
             "api_url": self.api_url,
             "summary": counts,
             "severity_summary": severities,
-            "results": [asdict(result) for result in self.results],
+            "results": [
+                asdict(result)
+                for result in self.results
+            ],
         }
 
 
@@ -3327,6 +4370,18 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append(f"API URL: `{report.get('api_url')}`")
     lines.append("")
 
+    lines.append("## Governance Verdict")
+    lines.append("```json")
+    lines.append(
+        json.dumps(
+            report.get("governance", {}),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+    lines.append("```")
+    lines.append("")
+
     lines.append("## Summary")
     for key, value in sorted(report.get("summary", {}).items()):
         lines.append(f"- **{key}**: {value}")
@@ -3339,31 +4394,61 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append("## Backend Candidates")
     lines.append("```json")
-    lines.append(json.dumps(report.get("backend_root_candidates", []), indent=2, ensure_ascii=False))
+    lines.append(
+        json.dumps(
+            report.get("backend_root_candidates", []),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     lines.append("```")
     lines.append("")
 
     lines.append("## Artifact Databases")
     lines.append("```json")
-    lines.append(json.dumps(report.get("artifact_databases", {}), indent=2, ensure_ascii=False))
+    lines.append(
+        json.dumps(
+            report.get("artifact_databases", {}),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     lines.append("```")
     lines.append("")
 
     lines.append("## Discovered Files")
     lines.append("```json")
-    lines.append(json.dumps(report.get("discovered_files", {}), indent=2, ensure_ascii=False))
+    lines.append(
+        json.dumps(
+            report.get("discovered_files", {}),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     lines.append("```")
     lines.append("")
 
     lines.append("## Discovered Packages")
     lines.append("```json")
-    lines.append(json.dumps(report.get("discovered_packages", {}), indent=2, ensure_ascii=False))
+    lines.append(
+        json.dumps(
+            report.get("discovered_packages", {}),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     lines.append("```")
     lines.append("")
 
     lines.append("## Discovered Assets")
     lines.append("```json")
-    lines.append(json.dumps(report.get("discovered_assets", {}), indent=2, ensure_ascii=False))
+    lines.append(
+        json.dumps(
+            report.get("discovered_assets", {}),
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     lines.append("```")
     lines.append("")
 
@@ -3377,12 +4462,27 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         lines.append("")
         lines.append(item.get("summary", ""))
 
+        if item.get("governance_domain") or item.get("contract_type"):
+            lines.append("")
+            lines.append(
+                f"Governance domain: `{item.get('governance_domain')}`"
+            )
+            lines.append(
+                f"Contract type: `{item.get('contract_type')}`"
+            )
+
         evidence = item.get("evidence") or {}
 
         if evidence:
             lines.append("")
             lines.append("```json")
-            lines.append(json.dumps(evidence, indent=2, ensure_ascii=False))
+            lines.append(
+                json.dumps(
+                    evidence,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
             lines.append("```")
 
         if item.get("suggested_fix"):
@@ -3400,7 +4500,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 # -----------------------------------------------------------------------------
 
 def main() -> int:
-    parser = argparse.ArgumentParser("RGA Runtime Verifier Bot")
+    parser = argparse.ArgumentParser("RGA Systems Auditor")
 
     parser.add_argument("--repo-root", default=".", help="Repository root or backend root.")
     parser.add_argument("--backend-root", default=None, help="Explicit backend root. Overrides auto-discovery.")
