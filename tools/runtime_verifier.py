@@ -993,6 +993,8 @@ class RuntimeVerifier:
             "mcp_contract_verdict": None,
             "deletion_verdict": None,
             "governance_verdict": None,
+            "root_failures": [],
+            "derived_failures": [],
 
             #
             # Layer boundary audit telemetry
@@ -2632,35 +2634,95 @@ class RuntimeVerifier:
             status=status,
             summary=summary,
             evidence={
-                "required_databases": ARTIFACT_DATABASE_NAMES,
-                "relationship_chain": ARTIFACT_RELATIONSHIP_CHAIN,
-                "missing": missing,
-                "unreadable": unreadable,
-                "empty": empty,
-                "database_status": db_status,
-                "read_mode": "sqlite_readonly",
+
+                #
+                # Required backbone
+                #
+
+                "required_databases":
+                    ARTIFACT_DATABASE_NAMES,
+
+                "relationship_chain":
+                    ARTIFACT_RELATIONSHIP_CHAIN,
+
+                #
+                # Findings
+                #
+
+                "missing":
+                    missing,
+
+                "unreadable":
+                    unreadable,
+
+                "empty":
+                    empty,
+
+                "database_status":
+                    db_status,
+
+                #
+                # Verification policy
+                #
+
+                "role":
+                    "root_contract",
+
+                "read_mode":
+                    "sqlite_readonly",
+
                 "allowed_operations": [
                     "schema_inventory",
                     "readability_check",
                     "record_count",
                     "relationship_verification",
                 ],
+
                 "prohibited_operations": [
                     "insert",
                     "update",
                     "delete",
                     "schema_mutation",
                 ],
+
+                #
+                # Governance cascade awareness
+                #
+
+                "derived_failures_if_missing": [
+                    "artifact_relationships",
+                    "artifact_backbone_contract",
+                    "asset_coverage",
+                    "hash_integrity",
+                    "type_A_usability",
+                    "runtime_artifact_readiness",
+                ],
+
+                #
+                # Notes
+                #
+
                 "policy_note": (
-                    "This check verifies artifact database presence, readability, "
-                    "and row evidence only. Runtime operability is evaluated by "
-                    "artifact backbone and runtime DB readiness checks."
+                    "This check acts as a root artifact-backbone contract. "
+                    "Missing or unreadable artifact databases may cause "
+                    "derived failures in downstream artifact verification "
+                    "domains."
+                ),
+
+                "governance_note": (
+                    "Artifact database failures should be rendered as root "
+                    "failures. Downstream contract failures should be marked "
+                    "as derived whenever caused by missing backbone databases."
                 ),
             },
             suggested_fix=(
                 None
                 if status == "pass"
-                else "Create or provide file_scan_inventory.db, chart_assets.db, and chart_patterns.db, then ensure each is valid SQLite and populated."
+                else (
+                    "Create or provide file_scan_inventory.db, "
+                    "chart_assets.db, and chart_patterns.db, then "
+                    "ensure each database is readable and populated."
+                )
             ),
             governance_domain="artifact_backbone",
             contract_type="artifact_database_policy",
@@ -4497,10 +4559,37 @@ class RuntimeVerifier:
 
         dependency_failures: List[Dict[str, Any]] = []
         governance_failures: List[Dict[str, Any]] = []
-        root_failures = []
-        derived_failures = []
         
+        #
+        # ----------------------------------------------------------
+        # Root vs Derived Failure Classification
+        #
+        # Root failures represent problems that can independently
+        # invalidate a governance contract.
+        #
+        # Derived failures are expected consequences of an
+        # upstream root failure.
+        # ----------------------------------------------------------
+        #
+
+        dependency_failures: List[Dict[str, Any]] = []
+        governance_failures: List[Dict[str, Any]] = []
+
+        root_failures: List[Dict[str, Any]] = []
+        derived_failures: List[Dict[str, Any]] = []
+
         DERIVED_FAILURE_POLICY = {
+
+            #
+            # Artifact backbone cascade
+            #
+
+            "artifact_relationships":
+                "artifact_database_policy",
+
+            "artifact_backbone_contract":
+                "artifact_database_policy",
+
             "asset_coverage":
                 "artifact_database_policy",
 
@@ -4518,15 +4607,25 @@ class RuntimeVerifier:
 
             contract_type = item.get("contract_type")
 
-            dependency_of = DERIVED_FAILURE_POLICY.get(
-                contract_type
+            dependency_of = (
+                DERIVED_FAILURE_POLICY.get(
+                    contract_type
+                )
             )
 
             if dependency_of:
-                item["dependency_of"] = dependency_of
-                derived_failures.append(item)
+                item["dependency_of"] = (
+                    dependency_of
+                )
+            
+                derived_failures.append(
+                    item
+                )
+                
             else:
-                root_failures.append(item)
+                root_failures.append(
+                    item
+                )
 
         critical_results: List[Any] = []
         fail_results: List[Any] = []
@@ -4824,6 +4923,12 @@ class RuntimeVerifier:
 
                 "governance_failures":
                     governance_failures,
+                    
+                "root_failures":
+                    root_failures,
+
+                "derived_failures":
+                    derived_failures,
 
                 "dependency_fail_count":
                     dependency_fail_count,
@@ -4884,13 +4989,7 @@ class RuntimeVerifier:
 
                 "deletion_verdict":
                     deletion_verdict,
-
-                "dependency_fail_count":
-                    dependency_fail_count,
-
-                "governance_fail_count":
-                    governance_fail_count,
-
+                    
                 "dependency_failures":
                     dependency_failures,
 
@@ -4902,6 +5001,12 @@ class RuntimeVerifier:
 
                 "derived_failures":
                     derived_failures,
+
+                "dependency_fail_count":
+                    dependency_fail_count,
+
+                "governance_fail_count":
+                    governance_fail_count,
 
                 "blocking_reasons":
                     blocking_reasons,
@@ -5025,6 +5130,21 @@ class RuntimeVerifier:
 
 def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines: List[str] = []
+    
+    governance = report.get(
+        "governance",
+        {},
+    )
+
+    root_failures = governance.get(
+        "root_failures",
+        [],
+    )
+
+    derived_failures = governance.get(
+        "derived_failures",
+        [],
+    )
 
     lines.append("# RGA Runtime Verifier Report")
     lines.append("")
@@ -5047,6 +5167,14 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         lines.append(
             f"- {item['contract_type']}"
         )
+        
+    if not root_failures:
+        lines.append("(none)")
+    else:
+        for item in root_failures:
+            lines.append(
+                f"- {item.get('contract_type')}"
+            )
 
     lines.append("")
 
