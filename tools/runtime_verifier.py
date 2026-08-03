@@ -7520,14 +7520,20 @@ def main() -> int:
     )
 
     print(text)
-
+    
     #
     # ----------------------------------------------------------
     # JSON Report
     # ----------------------------------------------------------
     #
 
+    generated_reports = {
+        "json": None,
+        "markdown": None,
+    }
+
     if args.json_out:
+
         json_out = Path(
             args.json_out
         )
@@ -7542,6 +7548,10 @@ def main() -> int:
             encoding="utf-8",
         )
 
+        generated_reports["json"] = str(
+            json_out
+        )
+
     #
     # ----------------------------------------------------------
     # Markdown Report
@@ -7549,12 +7559,53 @@ def main() -> int:
     #
 
     if args.md_out:
+
+        md_out = Path(
+            args.md_out
+        )
+
+        md_out.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
         write_markdown(
             report,
-            Path(
-                args.md_out
-            ),
+            md_out,
         )
+
+        generated_reports["markdown"] = str(
+            md_out
+        )
+
+    #
+    # ----------------------------------------------------------
+    # Report Generation Summary
+    # ----------------------------------------------------------
+    #
+
+    report.setdefault(
+        "report_generation",
+        {}
+    )
+
+    report["report_generation"].update(
+        {
+            "json_report":
+                generated_reports["json"],
+
+            "markdown_report":
+                generated_reports["markdown"],
+
+            "json_generated":
+                generated_reports["json"]
+                is not None,
+
+            "markdown_generated":
+                generated_reports["markdown"]
+                is not None,
+        }
+    )
 
     #
     # ----------------------------------------------------------
