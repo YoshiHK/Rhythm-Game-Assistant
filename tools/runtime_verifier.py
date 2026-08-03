@@ -5112,23 +5112,28 @@ class RuntimeVerifier:
         # ----------------------------------------------------------
         # Separate dependency failures from governance failures.
         #
-        # Dependency failures do not automatically block architecture
-        # governance.
+        # Dependency failures may constrain runtime readiness, but
+        # they should not automatically become architecture or
+        # governance blockers.
+        #
+        # Meta-contracts such as governance_verdict should also not
+        # become root causes.
         # ----------------------------------------------------------
         #
 
         dependency_failures: List[Dict[str, Any]] = []
         governance_failures: List[Dict[str, Any]] = []
 
-        critical_results: List[Any] = []
-        fail_results: List[Any] = []
+        relevant_failure_results: List[Any] = []
 
         for result in self.results:
-            if result.severity == "critical":
-                critical_results.append(result)
-
-            if result.severity == "fail":
-                fail_results.append(result)
+            if result.severity in {
+                "critical",
+                "fail",
+            }:
+                relevant_failure_results.append(
+                    result,
+                )
 
         dependency_contracts = {
             "dependency_reality",
@@ -5136,30 +5141,54 @@ class RuntimeVerifier:
             "runtime_import_reality",
         }
 
-        for result in (critical_results + fail_results):
+        for result in relevant_failure_results:
             contract_type = getattr(
                 result,
                 "contract_type",
                 None,
             )
 
+            #
+            # Meta-contracts are verdicts, not root causes.
+            #
+            if contract_type in GOVERNANCE_META_CONTRACT_TYPES:
+                continue
+
             item = {
-                "domain": result.domain,
-                "check": result.check,
-                "severity": result.severity,
-                "summary": result.summary,
-                "governance_domain": getattr(
-                    result,
-                    "governance_domain",
-                    None,
-                ),
-                "contract_type": contract_type,
+                "domain":
+                    result.domain,
+
+                "check":
+                    result.check,
+
+                "severity":
+                    result.severity,
+
+                "status":
+                    result.status,
+
+                "summary":
+                    result.summary,
+
+                "governance_domain":
+                    getattr(
+                        result,
+                        "governance_domain",
+                        None,
+                    ),
+
+                "contract_type":
+                    contract_type,
             }
 
             if contract_type in dependency_contracts:
-                dependency_failures.append(item)
+                dependency_failures.append(
+                    item,
+                )
             else:
-                governance_failures.append(item)
+                governance_failures.append(
+                    item,
+                )
 
         root_failures, derived_failures = (
             self.classify_governance_failure_lineage(
@@ -5168,24 +5197,30 @@ class RuntimeVerifier:
         )
 
         dependency_fail_count = len(
-            dependency_failures
+            dependency_failures,
         )
 
         governance_fail_count = len(
-            governance_failures
+            governance_failures,
         )
 
         root_failure_count = len(
-            root_failures
+            root_failures,
         )
 
         derived_failure_count = len(
-            derived_failures
+            derived_failures,
         )
 
         #
         # ----------------------------------------------------------
         # Runtime dependency reality
+        #
+        # Runtime readiness is treated separately from governance.
+        #
+        # Missing runtime dependencies may constrain runtime and flow
+        # verification, but should not automatically block architecture
+        # governance.
         # ----------------------------------------------------------
         #
 
@@ -5209,13 +5244,21 @@ class RuntimeVerifier:
             None,
         )
 
+        runtime_dependency_ready = (
+            runtime_dependency_result is not None
+            and runtime_dependency_result.status == "pass"
+        )
+
+        runtime_import_ready = (
+            runtime_import_result is not None
+            and runtime_import_result.status == "pass"
+        )
+
         runtime_verdict = (
             "ready"
             if (
-                runtime_dependency_result is not None
-                and runtime_dependency_result.status == "pass"
-                and runtime_import_result is not None
-                and runtime_import_result.status == "pass"
+                runtime_dependency_ready
+                and runtime_import_ready
             )
             else "blocked_by_dependency"
         )
@@ -5223,6 +5266,11 @@ class RuntimeVerifier:
         #
         # ----------------------------------------------------------
         # Deletion readiness
+        #
+        # Deletion is a governance gate.
+        # It remains blocked until artifact coverage, hash integrity,
+        # Type A usability, relationship verification, and runtime DB
+        # readiness pass.
         # ----------------------------------------------------------
         #
 
@@ -5238,14 +5286,20 @@ class RuntimeVerifier:
 
         deletion_verdict = (
             "ready"
-            if deletion_result is not None
-            and deletion_result.status == "pass"
+            if (
+                deletion_result is not None
+                and deletion_result.status == "pass"
+            )
             else "blocked"
         )
 
         #
         # ----------------------------------------------------------
         # Artifact backbone
+        #
+        # The artifact backbone is a governance-relevant root domain.
+        # Missing or unreadable artifact DBs should block downstream
+        # artifact verification and deletion readiness.
         # ----------------------------------------------------------
         #
 
@@ -5261,14 +5315,25 @@ class RuntimeVerifier:
 
         artifact_backbone_verdict = (
             "ready"
-            if artifact_backbone_result is not None
-            and artifact_backbone_result.status == "pass"
+            if (
+                artifact_backbone_result is not None
+                and artifact_backbone_result.status == "pass"
+            )
             else "blocked"
         )
 
         #
         # ----------------------------------------------------------
-        # Layer audit
+        # Layer boundary audit
+        #
+        # Hint:
+        #   not governance-blocking
+        #
+        # Suspicion:
+        #   review-needed, but not governance-blocking
+        #
+        # Evidence:
+        #   governance-blocking
         # ----------------------------------------------------------
         #
 
@@ -5277,25 +5342,38 @@ class RuntimeVerifier:
             {},
         )
 
-        layer_boundary_verdict = (
-            "blocked"
-            if layer_risk.get(
+        layer_evidence_count = int(
+            layer_risk.get(
                 "evidence_count",
                 0,
-            ) > 0
+            )
+            or 0
+        )
+
+        layer_suspicion_count = int(
+            layer_risk.get(
+                "suspicion_count",
+                0,
+            )
+            or 0
+        )
+
+        layer_boundary_verdict = (
+            "blocked"
+            if layer_evidence_count > 0
             else (
                 "review_needed"
-                if layer_risk.get(
-                    "suspicion_count",
-                    0,
-                ) > 0
+                if layer_suspicion_count > 0
                 else "ready"
             )
         )
 
         #
         # ----------------------------------------------------------
-        # MCP
+        # MCP contract
+        #
+        # MCP readiness is evaluated separately from FastAPI/runtime
+        # dependency readiness.
         # ----------------------------------------------------------
         #
 
@@ -5311,14 +5389,23 @@ class RuntimeVerifier:
 
         mcp_contract_verdict = (
             "ready"
-            if mcp_result is not None
-            and mcp_result.status == "pass"
+            if (
+                mcp_result is not None
+                and mcp_result.status == "pass"
+            )
             else "partial_or_blocked"
         )
 
         #
         # ----------------------------------------------------------
         # Flow contracts
+        #
+        # Flow contracts may be skipped or partial when runtime
+        # dependency/import readiness is incomplete.
+        #
+        # A skipped flow contract is not automatically a governance
+        # blocker. It should usually become review_needed or
+        # runtime-limited depending on the surrounding verdicts.
         # ----------------------------------------------------------
         #
 
@@ -5332,38 +5419,86 @@ class RuntimeVerifier:
             None,
         )
 
-        flow_contract_verdict = (
-            "ready"
-            if flow_contract_result is not None
+        if (
+            flow_contract_result is not None
             and flow_contract_result.status == "pass"
-            else "partial_or_blocked"
-        )
+        ):
+            flow_contract_verdict = "ready"
+
+        elif (
+            flow_contract_result is not None
+            and flow_contract_result.status == "skipped"
+        ):
+            flow_contract_verdict = "runtime_limited"
+
+        else:
+            flow_contract_verdict = "partial_or_blocked"
 
         #
         # ----------------------------------------------------------
         # Architecture verdict
         #
         # IMPORTANT:
-        # Dependency failures do NOT automatically block
-        # architecture governance.
+        #
+        # Dependency failures do NOT automatically block architecture
+        # governance.
+        #
+        # Architecture is blocked only by architecture-level contract
+        # failures or evidence-level layer boundary violations.
         # ----------------------------------------------------------
         #
-        
+
         architecture_failure_contracts = {
             "repository_discovery",
             "repository_runtime_alignment",
+            "repository_import_runtime_separation",
             "package_layout",
-            "import_reality",
-            "layer_boundary",
+            "package_identity",
+            "package_root_resolution",
+            "repository_shape",
+            "runtime_metadata_contract",
             "flow_contract",
         }
-        
+
         architecture_blockers = [
             item
             for item in governance_failures
             if item.get("contract_type")
             in architecture_failure_contracts
         ]
+
+        #
+        # Layer boundary only blocks architecture when evidence-level
+        # violations exist.
+        #
+        if layer_boundary_verdict == "blocked":
+            architecture_blockers.append(
+                {
+                    "domain":
+                        "layer_separation",
+
+                    "check":
+                        "layer_boundary_audit",
+
+                    "severity":
+                        "critical",
+
+                    "status":
+                        "fail",
+
+                    "summary":
+                        (
+                            "Layer boundary audit found evidence-level "
+                            "governance violations."
+                        ),
+
+                    "governance_domain":
+                        "layer_boundaries",
+
+                    "contract_type":
+                        "layer_boundary",
+                }
+            )
 
         architecture_verdict = (
             "blocked"
@@ -5381,24 +5516,40 @@ class RuntimeVerifier:
         # ----------------------------------------------------------
         #
 
-        governance_verdict = (
-            "blocked"
-            if (
-                architecture_verdict == "blocked"
-                or deletion_verdict == "blocked"
-                or artifact_backbone_verdict == "blocked"
-                or layer_boundary_verdict == "blocked"
-            )
-            else (
-                "review_needed"
-                if (
-                    layer_boundary_verdict == "review_needed"
-                    or runtime_verdict == "blocked_by_dependency"
-                )
-                else "ready"
-            )
+        has_governance_blocker = any(
+            verdict == "blocked"
+            for verdict in [
+                architecture_verdict,
+                artifact_backbone_verdict,
+                deletion_verdict,
+            ]
+        )       
+
+        requires_review = any(
+            verdict == "review_needed"
+            for verdict in [
+                layer_boundary_verdict,
+                flow_contract_verdict,
+            ]
+        ) 
+
+        runtime_constrained = (
+            runtime_verdict
+            == "blocked_by_dependency"
         )
 
+        if has_governance_blocker:
+            governance_verdict = "blocked"
+
+        elif requires_review:
+            governance_verdict = "review_needed"
+
+        elif runtime_constrained:
+            governance_verdict = "runtime_limited"
+
+        else:
+            governance_verdict = "ready"
+        
         self.governance_state.update(
             {
                 #
@@ -5499,6 +5650,60 @@ class RuntimeVerifier:
                         "Resolve root failures first, then re-run all derived verification contracts."
                     ),
                 },
+                
+                #
+                # --------------------------------------------------
+                # Impact Scope
+                # --------------------------------------------------
+                #
+                              
+                "impact_scope": {
+
+                    "root_contract_impacts": {
+
+                        "artifact_database_policy": {
+
+                            "directly_blocks": [
+                                "artifact_relationships",
+                                "artifact_backbone_contract",
+                                "asset_coverage",
+                                "hash_integrity",
+                                "type_A_usability",
+                                "runtime_artifact_readiness",
+                            ],
+
+                            "impact_domain":
+                                "artifact_backbone",
+                        },
+
+                        "deletion_readiness": {
+
+                            "directly_blocks": [
+                                "source_asset_deletion"
+                            ],
+
+                            "impact_domain":
+                                "deletion_governance",
+                        },
+                    },
+
+                    "impact_principle": (
+                        "Impact scope describes governance domains "
+                        "affected by a root contract failure. "
+                        "It does not imply remediation."
+                    ),
+                },         
+                
+                for root_contract in ROOT_FAILURE_CONTRACT_TYPES:
+
+                    impact_scope[root_contract] = {
+                        "directly_blocks": [
+                            item.get("contract_type")
+                            for item in derived_failures
+                            if item.get("dependency_of")
+                            == root_contract
+                        ]
+                    }                
 
                 #
                 # --------------------------------------------------
@@ -5507,24 +5712,46 @@ class RuntimeVerifier:
                 #
 
                 "lineage": {
-                    "root_failure_contract_types":
-                        sorted(
-                            ROOT_FAILURE_CONTRACT_TYPES
+
+                    #
+                    # Classification Policy
+                    #
+
+                    "policy": {
+
+                        "root_failure_contract_types":
+                            sorted(
+                                ROOT_FAILURE_CONTRACT_TYPES
+                            ),
+
+                        "derived_failure_policy":
+                            DERIVED_FAILURE_POLICY,
+
+                        "governance_meta_contract_types":
+                            sorted(
+                                GOVERNANCE_META_CONTRACT_TYPES
+                            ),
+
+                        "lineage_principle": (
+                            "Root failures are independently actionable blockers. "
+                            "Derived failures are downstream consequences and "
+                            "should be re-evaluated after root resolution."
                         ),
+                    },
+                    
+                    "runtime_lineage": {
 
-                    "derived_failure_policy":
-                        DERIVED_FAILURE_POLICY,
+                        "root_contracts": [
+                            item.get("contract_type")
+                            for item in root_failures
+                        ],
 
-                    "governance_meta_contract_types":
-                        sorted(
-                            GOVERNANCE_META_CONTRACT_TYPES
-                        ),
-
-                    "lineage_principle": (
-                        "Root failures are independently actionable blockers. "
-                        "Derived failures are downstream consequences and "
-                        "should be re-evaluated after root resolution."
-                    ),
+                        "derived_contracts": {
+                            item.get("contract_type"):
+                                item.get("dependency_of")
+                            for item in derived_failures
+                        },
+                    },
                 },
 
                 #
@@ -5576,24 +5803,31 @@ class RuntimeVerifier:
         self.add(
             domain="governance",
             check="governance_verdict",
-            status=(
+            status = (
                 "pass"
                 if governance_verdict == "ready"
                 else (
                     "warning"
-                    if governance_verdict == "review_needed"
+                    if governance_verdict in (
+                        "review_needed",
+                        "runtime_limited",
+                    )
                     else "fail"
                 )
-            ),
-            summary=(
+            )
+            summary = (
                 "RGA governance verdict is ready."
                 if governance_verdict == "ready"
                 else (
                     "RGA governance verdict requires review."
                     if governance_verdict == "review_needed"
-                    else "RGA governance verdict is blocked."
+                    else (
+                        "RGA runtime readiness is limited by runtime dependencies."
+                        if governance_verdict == "runtime_limited"
+                        else "RGA governance verdict is blocked."
+                    )
                 )
-            ),
+            )
             evidence={
                 #
                 # --------------------------------------------------
@@ -5687,42 +5921,120 @@ class RuntimeVerifier:
                         for item in derived_failures
                     },
                 },
+                
+                "action_order": [
+
+                    "resolve_root_failures",
+
+                    "revalidate_derived_failures",
+
+                    "recompute_governance_verdict"
+                ]                
 
                 #
                 # --------------------------------------------------
                 # Governance accounting
+                #
+                # Keep governance_verdict itself out of canonical
+                # blocking reasons to avoid circular explanations:
+                #
+                #   governance_verdict is blocked
+                #   because governance_verdict is blocked
+                #
+                # Meta results remain available through Detailed
+                # Results, but should not be treated as root causes.
                 # --------------------------------------------------
                 #
 
-                "blocking_reasons":
+                "blocking_reasons": [
+                    item
+                    for item in blocking_reasons
+                    if item.get("contract_type")
+                    not in GOVERNANCE_META_CONTRACT_TYPES
+                ],
+
+                "blocking_reason_count":
+                    len(
+                        [
+                            item
+                            for item in blocking_reasons
+                            if item.get("contract_type")
+                            not in GOVERNANCE_META_CONTRACT_TYPES
+                        ]
+                    ),
+
+                "raw_blocking_reasons":
                     blocking_reasons,
 
                 "warnings":
                     warnings,
 
+                "warning_count":
+                    len(
+                        warnings
+                    ),
+
                 #
                 # --------------------------------------------------
-                # Root / derived lineage policy
+                # Runtime / Governance interpretation
                 # --------------------------------------------------
                 #
 
-                "lineage_policy": {
-                    "root_failure_contract_types":
-                        sorted(ROOT_FAILURE_CONTRACT_TYPES),
+                "verdict_semantics": {
+                    "ready": (
+                        "No governance blockers or review-needed "
+                        "conditions were detected."
+                    ),
 
-                    "derived_failure_policy":
-                        DERIVED_FAILURE_POLICY,
+                    "runtime_limited": (
+                        "Governance is not independently blocked, but "
+                        "runtime readiness is constrained by dependency "
+                        "or import reality."
+                    ),
 
-                    "governance_meta_contract_types":
-                        sorted(GOVERNANCE_META_CONTRACT_TYPES),
+                    "review_needed": (
+                        "No hard governance blocker was detected, but "
+                        "one or more governance domains require review."
+                    ),
 
-                    "classification_note": (
-                        "Root failures represent independently actionable "
-                        "governance blockers. Derived failures are downstream "
-                        "consequences of an upstream root contract failure and "
-                        "should be re-evaluated after the root contract passes."
+                    "blocked": (
+                        "One or more governance root contracts or hard "
+                        "governance gates are blocked."
                     ),
                 },
+
+                #
+                # --------------------------------------------------
+                # Impact Scope
+                #
+                # This is copied from governance_state so the
+                # governance_verdict evidence remains self-contained.
+                #
+                # Impact scope is advisory only. It does not grant
+                # mutation authority.
+                # --------------------------------------------------
+                #
+
+                "impact_scope":
+                    self.governance_state.get(
+                        "impact_scope",
+                        {},
+                    ),
+
+                #
+                # --------------------------------------------------
+                # Failure Lineage
+                #
+                # Use the same structure as governance_state to avoid
+                # maintaining a second lineage_policy shape here.
+                # --------------------------------------------------
+                #
+
+                "lineage":
+                    self.governance_state.get(
+                        "lineage",
+                        {},
+                    ),
 
                 #
                 # --------------------------------------------------
@@ -5730,40 +6042,64 @@ class RuntimeVerifier:
                 # --------------------------------------------------
                 #
 
-                "policy": {
-                    "default_deletion":
-                        "blocked",
+                "policy":
+                    self.governance_state.get(
+                        "policy",
+                        {
+                            "default_deletion":
+                                "blocked",
 
-                    "completed_phases":
-                        "immutable",
+                            "completed_phases":
+                                "immutable",
 
-                    "verifier_mode":
-                        "read_only",
+                            "verifier_mode":
+                                "read_only",
 
-                    "dependency_failures_are_not_governance_failures":
-                        True,
+                            "dependency_failures_are_not_governance_failures":
+                                True,
 
-                    "root_failures_should_be_resolved_first":
-                        True,
+                            "root_failures_should_be_resolved_first":
+                                True,
 
-                    "derived_failures_should_not_be_counted_as_independent_root_causes":
-                        True,
-                },
+                            "derived_failures_should_be_revalidated_after_root_resolution":
+                                True,
+
+                            "false_positive_isolation":
+                                True,
+
+                            "maintenance_mode":
+                                "advisor_only",
+                        },
+                    ),
             },
             suggested_fix=(
                 None
                 if governance_verdict == "ready"
                 else (
-                    "Resolve root governance blockers first. "
-                    "Derived failures should be re-evaluated after their "
-                    "upstream root contracts pass. Dependency failures should "
-                    "remain separated from architecture governance violations."
+                    "Resolve runtime dependency or import constraints, "
+                    "then re-run runtime and flow verification. Governance "
+                    "is not independently blocked by runtime-limited status."
+                    if governance_verdict == "runtime_limited"
+                    else (
+                        "Review non-blocking governance warnings, especially "
+                        "layer-boundary suspicions and partial flow contracts. "
+                        "Do not mutate completed phases based on review-needed "
+                        "signals alone."
+                        if governance_verdict == "review_needed"
+                        else (
+                            "Resolve root governance blockers first. "
+                            "Derived failures should be re-evaluated after "
+                            "their upstream root contracts pass. Dependency "
+                            "failures should remain separated from architecture "
+                            "governance violations."
+                        )
+                    )
                 )
             ),
             governance_domain="governance",
             contract_type="governance_verdict",
         )
-        
+
     def run_all(self) -> Dict[str, Any]:
         self.check_environment()
 
@@ -5804,48 +6140,116 @@ class RuntimeVerifier:
         severities: Dict[str, int] = {}
 
         for result in self.results:
-            counts[result.status] = counts.get(result.status, 0) + 1
-            severities[result.severity] = severities.get(result.severity, 0) + 1
+            counts[result.status] = (
+                counts.get(
+                    result.status,
+                    0,
+                )
+                + 1
+            )
+
+            severities[result.severity] = (
+                severities.get(
+                    result.severity,
+                    0,
+                )
+                + 1
+            )
 
         artifact_db_candidates = {
-            db_name: [str(path) for path in paths]
-            for db_name, paths in self.resolve_all_artifact_db_candidates().items()
+            db_name: [
+                str(path)
+                for path in paths
+            ]
+            for db_name, paths
+            in self.resolve_all_artifact_db_candidates().items()
         }
 
         artifact_db_record_counts = {
-            db_name: len(records)
-            for db_name, records in self.iter_all_artifact_db_records().items()
+            db_name:
+                len(records)
+            for db_name, records
+            in self.iter_all_artifact_db_records().items()
         }
 
-        return {
-            "schema": "rga.runtime_verifier.report.v1.0",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "repo_root": str(self.repo_root),
-            "backend_root": str(self.backend_root),
-            "backend_root_mode": self.backend_root_mode,
+        report: Dict[str, Any] = {
+            "schema":
+                "rga.runtime_verifier.report.v1.0",
+
+            "generated_at":
+                datetime.now(
+                    timezone.utc
+                )
+                .replace(
+                    microsecond=0,
+                )
+                .isoformat(),
+
+            "repo_root":
+                str(
+                    self.repo_root
+                ),
+
+            "backend_root":
+                str(
+                    self.backend_root
+                ),
+
+            "backend_root_mode":
+                self.backend_root_mode,
+
             "backend_root_candidates": [
                 asdict(candidate)
                 for candidate in self.backend_candidates
             ],
-            "discovered_files": self.discovered_files,
-            "discovered_packages": self.discovered_packages,
-            "discovered_assets": self.discovered_assets,
+
+            "discovered_files":
+                self.discovered_files,
+
+            "discovered_packages":
+                self.discovered_packages,
+
+            "discovered_assets":
+                self.discovered_assets,
+
             "artifact_databases": {
-                "required": ARTIFACT_DATABASE_NAMES,
-                "relationship_chain": ARTIFACT_RELATIONSHIP_CHAIN,
-                "candidates": artifact_db_candidates,
-                "record_counts": artifact_db_record_counts,
+                "required":
+                    ARTIFACT_DATABASE_NAMES,
+
+                "relationship_chain":
+                    ARTIFACT_RELATIONSHIP_CHAIN,
+
+                "candidates":
+                    artifact_db_candidates,
+
+                "record_counts":
+                    artifact_db_record_counts,
             },
-            "governance": self.governance_state,
-            "api_url": self.api_url,
-            "summary": counts,
-            "severity_summary": severities,
+
+            "governance":
+                self.governance_state,
+
+            "api_url":
+                self.api_url,
+
+            "summary":
+                counts,
+
+            "severity_summary":
+                severities,
+
+            "result_count":
+                len(
+                    self.results
+                ),
+
             "results": [
                 asdict(result)
                 for result in self.results
             ],
         }
 
+        return report
 
 # -----------------------------------------------------------------------------
 # Output helpers
@@ -5868,6 +6272,16 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         "governance",
         {},
     )
+    
+    dependency_failures = governance.get(
+        "dependency_failures",
+        [],
+    )
+    
+    governance_failures = governance.get(
+        "governance_failures",
+        [],
+    )
 
     root_failures = governance.get(
         "root_failures",
@@ -5879,186 +6293,78 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         [],
     )
 
-    dependency_failures = governance.get(
-        "dependency_failures",
-        [],
-    )
-
-    governance_failures = governance.get(
-        "governance_failures",
-        [],
-    )
+    #
+    # --------------------------------------------------
+    # Governance Overview
+    # --------------------------------------------------
+    #
 
     lines.append("## Governance Overview")
     lines.append("")
-    
-    root_cause_summary = governance.get(
-        "root_cause_summary",
-        {},
-    )
-
-    if root_cause_summary:
-        lines.append("## Root Cause Summary")
-        lines.append("")
-
-        primary_root_contracts = (
-            root_cause_summary.get(
-                "primary_root_contracts",
-                [],
-            )
-        )
-
-        derived_contracts = (
-            root_cause_summary.get(
-                "derived_contracts",
-                [],
-            )
-        )
-
-        if primary_root_contracts:
-            lines.append("### Primary Root Contracts")
-            lines.append("")
-
-            for item in primary_root_contracts:
-                lines.append(
-                    f"- `{item}`"
-                )
-
-            lines.append("")
-
-        if derived_contracts:
-            lines.append("### Derived Contracts")
-            lines.append("")
-
-            for item in derived_contracts:
-                lines.append(
-                    f"- `{item}`"
-                )
-
-            lines.append("")
-
-        recommendation = (
-            root_cause_summary.get(
-                "recommendation",
-            )
-        )
-
-        if recommendation:
-            lines.append("### Recommendation")
-            lines.append("")
-            lines.append(recommendation)
-            lines.append("")
-            
-    lineage = governance.get(
-        "lineage",
-        {},
-    )
-
-    if lineage:
-        lines.append("## Failure Lineage")
-        lines.append("")
-
-        derived_policy = lineage.get(
-            "derived_failure_policy",
-            {},
-        )
-
-        root_contracts = lineage.get(
-            "root_failure_contract_types",
-            [],
-        )
-
-        for root_contract in root_contracts:
-
-            lines.append(
-                f"- `{root_contract}`"
-            )
-
-            downstream = [
-                child
-                for child, parent
-                in derived_policy.items()
-                if parent == root_contract
-            ]
-
-            for child in sorted(downstream):
-                lines.append(
-                    f"  - `{child}`"
-                )
-
-        lines.append("")
-
-    risk = governance.get(
-        "layer_boundary_risk",
-        {},
-    )
-
-    if risk:
-        lines.append(
-            "## Layer Boundary Risk"
-        )
-        lines.append("")
-
-        for k, v in risk.items():
-            lines.append(
-                f"- **{k}**: {v}"
-            )
-
-        lines.append("")
-
-    policy = governance.get(
-        "policy",
-        {},
-    )
-
-    if policy:
-        lines.append(
-            "## Governance Policy"
-        )
-
-        lines.append("")
-
-        for k, v in policy.items():
-            lines.append(
-                f"- **{k}**: {v}"
-            )
-
-        lines.append("")        
 
     governance_overview = [
         (
             "Governance verdict",
-            governance.get("governance_verdict"),
+            governance.get(
+                "governance_verdict",
+            ),
         ),
         (
             "Architecture verdict",
-            governance.get("architecture_verdict"),
+            governance.get(
+                "architecture_verdict",
+            ),
         ),
         (
             "Runtime verdict",
-            governance.get("runtime_verdict"),
+            governance.get(
+                "runtime_verdict",
+            ),
         ),
         (
             "Artifact backbone verdict",
-            governance.get("artifact_backbone_verdict"),
+            governance.get(
+                "artifact_backbone_verdict",
+            ),
         ),
         (
             "Flow contract verdict",
-            governance.get("flow_contract_verdict"),
+            governance.get(
+                "flow_contract_verdict",
+            ),
         ),
         (
             "Layer boundary verdict",
-            governance.get("layer_boundary_verdict"),
+            governance.get(
+                "layer_boundary_verdict",
+            ),
         ),
         (
             "MCP contract verdict",
-            governance.get("mcp_contract_verdict"),
+            governance.get(
+                "mcp_contract_verdict",
+            ),
         ),
         (
             "Deletion verdict",
-            governance.get("deletion_verdict"),
+            governance.get(
+                "deletion_verdict",
+            ),
         ),
     ]
+    
+    if (
+        governance.get(
+            "governance_verdict"
+        )
+        == "runtime_limited"
+    ):
+        lines.append(
+            "> Runtime readiness is constrained by dependency "
+            "or import reality. This is not automatically a "
+            "governance blocker."
+        )
+        lines.append("")    
 
     for label, value in governance_overview:
         lines.append(
@@ -6067,39 +6373,71 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append("")
 
+    verdict_semantics = governance.get(
+        "verdict_semantics",
+        {},
+    )
+
+    if verdict_semantics:
+        lines.append(
+            "### Verdict Semantics"
+        )
+        lines.append("")
+
+        for verdict, description in (
+            verdict_semantics.items()
+        ):
+            lines.append(
+                f"- **{verdict}**: "
+                f"{description}"
+            )
+
+        lines.append("")
+
     #
     # --------------------------------------------------
-    # Failure Overview
+    # Failure Accounting
     # --------------------------------------------------
     #
 
-    dependency_fail_count = (
+    dependency_fail_count = governance.get(
+        "dependency_fail_count",
+        0,
+    )
+
+    governance_fail_count = governance.get(
+        "governance_fail_count",
+        0,
+    )
+
+    root_failure_count = governance.get(
+        "root_failure_count",
+        0,
+    )
+
+    derived_failure_count = governance.get(
+        "derived_failure_count",
+        0,
+    )
+    
+    blocking_reason_count = (
         governance.get(
-            "dependency_fail_count",
+            "blocking_reason_count",
             0,
         )
     )
 
-    governance_fail_count = (
+    warning_count = (
         governance.get(
-            "governance_fail_count",
+            "warning_count",
             0,
         )
     )
 
-    root_failure_count = (
-        governance.get(
-            "root_failure_count",
-            0,
-        )
+    lines.append(
+        "## Failure Accounting"
     )
-
-    derived_failure_count = (
-        governance.get(
-            "derived_failure_count",
-            0,
-        )
-    )
+    lines.append("")
 
     lines.append(
         f"- Dependency failures: "
@@ -6135,11 +6473,9 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     if root_cause_summary:
-
         lines.append(
             "## Root Cause Summary"
         )
-
         lines.append("")
 
         primary_root_contracts = (
@@ -6149,6 +6485,21 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
             )
         )
 
+        if primary_root_contracts:
+            lines.append(
+                "### Primary Root Contracts"
+            )
+            lines.append("")
+
+            for item in (
+                primary_root_contracts
+            ):
+                lines.append(
+                    f"- `{item}`"
+                )
+
+            lines.append("")
+
         derived_contracts = (
             root_cause_summary.get(
                 "derived_contracts",
@@ -6156,196 +6507,107 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
             )
         )
 
+        if derived_contracts:
+            lines.append(
+                "### Derived Contracts"
+            )
+            lines.append("")
+
+            for item in (
+                derived_contracts
+            ):
+                lines.append(
+                    f"- `{item}`"
+                )
+
+            lines.append("")
+
         recommendation = (
             root_cause_summary.get(
                 "recommendation",
             )
         )
 
-        if primary_root_contracts:
-
-            lines.append(
-                "### Primary Root Contracts"
-            )
-
-            lines.append("")
-
-            for contract in (
-                primary_root_contracts
-            ):
-                lines.append(
-                    f"- `{contract}`"
-                )
-
-            lines.append("")
-
-        if derived_contracts:
-
-            lines.append(
-                "### Derived Contracts"
-            )
-
-            lines.append("")
-
-            for contract in (
-                derived_contracts
-            ):
-                lines.append(
-                    f"- `{contract}`"
-                )
-
-            lines.append("")
-
         if recommendation:
-
             lines.append(
                 "### Recommendation"
             )
-
             lines.append("")
-
             lines.append(
                 recommendation
             )
-
             lines.append("")
 
     #
     # --------------------------------------------------
-    # Root Failures
+    # Impact Scope
     # --------------------------------------------------
     #
 
-    lines.append(
-        "## Root Failures"
+    impact_scope = governance.get(
+        "impact_scope",
+        {},
     )
 
-    lines.append("")
-
-    if not root_failures:
-
+    if impact_scope:
         lines.append(
-            "(none)"
+            "## Impact Scope"
+        )
+        lines.append("")
+
+        root_contract_impacts = (
+            impact_scope.get(
+                "root_contract_impacts",
+                {},
+            )
         )
 
-    else:
-
-        for item in root_failures:
-
-            contract_type = item.get(
-                "contract_type",
-                "unknown",
-            )
-
-            lines.append(
-                f"- `{contract_type}` "
-                f"({item.get('domain')} / "
-                f"{item.get('check')})"
-            )
-
-            summary = item.get(
-                "summary"
-            )
-
-            if summary:
-
-                lines.append(
-                    f"  - {summary}"
-                )
-
-    lines.append("")
-
-    #
-    # --------------------------------------------------
-    # Derived Failures
-    # --------------------------------------------------
-    #
-
-    lines.append(
-        "## Derived Failures"
-    )
-
-    lines.append("")
-
-    if not derived_failures:
-
-        lines.append(
-            "(none)"
-        )
-
-    else:
-
-        for item in derived_failures:
-
-            contract_type = item.get(
-                "contract_type",
-                "unknown",
-            )
-
-            dependency_of = item.get(
-                "dependency_of",
-                "unknown",
-            )
-
-            lines.append(
-                f"- `{contract_type}` "
-                f"(dependency_of="
-                f"`{dependency_of}`)"
-            )
-
-            summary = item.get(
-                "summary"
-            )
-
-            if summary:
-
-                lines.append(
-                    f"  - {summary}"
-                )
-
-    lines.append("")
-
-    #
-    # --------------------------------------------------
-    # Dependency Failures
-    # --------------------------------------------------
-    #
-
-    lines.append(
-        "## Dependency Failures"
-    )
-
-    lines.append("")
-
-    if not dependency_failures:
-
-        lines.append(
-            "(none)"
-        )
-
-    else:
-
-        for item in (
-            dependency_failures
+        for (
+            root_contract,
+            details,
+        ) in (
+            root_contract_impacts.items()
         ):
-
             lines.append(
-                f"- `{item.get('contract_type')}` "
-                f"({item.get('domain')} / "
-                f"{item.get('check')})"
+                f"### `{root_contract}`"
+            )
+            lines.append("")
+
+            impact_domain = (
+                details.get(
+                    "impact_domain",
+                )
             )
 
-            summary = item.get(
-                "summary"
-            )
-
-            if summary:
-
+            if impact_domain:
                 lines.append(
-                    f"  - {summary}"
+                    f"- Impact domain: "
+                    f"`{impact_domain}`"
                 )
 
-    lines.append("")
+            for item in (
+                details.get(
+                    "directly_blocks",
+                    [],
+                )
+            ):
+                lines.append(
+                    f"  - `{item}`"
+                )
+
+            lines.append("")
+
+        impact_principle = (
+            impact_scope.get(
+                "impact_principle",
+            )
+        )
+
+        if impact_principle:
+            lines.append(
+                f"> {impact_principle}"
+            )
+            lines.append("")
 
     #
     # --------------------------------------------------
@@ -6359,23 +6621,28 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     if lineage:
-
         lines.append(
             "## Failure Lineage"
         )
-
         lines.append("")
 
-        root_contracts = (
+        runtime_lineage = (
             lineage.get(
-                "root_failure_contract_types",
+                "runtime_lineage",
+                {},
+            )
+        )
+
+        root_contracts = (
+            runtime_lineage.get(
+                "root_contracts",
                 [],
             )
         )
 
-        derived_policy = (
-            lineage.get(
-                "derived_failure_policy",
+        derived_contracts = (
+            runtime_lineage.get(
+                "derived_contracts",
                 {},
             )
         )
@@ -6383,20 +6650,20 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         for root_contract in (
             root_contracts
         ):
-
             lines.append(
                 f"- `{root_contract}`"
             )
 
-            downstream_contracts = sorted(
+            children = [
                 child
                 for child, parent
-                in derived_policy.items()
-                if parent == root_contract
-            )
+                in derived_contracts.items()
+                if parent
+                == root_contract
+            ]
 
-            for child in (
-                downstream_contracts
+            for child in sorted(
+                children
             ):
                 lines.append(
                     f"  - `{child}`"
@@ -6406,55 +6673,16 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     #
     # --------------------------------------------------
-    # Failure Inventory Summary
-    #
-    # Avoid re-listing all governance failures,
-    # because Root + Derived already contains
-    # the detailed breakdown.
-    # --------------------------------------------------
-    #
-
-    lines.append(
-        "## Failure Inventory Summary"
-    )
-
-    lines.append("")
-
-    lines.append(
-        f"- Total governance failures: "
-        f"`{governance_fail_count}`"
-    )
-
-    lines.append(
-        f"- Root governance failures: "
-        f"`{root_failure_count}`"
-    )
-
-    lines.append(
-        f"- Derived governance failures: "
-        f"`{derived_failure_count}`"
-    )
-
-    lines.append(
-        f"- Dependency failures: "
-        f"`{dependency_fail_count}`"
-    )
-
-    lines.append("")
-
-    #
-    # --------------------------------------------------
     # Layer Boundary Risk
     # --------------------------------------------------
     #
 
-    layer_boundary_risk = governance.get(
+    risk = governance.get(
         "layer_boundary_risk",
         {},
     )
 
-    if layer_boundary_risk:
-
+    if risk:
         lines.append(
             "## Layer Boundary Risk"
         )
@@ -6462,27 +6690,27 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
         lines.append(
             f"- Status: "
-            f"`{layer_boundary_risk.get('status')}`"
+            f"`{risk.get('status')}`"
         )
 
         lines.append(
-            f"- Evidence count: "
-            f"`{layer_boundary_risk.get('evidence_count', 0)}`"
+            f"- Hints: "
+            f"`{risk.get('hint_count', 0)}`"
         )
 
         lines.append(
-            f"- Suspicion count: "
-            f"`{layer_boundary_risk.get('suspicion_count', 0)}`"
+            f"- Suspicions: "
+            f"`{risk.get('suspicion_count', 0)}`"
         )
 
         lines.append(
-            f"- Hint count: "
-            f"`{layer_boundary_risk.get('hint_count', 0)}`"
+            f"- Evidence: "
+            f"`{risk.get('evidence_count', 0)}`"
         )
 
         lines.append(
-            f"- Governance blocking: "
-            f"`{layer_boundary_risk.get('governance_blocking', False)}`"
+            f"- Governance Blocking: "
+            f"`{risk.get('governance_blocking')}`"
         )
 
         lines.append("")
@@ -6499,20 +6727,19 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     if policy:
-
         lines.append(
             "## Governance Policy"
         )
         lines.append("")
 
-        for key, value in sorted(
+        for k, v in (
             policy.items()
         ):
             lines.append(
-                f"- **{key}**: {value}"
+                f"- **{k}**: {v}"
             )
 
-        lines.append("")
+        lines.append(""))
 
     #
     # --------------------------------------------------
@@ -6570,7 +6797,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     lines.append(
-        "## Artifact Backbone"
+        "### Artifact Backbone Snapshot"
     )
     lines.append("")
 
@@ -6611,7 +6838,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append(
         json.dumps(
-            artifact_databases,
+            artifact_snapshot,
             indent=2,
             ensure_ascii=False,
         )
@@ -6623,6 +6850,11 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     #
     # --------------------------------------------------
     # Repository Discovery
+    #
+    # Repository discovery focuses on repository reality.
+    #
+    # Markdown renders summarized inventories while full
+    # evidence remains available in the JSON report.
     # --------------------------------------------------
     #
 
@@ -6631,35 +6863,119 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
     lines.append("")
 
+    backend_candidates = report.get(
+        "backend_root_candidates",
+        [],
+    )
+
+    discovered_files = report.get(
+        "discovered_files",
+        {},
+    )
+
+    discovered_packages = report.get(
+        "discovered_packages",
+        {},
+    )
+
     lines.append(
         f"- Backend candidates: "
-        f"`{len(report.get('backend_root_candidates', []))}`"
+        f"`{len(backend_candidates)}`"
     )
 
     lines.append(
         f"- File groups discovered: "
-        f"`{len(report.get('discovered_files', {}))}`"
+        f"`{len(discovered_files)}`"
     )
 
     lines.append(
         f"- Package groups discovered: "
-        f"`{len(report.get('discovered_packages', {}))}`"
+        f"`{len(discovered_packages)}`"
     )
 
     lines.append("")
 
+    #
+    # --------------------------------------------------
+    # Backend Candidates
+    # --------------------------------------------------
+    #
+
+    if backend_candidates:
+
+        lines.append(
+            "### Backend Candidates"
+        )
+
+        lines.append("")
+        lines.append("```json")
+
+        lines.append(
+            json.dumps(
+                backend_candidates,
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+
+        lines.append("```")
+        lines.append("")
+
+    #
+    # --------------------------------------------------
+    # File Group Summary
+    #
+    # Render counts only.
+    # Full paths remain in JSON report.
+    # --------------------------------------------------
+    #
+
+    file_group_summary = {}
+
+    for group_name, value in (
+        discovered_files.items()
+    ):
+        if isinstance(
+            value,
+            list,
+        ):
+            file_group_summary[group_name] = len(
+                value
+            )
+        else:
+            file_group_summary[group_name] = 0
+
     lines.append(
-        "### Backend Candidates"
+        "### Discovered File Groups"
     )
+
+    lines.append("")
+
+    if file_group_summary:
+
+        for (
+            group_name,
+            count,
+        ) in sorted(
+            file_group_summary.items()
+        ):
+            lines.append(
+                f"- **{group_name}**: "
+                f"`{count}`"
+            )
+
+    else:
+
+        lines.append(
+            "- No repository file groups discovered."
+        )
+
     lines.append("")
     lines.append("```json")
 
     lines.append(
         json.dumps(
-            report.get(
-                "backend_root_candidates",
-                [],
-            ),
+            file_group_summary,
             indent=2,
             ensure_ascii=False,
         )
@@ -6668,18 +6984,76 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("```")
     lines.append("")
 
+    #
+    # --------------------------------------------------
+    # Package Discovery
+    #
+    # Repository package inventory summary.
+    # --------------------------------------------------
+    #
+
+    package_summary = {}
+
+    for package_group, value in (
+        discovered_packages.items()
+    ):
+
+        if isinstance(
+            value,
+            list,
+        ):
+            package_summary[
+                package_group
+            ] = len(
+                value
+            )
+
+        elif isinstance(
+            value,
+            dict,
+        ):
+            package_summary[
+                package_group
+            ] = len(
+                value
+            )
+
+        else:
+            package_summary[
+                package_group
+            ] = 0
+
     lines.append(
-        "### Discovered Files"
+        "### Package Discovery"
     )
+
+    lines.append("")
+
+    if package_summary:
+
+        for (
+            package_group,
+            count,
+        ) in sorted(
+            package_summary.items()
+        ):
+            lines.append(
+                f"- **{package_group}**: "
+                f"`{count}`"
+            )
+
+    else:
+
+        lines.append(
+            "- No package groups discovered."
+        )
+
     lines.append("")
     lines.append("```json")
 
     lines.append(
         json.dumps(
-            report.get(
-                "discovered_files",
-                {},
-            ),
+            package_summary,
             indent=2,
             ensure_ascii=False,
         )
@@ -6688,18 +7062,48 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append("```")
     lines.append("")
 
+    #
+    # --------------------------------------------------
+    # Repository Discovery Snapshot
+    #
+    # Compact snapshot for Auditor / Advisor layers.
+    # Full inventories remain available in JSON.
+    # --------------------------------------------------
+    #
+
+    repository_snapshot = {
+        "backend_candidate_count":
+            len(
+                backend_candidates
+            ),
+
+        "file_group_count":
+            len(
+                discovered_files
+            ),
+
+        "package_group_count":
+            len(
+                discovered_packages
+            ),
+
+        "file_group_summary":
+            file_group_summary,
+
+        "package_group_summary":
+            package_summary,
+    }
+
     lines.append(
-        "### Discovered Packages"
+        "### Repository Discovery Snapshot"
     )
+
     lines.append("")
     lines.append("```json")
 
     lines.append(
         json.dumps(
-            report.get(
-                "discovered_packages",
-                {},
-            ),
+            repository_snapshot,
             indent=2,
             ensure_ascii=False,
         )
@@ -6723,6 +7127,33 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         "## Asset Discovery"
     )
     lines.append("")
+    
+    asset_snapshot = {
+    "type_A":
+        len(
+            discovered_assets.get(
+                "type_A",
+                [],
+            )
+        ),
+
+    "type_B":
+        len(
+            discovered_assets.get(
+                "type_B",
+                [],
+            )
+        ),
+
+    "excluded_candidate_count":
+        discovered_assets.get(
+            "excluded_candidate_count",
+            0,
+        ),
+
+    "excluded_by_reason":
+        excluded_by_reason,
+}
 
     excluded_by_reason = (
         discovered_assets.get(
@@ -6771,7 +7202,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     #
 
     lines.append(
-        "## Governance State Snapshot"
+        "## Governance Evidence Snapshot"
     )
     lines.append("")
 
@@ -6798,8 +7229,6 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         "## Detailed Results"
     )
     lines.append("")
-
-    lines.append("## Results")
 
     for item in report.get("results", []):
         lines.append(
@@ -6847,137 +7276,369 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 # -----------------------------------------------------------------------------
 
 def main() -> int:
-    parser = argparse.ArgumentParser("RGA Systems Auditor")
+    parser = argparse.ArgumentParser(
+        "RGA Runtime Verifier"
+    )
 
-    parser.add_argument("--repo-root", default=".", help="Repository root or backend root.")
-    parser.add_argument("--backend-root", default=None, help="Explicit backend root. Overrides auto-discovery.")
+    parser.add_argument(
+        "--repo-root",
+        default=".",
+        help=(
+            "Repository root or backend root."
+        ),
+    )
+
+    parser.add_argument(
+        "--backend-root",
+        default=None,
+        help=(
+            "Explicit backend root. "
+            "Overrides repository discovery."
+        ),
+    )
 
     parser.add_argument(
         "--api-url",
         default="http://127.0.0.1:8000/api/v1/recommend",
-        help="RGA REST recommend endpoint.",
+        help=(
+            "RGA REST recommend endpoint."
+        ),
     )
 
     parser.add_argument(
         "--token",
         default=None,
-        help="Bearer token. Defaults to SOFTR_API_TOKEN environment variable.",
+        help=(
+            "Bearer token. Defaults to "
+            "SOFTR_API_TOKEN environment variable."
+        ),
     )
 
     parser.add_argument(
         "--mcp-config",
         default=None,
-        help="Optional path to VS Code mcp.json.",
+        help=(
+            "Optional path to VS Code mcp.json."
+        ),
     )
+
+    #
+    # ----------------------------------------------------------
+    # Explicit artifact DB overrides
+    #
+    # Repository discovery remains preferred.
+    # These are maintained primarily for troubleshooting
+    # and compatibility scenarios.
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--asset-db",
         default=None,
-        help="Optional explicit path to chart_assets.db. Kept for v0.6 compatibility.",
+        help=(
+            "Optional explicit path to chart_assets.db. "
+            "Retained for compatibility."
+        ),
     )
 
     parser.add_argument(
         "--file-scan-inventory-db",
         default=None,
-        help="Optional explicit path to file_scan_inventory.db.",
+        help=(
+            "Optional explicit path to "
+            "file_scan_inventory.db."
+        ),
     )
 
     parser.add_argument(
         "--chart-assets-db",
         default=None,
-        help="Optional explicit path to chart_assets.db.",
+        help=(
+            "Optional explicit path to "
+            "chart_assets.db."
+        ),
     )
 
     parser.add_argument(
         "--chart-patterns-db",
         default=None,
-        help="Optional explicit path to chart_patterns.db.",
+        help=(
+            "Optional explicit path to "
+            "chart_patterns.db."
+        ),
     )
+
+    #
+    # ----------------------------------------------------------
+    # Runtime checks
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--rest",
         action="store_true",
-        help="Run REST endpoint checks. Requires backend to be running.",
+        help=(
+            "Run REST endpoint verification. "
+            "Requires backend availability."
+        ),
     )
+
+    #
+    # ----------------------------------------------------------
+    # Report outputs
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--json-out",
         default=None,
-        help="Optional JSON report output path.",
+        help=(
+            "Optional JSON report output path."
+        ),
     )
 
     parser.add_argument(
         "--md-out",
         default=None,
-        help="Optional Markdown report output path.",
+        help=(
+            "Optional markdown report output path."
+        ),
     )
+
+    #
+    # ----------------------------------------------------------
+    # Strict modes
+    #
+    # Severity mode:
+    #   Uses result severities.
+    #
+    # Governance mode:
+    #   Uses governance verdict only.
+    #
+    # review_needed and runtime_limited are not
+    # treated as blocked governance states.
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Exit non-zero if any fail severity results are found.",
+        help=(
+            "Exit non-zero based on strict mode."
+        ),
     )
 
     parser.add_argument(
         "--strict-severity",
-        choices=["fail", "critical"],
+        choices=[
+            "fail",
+            "critical",
+        ],
         default="fail",
-        help="Severity threshold used by --strict.",
+        help=(
+            "Severity threshold used by --strict."
+        ),
+    )
+
+    parser.add_argument(
+        "--strict-governance",
+        action="store_true",
+        help=(
+            "Exit non-zero only when governance "
+            "verdict is blocked."
+        ),
     )
 
     args = parser.parse_args()
 
     verifier = RuntimeVerifier(
-        repo_root=Path(args.repo_root),
-        backend_root=Path(args.backend_root) if args.backend_root else None,
+        repo_root=Path(
+            args.repo_root
+        ),
+
+        backend_root=(
+            Path(
+                args.backend_root
+            )
+            if args.backend_root
+            else None
+        ),
+
         api_url=args.api_url,
+
         token=args.token,
-        mcp_config=Path(args.mcp_config).expanduser() if args.mcp_config else None,
-        asset_db=Path(args.asset_db).expanduser() if args.asset_db else None,
+
+        mcp_config=(
+            Path(
+                args.mcp_config
+            ).expanduser()
+            if args.mcp_config
+            else None
+        ),
+
+        asset_db=(
+            Path(
+                args.asset_db
+            ).expanduser()
+            if args.asset_db
+            else None
+        ),
+
         file_scan_inventory_db=(
-            Path(args.file_scan_inventory_db).expanduser()
+            Path(
+                args.file_scan_inventory_db
+            ).expanduser()
             if args.file_scan_inventory_db
             else None
         ),
+
         chart_assets_db=(
-            Path(args.chart_assets_db).expanduser()
+            Path(
+                args.chart_assets_db
+            ).expanduser()
             if args.chart_assets_db
             else None
         ),
+
         chart_patterns_db=(
-            Path(args.chart_patterns_db).expanduser()
+            Path(
+                args.chart_patterns_db
+            ).expanduser()
             if args.chart_patterns_db
             else None
         ),
+
         run_rest=args.rest,
     )
 
     report = verifier.run_all()
-    text = json.dumps(report, indent=2, ensure_ascii=False)
+
+    text = json.dumps(
+        report,
+        indent=2,
+        ensure_ascii=False,
+    )
 
     print(text)
 
+    #
+    # ----------------------------------------------------------
+    # JSON Report
+    # ----------------------------------------------------------
+    #
+
     if args.json_out:
-        json_out = Path(args.json_out)
-        json_out.parent.mkdir(parents=True, exist_ok=True)
-        json_out.write_text(text, encoding="utf-8")
+        json_out = Path(
+            args.json_out
+        )
+
+        json_out.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        json_out.write_text(
+            text,
+            encoding="utf-8",
+        )
+
+    #
+    # ----------------------------------------------------------
+    # Markdown Report
+    # ----------------------------------------------------------
+    #
 
     if args.md_out:
-        write_markdown(report, Path(args.md_out))
+        write_markdown(
+            report,
+            Path(
+                args.md_out
+            ),
+        )
+
+    #
+    # ----------------------------------------------------------
+    # Governance-aware strict mode
+    #
+    # blocked
+    #     -> exit 1
+    #
+    # runtime_limited
+    # review_needed
+    #     -> exit 0
+    #
+    # Consistent with:
+    #
+    # Dependency Reality
+    # != Governance Reality
+    # ----------------------------------------------------------
+    #
+
+    if args.strict_governance:
+
+        governance_verdict = (
+            report.get(
+                "governance",
+                {},
+            ).get(
+                "governance_verdict"
+            )
+        )
+
+        if governance_verdict == "blocked":
+            return 1
+
+    #
+    # ----------------------------------------------------------
+    # Severity strict mode
+    # ----------------------------------------------------------
+    #
 
     if args.strict:
-        severity = report.get("severity_summary", {})
 
-        if args.strict_severity == "critical":
-            if severity.get("critical", 0) > 0:
+        severity_summary = (
+            report.get(
+                "severity_summary",
+                {},
+            )
+        )
+
+        if (
+            args.strict_severity
+            == "critical"
+        ):
+            if (
+                severity_summary.get(
+                    "critical",
+                    0,
+                )
+                > 0
+            ):
                 return 1
 
-        if args.strict_severity == "fail":
-            if severity.get("fail", 0) > 0 or severity.get("critical", 0) > 0:
+        elif (
+            args.strict_severity
+            == "fail"
+        ):
+            if (
+                severity_summary.get(
+                    "fail",
+                    0,
+                )
+                > 0
+                or
+                severity_summary.get(
+                    "critical",
+                    0,
+                )
+                > 0
+            ):
                 return 1
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        main()
+    )
