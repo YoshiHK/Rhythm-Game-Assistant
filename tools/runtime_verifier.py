@@ -7586,9 +7586,8 @@ def main() -> int:
         report = verifier.run_all()
 
     except Exception as exc:
-        generated_reports["verifier_error"] = str(
-            exc
-        )
+
+        import traceback
 
         report = {
             "schema":
@@ -7597,42 +7596,27 @@ def main() -> int:
             "generated_at":
                 datetime.now(
                     timezone.utc
-                )
-                .replace(
-                    microsecond=0,
-                )
-                .isoformat(),
+                ).replace(
+                    microsecond=0
+                ).isoformat(),
 
-            "repo_root":
-                str(
-                    Path(
-                        args.repo_root
-                    )
-                ),
+            "execution_state":
+                "verifier_exception",
 
-            "backend_root":
-                str(
-                    Path(
-                        args.backend_root
-                    )
-                )
-                if args.backend_root
-                else None,
+            "error":
+                str(exc),
 
-            "backend_root_mode":
-                "unavailable",
-
-            "api_url":
-                args.api_url,
+            "traceback":
+                traceback.format_exc(),
 
             "summary": {
-                "fail":
-                    1,
+                "pass": 0,
+                "warning": 0,
+                "fail": 1,
             },
 
             "severity_summary": {
-                "critical":
-                    1,
+                "critical": 1,
             },
 
             "governance": {
@@ -7641,26 +7625,15 @@ def main() -> int:
 
                 "runtime_verdict":
                     "blocked_by_exception",
-
-                "policy": {
-                    "verifier_mode":
-                        "read_only",
-
-                    "completed_phases":
-                        "immutable",
-
-                    "dependency_failures_are_not_governance_failures":
-                        True,
-                },
             },
 
             "results": [
                 {
                     "domain":
-                        "verifier",
+                        "runtime_verifier",
 
                     "check":
-                        "runtime_verifier_execution",
+                        "verifier_execution",
 
                     "status":
                         "fail",
@@ -7669,37 +7642,21 @@ def main() -> int:
                         "critical",
 
                     "summary":
-                        "Runtime verifier execution failed before normal report generation completed.",
-
-                    "evidence": {
-                        "error":
-                            str(
-                                exc
-                            ),
-
-                        "traceback":
-                            traceback.format_exc(),
-                    },
-
-                    "suggested_fix":
                         (
-                            "Review runtime_verifier.py stderr output and "
-                            "ensure report generation can complete."
+                            "Runtime verifier raised "
+                            "an unhandled exception."
                         ),
 
-                    "governance_domain":
-                        "verifier_runtime",
-
-                    "contract_type":
-                        "verifier_execution",
+                    "evidence": {
+                        "exception":
+                            str(exc)
+                    },
                 }
             ],
         }
 
     #
-    # ----------------------------------------------------------
-    # Attach report generation status before any outputs.
-    # ----------------------------------------------------------
+    # report_generation update
     #
 
     report.setdefault(
@@ -7708,8 +7665,21 @@ def main() -> int:
     )
 
     report["report_generation"].update(
-        generated_reports
+        ...
     )
+
+    #
+    # NOW serialize
+    #
+
+    text = json.dumps(
+        report,
+        indent=2,
+        ensure_ascii=False,
+    )
+
+    print(text)
+
 
     #
     # ----------------------------------------------------------
