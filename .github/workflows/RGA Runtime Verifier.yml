@@ -1,0 +1,2347 @@
+name: RGA Runtime Verifier
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  runtime-verification:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      ############################################################
+      # Artifact Directory
+      ############################################################
+
+      - name: Prepare Artifact Directory
+        run: |
+          mkdir -p artifacts
+
+      ############################################################
+      # Evidence Taxonomy
+      ############################################################
+
+      - name: Evidence Taxonomy
+        run: |
+          cat > artifacts/evidence_taxonomy.json <<'JSON'
+          {
+            "schema": "rga.evidence.taxonomy.v1.0",
+            "mode": "read_only",
+            "bot_role": {
+              "checker": true,
+              "validator": true,
+              "verifier": true,
+              "auditor": true,
+              "advisor": true,
+
+              "maintainer_support": true,
+              
+              "governor": false,
+              "maintainer": false
+            },
+            "classification": {
+              "repository_reality": {
+                "description": "Files, folders, package roots, and discovered repository surfaces.",
+                "governance_blocking": true
+              },
+              "dependency_reality": {
+                "description": "Python/package dependency availability and import prerequisites.",
+                "governance_blocking": false,
+                "affects": [
+                  "runtime_verdict",
+                  "flow_verification"
+                ]
+              },
+              "import_reality": {
+                "description": "Whether Python modules import successfully in the current runtime context.",
+                "governance_blocking": false,
+                "affects": [
+                  "runtime_verdict"
+                ]
+              },
+              "runtime_reality": {
+                "description": "Runtime availability and operational surface evidence.",
+                "governance_blocking": false
+              },
+              "artifact_backbone": {
+                "description": "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db backbone.",
+                "governance_blocking": true
+              },
+              "deletion_governance": {
+                "description": "Deletion readiness and source asset retention gates.",
+                "governance_blocking": true
+              },
+              "layer_boundary": {
+                "description": "Layer responsibility separation evidence.",
+                "confidence_model": [
+                  "hint",
+                  "suspicion",
+                  "evidence"
+                ],
+                "governance_blocking_confidence": [
+                  "evidence"
+                ]
+              },
+              "root_failure": {
+                "description": "Independently actionable governance blocker.",
+                "render_before": [
+                  "derived_failure"
+                ]
+              },
+              "derived_failure": {
+                "description": "Downstream consequence of an upstream root contract failure.",
+                "revalidate_after_root_resolution": true
+              }
+            },
+            "governance_principles": {
+              "completed_phases": "immutable",
+              "verifier_mode": "read_only",
+              "dependency_failures_are_not_governance_failures": true,
+              "root_failures_should_be_resolved_first": true,
+              "derived_failures_should_be_revalidated_after_root_resolution": true,
+              "false_positive_isolation": true,
+              "runtime_limited_is_not_governance_blocked": true,
+              "root_failures_take_priority": true,
+              "impact_scope_is_advisory_only": true,
+              "lineage_does_not_imply_remediation": true
+              "maintenance_mode": "advisor_only"
+            }
+          }
+          JSON
+
+      ############################################################
+      # Repository Discovery Evidence
+      ############################################################
+
+      - name: Repository Discovery Evidence
+        run: |
+          pwd \
+            > artifacts/repository_root.txt
+
+          find . -type f \
+            | sort \
+            > artifacts/repository_inventory.txt
+
+          find . -type d \
+            | sort \
+            > artifacts/repository_directories.txt
+
+          git status --short \
+            > artifacts/git_status_short.txt || true
+
+          git rev-parse HEAD \
+            > artifacts/git_head.txt || true
+
+          git branch --show-current \
+            > artifacts/git_branch.txt || true
+
+          {
+            echo "Repository Discovery Evidence"
+            echo ""
+
+            echo "Repository root:"
+            cat artifacts/repository_root.txt || true
+
+            echo ""
+            echo "Git HEAD:"
+            cat artifacts/git_head.txt || true
+
+            echo ""
+            echo "Git branch:"
+            cat artifacts/git_branch.txt || true
+
+            echo ""
+            echo "Inventory files:"
+            echo "- repository_inventory.txt"
+            echo "- repository_directories.txt"
+            echo "- git_status_short.txt"
+          } > artifacts/repository_discovery_summary.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count(path_text):
+              p = Path(path_text)
+
+              if not p.exists():
+                  return 0
+
+              return len(
+                  [
+                      line
+                      for line in p.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              )
+
+          payload = {
+              "schema":
+                  "rga.repository_discovery_evidence.v1.1",
+
+              "repository_file_count":
+                  count(
+                      "artifacts/repository_inventory.txt"
+                  ),
+
+              "repository_directory_count":
+                  count(
+                      "artifacts/repository_directories.txt"
+                  ),
+
+              "repository_driven":
+                  True,
+
+              "evidence_role":
+                  "repository_reality",
+
+              "verification_note":
+                  (
+                      "Repository discovery establishes "
+                      "repository reality only. Runtime "
+                      "readiness must be verified separately."
+                  ),
+          }
+
+          with open(
+              "artifacts/repository_discovery_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+          
+      ############################################################
+      # Runtime Discovery Evidence
+      ############################################################
+
+      - name: Runtime Discovery Evidence
+        run: |
+          find . -type f -name "main.py" \
+            | sort > artifacts/main_candidates.txt || true
+
+          find . -type f -name "recommend.py" \
+            | sort > artifacts/recommend_candidates.txt || true
+
+          find . -type f -name "app.py" \
+            | sort > artifacts/app_candidates.txt || true
+
+          find . -type f -name "runtime_meta.py" \
+            | sort > artifacts/runtime_meta_candidates.txt || true
+
+          find . -type f -name "mcp_server.py" \
+            | sort > artifacts/mcp_server_candidates.txt || true
+
+          find . -type f -name "runtime_verifier.py" \
+            | sort > artifacts/runtime_verifier_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -name "recommend.py" -o \
+              -name "recommendation*.py" -o \
+              -name "*recommender*.py" \
+            \) \
+            | sort > artifacts/recommendation_entrypoints.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*reader*.py" -o \
+              -iname "*readers*.py" \
+            \) \
+            | sort > artifacts/reader_entrypoints.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*validator*.py" -o \
+              -iname "*validators*.py" \
+            \) \
+            | sort > artifacts/validator_entrypoints.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*bridge*.py" -o \
+              -iname "*bridges*.py" \
+            \) \
+            | sort > artifacts/bridge_entrypoints.txt || true
+
+          find . -type f \
+            \( \
+              -name "*orchestrator*.py" -o \
+              -name "*workflow*.py" -o \
+              -name "*runtime*.py" \
+            \) \
+            | sort > artifacts/orchestration_entrypoints.txt || true
+
+          find . -type d \
+            | grep "rhythm" \
+            > artifacts/rhythm_directories.txt || true
+
+          {
+            echo "Runtime Discovery Evidence"
+            echo ""
+            echo "main.py candidates:"
+            cat artifacts/main_candidates.txt || true
+            echo ""
+            echo "recommend.py candidates:"
+            cat artifacts/recommend_candidates.txt || true
+            echo ""
+            echo "app.py candidates:"
+            cat artifacts/app_candidates.txt || true
+            echo ""
+            echo "runtime_meta.py candidates:"
+            cat artifacts/runtime_meta_candidates.txt || true
+            echo ""
+            echo "mcp_server.py candidates:"
+            cat artifacts/mcp_server_candidates.txt || true
+          } > artifacts/runtime_discovery_summary.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = {
+              "schema":
+                  "rga.runtime_discovery_evidence.v1.1",
+
+              "repository_driven":
+                  True,
+
+              "runtime_surfaces": {
+                  "main":
+                      "main_candidates.txt",
+
+                  "recommend":
+                      "recommend_candidates.txt",
+
+                  "runtime_meta":
+                      "runtime_meta_candidates.txt",
+
+                  "mcp":
+                      "mcp_server_candidates.txt",
+              },
+
+              "discovery_strategy":
+                  "repository_driven",
+
+              "verification_note":
+                  (
+                      "Runtime discovery identifies candidate "
+                      "runtime surfaces but does not imply "
+                      "runtime readiness."
+                  ),
+          }
+
+          with open(
+              "artifacts/runtime_discovery_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+      ############################################################
+      # Package Reality Evidence
+      ############################################################
+
+      - name: Package Reality Evidence
+        run: |
+          find . -type d -name "rhythm_ingestion" \
+            | sort > artifacts/rhythm_ingestion_package_dirs.txt || true
+
+          find . -type d -name "rhythm ingestion" \
+            | sort > artifacts/rhythm_invalid_alias_dirs.txt || true
+
+          find . -type f -name "__init__.py" \
+            | sort > artifacts/python_init_files.txt || true
+
+          {
+            echo "Package Reality Evidence"
+            echo ""
+
+            echo "Canonical package dirs:"
+            cat artifacts/rhythm_ingestion_package_dirs.txt || true
+
+            echo ""
+            echo "Invalid alias dirs:"
+            cat artifacts/rhythm_invalid_alias_dirs.txt || true
+
+            echo ""
+            echo "__init__.py files:"
+            wc -l artifacts/python_init_files.txt || true
+          } > artifacts/package_reality_summary.txt
+
+          python - <<'PY'
+          import json
+
+          payload = {
+              "schema":
+                  "rga.package_reality_evidence.v1.1",
+
+              "canonical_package":
+                  "rhythm_ingestion",
+
+              "repository_driven":
+                  True,
+
+              "package_reality":
+                  "independent",
+
+              "verification_note":
+                  (
+                      "Package reality should be evaluated "
+                      "before import reality."
+                  ),
+          }
+
+          with open(
+              "artifacts/package_reality_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+          
+      ############################################################
+      # Dependency Reality Evidence
+      ############################################################
+
+      - name: Dependency Reality Evidence
+        run: |
+          python --version \
+            > artifacts/python_version.txt
+
+          python -m pip --version \
+            > artifacts/pip_version.txt
+
+          python -m pip freeze \
+            > artifacts/pip_freeze.txt
+
+          python - <<'PY'
+          import importlib
+          import json
+          import sys
+
+          required_modules = [
+              "sqlite3",
+          ]
+
+          optional_modules = [
+              "fastapi",
+              "uvicorn",
+              "pydantic",
+          ]
+
+          api_runtime_modules = [
+              "fastapi",
+              "pydantic",
+          ]
+
+          def probe(module_name):
+              try:
+                  module = importlib.import_module(module_name)
+
+                  return {
+                      "status": "pass",
+                      "file": getattr(
+                          module,
+                          "__file__",
+                          None,
+                      ),
+                  }
+
+              except Exception as exc:
+                  return {
+                      "status": "fail",
+                      "error": str(exc),
+                  }
+
+          payload = {
+              "schema":
+                  "rga.runtime_dependency_probe.v1.1",
+
+              "python_executable":
+                  sys.executable,
+
+              "python_version":
+                  sys.version,
+
+              "required_modules": {
+                  name: probe(name)
+                  for name in required_modules
+              },
+
+              "optional_modules": {
+                  name: probe(name)
+                  for name in optional_modules
+              },
+
+              "api_runtime_modules": {
+                  name: probe(name)
+                  for name in api_runtime_modules
+              },
+
+              "classification": {
+                  "required_missing":
+                      "runtime_limited",
+
+                  "api_runtime_missing":
+                      "capability_reduction",
+
+                  "optional_missing":
+                      "warning_only",
+              },
+
+              "governance_effect": {
+                  "required_missing":
+                      "runtime_limited",
+
+                  "optional_missing":
+                      "warning_only",
+              },
+
+              "governance_note": (
+                  "Dependency failures influence runtime "
+                  "readiness but should not automatically "
+                  "be treated as governance failures."
+              ),
+          }
+
+          with open(
+              "artifacts/runtime_dependency_probe.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+      ############################################################
+      # Import Reality Evidence
+      ############################################################
+
+      - name: Import Reality Evidence
+        run: |
+          python - <<'PY'
+          import importlib
+          import json
+          import sys
+
+          modules = [
+              "rhythm_ingestion",
+              "rhythm_ingestion.api",
+              "rhythm_ingestion.api.recommend",
+              "rhythm_ingestion.runtime_meta",
+          ]
+
+          results = {}
+
+          for module_name in modules:
+              try:
+                  module = importlib.import_module(
+                      module_name
+                  )
+
+                  results[module_name] = {
+                      "status": "pass",
+                      "file": getattr(
+                          module,
+                          "__file__",
+                          None,
+                      ),
+                  }
+
+              except Exception as exc:
+                  results[module_name] = {
+                      "status": "fail",
+                      "error": str(exc),
+                  }
+
+          payload = {
+              "schema":
+                  "rga.import_reality_probe.v1.1",
+
+              "python_executable":
+                  sys.executable,
+
+              "modules":
+                  results,
+
+              "repository_driven":
+                  True,
+
+              "verification_note": (
+                  "Import failures should be interpreted "
+                  "against dependency reality before being "
+                  "treated as package-layout defects."
+              ),
+          }
+
+          with open(
+              "artifacts/import_reality_probe.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+      ############################################################
+      # Artifact Database Discovery
+      ############################################################
+
+      - name: Artifact Database Discovery
+        run: |
+          find . -type f -name "file_scan_inventory.db" \
+            | sort > artifacts/file_scan_inventory_db.txt || true
+
+          find . -type f -name "chart_assets.db" \
+            | sort > artifacts/chart_assets_db.txt || true
+
+          find . -type f -name "chart_patterns.db" \
+            | sort > artifacts/chart_patterns_db.txt || true
+
+          {
+            echo "Artifact Database Discovery"
+            echo ""
+            echo "Relationship chain:"
+            echo "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db"
+            echo ""
+            echo "file_scan_inventory.db candidates:"
+            cat artifacts/file_scan_inventory_db.txt || true
+            echo ""
+            echo "chart_assets.db candidates:"
+            cat artifacts/chart_assets_db.txt || true
+            echo ""
+            echo "chart_patterns.db candidates:"
+            cat artifacts/chart_patterns_db.txt || true
+          } > artifacts/artifact_database_discovery_summary.txt
+
+      ############################################################
+      # Artifact Database Schema Evidence
+      ############################################################
+
+      - name: Artifact Database Schema Evidence
+        run: |
+          python - <<'PY'
+          import json
+          import sqlite3
+          from pathlib import Path
+
+          db_names = [
+              "file_scan_inventory.db",
+              "chart_assets.db",
+              "chart_patterns.db",
+          ]
+
+          report = {}
+
+          for db_name in db_names:
+              paths = sorted(Path(".").rglob(db_name))
+              report[db_name] = []
+
+              for path in paths:
+                  item = {
+                      "path": str(path),
+                      "exists": path.exists(),
+                      "read_mode": "sqlite_readonly",
+                      "modification": "prohibited",
+                      "readable": False,
+                      "tables": [],
+                      "table_columns": {},
+                      "table_row_counts": {},
+                  }
+
+                  try:
+                      uri = f"file:{path.resolve().as_posix()}?mode=ro"
+                      with sqlite3.connect(uri, uri=True) as conn:
+                          cur = conn.cursor()
+                          tables = [
+                              row[0]
+                              for row in cur.execute(
+                                  "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                              ).fetchall()
+                          ]
+
+                          item["readable"] = True
+                          item["tables"] = tables
+
+                          for table in tables:
+                              quoted = '"' + table.replace('"', '""') + '"'
+
+                              columns = [
+                                  row[1]
+                                  for row in cur.execute(f"PRAGMA table_info({quoted})").fetchall()
+                              ]
+
+                              item["table_columns"][table] = columns
+
+                              try:
+                                  count = cur.execute(f"SELECT COUNT(*) FROM {quoted}").fetchone()[0]
+                                  item["table_row_counts"][table] = count
+                              except Exception as exc:
+                                  item["table_row_counts"][table] = {"error": str(exc)}
+
+                  except Exception as exc:
+                      item["error"] = str(exc)
+
+                  report[db_name].append(item)
+
+          payload = {
+              "schema": "rga.artifact_database_schema_probe.v1.0",
+              "read_mode": "sqlite_readonly",
+              "modification": "prohibited",
+              "databases": report,
+          }
+
+          with open("artifacts/artifact_database_schema_probe.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, indent=2, ensure_ascii=False)
+          PY
+
+      ############################################################
+      # Artifact Inventory Evidence
+      ############################################################
+
+      - name: Artifact Inventory Evidence
+        run: |
+          find . -type f \
+            > artifacts/repository_files.txt
+
+          find . -type f \
+            \( \
+              -name "*.aff" -o \
+              -name "*.sus" -o \
+              -name "*.html" -o \
+              -name "*.mht" \
+            \) \
+            | sort > artifacts/type_a_candidates_without_json.txt || true
+
+          find . -type f \
+            -name "*.json" \
+            | sort > artifacts/json_inventory.txt || true
+
+          find . -type f \
+            \( \
+              -name "*.mp4" -o \
+              -name "*.mov" -o \
+              -name "*.mkv" -o \
+              -name "*.webm" -o \
+              -name "*.url" -o \
+              -name "*.webloc" \
+            \) \
+            | sort > artifacts/type_b_candidates.txt || true
+
+          {
+            echo "Artifact Inventory Evidence"
+            echo ""
+
+            echo "Repository files:"
+            wc -l artifacts/repository_files.txt || true
+
+            echo ""
+            echo "Type A candidates excluding JSON:"
+            wc -l artifacts/type_a_candidates_without_json.txt || true
+
+            echo ""
+            echo "JSON inventory:"
+            wc -l artifacts/json_inventory.txt || true
+
+            echo ""
+            echo "Type B candidates:"
+            wc -l artifacts/type_b_candidates.txt || true
+          } > artifacts/artifact_inventory_summary.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count(path):
+              p = Path(path)
+
+              if not p.exists():
+                  return 0
+
+              return len(
+                  [
+                      line
+                      for line in p.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              )
+
+          repository_count = count(
+              "artifacts/repository_files.txt"
+          )
+
+          payload = {
+              "schema":
+                  "rga.asset_inventory_summary.v1.1",
+
+              "repository_files":
+                  repository_count,
+
+              "type_A_candidates":
+                  count(
+                      "artifacts/type_a_candidates_without_json.txt"
+                  ),
+
+              "json_inventory":
+                  count(
+                      "artifacts/json_inventory.txt"
+                  ),
+
+              "type_B_candidates":
+                  count(
+                      "artifacts/type_b_candidates.txt"
+                  ),
+
+              "evidence_state":
+                  (
+                      "evidence_available"
+                      if repository_count > 0
+                      else "insufficient_evidence"
+                  ),
+
+              "verification_note":
+                  (
+                      "Inventory evidence establishes repository "
+                      "coverage inputs only. It does not imply "
+                      "asset coverage verification."
+                  ),
+          }
+
+          with open(
+              "artifacts/asset_inventory_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+
+      ############################################################
+      # Asset Classification Evidence
+      ############################################################
+
+      - name: Asset Classification Evidence
+        run: |
+          grep "/translations/" \
+            artifacts/json_inventory.txt \
+            > artifacts/localization_json.txt || true
+
+          grep "/schemas/" \
+            artifacts/json_inventory.txt \
+            > artifacts/schema_json.txt || true
+
+          grep "/fixtures/" \
+            artifacts/json_inventory.txt \
+            > artifacts/fixture_json.txt || true
+
+          grep "/registry/" \
+            artifacts/json_inventory.txt \
+            > artifacts/registry_json.txt || true
+
+          grep "/artifacts/" \
+            artifacts/json_inventory.txt \
+            > artifacts/generated_artifact_json.txt || true
+
+          grep "/.github/\|/.vscode/\|/tools/" \
+            artifacts/json_inventory.txt \
+            > artifacts/tooling_json.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          categories = {
+              "localization":
+                  Path(
+                      "artifacts/localization_json.txt"
+                  ),
+
+              "schema":
+                  Path(
+                      "artifacts/schema_json.txt"
+                  ),
+
+              "fixture":
+                  Path(
+                      "artifacts/fixture_json.txt"
+                  ),
+
+              "registry":
+                  Path(
+                      "artifacts/registry_json.txt"
+                  ),
+
+              "generated_artifact":
+                  Path(
+                      "artifacts/generated_artifact_json.txt"
+                  ),
+
+              "tooling":
+                  Path(
+                      "artifacts/tooling_json.txt"
+                  ),
+          }
+
+          payload = {
+              "schema":
+                  "rga.asset_classification_evidence.v1.1",
+
+              "categories":
+                  {},
+          }
+
+          for name, path in categories.items():
+
+              if path.exists():
+                  lines = [
+                      line.strip()
+                      for line in path.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              else:
+                  lines = []
+
+              payload["categories"][name] = {
+                  "count":
+                      len(lines),
+
+                  "examples":
+                      lines[:10],
+
+                  "coverage_role":
+                      "excluded",
+              }
+
+          payload["classification_note"] = (
+              "Localization, schema, fixture, registry, "
+              "generated artifacts and tooling evidence "
+              "are excluded from asset coverage accounting."
+          )
+
+          with open(
+              "artifacts/asset_classification_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+
+      ############################################################
+      # Asset Scope Evidence
+      ############################################################
+
+      - name: Asset Scope Evidence
+        run: |
+          find . -type f \
+            \( \
+              -path "*/chart_assets/*" -o \
+              -path "*/charts/*" -o \
+              -path "*/assets/*" -o \
+              -path "*/ingestion_assets/*" \
+            \) \
+            | sort > artifacts/scoped_asset_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -path "*/.github/*" -o \
+              -path "*/.vscode/*" -o \
+              -path "*/docs/*" -o \
+              -path "*/tools/*" -o \
+              -path "*/artifacts/*" -o \
+              -path "*/Phase 4 - Personalization/*" -o \
+              -path "*/Phase 4.5 - Localization/*" -o \
+              -path "*/Phase 5 - Productionization/*" -o \
+              -path "*/Phase 6 - Hardening and Scaling/*" -o \
+              -path "*/Phase 7 - Games Recommendation/*" \
+            \) \
+            | sort > artifacts/excluded_scope_candidates.txt || true
+
+          {
+            echo "Asset Scope Evidence"
+            echo ""
+            echo "Scoped asset candidates:"
+            wc -l artifacts/scoped_asset_candidates.txt || true
+
+            echo ""
+            echo "Excluded scope candidates:"
+            wc -l artifacts/excluded_scope_candidates.txt || true
+          } > artifacts/asset_scope_summary.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count(path):
+              p = Path(path)
+
+              if not p.exists():
+                  return 0
+
+              return len(
+                  [
+                      line
+                      for line in p.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              )
+
+          payload = {
+              "schema":
+                  "rga.asset_scope_summary.v1.1",
+
+              "scoped_candidate_count":
+                  count(
+                      "artifacts/scoped_asset_candidates.txt"
+                  ),
+
+              "excluded_candidate_count":
+                  count(
+                      "artifacts/excluded_scope_candidates.txt"
+                  ),
+
+              "repository_driven":
+                  True,
+
+              "impact_note":
+                  (
+                      "Asset scope influences repository "
+                      "coverage accounting but does not "
+                      "modify repository state."
+                  ),
+          }
+
+          with open(
+              "artifacts/asset_scope_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+
+      ############################################################
+      # Artifact Relationship Evidence
+      ############################################################
+
+      - name: Artifact Relationship Evidence
+        run: |
+          {
+            echo "Artifact relationship chain:"
+            echo "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db"
+            echo ""
+
+            echo "file_scan_inventory.db candidates:"
+            cat artifacts/file_scan_inventory_db.txt || true
+
+            echo ""
+            echo "chart_assets.db candidates:"
+            cat artifacts/chart_assets_db.txt || true
+
+            echo ""
+            echo "chart_patterns.db candidates:"
+            cat artifacts/chart_patterns_db.txt || true
+
+            echo ""
+            echo "Root failure policy:"
+            echo "artifact_database_policy is a root contract."
+
+            echo ""
+            echo "Derived failures when missing:"
+            echo "- artifact_relationships"
+            echo "- artifact_backbone_contract"
+            echo "- asset_coverage"
+            echo "- hash_integrity"
+            echo "- type_A_usability"
+            echo "- runtime_artifact_readiness"
+          } > artifacts/artifact_chain_discovery.txt
+
+          cat > artifacts/artifact_failure_lineage.json <<'JSON'
+          {
+            "schema": "rga.artifact_failure_lineage.v1.1",
+
+            "root_contract":
+              "artifact_database_policy",
+
+            "direct_impact_scope": [
+              "artifact_relationships",
+              "artifact_backbone_contract",
+              "asset_coverage",
+              "hash_integrity",
+              "type_A_usability",
+              "runtime_artifact_readiness"
+            ],
+
+            "policy": {
+              "resolve_root_failures_first": true,
+              "revalidate_derived_after_root_resolution": true,
+              "impact_scope_is_advisory_only": true
+            }
+          }
+          JSON
+
+      ############################################################
+      # Hash Evidence
+      ############################################################
+
+      - name: Hash Inventory Evidence
+        run: |
+          find . -type f \
+            ! -path "./.git/*" \
+            ! -path "./artifacts/*" \
+            -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            > artifacts/repository_hashes.txt || true
+
+          {
+            echo "Hash Inventory Evidence"
+            echo ""
+            echo "Repository hash entries:"
+            wc -l artifacts/repository_hashes.txt || true
+          } > artifacts/hash_inventory_summary.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          hash_file = Path(
+              "artifacts/repository_hashes.txt"
+          )
+
+          if hash_file.exists():
+
+              entries = [
+                  line
+                  for line in hash_file.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              ]
+
+          else:
+              entries = []
+
+          payload = {
+              "schema":
+                  "rga.hash_inventory_summary.v1.0",
+
+              "hash_entry_count":
+                  len(entries),
+
+              "coverage_state":
+                  (
+                      "evidence_available"
+                      if entries
+                      else "insufficient_evidence"
+                  ),
+
+              "verification_note":
+                  (
+                      "Hash inventory establishes verification evidence "
+                      "only. Presence of hashes does not imply hash "
+                      "consistency."
+                  ),
+          }
+
+          with open(
+              "artifacts/hash_inventory_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+      ############################################################
+      # Flow Verification Evidence
+      ############################################################
+
+      - name: Flow Verification Evidence
+        run: |
+          find . -type f \
+            \( \
+              -name "*recommend*.py" -o \
+              -name "*tips*.py" -o \
+              -name "*orchestrator*.py" -o \
+              -name "*runtime*.py" -o \
+              -name "*progression*.py" -o \
+              -name "*chart*.py" -o \
+              -name "*player*.py" \
+            \) \
+            | sort > artifacts/flow_candidates.txt || true
+
+          grep -RIn \
+            -e "chart" \
+            -e "pattern" \
+            -e "tips" \
+            -e "player" \
+            -e "progression" \
+            -e "game" \
+            -e "recommend" \
+            engine \
+            > artifacts/flow_keyword_hits.txt || true
+
+          {
+            echo "Flow Verification Evidence"
+            echo ""
+            echo "Expected Flow Contracts"
+            echo "-----------------------"
+            echo "chart_first"
+            echo "player_first"
+            echo "progression"
+            echo ""
+            echo "Flow Governance"
+            echo "---------------"
+            echo "Flow contracts are expected contracts."
+            echo "Repository discovery precedes flow verification."
+            echo "Flow verification may be runtime-limited."
+            echo ""
+            echo "Generated Files"
+            echo "---------------"
+            echo "flow_candidates.txt"
+            echo "flow_keyword_hits.txt"
+          } > artifacts/flow_verification_summary.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count(path_text):
+              path = Path(path_text)
+
+              if not path.exists():
+                  return 0
+
+              return len(
+                  [
+                      line
+                      for line in path.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              )
+
+          payload = {
+              "schema":
+                  "rga.flow_verification_evidence.v1.0",
+
+              "expected_flow_contracts": [
+                  "chart_first",
+                  "player_first",
+                  "progression",
+              ],
+
+              "candidate_count":
+                  count(
+                      "artifacts/flow_candidates.txt"
+                  ),
+
+              "keyword_hit_count":
+                  count(
+                      "artifacts/flow_keyword_hits.txt"
+                  ),
+
+              "runtime_limited_possible":
+                  True,
+
+              "governance_principles": {
+                  "repository_discovery_precedes_flow_verification":
+                      True,
+
+                  "dependency_reality_may_limit_flow_verification":
+                      True,
+
+                  "runtime_limited_is_not_automatic_governance_failure":
+                      True,
+              },
+          }
+
+          with open(
+              "artifacts/flow_verification_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+      ############################################################
+      # Layer Separation Evidence
+      ############################################################
+
+      - name: Layer Separation Evidence
+        run: |
+          ########################################################
+          # Python inventory
+          ########################################################
+
+          find . -type f -name "*.py" \
+            | sort \
+            > artifacts/python_inventory.txt
+
+          ########################################################
+          # Layer directory inventory
+          ########################################################
+
+          find . -type d \
+            \( \
+              -iname "*model*" -o \
+              -iname "*normalizer*" -o \
+              -iname "*converter*" -o \
+              -iname "*classifier*" -o \
+              -iname "*validator*" -o \
+              -iname "*reader*" -o \
+              -iname "*writer*" -o \
+              -iname "*bridge*" -o \
+              -iname "*orchestrator*" \
+            \) \
+            | sort \
+            > artifacts/layer_directories.txt || true
+
+          ########################################################
+          # Tier 1
+          # Hint-level evidence
+          #
+          # Plain textual references.
+          # Not governance blocking.
+          ########################################################
+
+          grep -RIn \
+            -e "sqlite3" \
+            -e ".writers" \
+            -e ".writer" \
+            -e ".persistence" \
+            -e ".orchestrator" \
+            -e ".orchestrators" \
+            -e "recommendation_logic" \
+            -e "runtime_mutation" \
+            engine \
+            > artifacts/layer_boundary_hints.txt || true
+
+          ########################################################
+          # Tier 2
+          # Suspicion-level evidence
+          #
+          # Import-style references crossing layers.
+          # Requires review but is not automatically
+          # governance blocking.
+          ########################################################
+
+          grep -RInE \
+            '^[[:space:]]*import .*writer|^[[:space:]]*from .*writer' \
+            engine \
+            > artifacts/layer_boundary_writer_imports.txt || true
+
+          grep -RInE \
+            '^[[:space:]]*import .*persistence|^[[:space:]]*from .*persistence' \
+            engine \
+            > artifacts/layer_boundary_persistence_imports.txt || true
+
+          grep -RInE \
+            '^[[:space:]]*import .*orchestrator|^[[:space:]]*from .*orchestrator' \
+            engine \
+            > artifacts/layer_boundary_orchestrator_imports.txt || true
+
+          cat \
+            artifacts/layer_boundary_writer_imports.txt \
+            artifacts/layer_boundary_persistence_imports.txt \
+            artifacts/layer_boundary_orchestrator_imports.txt \
+            > artifacts/layer_boundary_suspicions.txt || true
+
+          ########################################################
+          # Tier 3
+          # Evidence-level signals
+          #
+          # Executable side effects.
+          # Candidate governance blockers.
+          ########################################################
+
+          grep -RIn \
+            -e ".commit(" \
+            -e ".execute(" \
+            -e ".executemany(" \
+            engine \
+            > artifacts/layer_boundary_db_operations.txt || true
+
+          grep -RIn \
+            -e "INSERT INTO" \
+            -e "UPDATE " \
+            -e "DELETE FROM" \
+            -e "CREATE TABLE" \
+            -e "DROP TABLE" \
+            -e "ALTER TABLE" \
+            engine \
+            > artifacts/layer_boundary_sql_statements.txt || true
+
+          grep -RIn \
+            -e ".persist(" \
+            -e ".save(" \
+            -e ".write(" \
+            engine \
+            > artifacts/layer_boundary_write_operations.txt || true
+
+          cat \
+            artifacts/layer_boundary_db_operations.txt \
+            artifacts/layer_boundary_sql_statements.txt \
+            artifacts/layer_boundary_write_operations.txt \
+            > artifacts/layer_boundary_evidence.txt || true
+
+          ########################################################
+          # Risk summary
+          ########################################################
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count_lines(path_text):
+              path = Path(path_text)
+
+              if not path.exists():
+                  return 0
+
+              return sum(
+                  1
+                  for line in path.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              )
+
+          hint_count = count_lines(
+              "artifacts/layer_boundary_hints.txt"
+          )
+
+          suspicion_count = count_lines(
+              "artifacts/layer_boundary_suspicions.txt"
+          )
+
+          evidence_count = count_lines(
+              "artifacts/layer_boundary_evidence.txt"
+          )
+
+          highest_confidence = (
+              "evidence"
+              if evidence_count > 0
+              else (
+                  "suspicion"
+                  if suspicion_count > 0
+                  else (
+                      "hint"
+                      if hint_count > 0
+                      else "none"
+                  )
+              )
+          )
+
+          payload = {
+              "schema":
+                  "rga.layer_boundary_risk.v1.1",
+
+              "hint_count":
+                  hint_count,
+
+              "suspicion_count":
+                  suspicion_count,
+
+              "evidence_count":
+                  evidence_count,
+
+              "highest_confidence":
+                  highest_confidence,
+
+              "confidence_summary": {
+                  "hint":
+                      hint_count,
+
+                  "suspicion":
+                      suspicion_count,
+
+                  "evidence":
+                      evidence_count,
+              },
+
+              "confidence_model": [
+                  "hint",
+                  "suspicion",
+                  "evidence",
+              ],
+
+              "governance_blocking_confidence": [
+                  "evidence",
+              ],
+
+              "repository_driven":
+                  True,
+
+              "evidence_origin":
+                  "repository_discovery",
+
+              "governance_interpretation": {
+                  "ready":
+                      "no evidence-level violations",
+
+                  "review_needed":
+                      "suspicion-level signals detected",
+
+                  "blocked":
+                      "evidence-level violations detected",
+              },
+
+              "policy": {
+                  "hints_block_governance":
+                      False,
+
+                  "suspicions_block_governance":
+                      False,
+
+                  "evidence_blocks_governance":
+                      True,
+              },
+          }
+
+          with open(
+              "artifacts/layer_boundary_risk.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+          ########################################################
+          # Human-readable summary
+          ########################################################
+
+          {
+            echo "Layer Boundary Evidence Summary"
+            echo ""
+
+            echo "Confidence Model"
+            echo "----------------"
+            echo "hint"
+            echo "suspicion"
+            echo "evidence"
+            echo ""
+
+            echo "Governance Interpretation"
+            echo "-------------------------"
+            echo "Hints do not block governance."
+            echo "Suspicions require review."
+            echo "Only evidence-level findings may block governance."
+            echo ""
+            echo "Runtime-limited is not inferred from layer evidence."
+            echo "Layer evidence affects governance review only."
+            echo ""
+
+            echo "Generated Files"
+            echo "---------------"
+            echo "layer_boundary_hints.txt"
+            echo "layer_boundary_suspicions.txt"
+            echo "layer_boundary_evidence.txt"
+            echo "layer_boundary_risk.json"
+          } > artifacts/layer_boundary_summary.txt
+          
+      ############################################################
+      # MCP Evidence
+      ############################################################
+
+      - name: MCP Evidence
+        run: |
+          find . -type f -name "mcp.json" \
+            | sort > artifacts/mcp_configs.txt || true
+
+          find . -type f -name "mcp_server.py" \
+            | sort > artifacts/mcp_server_candidates_v1.txt || true
+
+          if [ -f ".vscode/mcp.json" ]; then
+            cp .vscode/mcp.json artifacts/mcp_config_effective.json
+          fi
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = {
+              "schema":
+                  "rga.mcp_contract_evidence.v1.1",
+
+              "required_server":
+                  "rhythm-game-assistant",
+
+              "transport":
+                  "stdio",
+
+              "required_adapter":
+                  "mcp_server.py",
+
+              "expected_environment": [
+                  "RGA_REST_URL",
+              ],
+
+              "repository_driven":
+                  True,
+
+              "governance_note":
+                  (
+                      "MCP contract readiness is evaluated "
+                      "separately from runtime dependency "
+                      "readiness."
+                  ),
+
+              "runtime_limited_note":
+                  (
+                      "Runtime dependency failures do not "
+                      "automatically imply MCP contract failure."
+                  ),
+          }
+
+          with open(
+              "artifacts/mcp_contract_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+          {
+            echo "MCP Verification Evidence"
+            echo ""
+
+            echo "Required Server"
+            echo "---------------"
+            echo "rhythm-game-assistant"
+            echo "type=stdio"
+
+            echo ""
+            echo "Required Adapter"
+            echo "----------------"
+            echo "mcp_server.py"
+
+            echo ""
+            echo "Expected Environment"
+            echo "--------------------"
+            echo "RGA_REST_URL"
+
+            echo ""
+            echo "Governance Note"
+            echo "---------------"
+            echo "MCP readiness is evaluated independently from runtime dependency readiness."
+          } > artifacts/mcp_contract_summary.txt
+
+
+      ############################################################
+      # Runtime Surface Evidence
+      ############################################################
+
+      - name: Runtime Surface Evidence
+        run: |
+          find . -type f \
+            \( \
+              -name "app.py" -o \
+              -name "recommend.py" -o \
+              -name "main.py" \
+            \) \
+            | sort > artifacts/runtime_surface_candidates.txt || true
+
+          grep -RIn \
+            -e "@app" \
+            -e "APIRouter" \
+            -e "FastAPI" \
+            -e "recommend" \
+            engine \
+            > artifacts/runtime_surface_keyword_hits.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count(path_text):
+              path = Path(path_text)
+
+              if not path.exists():
+                  return 0
+
+              return len(
+                  [
+                      line
+                      for line in path.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              )
+
+          payload = {
+              "schema":
+                  "rga.runtime_surface_evidence.v1.1",
+
+              "candidate_count":
+                  count(
+                      "artifacts/runtime_surface_candidates.txt"
+                  ),
+
+              "keyword_hit_count":
+                  count(
+                      "artifacts/runtime_surface_keyword_hits.txt"
+                  ),
+
+              "repository_driven":
+                  True,
+
+              "governance_note":
+                  (
+                      "Runtime surface discovery provides "
+                      "runtime visibility evidence but does "
+                      "not independently establish runtime "
+                      "readiness."
+                  ),
+          }
+
+          with open(
+              "artifacts/runtime_surface_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+          {
+            echo "Runtime Surface Evidence"
+            echo ""
+
+            echo "Generated Files"
+            echo "---------------"
+            echo "runtime_surface_candidates.txt"
+            echo "runtime_surface_keyword_hits.txt"
+
+            echo ""
+            echo "Runtime surface discovery is repository-driven."
+          } > artifacts/runtime_surface_summary.txt
+
+
+      ############################################################
+      # Runtime Reader Discovery Evidence
+      ############################################################
+
+      - name: Runtime Reader Discovery Evidence
+        run: |
+          find . -type f \
+            \( \
+              -iname "*reader*.py" -o \
+              -iname "*readers*.py" \
+            \) \
+            | sort > artifacts/runtime_reader_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*validator*.py" -o \
+              -iname "*validators*.py" \
+            \) \
+            | sort > artifacts/runtime_validator_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*bridge*.py" -o \
+              -iname "*bridges*.py" \
+            \) \
+            | sort > artifacts/runtime_bridge_candidates.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count(path_text):
+              path = Path(path_text)
+
+              if not path.exists():
+                  return 0
+
+              return len(
+                  [
+                      line
+                      for line in path.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              )
+
+          payload = {
+              "schema":
+                  "rga.runtime_reader_discovery.v1.1",
+
+              "reader_candidates":
+                  count(
+                      "artifacts/runtime_reader_candidates.txt"
+                  ),
+
+              "validator_candidates":
+                  count(
+                      "artifacts/runtime_validator_candidates.txt"
+                  ),
+
+              "bridge_candidates":
+                  count(
+                      "artifacts/runtime_bridge_candidates.txt"
+                  ),
+
+              "discovery_strategy":
+                  "repository_driven",
+
+              "topology_assumptions":
+                  False,
+
+              "verification_note":
+                  (
+                      "Repository discovery precedes runtime "
+                      "reader verification."
+                  ),
+          }
+
+          with open(
+              "artifacts/runtime_reader_discovery_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+          {
+            echo "Runtime Reader Discovery Evidence"
+            echo ""
+
+            echo "Reader candidates:"
+            wc -l artifacts/runtime_reader_candidates.txt || true
+
+            echo ""
+            echo "Validator candidates:"
+            wc -l artifacts/runtime_validator_candidates.txt || true
+
+            echo ""
+            echo "Bridge candidates:"
+            wc -l artifacts/runtime_bridge_candidates.txt || true
+
+            echo ""
+            echo "Discovery Strategy:"
+            echo "repository_driven"
+          } > artifacts/runtime_reader_discovery_summary.txt
+
+
+      ############################################################
+      # Runtime DB Read Evidence
+      ############################################################
+
+      - name: Runtime DB Read Evidence
+        run: |
+          find . -type f \
+            \( \
+              -name "file_scan_inventory.db" -o \
+              -name "chart_assets.db" -o \
+              -name "chart_patterns.db" \
+            \) \
+            | sort > artifacts/runtime_db_candidates.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(
+              "artifacts/runtime_db_candidates.txt"
+          )
+
+          if path.exists():
+              db_candidates = [
+                  line.strip()
+                  for line in path.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              ]
+          else:
+              db_candidates = []
+
+          payload = {
+              "schema":
+                  "rga.runtime_db_read_evidence.v1.1",
+
+              "candidate_count":
+                  len(
+                      db_candidates
+                  ),
+
+              "artifact_backbone": [
+                  "file_scan_inventory.db",
+                  "chart_assets.db",
+                  "chart_patterns.db",
+              ],
+
+              "repository_driven":
+                  True,
+
+              "runtime_limited_possible":
+                  True,
+
+              "governance_note":
+                  (
+                      "Artifact database discovery establishes "
+                      "runtime read evidence only. Runtime read "
+                      "readiness must be verified separately."
+                  ),
+          }
+
+          with open(
+              "artifacts/runtime_db_read_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+          {
+            echo "Runtime DB Read Evidence"
+            echo ""
+
+            echo "Runtime DB candidates:"
+            cat artifacts/runtime_db_candidates.txt || true
+
+            echo ""
+            echo "Artifact Backbone"
+            echo "-----------------"
+            echo "file_scan_inventory.db"
+            echo "chart_assets.db"
+            echo "chart_patterns.db"
+
+            echo ""
+            echo "Runtime DB discovery does not imply runtime DB readiness."
+          } > artifacts/runtime_db_read_summary.txt
+
+      ############################################################
+      # Governance Evidence
+      ############################################################
+
+      - name: Governance Evidence
+        run: |
+          {
+            echo "RGA Governance Context"
+            echo ""
+
+            echo "Verifier Mode: read_only"
+            echo "Completed Phases: immutable"
+            echo "Default Deletion Policy: blocked"
+            echo "Maintenance Mode: advisor_only"
+            echo ""
+
+            echo "Reality Separation"
+            echo "------------------"
+            echo "Repository Reality != Import Reality"
+            echo "Import Reality != Runtime Reality"
+            echo "Dependency Reality != Governance"
+            echo ""
+
+            echo "Runtime Limitation Policy"
+            echo "-------------------------"
+            echo "runtime_limited != governance_blocked"
+            echo "runtime_limited indicates dependency or import constraints."
+            echo "runtime_limited does not automatically imply governance failure."
+            echo ""
+
+            echo "Layer Boundary Confidence"
+            echo "-------------------------"
+            echo "Hint != Suspicion != Evidence"
+            echo "Only evidence-level findings may block governance."
+            echo ""
+
+            echo "Root Contract Policy"
+            echo "--------------------"
+            echo "Root failures are independently actionable."
+            echo "Derived failures should be revalidated after root resolution."
+            echo ""
+
+            echo "Artifact Backbone Contract"
+            echo "--------------------------"
+            echo "file_scan_inventory.db"
+            echo " -> chart_assets.db"
+            echo " -> chart_patterns.db"
+            echo ""
+
+            echo "Deletion Governance"
+            echo "-------------------"
+            echo "Deletion remains blocked until:"
+            echo "artifact_backbone_verified"
+            echo "asset_coverage_verified"
+            echo "hash_consistency_verified"
+            echo "type_A_text_usable"
+            echo "runtime_can_use_db_assets"
+            echo "runtime_can_use_db_patterns"
+          } > artifacts/governance_context.txt
+
+          python - <<'PY'
+          import json
+
+          payload = {
+              "schema":
+                  "rga.governance_context.v1.1",
+
+              "verifier_mode":
+                  "read_only",
+
+              "completed_phases":
+                  "immutable",
+
+              "maintenance_mode":
+                  "advisor_only",
+
+              "runtime_limited_policy": {
+                  "runtime_limited_is_governance_blocked":
+                      False,
+
+                  "runtime_limited_is_dependency_constrained":
+                      True,
+              },
+
+              "root_failure_policy": {
+                  "resolve_root_failures_first":
+                      True,
+
+                  "revalidate_derived_after_root_resolution":
+                      True,
+              },
+
+              "governance_principles": {
+                  "dependency_failures_are_not_governance_failures":
+                      True,
+
+                  "false_positive_isolation":
+                      True,
+
+                  "impact_scope_is_advisory_only":
+                      True,
+
+                  "lineage_does_not_imply_remediation":
+                      True,
+              },
+          }
+
+          with open(
+              "artifacts/governance_context.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+          
+      ############################################################
+      # Governance Failure Lineage Evidence
+      ############################################################
+
+      - name: Governance Failure Lineage Evidence
+        run: |
+          cat > artifacts/governance_failure_lineage.json <<'JSON'
+          {
+            "schema": "rga.governance_failure_lineage.v1.1",
+
+            "root_contracts": [
+              "artifact_database_policy",
+              "deletion_readiness"
+            ],
+
+            "derived_contracts": {
+              "artifact_relationships": "artifact_database_policy",
+              "artifact_backbone_contract": "artifact_database_policy",
+              "asset_coverage": "artifact_database_policy",
+              "hash_integrity": "artifact_database_policy",
+              "type_A_usability": "artifact_database_policy",
+              "runtime_artifact_readiness": "artifact_database_policy"
+            },
+
+            "impact_scope": {
+              "artifact_database_policy": {
+                "directly_blocks": [
+                  "artifact_relationships",
+                  "artifact_backbone_contract",
+                  "asset_coverage",
+                  "hash_integrity",
+                  "type_A_usability",
+                  "runtime_artifact_readiness"
+                ]
+              },
+
+              "deletion_readiness": {
+                "directly_blocks": [
+                  "source_asset_deletion"
+                ]
+              }
+            },
+
+            "meta_contracts": [
+              "governance_verdict"
+            ],
+
+            "policy": {
+              "resolve_root_failures_first": true,
+              "revalidate_derived_failures_after_root_resolution": true,
+              "dependency_failures_are_not_governance_failures": true,
+              "impact_scope_is_advisory_only": true
+            }
+          }
+          JSON
+
+      ############################################################
+      # Run Verifier
+      ############################################################
+
+      - name: Run RGA Runtime Verifier
+        id: run_verifier
+        continue-on-error: true
+        run: |
+          set +e
+
+          python tools/runtime_verifier.py \
+            --repo-root . \
+            --mcp-config .vscode/mcp.json \
+            --json-out artifacts/runtime_verifier_report.json \
+            --md-out artifacts/runtime_verifier_report.md \
+            > artifacts/runtime_verifier_stdout.txt \
+            2> artifacts/runtime_verifier_stderr.txt
+
+          verifier_exit_code=$?
+
+          echo "${verifier_exit_code}" \
+            > artifacts/runtime_verifier_exit_code.txt
+
+          echo "verifier_exit_code=${verifier_exit_code}" \
+            >> "$GITHUB_OUTPUT"
+
+          echo "RGA Runtime Verifier exited with code: ${verifier_exit_code}"
+
+          exit 0
+
+      ############################################################
+      # Artifact Bundle Manifest
+      ############################################################
+
+      - name: Artifact Bundle Manifest
+        if: always()
+        run: |
+          {
+            echo "RGA Runtime Verifier Artifact Bundle"
+            echo ""
+
+            echo "Generated at:"
+            date -u +"%Y-%m-%dT%H:%M:%SZ"
+
+            echo ""
+            echo "Verifier Exit Code:"
+
+            cat artifacts/runtime_verifier_exit_code.txt || true
+
+            echo ""
+            echo "Artifact Count:"
+
+            find artifacts -type f | wc -l
+
+            echo ""
+            echo "Files:"
+
+            find artifacts -type f | sort
+          } > artifacts/artifact_bundle_manifest.txt
+
+      ############################################################
+      # Create Downloadable Zip Bundle
+      ############################################################
+
+      - name: Create Downloadable Zip Bundle
+        if: always()
+        run: |
+          cd artifacts
+
+          zip -r ../runtime-verifier-report.zip . || true
+
+          cd ..
+
+          if [ -f runtime-verifier-report.zip ]; then
+            cp runtime-verifier-report.zip \
+              artifacts/runtime-verifier-report.zip
+          fi
+
+      ############################################################
+      # Runtime Verifier Job Summary
+      ############################################################
+
+      - name: Runtime Verifier Job Summary
+        if: always()
+        run: |
+          {
+            echo "## RGA Runtime Verifier"
+            echo ""
+
+            echo "- JSON Report: \`artifacts/runtime_verifier_report.json\`"
+            echo "- Markdown Report: \`artifacts/runtime_verifier_report.md\`"
+            echo "- Evidence Bundle: \`artifacts/\`"
+            echo "- Downloadable Zip: \`runtime-verifier-report.zip\`"
+
+            echo ""
+
+            if [ -f artifacts/runtime_verifier_exit_code.txt ]; then
+              echo "- Verifier Exit Code: \`$(cat artifacts/runtime_verifier_exit_code.txt)\`"
+              echo ""
+            fi
+
+            if [ -f artifacts/runtime_verifier_report.md ]; then
+              echo "### Markdown Report Preview"
+              echo ""
+
+              head -n 120 \
+                artifacts/runtime_verifier_report.md
+
+              echo ""
+            fi
+
+            if [ -f artifacts/runtime_verifier_stderr.txt ]; then
+              echo "### stderr Preview"
+              echo ""
+              echo '```text'
+
+              head -n 80 \
+                artifacts/runtime_verifier_stderr.txt
+
+              echo '```'
+              echo ""
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      ############################################################
+      # Upload Artifact Folder
+      ############################################################
+
+      - name: Upload Runtime Verifier Artifact Folder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-verifier-artifacts
+          path: artifacts/
+          if-no-files-found: warn
+
+      ############################################################
+      # Upload Downloadable Zip Bundle
+      ############################################################
+
+      - name: Upload Runtime Verifier Zip
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-verifier-report-zip
+          path: runtime-verifier-report.zip
+          if-no-files-found: warn
