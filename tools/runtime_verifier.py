@@ -1617,12 +1617,39 @@ class RuntimeVerifier:
         status: str,
     ) -> None:
 
+        governance_blocking = evidence_count > 0
+        
+        highest_confidence = (
+            "evidence"
+            if evidence_count > 0
+            else "suspicion"
+            if suspicion_count > 0
+            else "hint"
+            if hint_count > 0
+            else "none"
+        )        
+
         self.governance_state["layer_boundary_risk"] = {
             "status": status,
             "evidence_count": evidence_count,
             "suspicion_count": suspicion_count,
             "hint_count": hint_count,
-            "governance_blocking": evidence_count > 0,
+            "governance_blocking": governance_blocking,
+            "confidence_model": [
+                "hint",
+                "suspicion",
+                "evidence",
+            ],
+            "blocking_confidence": [
+                "evidence",
+            ],
+            "highest_confidence": highest_confidence,
+        }
+
+        self.governance_state["confidence_summary"] = {
+            "evidence": evidence_count,
+            "suspicion": suspicion_count,
+            "hint": hint_count,
         }
 
     # ------------------------------------------------------------------
@@ -3116,22 +3143,69 @@ class RuntimeVerifier:
         orphan_asset_chart_ids = sorted([item for item in asset_chart_ids if item not in pattern_chart_ids])
         orphan_pattern_chart_ids = sorted([item for item in pattern_chart_ids if item not in asset_chart_ids])
 
-        scan_to_asset_coverage = 100.0 if not scan_paths else round(
-            ((len(scan_paths) - len(orphan_scans)) / len(scan_paths)) * 100,
-            2,
+        scan_count = len(scan_paths)
+
+        if scan_count == 0:
+            scan_to_asset_coverage = None
+            scan_to_asset_state = "insufficient_evidence"
+        else:
+            scan_to_asset_coverage = round(
+                (
+                    (scan_count - len(orphan_scans))
+                    / scan_count
+                ) * 100,
+                2,
+            )
+
+            scan_to_asset_state = (
+                "complete"
+                if scan_to_asset_coverage == 100.0
+                else "incomplete"
+            )
+
+        asset_path_count = len(asset_paths)
+
+        if asset_path_count == 0:
+            asset_to_pattern_coverage_by_path = None
+            asset_to_pattern_path_state = "insufficient_evidence"
+        else:
+            asset_to_pattern_coverage_by_path = round(
+                (
+                    (asset_path_count - len(orphan_assets_without_patterns))
+                    / asset_path_count
+                ) * 100,
+                2,
+            )
+
+            asset_to_pattern_path_state = (
+                "complete"
+                if asset_to_pattern_coverage_by_path == 100.0
+                else "incomplete"
+            )
+
+        asset_id_count = len(asset_chart_ids)
+
+        id_relationship_available = bool(
+            asset_chart_ids or pattern_chart_ids
         )
 
-        asset_to_pattern_coverage_by_path = 100.0 if not asset_paths else round(
-            ((len(asset_paths) - len(orphan_assets_without_patterns)) / len(asset_paths)) * 100,
-            2,
-        )
+        if asset_id_count == 0:
+            asset_to_pattern_coverage_by_id = None
+            asset_to_pattern_id_state = "insufficient_evidence"
+        else:
+            asset_to_pattern_coverage_by_id = round(
+                (
+                    len(asset_to_pattern_id_matches)
+                    / asset_id_count
+                ) * 100,
+                2,
+            )
 
-        id_relationship_available = bool(asset_chart_ids or pattern_chart_ids)
-        asset_to_pattern_coverage_by_id = (
-            100.0
-            if not asset_chart_ids
-            else round((len(asset_to_pattern_id_matches) / len(asset_chart_ids)) * 100, 2)
-        )
+            asset_to_pattern_id_state = (
+                "complete"
+                if asset_to_pattern_coverage_by_id == 100.0
+                else "incomplete"
+            )
 
         scan_db_ready = self.artifact_db_has_readable_rows(FILE_SCAN_INVENTORY_DB_NAME)
         asset_db_ready = self.artifact_db_has_readable_rows(CHART_ASSETS_DB_NAME)
@@ -3503,13 +3577,29 @@ class RuntimeVerifier:
             ]
         )
 
-        coverage_percentage = 100.0 if not repository_assets_set else round(
-            ((len(repository_assets_set) - len(orphan_files)) / len(repository_assets_set)) * 100,
-            2,
-        )
+        repository_asset_count = len(repository_assets_set)
+
+        if repository_asset_count == 0:
+            coverage_percentage = None
+            coverage_state = "insufficient_evidence"
+        else:
+            coverage_percentage = round(
+                (
+                    (repository_asset_count - len(orphan_files))
+                    / repository_asset_count
+                ) * 100,
+                2,
+            )
+
+            coverage_state = (
+                "complete"
+                if coverage_percentage == 100.0
+                and not orphan_db_entries
+                else "incomplete"
+            )
 
         pass_condition = (
-            bool(repository_assets_set)
+            repository_asset_count > 0
             and coverage_percentage == 100.0
             and not orphan_db_entries
         )
