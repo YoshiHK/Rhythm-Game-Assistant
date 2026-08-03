@@ -7270,7 +7270,6 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
-
 # -----------------------------------------------------------------------------
 # CLI
 # -----------------------------------------------------------------------------
@@ -7451,136 +7450,255 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    verifier = RuntimeVerifier(
-        repo_root=Path(
-            args.repo_root
-        ),
-
-        backend_root=(
-            Path(
-                args.backend_root
-            )
-            if args.backend_root
-            else None
-        ),
-
-        api_url=args.api_url,
-
-        token=args.token,
-
-        mcp_config=(
-            Path(
-                args.mcp_config
-            ).expanduser()
-            if args.mcp_config
-            else None
-        ),
-
-        asset_db=(
-            Path(
-                args.asset_db
-            ).expanduser()
-            if args.asset_db
-            else None
-        ),
-
-        file_scan_inventory_db=(
-            Path(
-                args.file_scan_inventory_db
-            ).expanduser()
-            if args.file_scan_inventory_db
-            else None
-        ),
-
-        chart_assets_db=(
-            Path(
-                args.chart_assets_db
-            ).expanduser()
-            if args.chart_assets_db
-            else None
-        ),
-
-        chart_patterns_db=(
-            Path(
-                args.chart_patterns_db
-            ).expanduser()
-            if args.chart_patterns_db
-            else None
-        ),
-
-        run_rest=args.rest,
-    )
-
-    report = verifier.run_all()
-
-    text = json.dumps(
-        report,
-        indent=2,
-        ensure_ascii=False,
-    )
-
-    print(text)
-    
-    #
-    # ----------------------------------------------------------
-    # JSON Report
-    # ----------------------------------------------------------
-    #
-
-    generated_reports = {
-        "json": None,
-        "markdown": None,
-    }
-
-    if args.json_out:
-
-        json_out = Path(
+    json_out = (
+        Path(
             args.json_out
         )
+        if args.json_out
+        else None
+    )
 
-        json_out.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        json_out.write_text(
-            text,
-            encoding="utf-8",
-        )
-
-        generated_reports["json"] = str(
-            json_out
-        )
-
-    #
-    # ----------------------------------------------------------
-    # Markdown Report
-    # ----------------------------------------------------------
-    #
-
-    if args.md_out:
-
-        md_out = Path(
+    md_out = (
+        Path(
             args.md_out
         )
-
-        md_out.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        write_markdown(
-            report,
-            md_out,
-        )
-
-        generated_reports["markdown"] = str(
-            md_out
-        )
+        if args.md_out
+        else None
+    )
 
     #
     # ----------------------------------------------------------
-    # Report Generation Summary
+    # Report generation state
+    #
+    # This is intentionally initialized before verifier execution
+    # so fallback reports can still be generated if run_all fails.
+    # ----------------------------------------------------------
+    #
+
+    generated_reports: Dict[str, Any] = {
+        "json_report":
+            str(json_out)
+            if json_out
+            else None,
+
+        "markdown_report":
+            str(md_out)
+            if md_out
+            else None,
+
+        "json_requested":
+            json_out is not None,
+
+        "markdown_requested":
+            md_out is not None,
+
+        "json_generated":
+            False,
+
+        "markdown_generated":
+            False,
+
+        "markdown_fallback_generated":
+            False,
+
+        "json_error":
+            None,
+
+        "markdown_error":
+            None,
+
+        "verifier_error":
+            None,
+    }
+
+    report: Dict[str, Any]
+
+    #
+    # ----------------------------------------------------------
+    # Run verifier
+    #
+    # If the verifier itself crashes, still generate a structured
+    # report so workflow artifacts are not missing.
+    # ----------------------------------------------------------
+    #
+
+    try:
+        verifier = RuntimeVerifier(
+            repo_root=Path(
+                args.repo_root
+            ),
+
+            backend_root=(
+                Path(
+                    args.backend_root
+                )
+                if args.backend_root
+                else None
+            ),
+
+            api_url=args.api_url,
+
+            token=args.token,
+
+            mcp_config=(
+                Path(
+                    args.mcp_config
+                ).expanduser()
+                if args.mcp_config
+                else None
+            ),
+
+            asset_db=(
+                Path(
+                    args.asset_db
+                ).expanduser()
+                if args.asset_db
+                else None
+            ),
+
+            file_scan_inventory_db=(
+                Path(
+                    args.file_scan_inventory_db
+                ).expanduser()
+                if args.file_scan_inventory_db
+                else None
+            ),
+
+            chart_assets_db=(
+                Path(
+                    args.chart_assets_db
+                ).expanduser()
+                if args.chart_assets_db
+                else None
+            ),
+
+            chart_patterns_db=(
+                Path(
+                    args.chart_patterns_db
+                ).expanduser()
+                if args.chart_patterns_db
+                else None
+            ),
+
+            run_rest=args.rest,
+        )
+
+        report = verifier.run_all()
+
+    except Exception as exc:
+        generated_reports["verifier_error"] = str(
+            exc
+        )
+
+        report = {
+            "schema":
+                "rga.runtime_verifier.report.v1.0",
+
+            "generated_at":
+                datetime.now(
+                    timezone.utc
+                )
+                .replace(
+                    microsecond=0,
+                )
+                .isoformat(),
+
+            "repo_root":
+                str(
+                    Path(
+                        args.repo_root
+                    )
+                ),
+
+            "backend_root":
+                str(
+                    Path(
+                        args.backend_root
+                    )
+                )
+                if args.backend_root
+                else None,
+
+            "backend_root_mode":
+                "unavailable",
+
+            "api_url":
+                args.api_url,
+
+            "summary": {
+                "fail":
+                    1,
+            },
+
+            "severity_summary": {
+                "critical":
+                    1,
+            },
+
+            "governance": {
+                "governance_verdict":
+                    "blocked",
+
+                "runtime_verdict":
+                    "blocked_by_exception",
+
+                "policy": {
+                    "verifier_mode":
+                        "read_only",
+
+                    "completed_phases":
+                        "immutable",
+
+                    "dependency_failures_are_not_governance_failures":
+                        True,
+                },
+            },
+
+            "results": [
+                {
+                    "domain":
+                        "verifier",
+
+                    "check":
+                        "runtime_verifier_execution",
+
+                    "status":
+                        "fail",
+
+                    "severity":
+                        "critical",
+
+                    "summary":
+                        "Runtime verifier execution failed before normal report generation completed.",
+
+                    "evidence": {
+                        "error":
+                            str(
+                                exc
+                            ),
+
+                        "traceback":
+                            traceback.format_exc(),
+                    },
+
+                    "suggested_fix":
+                        (
+                            "Review runtime_verifier.py stderr output and "
+                            "ensure report generation can complete."
+                        ),
+
+                    "governance_domain":
+                        "verifier_runtime",
+
+                    "contract_type":
+                        "verifier_execution",
+                }
+            ],
+        }
+
+    #
+    # ----------------------------------------------------------
+    # Attach report generation status before any outputs.
     # ----------------------------------------------------------
     #
 
@@ -7590,21 +7708,159 @@ def main() -> int:
     )
 
     report["report_generation"].update(
-        {
-            "json_report":
-                generated_reports["json"],
+        generated_reports
+    )
 
-            "markdown_report":
-                generated_reports["markdown"],
+    #
+    # ----------------------------------------------------------
+    # Markdown Report
+    #
+    # Markdown is attempted first so the final JSON can record
+    # markdown generation success/failure.
+    #
+    # If write_markdown fails, a fallback markdown report is still
+    # generated so the workflow artifact is not missing.
+    # ----------------------------------------------------------
+    #
 
-            "json_generated":
-                generated_reports["json"]
-                is not None,
+    if md_out is not None:
 
-            "markdown_generated":
-                generated_reports["markdown"]
-                is not None,
-        }
+        try:
+            md_out.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            write_markdown(
+                report,
+                md_out,
+            )
+
+            generated_reports["markdown_generated"] = True
+
+        except Exception as exc:
+            generated_reports["markdown_error"] = str(
+                exc
+            )
+
+            try:
+                md_out.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+
+                fallback_lines = [
+                    "# RGA Runtime Verifier Report",
+                    "",
+                    "## Report Generation Fallback",
+                    "",
+                    "Markdown rendering failed, so this fallback report was generated.",
+                    "",
+                    "```text",
+                    str(
+                        exc
+                    ),
+                    "```",
+                    "",
+                    "## JSON Report",
+                    "",
+                    "The JSON report should still contain the structured verifier output if JSON generation succeeded.",
+                    "",
+                ]
+
+                md_out.write_text(
+                    "\n".join(
+                        fallback_lines
+                    ),
+                    encoding="utf-8",
+                )
+
+                generated_reports["markdown_generated"] = True
+                generated_reports["markdown_fallback_generated"] = True
+
+            except Exception as fallback_exc:
+                generated_reports["markdown_error"] = (
+                    f"{exc}; fallback_failed={fallback_exc}"
+                )
+
+    #
+    # ----------------------------------------------------------
+    # Finalize report generation metadata after Markdown attempt.
+    # ----------------------------------------------------------
+    #
+
+    report["report_generation"].update(
+        generated_reports
+    )
+
+    #
+    # ----------------------------------------------------------
+    # JSON Report
+    #
+    # JSON is written after report_generation is finalized.
+    # This prevents the JSON artifact from missing report output
+    # metadata.
+    # ----------------------------------------------------------
+    #
+
+    if json_out is not None:
+
+        try:
+            json_out.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            text = json.dumps(
+                report,
+                indent=2,
+                ensure_ascii=False,
+            )
+
+            json_out.write_text(
+                text,
+                encoding="utf-8",
+            )
+
+            generated_reports["json_generated"] = True
+
+        except Exception as exc:
+            generated_reports["json_error"] = str(
+                exc
+            )
+
+            report["report_generation"].update(
+                generated_reports
+            )
+
+            print(
+                json.dumps(
+                    report,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+
+            return 1
+
+    #
+    # ----------------------------------------------------------
+    # Final stdout output
+    #
+    # Print the final report, including report_generation status.
+    # ----------------------------------------------------------
+    #
+
+    report["report_generation"].update(
+        generated_reports
+    )
+
+    print(
+        json.dumps(
+            report,
+            indent=2,
+            ensure_ascii=False,
+        )
     )
 
     #
