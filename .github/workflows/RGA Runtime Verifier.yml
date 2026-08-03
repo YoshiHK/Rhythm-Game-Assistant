@@ -2320,19 +2320,7 @@ jobs:
               echo '```'
               echo ""
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      ############################################################
-      # Upload Artifact Folder
-      ############################################################
-
-      - name: Upload Runtime Verifier Artifact Folder
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: runtime-verifier-artifacts
-          path: artifacts/
-          if-no-files-found: warn
+          } >> "$GITHUB_STEP_SUMMARY"
 
       ############################################################
       # Upload Downloadable Zip Bundle
