@@ -2277,6 +2277,37 @@ jobs:
           fi
 
       ############################################################
+      # Verify Generated Reports
+      ############################################################
+
+      - name: Verify Generated Reports
+        if: always()
+        run: |
+          report_ok=true
+
+          if [ ! -f artifacts/runtime_verifier_report.json ]; then
+            echo "Missing JSON report"
+            report_ok=false
+          fi
+
+          if [ ! -f artifacts/runtime_verifier_report.md ]; then
+            echo "Missing Markdown report"
+            report_ok=false
+          fi
+
+          if [ "$report_ok" = true ]; then
+            echo "report_generation_status=verified" \
+              > artifacts/report_generation_status.txt
+
+            echo "Report generation verified."
+          else
+            echo "report_generation_status=incomplete" \
+              > artifacts/report_generation_status.txt
+
+            echo "Report generation incomplete."
+          fi
+
+      ############################################################
       # Runtime Verifier Job Summary
       ############################################################
 
@@ -2293,6 +2324,11 @@ jobs:
             echo "- Downloadable Zip: \`runtime-verifier-report.zip\`"
 
             echo ""
+
+            if [ -f artifacts/report_generation_status.txt ]; then
+              echo "- Report Generation Status: \`$(cat artifacts/report_generation_status.txt)\`"
+              echo ""
+            fi
 
             if [ -f artifacts/runtime_verifier_exit_code.txt ]; then
               echo "- Verifier Exit Code: \`$(cat artifacts/runtime_verifier_exit_code.txt)\`"
@@ -2312,15 +2348,31 @@ jobs:
             if [ -f artifacts/runtime_verifier_stderr.txt ]; then
               echo "### stderr Preview"
               echo ""
+
               echo '```text'
 
               head -n 80 \
-                artifacts/runtime_verifier_stderr.txt
+                artifacts/runtime_verifier_stderr.txt || true
 
               echo '```'
               echo ""
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+
+            if [ ! -f artifacts/runtime_verifier_report.json ]; then
+              echo "### Missing Artifacts"
+              echo ""
+              echo "- runtime_verifier_report.json"
+              echo ""
+            fi
+
+            if [ ! -f artifacts/runtime_verifier_report.md ]; then
+              echo "### Missing Artifacts"
+              echo ""
+              echo "- runtime_verifier_report.md"
+              echo ""
+            fi
+
+          } >> "$GITHUB_STEP_SUMMARY"
 
       ############################################################
       # Upload Downloadable Zip Bundle
