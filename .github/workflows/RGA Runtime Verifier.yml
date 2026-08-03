@@ -2285,26 +2285,22 @@ jobs:
         run: |
           report_ok=true
 
-          if [ ! -f artifacts/runtime_verifier_report.json ]; then
-            echo "Missing JSON report"
+          if [ ! -s artifacts/runtime_verifier_report.json ]; then
+            echo "Missing or empty JSON report"
             report_ok=false
           fi
 
-          if [ ! -f artifacts/runtime_verifier_report.md ]; then
-            echo "Missing Markdown report"
+          if [ ! -s artifacts/runtime_verifier_report.md ]; then
+            echo "Missing or empty Markdown report"
             report_ok=false
           fi
 
           if [ "$report_ok" = true ]; then
-            echo "report_generation_status=verified" \
+            echo "verified" \
               > artifacts/report_generation_status.txt
-
-            echo "Report generation verified."
           else
-            echo "report_generation_status=incomplete" \
+            echo "incomplete" \
               > artifacts/report_generation_status.txt
-
-            echo "Report generation incomplete."
           fi
 
       ############################################################
