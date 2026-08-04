@@ -5132,7 +5132,7 @@ class RuntimeVerifier:
                 "fail",
             }:
                 relevant_failure_results.append(
-                    result,
+                    result
                 )
 
         dependency_contracts = {
@@ -5183,12 +5183,19 @@ class RuntimeVerifier:
 
             if contract_type in dependency_contracts:
                 dependency_failures.append(
-                    item,
+                    item
                 )
+
             else:
                 governance_failures.append(
-                    item,
+                    item
                 )
+
+        #
+        # ----------------------------------------------------------
+        # Root / Derived Failure Classification
+        # ----------------------------------------------------------
+        #
 
         root_failures, derived_failures = (
             self.classify_governance_failure_lineage(
@@ -5197,19 +5204,19 @@ class RuntimeVerifier:
         )
 
         dependency_fail_count = len(
-            dependency_failures,
+            dependency_failures
         )
 
         governance_fail_count = len(
-            governance_failures,
+            governance_failures
         )
 
         root_failure_count = len(
-            root_failures,
+            root_failures
         )
 
         derived_failure_count = len(
-            derived_failures,
+            derived_failures
         )
 
         #
@@ -5404,8 +5411,8 @@ class RuntimeVerifier:
         # dependency/import readiness is incomplete.
         #
         # A skipped flow contract is not automatically a governance
-        # blocker. It should usually become review_needed or
-        # runtime-limited depending on the surrounding verdicts.
+        # blocker. It becomes runtime_limited because the verifier
+        # could not complete flow checks due to runtime constraints.
         # ----------------------------------------------------------
         #
 
@@ -5463,7 +5470,9 @@ class RuntimeVerifier:
         architecture_blockers = [
             item
             for item in governance_failures
-            if item.get("contract_type")
+            if item.get(
+                "contract_type"
+            )
             in architecture_failure_contracts
         ]
 
@@ -5471,6 +5480,7 @@ class RuntimeVerifier:
         # Layer boundary only blocks architecture when evidence-level
         # violations exist.
         #
+
         if layer_boundary_verdict == "blocked":
             architecture_blockers.append(
                 {
@@ -5486,11 +5496,10 @@ class RuntimeVerifier:
                     "status":
                         "fail",
 
-                    "summary":
-                        (
-                            "Layer boundary audit found evidence-level "
-                            "governance violations."
-                        ),
+                    "summary": (
+                        "Layer boundary audit found evidence-level "
+                        "governance violations."
+                    ),
 
                     "governance_domain":
                         "layer_boundaries",
@@ -5523,7 +5532,7 @@ class RuntimeVerifier:
                 artifact_backbone_verdict,
                 deletion_verdict,
             ]
-        )       
+        )
 
         requires_review = any(
             verdict == "review_needed"
@@ -5531,7 +5540,7 @@ class RuntimeVerifier:
                 layer_boundary_verdict,
                 flow_contract_verdict,
             ]
-        ) 
+        )
 
         runtime_constrained = (
             runtime_verdict
@@ -5549,7 +5558,68 @@ class RuntimeVerifier:
 
         else:
             governance_verdict = "ready"
-        
+
+        #
+        # ----------------------------------------------------------
+        # Dynamic Impact Scope
+        #
+        # Impact scope is derived from the actual root/derived
+        # lineage discovered during verification.
+        # ----------------------------------------------------------
+        #
+
+        impact_scope: Dict[str, Any] = {}
+
+        for root_failure in root_failures:
+
+            root_contract = root_failure.get(
+                "contract_type"
+            )
+
+            if not root_contract:
+                continue
+
+            impact_scope[root_contract] = {
+                "directly_blocks": sorted(
+                    [
+                        item.get("contract_type")
+                        for item in derived_failures
+                        if item.get(
+                            "dependency_of"
+                        )
+                        == root_contract
+                    ]
+                )
+            }
+
+        #
+        # Governance-domain hints
+        #
+
+        if (
+            "artifact_database_policy"
+            in impact_scope
+        ):
+            impact_scope[
+                "artifact_database_policy"
+            ][
+                "impact_domain"
+            ] = (
+                "artifact_backbone"
+            )
+
+        if (
+            "deletion_readiness"
+            in impact_scope
+        ):
+            impact_scope[
+                "deletion_readiness"
+            ][
+                "impact_domain"
+            ] = (
+                "deletion_governance"
+            )
+
         self.governance_state.update(
             {
                 #
@@ -5621,89 +5691,62 @@ class RuntimeVerifier:
                 #
                 # --------------------------------------------------
                 # Root Cause Summary
-                #
-                # Used by:
-                #   Auditor
-                #   Advisor
-                #   Maintenance Planner
                 # --------------------------------------------------
                 #
 
                 "root_cause_summary": {
+
                     "primary_root_contracts": [
-                        item.get("contract_type")
+                        item.get(
+                            "contract_type"
+                        )
                         for item in root_failures
                     ],
 
                     "derived_contracts": [
-                        item.get("contract_type")
+                        item.get(
+                            "contract_type"
+                        )
                         for item in derived_failures
                     ],
 
                     "derived_dependency_map": {
-                        item.get("contract_type"):
-                            item.get("dependency_of")
+                        item.get(
+                            "contract_type"
+                        ):
+                            item.get(
+                                "dependency_of"
+                            )
                         for item in derived_failures
                     },
 
                     "recommendation": (
-                        "Resolve root failures first, then re-run all derived verification contracts."
+                        "Resolve root failures first, "
+                        "then re-run all derived "
+                        "verification contracts."
                     ),
                 },
-                
+
                 #
                 # --------------------------------------------------
                 # Impact Scope
                 # --------------------------------------------------
                 #
-                              
+
                 "impact_scope": {
 
-                    "root_contract_impacts": {
-
-                        "artifact_database_policy": {
-
-                            "directly_blocks": [
-                                "artifact_relationships",
-                                "artifact_backbone_contract",
-                                "asset_coverage",
-                                "hash_integrity",
-                                "type_A_usability",
-                                "runtime_artifact_readiness",
-                            ],
-
-                            "impact_domain":
-                                "artifact_backbone",
-                        },
-
-                        "deletion_readiness": {
-
-                            "directly_blocks": [
-                                "source_asset_deletion"
-                            ],
-
-                            "impact_domain":
-                                "deletion_governance",
-                        },
-                    },
+                    "root_contract_impacts":
+                        impact_scope,
 
                     "impact_principle": (
                         "Impact scope describes governance domains "
                         "affected by a root contract failure. "
                         "It does not imply remediation."
                     ),
-                },         
-                
-                for root_contract in ROOT_FAILURE_CONTRACT_TYPES:
 
-                    impact_scope[root_contract] = {
-                        "directly_blocks": [
-                            item.get("contract_type")
-                            for item in derived_failures
-                            if item.get("dependency_of")
-                            == root_contract
-                        ]
-                    },             
+                    "generation_mode":
+                        "runtime_lineage_driven",
+                },
 
                 #
                 # --------------------------------------------------
@@ -5712,10 +5755,6 @@ class RuntimeVerifier:
                 #
 
                 "lineage": {
-
-                    #
-                    # Classification Policy
-                    #
 
                     "policy": {
 
@@ -5738,17 +5777,23 @@ class RuntimeVerifier:
                             "should be re-evaluated after root resolution."
                         ),
                     },
-                    
+
                     "runtime_lineage": {
 
                         "root_contracts": [
-                            item.get("contract_type")
+                            item.get(
+                                "contract_type"
+                            )
                             for item in root_failures
                         ],
 
                         "derived_contracts": {
-                            item.get("contract_type"):
-                                item.get("dependency_of")
+                            item.get(
+                                "contract_type"
+                            ):
+                                item.get(
+                                    "dependency_of"
+                                )
                             for item in derived_failures
                         },
                     },
@@ -5773,6 +5818,7 @@ class RuntimeVerifier:
                 #
 
                 "policy": {
+
                     "default_deletion":
                         "blocked",
 
@@ -5800,10 +5846,54 @@ class RuntimeVerifier:
             }
         )
 
+        #
+        # ----------------------------------------------------------
+        # Governance Evidence Snapshot
+        #
+        # Keep meta-contracts such as governance_verdict out of
+        # canonical blocking reasons to avoid circular explanations:
+        #
+        #   governance_verdict is blocked
+        #   because governance_verdict is blocked
+        #
+        # Meta results remain available through Detailed Results.
+        # ----------------------------------------------------------
+        #
+
+        filtered_blocking_reasons = [
+            item
+            for item in blocking_reasons
+            if item.get("contract_type")
+            not in GOVERNANCE_META_CONTRACT_TYPES
+        ]
+
+        impact_scope_evidence = (
+            self.governance_state.get(
+                "impact_scope",
+                {},
+            )
+        )
+
+        lineage_evidence = (
+            self.governance_state.get(
+                "lineage",
+                {},
+            )
+        )
+
+        policy_evidence = (
+            self.governance_state.get(
+                "policy",
+                {},
+            )
+        )
+
         self.add(
             domain="governance",
+
             check="governance_verdict",
-            status = (
+
+            status=(
                 "pass"
                 if governance_verdict == "ready"
                 else (
@@ -5814,24 +5904,26 @@ class RuntimeVerifier:
                     )
                     else "fail"
                 )
-            )
-            summary = (
+            ),
+
+            summary=(
                 "RGA governance verdict is ready."
                 if governance_verdict == "ready"
                 else (
                     "RGA governance verdict requires review."
                     if governance_verdict == "review_needed"
                     else (
-                        "RGA runtime readiness is limited by runtime dependencies."
+                        "RGA runtime readiness is limited by dependency or import reality."
                         if governance_verdict == "runtime_limited"
                         else "RGA governance verdict is blocked."
                     )
                 )
-            )
+            ),
+
             evidence={
                 #
                 # --------------------------------------------------
-                # Top-level verdicts
+                # Top-Level Verdicts
                 # --------------------------------------------------
                 #
 
@@ -5861,7 +5953,7 @@ class RuntimeVerifier:
 
                 #
                 # --------------------------------------------------
-                # Failure classes
+                # Failure Classes
                 # --------------------------------------------------
                 #
 
@@ -5879,7 +5971,7 @@ class RuntimeVerifier:
 
                 #
                 # --------------------------------------------------
-                # Failure counts
+                # Failure Counts
                 # --------------------------------------------------
                 #
 
@@ -5897,70 +5989,65 @@ class RuntimeVerifier:
 
                 #
                 # --------------------------------------------------
-                # Compact root-cause summary
+                # Root Cause Summary
                 #
-                # This is intended for downstream Advisor /
-                # Maintenance Planner bots.
+                # Compact advisor / maintainer planning view.
                 # --------------------------------------------------
                 #
 
                 "root_cause_summary": {
                     "primary_root_contracts": [
-                        item.get("contract_type")
+                        item.get(
+                            "contract_type"
+                        )
                         for item in root_failures
                     ],
 
                     "derived_contracts": [
-                        item.get("contract_type")
+                        item.get(
+                            "contract_type"
+                        )
                         for item in derived_failures
                     ],
 
                     "derived_dependency_map": {
-                        item.get("contract_type"):
-                            item.get("dependency_of")
+                        item.get(
+                            "contract_type"
+                        ):
+                            item.get(
+                                "dependency_of"
+                            )
                         for item in derived_failures
                     },
                 },
-                
+
+                #
+                # --------------------------------------------------
+                # Recommended Action Order
+                #
+                # Advisory only.
+                # This does not grant remediation or mutation authority.
+                # --------------------------------------------------
+                #
+
                 "action_order": [
-
                     "resolve_root_failures",
-
                     "revalidate_derived_failures",
-
-                    "recompute_governance_verdict"
-                ]                
-
-                #
-                # --------------------------------------------------
-                # Governance accounting
-                #
-                # Keep governance_verdict itself out of canonical
-                # blocking reasons to avoid circular explanations:
-                #
-                #   governance_verdict is blocked
-                #   because governance_verdict is blocked
-                #
-                # Meta results remain available through Detailed
-                # Results, but should not be treated as root causes.
-                # --------------------------------------------------
-                #
-
-                "blocking_reasons": [
-                    item
-                    for item in blocking_reasons
-                    if item.get("contract_type")
-                    not in GOVERNANCE_META_CONTRACT_TYPES
+                    "recompute_governance_verdict",
                 ],
+
+                #
+                # --------------------------------------------------
+                # Governance Accounting
+                # --------------------------------------------------
+                #
+
+                "blocking_reasons":
+                    filtered_blocking_reasons,
 
                 "blocking_reason_count":
                     len(
-                        [
-                            item
-                            for item in blocking_reasons
-                            if item.get("contract_type")
-                            not in GOVERNANCE_META_CONTRACT_TYPES
-                        ]
+                        filtered_blocking_reasons
                     ),
 
                 "raw_blocking_reasons":
@@ -5976,7 +6063,7 @@ class RuntimeVerifier:
 
                 #
                 # --------------------------------------------------
-                # Runtime / Governance interpretation
+                # Runtime / Governance Interpretation
                 # --------------------------------------------------
                 #
 
@@ -6007,71 +6094,38 @@ class RuntimeVerifier:
                 # --------------------------------------------------
                 # Impact Scope
                 #
-                # This is copied from governance_state so the
-                # governance_verdict evidence remains self-contained.
+                # Copied from governance_state so this result remains
+                # self-contained.
                 #
-                # Impact scope is advisory only. It does not grant
-                # mutation authority.
+                # Advisory only. Does not imply remediation authority.
                 # --------------------------------------------------
                 #
 
                 "impact_scope":
-                    self.governance_state.get(
-                        "impact_scope",
-                        {},
-                    ),
+                    impact_scope_evidence,
 
                 #
                 # --------------------------------------------------
                 # Failure Lineage
                 #
-                # Use the same structure as governance_state to avoid
-                # maintaining a second lineage_policy shape here.
+                # Same shape as governance_state["lineage"].
+                # Avoids maintaining a second lineage schema here.
                 # --------------------------------------------------
                 #
 
                 "lineage":
-                    self.governance_state.get(
-                        "lineage",
-                        {},
-                    ),
+                    lineage_evidence,
 
                 #
                 # --------------------------------------------------
-                # Governance policy
+                # Governance Policy
                 # --------------------------------------------------
                 #
 
                 "policy":
-                    self.governance_state.get(
-                        "policy",
-                        {
-                            "default_deletion":
-                                "blocked",
-
-                            "completed_phases":
-                                "immutable",
-
-                            "verifier_mode":
-                                "read_only",
-
-                            "dependency_failures_are_not_governance_failures":
-                                True,
-
-                            "root_failures_should_be_resolved_first":
-                                True,
-
-                            "derived_failures_should_be_revalidated_after_root_resolution":
-                                True,
-
-                            "false_positive_isolation":
-                                True,
-
-                            "maintenance_mode":
-                                "advisor_only",
-                        },
-                    ),
+                    policy_evidence,
             },
+
             suggested_fix=(
                 None
                 if governance_verdict == "ready"
@@ -6096,7 +6150,9 @@ class RuntimeVerifier:
                     )
                 )
             ),
+
             governance_domain="governance",
+
             contract_type="governance_verdict",
         )
 
@@ -6140,6 +6196,7 @@ class RuntimeVerifier:
         severities: Dict[str, int] = {}
 
         for result in self.results:
+
             counts[result.status] = (
                 counts.get(
                     result.status,
