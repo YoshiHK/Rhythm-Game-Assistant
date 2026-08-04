@@ -107,6 +107,17 @@ jobs:
                 "revalidate_after_root_resolution": true
               }
             },
+            "runtime_limited": {
+              "description":
+                "Evidence collection was restricted by dependency, import, or runtime constraints.",
+              "governance_blocking": false,
+              "requires_revalidation": true
+            },
+            "review_needed": {
+              "description":
+                "Human review recommended. No governance blocker confirmed.",
+              "governance_blocking": false
+            },
             "governance_principles": {
               "completed_phases": "immutable",
               "verifier_mode": "read_only",
@@ -117,7 +128,11 @@ jobs:
               "runtime_limited_is_not_governance_blocked": true,
               "root_failures_take_priority": true,
               "impact_scope_is_advisory_only": true,
-              "lineage_does_not_imply_remediation": true
+              "lineage_does_not_imply_remediation": true,
+              "repository_reality_is_not_runtime_reality": true,
+              "import_reality_is_not_runtime_reality": true,
+              "runtime_blockers_are_not_governance_blockers": true,
+              "artifact_backbone_is_root_contract": true,
               "maintenance_mode": "advisor_only"
             }
           }
@@ -434,6 +449,186 @@ jobs:
           PY
           
       ############################################################
+      # Governance Lineage Taxonomy
+      ############################################################
+
+      - name: Governance Lineage Taxonomy
+        run: |
+          cat > artifacts/governance_lineage_taxonomy.json <<'JSON'
+          {
+            "schema": "rga.governance.lineage.v1.1",
+
+            "purpose":
+              "Root and derived governance failure rendering.",
+
+            "rendering_order": [
+              "root_failure",
+              "derived_failure"
+            ],
+
+            "failure_classes": {
+
+              "root_failure": {
+                "description":
+                  "Independently actionable governance blocker.",
+
+                "resolution_priority":
+                  1
+              },
+
+              "derived_failure": {
+                "description":
+                  "Downstream failure caused by a root contract failure.",
+
+                "resolution_priority":
+                  2,
+
+                "requires_root_reference":
+                  true,
+
+                "revalidate_after_root_resolution":
+                  true
+              }
+            },
+
+            "artifact_backbone_cascade": {
+
+              "root_contract":
+                "artifact_database_policy",
+
+              "derived_contracts": [
+                "artifact_relationships",
+                "artifact_backbone_contract",
+                "asset_coverage",
+                "hash_integrity",
+                "type_A_usability",
+                "runtime_artifact_readiness"
+              ]
+            },
+
+            "governance_notes": [
+              "Resolve root failures before derived failures.",
+              "Derived failures should be revalidated after root resolution.",
+              "Lineage classification does not imply remediation."
+            ]
+          }
+          JSON
+          
+      ############################################################
+      # Artifact Backbone Discovery
+      ############################################################
+
+      - name: Artifact Backbone Discovery
+        run: |
+          find . -type f -name "file_scan_inventory.db" \
+            | sort > artifacts/file_scan_inventory_candidates.txt || true
+
+          find . -type f -name "chart_assets.db" \
+            | sort > artifacts/chart_assets_db_candidates.txt || true
+
+          find . -type f -name "chart_patterns.db" \
+            | sort > artifacts/chart_patterns_db_candidates.txt || true
+
+          {
+            echo "Artifact Backbone Discovery"
+            echo ""
+
+            echo "file_scan_inventory.db:"
+            cat artifacts/file_scan_inventory_candidates.txt || true
+
+            echo ""
+            echo "chart_assets.db:"
+            cat artifacts/chart_assets_db_candidates.txt || true
+
+            echo ""
+            echo "chart_patterns.db:"
+            cat artifacts/chart_patterns_db_candidates.txt || true
+
+          } > artifacts/artifact_backbone_discovery.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def read_lines(path_text):
+              p = Path(path_text)
+
+              if not p.exists():
+                  return []
+
+              return [
+                  line.strip()
+                  for line in p.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              ]
+
+          inventory = {
+              "file_scan_inventory":
+                  read_lines(
+                      "artifacts/file_scan_inventory_candidates.txt"
+                  ),
+
+              "chart_assets":
+                  read_lines(
+                      "artifacts/chart_assets_db_candidates.txt"
+                  ),
+
+              "chart_patterns":
+                  read_lines(
+                      "artifacts/chart_patterns_db_candidates.txt"
+                  ),
+          }
+
+          payload = {
+              "schema":
+                  "rga.artifact_backbone.discovery.v1.1",
+
+              "artifact_backbone_chain": [
+                  "file_scan_inventory.db",
+                  "chart_assets.db",
+                  "chart_patterns.db"
+              ],
+
+              "repository_driven":
+                  True,
+
+              "discovered_candidates":
+                  inventory,
+
+              "artifact_backbone_present":
+                  (
+                      bool(inventory["file_scan_inventory"])
+                      and bool(inventory["chart_assets"])
+                      and bool(inventory["chart_patterns"])
+                  ),
+
+              "verification_note":
+                  (
+                      "Artifact backbone discovery establishes "
+                      "candidate evidence only. Readability, "
+                      "relationships, coverage, hash consistency, "
+                      "runtime usability, and deletion readiness "
+                      "must be verified separately."
+                  )
+          }
+
+          with open(
+              "artifacts/artifact_backbone_discovery.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+          
+      ############################################################
       # Dependency Reality Evidence
       ############################################################
 
@@ -526,6 +721,9 @@ jobs:
               "governance_effect": {
                   "required_missing":
                       "runtime_limited",
+                      
+                  "api_runtime_missing":
+                      "runtime_limited",
 
                   "optional_missing":
                       "warning_only",
@@ -604,11 +802,25 @@ jobs:
 
               "repository_driven":
                   True,
+                  
+              "lineage_interpretation": {
+                  "package_reality":
+                      "must_be_verified_first",
+
+                  "dependency_reality":
+                      "must_be_verified_first",
+
+                  "dependency_failure":
+                      "runtime_limited",
+
+                  "package_failure":
+                      "architecture_issue",
+              },
 
               "verification_note": (
                   "Import failures should be interpreted "
                   "against dependency reality before being "
-                  "treated as package-layout defects."
+                  "treated as package-layout defects."   
               ),
           }
 
@@ -657,10 +869,10 @@ jobs:
           } > artifacts/artifact_database_discovery_summary.txt
 
       ############################################################
-      # Artifact Database Schema Evidence
+      # Artifact Backbone Schema Evidence
       ############################################################
 
-      - name: Artifact Database Schema Evidence
+      - name: Artifact Backbone Schema Evidence
         run: |
           python - <<'PY'
           import json
@@ -727,10 +939,43 @@ jobs:
                   report[db_name].append(item)
 
           payload = {
-              "schema": "rga.artifact_database_schema_probe.v1.0",
-              "read_mode": "sqlite_readonly",
-              "modification": "prohibited",
-              "databases": report,
+              "schema":
+                  "rga.artifact_database_schema_probe.v1.1",
+
+              "artifact_contract_root":
+                  "artifact_database_policy",
+
+              "verification_layer":
+                  "artifact_backbone",
+
+              "governance_role":
+                  "root_contract",
+
+              "read_mode":
+                  "sqlite_readonly",
+
+              "modification":
+                  "prohibited",
+
+              "policy": {
+                  "read_only": True,
+
+                  "allowed_operations": [
+                      "schema_inventory",
+                      "table_count",
+                      "row_count",
+                  ],
+
+                  "prohibited_operations": [
+                      "insert",
+                      "update",
+                      "delete",
+                      "schema_mutation",
+                  ],
+              },
+
+              "databases":
+                  report,
           }
 
           with open("artifacts/artifact_database_schema_probe.json", "w", encoding="utf-8") as f:
@@ -843,11 +1088,16 @@ jobs:
                       if repository_count > 0
                       else "insufficient_evidence"
                   ),
+                  
+              "inventory_role":
+                  "repository_discovery",
+
+              "coverage_verified":
+                  False,
 
               "verification_note":
                   (
-                      "Inventory evidence establishes repository "
-                      "coverage inputs only. It does not imply "
+                      "Repository inventory evidence does not imply "
                       "asset coverage verification."
                   ),
           }
@@ -954,16 +1204,27 @@ jobs:
               else:
                   lines = []
 
-              payload["categories"][name] = {
-                  "count":
-                      len(lines),
+          payload["categories"][name] = {
+              "count":
+                  len(lines),
 
-                  "examples":
-                      lines[:10],
+              "examples":
+                  lines[:10],
 
-                  "coverage_role":
-                      "excluded",
-              }
+              "coverage_role":
+                  "excluded",
+
+              "coverage_accounting": {
+                  "included_in_asset_coverage":
+                      False,
+
+                  "included_in_hash_verification":
+                      False,
+
+                  "included_in_deletion_readiness":
+                      False,
+              },
+          }
 
           payload["classification_note"] = (
               "Localization, schema, fixture, registry, "
@@ -1070,6 +1331,25 @@ jobs:
                       "coverage accounting but does not "
                       "modify repository state."
                   ),
+                  
+              "type_model": {
+                  "type_A":
+                      "deterministic",
+
+                  "type_B":
+                      "reference_only",
+              },
+
+              "scope_principles": {
+                  "repository_files_are_not_assets":
+                      True,
+
+                  "scope_influences_coverage_only":
+                      True,
+
+                  "scope_does_not_modify_repository":
+                      True,
+              }
           }
 
           with open(
@@ -1123,28 +1403,110 @@ jobs:
           } > artifacts/artifact_chain_discovery.txt
 
           cat > artifacts/artifact_failure_lineage.json <<'JSON'
-          {
-            "schema": "rga.artifact_failure_lineage.v1.1",
+            {
+              "schema": "rga.artifact_failure_lineage.v1.2",
 
-            "root_contract":
-              "artifact_database_policy",
+              "artifact_backbone_chain": [
+                "file_scan_inventory.db",
+                "chart_assets.db",
+                "chart_patterns.db"
+              ],
 
-            "direct_impact_scope": [
-              "artifact_relationships",
-              "artifact_backbone_contract",
-              "asset_coverage",
-              "hash_integrity",
-              "type_A_usability",
-              "runtime_artifact_readiness"
-            ],
+              "root_contract":
+                "artifact_database_policy",
 
-            "policy": {
-              "resolve_root_failures_first": true,
-              "revalidate_derived_after_root_resolution": true,
-              "impact_scope_is_advisory_only": true
+              "root_failure_classification": {
+                "artifact_database_policy": {
+                  "failure_class":
+                    "root_failure",
+
+                  "governance_blocking":
+                    true,
+
+                  "resolution_priority":
+                    1
+                }
+              },
+
+              "derived_contracts": [
+                "artifact_relationships",
+                "artifact_backbone_contract",
+                "asset_coverage",
+                "hash_integrity",
+                "type_A_usability",
+                "runtime_artifact_readiness"
+              ],
+
+              "direct_impact_scope": [
+                "artifact_relationships",
+                "artifact_backbone_contract",
+                "asset_coverage",
+                "hash_integrity",
+                "type_A_usability",
+                "runtime_artifact_readiness"
+              ],
+
+              "relationship_principles": {
+
+                "presence_is_not_relationship_verification":
+                  true,
+
+                "readability_is_not_relationship_verification":
+                  true,
+
+                "relationship_verification_precedes_asset_coverage":
+                  true,
+
+                "asset_coverage_precedes_deletion_readiness":
+                  true,
+
+                "hash_consistency_precedes_deletion_readiness":
+                  true,
+
+                "runtime_artifact_readiness_precedes_deletion_readiness":
+                  true
+              },
+
+              "backbone_interpretation": {
+
+                "database_presence":
+                  "discovery",
+
+                "database_readability":
+                  "validation",
+
+                "relationship_verification":
+                  "verification",
+
+                "deletion_readiness":
+                  "governance_gate"
+              },
+
+              "policy": {
+
+                "resolve_root_failures_first":
+                  true,
+
+                "revalidate_derived_after_root_resolution":
+                  true,
+
+                "impact_scope_is_advisory_only":
+                  true,
+
+                "lineage_does_not_imply_remediation":
+                  true,
+
+                "derived_failures_should_not_be_prioritized_ahead_of_root_failures":
+                  true
+              },
+
+              "governance_notes": [
+                "Artifact database policy is the canonical artifact-backbone root contract.",
+                "Derived contracts should be revalidated after root contract restoration.",
+                "Relationship verification requires more than database discovery.",
+                "Deletion readiness must not be inferred from discovery evidence."
+              ]
             }
-          }
-          JSON
 
       ############################################################
       # Hash Evidence
@@ -1203,12 +1565,18 @@ jobs:
                       else "insufficient_evidence"
                   ),
 
-              "verification_note":
+              "evidence_note":
                   (
-                      "Hash inventory establishes verification evidence "
-                      "only. Presence of hashes does not imply hash "
-                      "consistency."
+                      "Hash inventory establishes hash evidence only. "
+                      "Hash consistency requires comparison against "
+                      "persisted artifact records."
                   ),
+                  
+              "future_verification_dependencies": [
+                  "hash_integrity",
+                  "asset_coverage",
+                  "deletion_readiness",
+              ],                  
           }
 
           with open(
@@ -1327,6 +1695,30 @@ jobs:
 
                   "runtime_limited_is_not_automatic_governance_failure":
                       True,
+                      
+              "flow_entry_artifacts": {
+                  "chart_first":
+                      "chart",
+
+                  "player_first":
+                      "player",
+
+                  "progression":
+                      "progression"
+              },
+
+              "phase_boundary_policy": {
+                  "tips_generation_immutable":
+                      True,
+
+                  "personalization_immutable":
+                      True,
+
+                  "localization_immutable":
+                      True,
+
+                  "recommendation_logic_immutable":
+                      True,
               },
           }
 
@@ -1342,6 +1734,175 @@ jobs:
                   ensure_ascii=False,
               )
           PY
+          
+      ############################################################
+      # Flow Contract Taxonomy
+      ############################################################
+
+      - name: Flow Contract Taxonomy
+        run: |
+          cat > artifacts/flow_contract_taxonomy.json <<'JSON'
+          {
+            "schema": "rga.flow_contract_taxonomy.v1.1",
+
+            "contracts": {
+
+              "chart_first": {
+
+                "description":
+                  "Chart-selected flow leading to chart understanding and tips generation.",
+
+                "entry_artifact":
+                  "chart",
+
+                "primary_sequence": [
+                  "chart",
+                  "pattern",
+                  "tips",
+                  "personalization",
+                  "localization",
+                  "presentation"
+                ]
+              },
+
+              "player_first": {
+
+                "description":
+                  "Player/profile-driven flow leading to song recommendation.",
+
+                "entry_artifact":
+                  "player",
+
+                "primary_sequence": [
+                  "player",
+                  "recommendation",
+                  "song",
+                  "tips",
+                  "personalization",
+                  "localization",
+                  "presentation"
+                ]
+              },
+
+              "progression": {
+
+                "description":
+                  "Progression-driven flow leading to game and song recommendations.",
+
+                "entry_artifact":
+                  "progression",
+
+                "primary_sequence": [
+                  "progression",
+                  "game",
+                  "song",
+                  "tips",
+                  "personalization",
+                  "localization",
+                  "presentation"
+                ]
+              }
+            },
+
+            "phase_boundary_policy": {
+
+              "phase_1_2_chart_understanding_immutable":
+                true,
+
+              "phase_3_canonical_ingestion_immutable":
+                true,
+
+              "phase_4_personalization_immutable":
+                true,
+
+              "phase_4_5_localization_immutable":
+                true,
+
+              "phase_5_7_recommendation_stack_immutable":
+                true
+            },
+
+            "governance_principles": {
+
+              "flows_are_distinct":
+                true,
+
+              "flows_share_backbone":
+                true,
+
+              "entry_points_are_different":
+                true,
+
+              "recommendation_logic_not_modified":
+                true,
+
+              "tips_generation_not_modified":
+                true,
+
+              "personalization_not_modified":
+                true,
+
+              "localization_not_modified":
+                true,
+
+              "flow_verification_is_repository_driven":
+                true
+            },
+
+            "ui_entry_surface_mapping": {
+
+              "song_pages":
+                "chart_first",
+
+              "recommendation_pages":
+                "chart_first",
+
+              "history_pages":
+                "chart_first",
+
+              "profile_pages":
+                "player_first",
+
+              "ingestion_pages":
+                "player_first",
+
+              "feedback_pages":
+                "player_first",
+
+              "progression_pages":
+                "progression",
+
+              "gamification_pages":
+                "progression"
+            },
+
+            "verification_note":
+              "Flow taxonomy defines expected flow contracts only. Flow taxonomy does not modify runtime behavior, recommendation logic, personalization, localization, or completed phases."
+          }
+          JSON
+
+          {
+            echo "Flow Contract Taxonomy"
+            echo ""
+
+            echo "Contracts:"
+            echo "- chart_first"
+            echo "- player_first"
+            echo "- progression"
+
+            echo ""
+            echo "Phase Boundary Policy:"
+            echo "- Phase 1-2 immutable"
+            echo "- Phase 3 immutable"
+            echo "- Phase 4 immutable"
+            echo "- Phase 4.5 immutable"
+            echo "- Phase 5-7 immutable"
+
+            echo ""
+            echo "Generated Files:"
+            echo "- flow_contract_taxonomy.json"
+
+          } > artifacts/flow_contract_taxonomy_summary.txt
 
       ############################################################
       # Layer Separation Evidence
@@ -1350,7 +1911,7 @@ jobs:
       - name: Layer Separation Evidence
         run: |
           ########################################################
-          # Python inventory
+          # Python Inventory
           ########################################################
 
           find . -type f -name "*.py" \
@@ -1358,7 +1919,7 @@ jobs:
             > artifacts/python_inventory.txt
 
           ########################################################
-          # Layer directory inventory
+          # Layer Directory Discovery
           ########################################################
 
           find . -type d \
@@ -1378,9 +1939,11 @@ jobs:
 
           ########################################################
           # Tier 1
-          # Hint-level evidence
           #
-          # Plain textual references.
+          # Hint-Level Evidence
+          #
+          # Textual references only.
+          #
           # Not governance blocking.
           ########################################################
 
@@ -1398,11 +1961,14 @@ jobs:
 
           ########################################################
           # Tier 2
-          # Suspicion-level evidence
           #
-          # Import-style references crossing layers.
-          # Requires review but is not automatically
-          # governance blocking.
+          # Suspicion-Level Evidence
+          #
+          # Import-like references crossing layers.
+          #
+          # Review Required.
+          #
+          # Not automatically governance blocking.
           ########################################################
 
           grep -RInE \
@@ -1428,9 +1994,11 @@ jobs:
 
           ########################################################
           # Tier 3
-          # Evidence-level signals
           #
-          # Executable side effects.
+          # Evidence-Level Candidates
+          #
+          # Executable write-side behavior.
+          #
           # Candidate governance blockers.
           ########################################################
 
@@ -1465,7 +2033,7 @@ jobs:
             > artifacts/layer_boundary_evidence.txt || true
 
           ########################################################
-          # Risk summary
+          # Layer Boundary Risk Model
           ########################################################
 
           python - <<'PY'
@@ -1513,9 +2081,28 @@ jobs:
               )
           )
 
+          governance_state = (
+              "blocked"
+              if evidence_count > 0
+              else (
+                  "review_needed"
+                  if suspicion_count > 0
+                  else "ready"
+              )
+          )
+
           payload = {
               "schema":
-                  "rga.layer_boundary_risk.v1.1",
+                  "rga.layer_boundary_risk.v1.2",
+
+              "verification_layer":
+                  "layer_boundaries",
+
+              "repository_driven":
+                  True,
+
+              "evidence_origin":
+                  "repository_discovery",
 
               "hint_count":
                   hint_count,
@@ -1528,6 +2115,9 @@ jobs:
 
               "highest_confidence":
                   highest_confidence,
+
+              "governance_state":
+                  governance_state,
 
               "confidence_summary": {
                   "hint":
@@ -1550,24 +2140,37 @@ jobs:
                   "evidence",
               ],
 
-              "repository_driven":
-                  True,
-
-              "evidence_origin":
-                  "repository_discovery",
-
               "governance_interpretation": {
                   "ready":
-                      "no evidence-level violations",
+                      "No evidence-level violations detected.",
 
                   "review_needed":
-                      "suspicion-level signals detected",
+                      "Suspicion-level signals detected. Manual review recommended.",
 
                   "blocked":
-                      "evidence-level violations detected",
+                      "Evidence-level violations detected."
+              },
+
+              "boundary_principles": {
+
+                  "hints_are_not_evidence":
+                      True,
+
+                  "suspicions_are_not_evidence":
+                      True,
+
+                  "runtime_limited_is_not_governance_blocked":
+                      True,
+
+                  "repository_discovery_is_not_runtime_verification":
+                      True,
+
+                  "layer_separation_is_repository_driven":
+                      True,
               },
 
               "policy": {
+
                   "hints_block_governance":
                       False,
 
@@ -1576,7 +2179,31 @@ jobs:
 
                   "evidence_blocks_governance":
                       True,
+
+                  "false_positive_isolation":
+                      True,
+
+                  "review_before_escalation":
+                      True,
               },
+
+              "phase_boundary_policy": {
+
+                  "phase_1_2_immutable":
+                      True,
+
+                  "phase_3_immutable":
+                      True,
+
+                  "phase_4_immutable":
+                      True,
+
+                  "phase_4_5_immutable":
+                      True,
+
+                  "phase_5_7_immutable":
+                      True,
+              }
           }
 
           with open(
@@ -1593,7 +2220,7 @@ jobs:
           PY
 
           ########################################################
-          # Human-readable summary
+          # Human-Readable Summary
           ########################################################
 
           {
@@ -1605,118 +2232,28 @@ jobs:
             echo "hint"
             echo "suspicion"
             echo "evidence"
-            echo ""
 
+            echo ""
             echo "Governance Interpretation"
             echo "-------------------------"
             echo "Hints do not block governance."
             echo "Suspicions require review."
-            echo "Only evidence-level findings may block governance."
-            echo ""
-            echo "Runtime-limited is not inferred from layer evidence."
-            echo "Layer evidence affects governance review only."
-            echo ""
+            echo "Evidence-level findings may block governance."
 
+            echo ""
+            echo "Repository discovery is not runtime verification."
+            echo "Runtime-limited is not governance-blocked."
+            echo "Layer boundary evidence is repository-driven."
+
+            echo ""
             echo "Generated Files"
             echo "---------------"
             echo "layer_boundary_hints.txt"
             echo "layer_boundary_suspicions.txt"
             echo "layer_boundary_evidence.txt"
             echo "layer_boundary_risk.json"
+
           } > artifacts/layer_boundary_summary.txt
-          
-      ############################################################
-      # MCP Evidence
-      ############################################################
-
-      - name: MCP Evidence
-        run: |
-          find . -type f -name "mcp.json" \
-            | sort > artifacts/mcp_configs.txt || true
-
-          find . -type f -name "mcp_server.py" \
-            | sort > artifacts/mcp_server_candidates_v1.txt || true
-
-          if [ -f ".vscode/mcp.json" ]; then
-            cp .vscode/mcp.json artifacts/mcp_config_effective.json
-          fi
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          payload = {
-              "schema":
-                  "rga.mcp_contract_evidence.v1.1",
-
-              "required_server":
-                  "rhythm-game-assistant",
-
-              "transport":
-                  "stdio",
-
-              "required_adapter":
-                  "mcp_server.py",
-
-              "expected_environment": [
-                  "RGA_REST_URL",
-              ],
-
-              "repository_driven":
-                  True,
-
-              "governance_note":
-                  (
-                      "MCP contract readiness is evaluated "
-                      "separately from runtime dependency "
-                      "readiness."
-                  ),
-
-              "runtime_limited_note":
-                  (
-                      "Runtime dependency failures do not "
-                      "automatically imply MCP contract failure."
-                  ),
-          }
-
-          with open(
-              "artifacts/mcp_contract_summary.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
-          PY
-
-          {
-            echo "MCP Verification Evidence"
-            echo ""
-
-            echo "Required Server"
-            echo "---------------"
-            echo "rhythm-game-assistant"
-            echo "type=stdio"
-
-            echo ""
-            echo "Required Adapter"
-            echo "----------------"
-            echo "mcp_server.py"
-
-            echo ""
-            echo "Expected Environment"
-            echo "--------------------"
-            echo "RGA_REST_URL"
-
-            echo ""
-            echo "Governance Note"
-            echo "---------------"
-            echo "MCP readiness is evaluated independently from runtime dependency readiness."
-          } > artifacts/mcp_contract_summary.txt
-
 
       ############################################################
       # Runtime Surface Evidence
@@ -1763,7 +2300,7 @@ jobs:
 
           payload = {
               "schema":
-                  "rga.runtime_surface_evidence.v1.1",
+                  "rga.runtime_surface_evidence.v1.2",
 
               "candidate_count":
                   count(
@@ -1778,13 +2315,25 @@ jobs:
               "repository_driven":
                   True,
 
-              "governance_note":
-                  (
-                      "Runtime surface discovery provides "
-                      "runtime visibility evidence but does "
-                      "not independently establish runtime "
-                      "readiness."
-                  ),
+              "verification_layer":
+                  "runtime_surface_discovery",
+
+              "runtime_principles": {
+                  "repository_discovery_is_not_runtime_readiness":
+                      True,
+
+                  "runtime_surface_visibility_is_not_runtime_verification":
+                      True,
+
+                  "dependency_reality_precedes_runtime_verification":
+                      True,
+              },
+
+              "governance_note": (
+                  "Runtime surface discovery provides runtime visibility "
+                  "evidence but does not independently establish runtime "
+                  "readiness."
+              ),
           }
 
           with open(
@@ -1803,16 +2352,13 @@ jobs:
           {
             echo "Runtime Surface Evidence"
             echo ""
-
             echo "Generated Files"
             echo "---------------"
             echo "runtime_surface_candidates.txt"
             echo "runtime_surface_keyword_hits.txt"
-
             echo ""
             echo "Runtime surface discovery is repository-driven."
           } > artifacts/runtime_surface_summary.txt
-
 
       ############################################################
       # Runtime Reader Discovery Evidence
@@ -1864,7 +2410,7 @@ jobs:
 
           payload = {
               "schema":
-                  "rga.runtime_reader_discovery.v1.1",
+                  "rga.runtime_reader_discovery.v1.2",
 
               "reader_candidates":
                   count(
@@ -1887,11 +2433,18 @@ jobs:
               "topology_assumptions":
                   False,
 
-              "verification_note":
-                  (
-                      "Repository discovery precedes runtime "
-                      "reader verification."
-                  ),
+              "verification_layer":
+                  "runtime_discovery",
+
+              "runtime_pipeline_model": {
+                  "readers": "read_only",
+                  "validators": "correctness",
+                  "bridges": "integration",
+              },
+
+              "verification_note": (
+                  "Repository discovery precedes runtime reader verification."
+              ),
           }
 
           with open(
@@ -1910,23 +2463,15 @@ jobs:
           {
             echo "Runtime Reader Discovery Evidence"
             echo ""
-
             echo "Reader candidates:"
             wc -l artifacts/runtime_reader_candidates.txt || true
-
             echo ""
             echo "Validator candidates:"
             wc -l artifacts/runtime_validator_candidates.txt || true
-
             echo ""
             echo "Bridge candidates:"
             wc -l artifacts/runtime_bridge_candidates.txt || true
-
-            echo ""
-            echo "Discovery Strategy:"
-            echo "repository_driven"
           } > artifacts/runtime_reader_discovery_summary.txt
-
 
       ############################################################
       # Runtime DB Read Evidence
@@ -1964,12 +2509,10 @@ jobs:
 
           payload = {
               "schema":
-                  "rga.runtime_db_read_evidence.v1.1",
+                  "rga.runtime_db_read_evidence.v1.2",
 
               "candidate_count":
-                  len(
-                      db_candidates
-                  ),
+                  len(db_candidates),
 
               "artifact_backbone": [
                   "file_scan_inventory.db",
@@ -1977,18 +2520,25 @@ jobs:
                   "chart_patterns.db",
               ],
 
+              "verification_layer":
+                  "runtime_artifact_readiness",
+
               "repository_driven":
                   True,
 
               "runtime_limited_possible":
                   True,
 
-              "governance_note":
-                  (
-                      "Artifact database discovery establishes "
-                      "runtime read evidence only. Runtime read "
-                      "readiness must be verified separately."
-                  ),
+              "relationship_principles": {
+                  "presence_is_not_readiness": True,
+                  "readability_is_not_relationship_verification": True,
+                  "relationship_verification_precedes_runtime_readiness": True,
+              },
+
+              "governance_note": (
+                  "Artifact database discovery establishes runtime read evidence only. "
+                  "Runtime read readiness must be verified separately."
+              ),
           }
 
           with open(
@@ -2004,90 +2554,18 @@ jobs:
               )
           PY
 
-          {
-            echo "Runtime DB Read Evidence"
-            echo ""
-
-            echo "Runtime DB candidates:"
-            cat artifacts/runtime_db_candidates.txt || true
-
-            echo ""
-            echo "Artifact Backbone"
-            echo "-----------------"
-            echo "file_scan_inventory.db"
-            echo "chart_assets.db"
-            echo "chart_patterns.db"
-
-            echo ""
-            echo "Runtime DB discovery does not imply runtime DB readiness."
-          } > artifacts/runtime_db_read_summary.txt
-
       ############################################################
       # Governance Evidence
       ############################################################
 
       - name: Governance Evidence
         run: |
-          {
-            echo "RGA Governance Context"
-            echo ""
-
-            echo "Verifier Mode: read_only"
-            echo "Completed Phases: immutable"
-            echo "Default Deletion Policy: blocked"
-            echo "Maintenance Mode: advisor_only"
-            echo ""
-
-            echo "Reality Separation"
-            echo "------------------"
-            echo "Repository Reality != Import Reality"
-            echo "Import Reality != Runtime Reality"
-            echo "Dependency Reality != Governance"
-            echo ""
-
-            echo "Runtime Limitation Policy"
-            echo "-------------------------"
-            echo "runtime_limited != governance_blocked"
-            echo "runtime_limited indicates dependency or import constraints."
-            echo "runtime_limited does not automatically imply governance failure."
-            echo ""
-
-            echo "Layer Boundary Confidence"
-            echo "-------------------------"
-            echo "Hint != Suspicion != Evidence"
-            echo "Only evidence-level findings may block governance."
-            echo ""
-
-            echo "Root Contract Policy"
-            echo "--------------------"
-            echo "Root failures are independently actionable."
-            echo "Derived failures should be revalidated after root resolution."
-            echo ""
-
-            echo "Artifact Backbone Contract"
-            echo "--------------------------"
-            echo "file_scan_inventory.db"
-            echo " -> chart_assets.db"
-            echo " -> chart_patterns.db"
-            echo ""
-
-            echo "Deletion Governance"
-            echo "-------------------"
-            echo "Deletion remains blocked until:"
-            echo "artifact_backbone_verified"
-            echo "asset_coverage_verified"
-            echo "hash_consistency_verified"
-            echo "type_A_text_usable"
-            echo "runtime_can_use_db_assets"
-            echo "runtime_can_use_db_patterns"
-          } > artifacts/governance_context.txt
-
           python - <<'PY'
           import json
 
           payload = {
               "schema":
-                  "rga.governance_context.v1.1",
+                  "rga.governance_context.v1.2",
 
               "verifier_mode":
                   "read_only",
@@ -2098,34 +2576,35 @@ jobs:
               "maintenance_mode":
                   "advisor_only",
 
-              "runtime_limited_policy": {
-                  "runtime_limited_is_governance_blocked":
-                      False,
+              "governance_states": [
+                  "ready",
+                  "review_needed",
+                  "runtime_limited",
+                  "blocked"
+              ],
 
-                  "runtime_limited_is_dependency_constrained":
-                      True,
+              "reality_separation": {
+                  "repository_reality_is_not_import_reality": True,
+                  "import_reality_is_not_runtime_reality": True,
+                  "dependency_reality_is_not_governance_reality": True,
+              },
+
+              "runtime_limited_policy": {
+                  "runtime_limited_is_governance_blocked": False,
+                  "runtime_limited_is_dependency_constrained": True,
               },
 
               "root_failure_policy": {
-                  "resolve_root_failures_first":
-                      True,
-
-                  "revalidate_derived_after_root_resolution":
-                      True,
+                  "resolve_root_failures_first": True,
+                  "revalidate_derived_after_root_resolution": True,
               },
 
               "governance_principles": {
-                  "dependency_failures_are_not_governance_failures":
-                      True,
-
-                  "false_positive_isolation":
-                      True,
-
-                  "impact_scope_is_advisory_only":
-                      True,
-
-                  "lineage_does_not_imply_remediation":
-                      True,
+                  "dependency_failures_are_not_governance_failures": True,
+                  "false_positive_isolation": True,
+                  "impact_scope_is_advisory_only": True,
+                  "lineage_does_not_imply_remediation": True,
+                  "artifact_backbone_is_root_contract": True,
               },
           }
 
@@ -2134,14 +2613,9 @@ jobs:
               "w",
               encoding="utf-8",
           ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
+              json.dump(payload, f, indent=2, ensure_ascii=False)
           PY
-          
+
       ############################################################
       # Governance Failure Lineage Evidence
       ############################################################
@@ -2150,11 +2624,17 @@ jobs:
         run: |
           cat > artifacts/governance_failure_lineage.json <<'JSON'
           {
-            "schema": "rga.governance_failure_lineage.v1.1",
+            "schema": "rga.governance_failure_lineage.v1.2",
 
             "root_contracts": [
               "artifact_database_policy",
               "deletion_readiness"
+            ],
+
+            "artifact_backbone_chain": [
+              "file_scan_inventory.db",
+              "chart_assets.db",
+              "chart_patterns.db"
             ],
 
             "derived_contracts": {
@@ -2165,29 +2645,6 @@ jobs:
               "type_A_usability": "artifact_database_policy",
               "runtime_artifact_readiness": "artifact_database_policy"
             },
-
-            "impact_scope": {
-              "artifact_database_policy": {
-                "directly_blocks": [
-                  "artifact_relationships",
-                  "artifact_backbone_contract",
-                  "asset_coverage",
-                  "hash_integrity",
-                  "type_A_usability",
-                  "runtime_artifact_readiness"
-                ]
-              },
-
-              "deletion_readiness": {
-                "directly_blocks": [
-                  "source_asset_deletion"
-                ]
-              }
-            },
-
-            "meta_contracts": [
-              "governance_verdict"
-            ],
 
             "policy": {
               "resolve_root_failures_first": true,
@@ -2224,285 +2681,6 @@ jobs:
           echo "verifier_exit_code=${verifier_exit_code}" \
             >> "$GITHUB_OUTPUT"
 
-          echo "RGA Runtime Verifier exited with code: ${verifier_exit_code}"
-
-          ########################################################
-          # Ensure report artifacts exist
-          #
-          # This protects the workflow from the case where
-          # runtime_verifier.py exits before normal JSON / Markdown
-          # report generation completes.
-          #
-          # This does not alter verifier logic.
-          # It only produces fallback diagnostic reports.
-          ########################################################
-
-          python - <<'PY'
-          import json
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          artifacts = Path("artifacts")
-
-          json_report = artifacts / "runtime_verifier_report.json"
-          md_report = artifacts / "runtime_verifier_report.md"
-
-          stdout_path = artifacts / "runtime_verifier_stdout.txt"
-          stderr_path = artifacts / "runtime_verifier_stderr.txt"
-          exit_code_path = artifacts / "runtime_verifier_exit_code.txt"
-
-          def read_text(path, limit=12000):
-              if not path.exists():
-                  return ""
-
-              text = path.read_text(
-                  encoding="utf-8",
-                  errors="ignore",
-              )
-
-              if len(text) > limit:
-                  return text[:limit] + "\n...[truncated]"
-
-              return text
-
-          verifier_exit_code = (
-              exit_code_path.read_text(
-                  encoding="utf-8",
-                  errors="ignore",
-              ).strip()
-              if exit_code_path.exists()
-              else "unknown"
-          )
-
-          stdout_text = read_text(stdout_path)
-          stderr_text = read_text(stderr_path)
-
-          fallback_needed = (
-              not json_report.exists()
-              or json_report.stat().st_size == 0
-              or not md_report.exists()
-              or md_report.stat().st_size == 0
-          )
-
-          fallback_payload = {
-              "schema":
-                  "rga.runtime_verifier.report.fallback.v1.0",
-
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
-
-              "execution_state":
-                  "fallback_report_generated",
-
-              "verifier_exit_code":
-                  verifier_exit_code,
-
-              "report_generation": {
-                  "json_report":
-                      str(json_report),
-
-                  "markdown_report":
-                      str(md_report),
-
-                  "json_generated_by_fallback":
-                      (
-                          not json_report.exists()
-                          or json_report.stat().st_size == 0
-                      ),
-
-                  "markdown_generated_by_fallback":
-                      (
-                          not md_report.exists()
-                          or md_report.stat().st_size == 0
-                      ),
-              },
-
-              "governance": {
-                  "governance_verdict":
-                      "blocked",
-
-                  "runtime_verdict":
-                      "blocked_by_exception",
-
-                  "policy": {
-                      "verifier_mode":
-                          "read_only",
-
-                      "completed_phases":
-                          "immutable",
-
-                      "dependency_failures_are_not_governance_failures":
-                          True,
-
-                      "fallback_report_does_not_imply_logic_mutation":
-                          True,
-                  },
-              },
-
-              "summary": {
-                  "fail":
-                      1,
-              },
-
-              "severity_summary": {
-                  "critical":
-                      1,
-              },
-
-              "results": [
-                  {
-                      "domain":
-                          "workflow",
-
-                      "check":
-                          "runtime_verifier_report_generation",
-
-                      "status":
-                          "fail",
-
-                      "severity":
-                          "critical",
-
-                      "summary":
-                          (
-                              "Runtime verifier did not produce one or more "
-                              "expected report artifacts. Fallback reports "
-                              "were generated by the workflow."
-                          ),
-
-                      "evidence": {
-                          "verifier_exit_code":
-                              verifier_exit_code,
-
-                          "stdout_preview":
-                              stdout_text,
-
-                          "stderr_preview":
-                              stderr_text,
-                      },
-
-                      "suggested_fix":
-                          (
-                              "Inspect runtime_verifier_stderr.txt and "
-                              "runtime_verifier_stdout.txt to locate the "
-                              "exception or early termination before normal "
-                              "report generation."
-                          ),
-
-                      "governance_domain":
-                          "verifier_runtime",
-
-                      "contract_type":
-                          "report_generation",
-                  }
-              ],
-          }
-
-          if not json_report.exists() or json_report.stat().st_size == 0:
-              json_report.write_text(
-                  json.dumps(
-                      fallback_payload,
-                      indent=2,
-                      ensure_ascii=False,
-                  ),
-                  encoding="utf-8",
-              )
-
-          if not md_report.exists() or md_report.stat().st_size == 0:
-              md_lines = [
-                  "# RGA Runtime Verifier Report",
-                  "",
-                  "## Fallback Report Generated",
-                  "",
-                  "The runtime verifier did not produce the expected Markdown report.",
-                  "A fallback Markdown report was generated by the workflow so the artifact bundle remains complete.",
-                  "",
-                  "## Execution",
-                  "",
-                  f"- Verifier exit code: `{verifier_exit_code}`",
-                  "",
-                  "## Governance Interpretation",
-                  "",
-                  "- Fallback report generation does **not** modify verifier logic.",
-                  "- Fallback report generation does **not** modify completed phases.",
-                  "- Fallback report generation exists only to preserve diagnostic evidence.",
-                  "",
-                  "## stderr Preview",
-                  "",
-                  "```text",
-                  stderr_text or "(empty)",
-                  "```",
-                  "",
-                  "## stdout Preview",
-                  "",
-                  "```text",
-                  stdout_text or "(empty)",
-                  "```",
-                  "",
-              ]
-
-              md_report.write_text(
-                  "\n".join(md_lines),
-                  encoding="utf-8",
-              )
-
-          status_path = artifacts / "report_generation_status.txt"
-
-          if (
-              json_report.exists()
-              and json_report.stat().st_size > 0
-              and md_report.exists()
-              and md_report.stat().st_size > 0
-          ):
-              status_path.write_text(
-                  "report_generation_status=verified\n",
-                  encoding="utf-8",
-              )
-          else:
-              status_path.write_text(
-                  "report_generation_status=incomplete\n",
-                  encoding="utf-8",
-              )
-
-          if fallback_needed:
-              print("Fallback report generation was required.")
-          else:
-              print("Runtime verifier reports were generated normally.")
-          PY
-
-          ########################################################
-          # Preview diagnostics
-          ########################################################
-
-          if [ -f artifacts/runtime_verifier_stderr.txt ]; then
-            echo ""
-            echo "---- verifier stderr preview ----"
-            head -n 80 artifacts/runtime_verifier_stderr.txt || true
-          fi
-
-          if [ -f artifacts/runtime_verifier_stdout.txt ]; then
-            echo ""
-            echo "---- verifier stdout preview ----"
-            head -n 80 artifacts/runtime_verifier_stdout.txt || true
-          fi
-
-          if [ -f artifacts/report_generation_status.txt ]; then
-            echo ""
-            echo "---- report generation status ----"
-            cat artifacts/report_generation_status.txt || true
-          fi
-
-          ########################################################
-          # Do not fail the workflow here.
-          #
-          # Governance failure should be represented in the reports.
-          # Workflow artifact generation must continue.
-          ########################################################
-
           exit 0
 
       ############################################################
@@ -2521,19 +2699,59 @@ jobs:
 
             echo ""
             echo "Verifier Exit Code:"
-
             cat artifacts/runtime_verifier_exit_code.txt || true
 
             echo ""
             echo "Artifact Count:"
-
             find artifacts -type f | wc -l
 
             echo ""
             echo "Files:"
-
             find artifacts -type f | sort
+
           } > artifacts/artifact_bundle_manifest.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          files = sorted(
+              str(p)
+              for p in Path("artifacts").rglob("*")
+              if p.is_file()
+          )
+
+          payload = {
+              "schema":
+                  "rga.artifact_bundle_manifest.v1.2",
+
+              "artifact_count":
+                  len(files),
+
+              "bundle_role":
+                  "verification_evidence",
+
+              "verifier_mode":
+                  "read_only",
+
+              "maintenance_mode":
+                  "advisor_only",
+
+              "generated_files":
+                  files,
+          }
+
+          Path(
+              "artifacts/artifact_bundle_manifest.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Create Downloadable Zip Bundle
@@ -2580,6 +2798,46 @@ jobs:
               > artifacts/report_generation_status.txt
           fi
 
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = {
+              "schema":
+                  "rga.report_generation_status.v1.2",
+
+              "json_report_present":
+                  Path(
+                      "artifacts/runtime_verifier_report.json"
+                  ).is_file(),
+
+              "markdown_report_present":
+                  Path(
+                      "artifacts/runtime_verifier_report.md"
+                  ).is_file(),
+
+              "status": (
+                  "verified"
+                  if Path(
+                      "artifacts/report_generation_status.txt"
+                  ).read_text().strip() == "verified"
+                  else "incomplete"
+              ),
+
+              "verification_principles": {
+                  "report_generation_is_not_governance_pass": True,
+                  "artifact_presence_is_not_contract_verification": True,
+              },
+          }
+
+          Path(
+              "artifacts/report_generation_status.json"
+          ).write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          PY
+
       ############################################################
       # Runtime Verifier Job Summary
       ############################################################
@@ -2591,11 +2849,21 @@ jobs:
             echo "## RGA Runtime Verifier"
             echo ""
 
+            echo "### Verification Model"
+            echo ""
+            echo "- Validation != Verification"
+            echo "- Repository Reality != Import Reality"
+            echo "- Import Reality != Runtime Reality"
+            echo "- Dependency Reality != Governance Reality"
+            echo "- Runtime Limited != Governance Blocked"
+            echo ""
+
+            echo "### Reports"
+            echo ""
             echo "- JSON Report: \`artifacts/runtime_verifier_report.json\`"
             echo "- Markdown Report: \`artifacts/runtime_verifier_report.md\`"
             echo "- Evidence Bundle: \`artifacts/\`"
             echo "- Downloadable Zip: \`runtime-verifier-report.zip\`"
-
             echo ""
 
             if [ -f artifacts/report_generation_status.txt ]; then
@@ -2611,50 +2879,42 @@ jobs:
             if [ -f artifacts/runtime_verifier_report.md ]; then
               echo "### Markdown Report Preview"
               echo ""
-
-              head -n 120 \
-                artifacts/runtime_verifier_report.md
-
+              head -n 120 artifacts/runtime_verifier_report.md
               echo ""
             fi
 
             if [ -f artifacts/runtime_verifier_stderr.txt ]; then
               echo "### stderr Preview"
               echo ""
-
               echo '```text'
-
-              head -n 80 \
-                artifacts/runtime_verifier_stderr.txt || true
-
+              head -n 80 artifacts/runtime_verifier_stderr.txt || true
               echo '```'
-              echo ""
-            fi
-
-            if [ ! -f artifacts/runtime_verifier_report.json ]; then
-              echo "### Missing Artifacts"
-              echo ""
-              echo "- runtime_verifier_report.json"
-              echo ""
-            fi
-
-            if [ ! -f artifacts/runtime_verifier_report.md ]; then
-              echo "### Missing Artifacts"
-              echo ""
-              echo "- runtime_verifier_report.md"
               echo ""
             fi
 
           } >> "$GITHUB_STEP_SUMMARY"
 
       ############################################################
-      # Upload Downloadable Zip Bundle
+      # Upload Evidence Bundle
       ############################################################
 
-      - name: Upload Runtime Verifier Zip
+      - name: Upload Runtime Verifier Bundle
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: runtime-verifier-report-zip
           path: runtime-verifier-report.zip
           if-no-files-found: warn
+
+      ############################################################
+      # Upload Raw Evidence
+      ############################################################
+
+      - name: Upload Runtime Verifier Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-verifier-evidence
+          path: artifacts/
+          if-no-files-found: warn
+
