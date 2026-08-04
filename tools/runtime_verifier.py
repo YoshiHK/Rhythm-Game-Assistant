@@ -6739,7 +6739,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
                 f"- **{k}**: {v}"
             )
 
-        lines.append(""))
+        lines.append("")
 
     #
     # --------------------------------------------------
