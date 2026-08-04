@@ -7527,19 +7527,24 @@ def main() -> int:
     # ----------------------------------------------------------
     # Report generation state
     #
-    # This is intentionally initialized before verifier execution
-    # so fallback reports can still be generated if run_all fails.
+    # This is initialized before verifier execution so fallback
+    # reports can still be generated if RuntimeVerifier or run_all
+    # fails before normal report creation completes.
     # ----------------------------------------------------------
     #
 
     generated_reports: Dict[str, Any] = {
         "json_report":
-            str(json_out)
+            str(
+                json_out
+            )
             if json_out
             else None,
 
         "markdown_report":
-            str(md_out)
+            str(
+                md_out
+            )
             if md_out
             else None,
 
@@ -7566,16 +7571,19 @@ def main() -> int:
 
         "verifier_error":
             None,
+
+        "verifier_exception_traceback":
+            None,
     }
 
-    report: Dict[str, Any]
+    verifier_execution_failed = False
 
     #
     # ----------------------------------------------------------
     # Run verifier
     #
-    # If the verifier itself crashes, still generate a structured
-    # report so workflow artifacts are not missing.
+    # If verifier execution crashes, still generate a structured
+    # fallback report so workflow artifacts are not missing.
     # ----------------------------------------------------------
     #
 
@@ -7640,11 +7648,20 @@ def main() -> int:
             run_rest=args.rest,
         )
 
-        report = verifier.run_all()
+        report: Dict[str, Any] = verifier.run_all()
 
     except Exception as exc:
-
         import traceback
+
+        verifier_execution_failed = True
+
+        generated_reports["verifier_error"] = str(
+            exc
+        )
+
+        generated_reports["verifier_exception_traceback"] = (
+            traceback.format_exc()
+        )
 
         report = {
             "schema":
@@ -7653,27 +7670,47 @@ def main() -> int:
             "generated_at":
                 datetime.now(
                     timezone.utc
-                ).replace(
+                )
+                .replace(
                     microsecond=0
-                ).isoformat(),
+                )
+                .isoformat(),
 
             "execution_state":
                 "verifier_exception",
 
-            "error":
-                str(exc),
+            "repo_root":
+                str(
+                    Path(
+                        args.repo_root
+                    )
+                ),
 
-            "traceback":
-                traceback.format_exc(),
+            "backend_root":
+                (
+                    str(
+                        Path(
+                            args.backend_root
+                        )
+                    )
+                    if args.backend_root
+                    else None
+                ),
+
+            "backend_root_mode":
+                "unavailable",
+
+            "api_url":
+                args.api_url,
 
             "summary": {
-                "pass": 0,
-                "warning": 0,
-                "fail": 1,
+                "fail":
+                    1,
             },
 
             "severity_summary": {
-                "critical": 1,
+                "critical":
+                    1,
             },
 
             "governance": {
@@ -7682,6 +7719,20 @@ def main() -> int:
 
                 "runtime_verdict":
                     "blocked_by_exception",
+
+                "policy": {
+                    "verifier_mode":
+                        "read_only",
+
+                    "completed_phases":
+                        "immutable",
+
+                    "dependency_failures_are_not_governance_failures":
+                        True,
+
+                    "fallback_report_does_not_modify_logic":
+                        True,
+                },
             },
 
             "results": [
@@ -7698,22 +7749,48 @@ def main() -> int:
                     "severity":
                         "critical",
 
-                    "summary":
-                        (
-                            "Runtime verifier raised "
-                            "an unhandled exception."
-                        ),
+                    "summary": (
+                        "Runtime verifier raised an unhandled "
+                        "exception before normal report generation "
+                        "completed."
+                    ),
 
                     "evidence": {
                         "exception":
-                            str(exc)
+                            str(
+                                exc
+                            ),
+
+                        "traceback":
+                            generated_reports[
+                                "verifier_exception_traceback"
+                            ],
                     },
+
+                    "suggested_fix": (
+                        "Inspect runtime_verifier_stderr.txt and "
+                        "runtime_verifier_stdout.txt to locate the "
+                        "exception or early termination before normal "
+                        "report generation."
+                    ),
+
+                    "governance_domain":
+                        "verifier_runtime",
+
+                    "contract_type":
+                        "verifier_execution",
                 }
             ],
         }
 
     #
-    # report_generation update
+    # ----------------------------------------------------------
+    # Attach initial report generation metadata.
+    #
+    # Important:
+    # Do not use ellipsis here. report_generation.update(...)
+    # causes TypeError because ellipsis is not iterable.
+    # ----------------------------------------------------------
     #
 
     report.setdefault(
@@ -7722,31 +7799,18 @@ def main() -> int:
     )
 
     report["report_generation"].update(
-        ...
+        generated_reports
     )
-
-    #
-    # NOW serialize
-    #
-
-    text = json.dumps(
-        report,
-        indent=2,
-        ensure_ascii=False,
-    )
-
-    print(text)
-
 
     #
     # ----------------------------------------------------------
     # Markdown Report
     #
-    # Markdown is attempted first so the final JSON can record
-    # markdown generation success/failure.
+    # Markdown is attempted before final JSON output so JSON can
+    # record Markdown generation success or failure.
     #
-    # If write_markdown fails, a fallback markdown report is still
-    # generated so the workflow artifact is not missing.
+    # If write_markdown fails, generate a fallback Markdown report
+    # so the workflow artifact is not missing.
     # ----------------------------------------------------------
     #
 
@@ -7766,8 +7830,12 @@ def main() -> int:
             generated_reports["markdown_generated"] = True
 
         except Exception as exc:
-            generated_reports["markdown_error"] = str(
-                exc
+            import traceback
+
+            generated_reports["markdown_error"] = (
+                str(
+                    exc
+                )
             )
 
             try:
@@ -7779,9 +7847,11 @@ def main() -> int:
                 fallback_lines = [
                     "# RGA Runtime Verifier Report",
                     "",
-                    "## Report Generation Fallback",
+                    "## Fallback Report Generated",
                     "",
-                    "Markdown rendering failed, so this fallback report was generated.",
+                    "The normal Markdown renderer failed, so this fallback Markdown report was generated.",
+                    "",
+                    "## Markdown Error",
                     "",
                     "```text",
                     str(
@@ -7789,9 +7859,17 @@ def main() -> int:
                     ),
                     "```",
                     "",
-                    "## JSON Report",
+                    "## Markdown Traceback",
                     "",
-                    "The JSON report should still contain the structured verifier output if JSON generation succeeded.",
+                    "```text",
+                    traceback.format_exc(),
+                    "```",
+                    "",
+                    "## Governance Interpretation",
+                    "",
+                    "- Fallback report generation does **not** modify verifier logic.",
+                    "- Fallback report generation does **not** modify completed phases.",
+                    "- Fallback report generation exists only to preserve diagnostic evidence.",
                     "",
                 ]
 
@@ -7824,9 +7902,11 @@ def main() -> int:
     # ----------------------------------------------------------
     # JSON Report
     #
-    # JSON is written after report_generation is finalized.
-    # This prevents the JSON artifact from missing report output
-    # metadata.
+    # JSON is written after report_generation is finalized, so the
+    # JSON artifact contains report output metadata.
+    #
+    # json_generated is set before serialization so the written JSON
+    # contains json_generated=true when writing succeeds.
     # ----------------------------------------------------------
     #
 
@@ -7836,6 +7916,12 @@ def main() -> int:
             json_out.parent.mkdir(
                 parents=True,
                 exist_ok=True,
+            )
+
+            generated_reports["json_generated"] = True
+
+            report["report_generation"].update(
+                generated_reports
             )
 
             text = json.dumps(
@@ -7849,9 +7935,8 @@ def main() -> int:
                 encoding="utf-8",
             )
 
-            generated_reports["json_generated"] = True
-
         except Exception as exc:
+            generated_reports["json_generated"] = False
             generated_reports["json_error"] = str(
                 exc
             )
@@ -7968,6 +8053,19 @@ def main() -> int:
                 > 0
             ):
                 return 1
+
+    #
+    # ----------------------------------------------------------
+    # Non-strict execution state
+    #
+    # If verifier execution itself failed, return non-zero after
+    # preserving reports. The workflow can still continue because
+    # the workflow step uses set +e / continue-on-error.
+    # ----------------------------------------------------------
+    #
+
+    if verifier_execution_failed:
+        return 1
 
     return 0
 
