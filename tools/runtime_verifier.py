@@ -6312,29 +6312,112 @@ class RuntimeVerifier:
 # Output helpers
 # -----------------------------------------------------------------------------
 
-def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
+def write_markdown(
+    report: Dict[str, Any],
+    out_path: Path,
+) -> None:
+
     lines: List[str] = []
 
-    lines.append("# RGA Runtime Verifier Report")
+    #
+    # ----------------------------------------------------------
+    # Report Header
+    # ----------------------------------------------------------
+    #
+
+    lines.append(
+        "# RGA Runtime Verifier Report"
+    )
     lines.append("")
-    lines.append(f"Schema: `{report.get('schema')}`")
-    lines.append(f"Generated: `{report.get('generated_at')}`")
-    lines.append(f"Repo root: `{report.get('repo_root')}`")
-    lines.append(f"Backend root: `{report.get('backend_root')}`")
-    lines.append(f"Backend root mode: `{report.get('backend_root_mode')}`")
-    lines.append(f"API URL: `{report.get('api_url')}`")
+
+    lines.append(
+        f"Schema: `{report.get('schema')}`"
+    )
+
+    lines.append(
+        f"Generated: `{report.get('generated_at')}`"
+    )
+
+    lines.append(
+        f"Repo root: `{report.get('repo_root')}`"
+    )
+
+    lines.append(
+        f"Backend root: `{report.get('backend_root')}`"
+    )
+
+    lines.append(
+        f"Backend root mode: `{report.get('backend_root_mode')}`"
+    )
+
+    lines.append(
+        f"API URL: `{report.get('api_url')}`"
+    )
+
     lines.append("")
+
+    #
+    # ----------------------------------------------------------
+    # Report Generation
+    # ----------------------------------------------------------
+    #
+
+    report_generation = report.get(
+        "report_generation",
+        {},
+    )
+
+    if report_generation:
+
+        lines.append(
+            "## Report Generation"
+        )
+
+        lines.append("")
+
+        for label, value in [
+            (
+                "JSON generated",
+                report_generation.get(
+                    "json_generated"
+                ),
+            ),
+            (
+                "Markdown generated",
+                report_generation.get(
+                    "markdown_generated"
+                ),
+            ),
+            (
+                "Markdown fallback",
+                report_generation.get(
+                    "markdown_fallback_generated"
+                ),
+            ),
+        ]:
+
+            lines.append(
+                f"- {label}: `{value}`"
+            )
+
+        lines.append("")
+
+    #
+    # ----------------------------------------------------------
+    # Governance Snapshot
+    # ----------------------------------------------------------
+    #
 
     governance = report.get(
         "governance",
         {},
     )
-    
+
     dependency_failures = governance.get(
         "dependency_failures",
         [],
     )
-    
+
     governance_failures = governance.get(
         "governance_failures",
         [],
@@ -6350,66 +6433,63 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         [],
     )
 
-    #
-    # --------------------------------------------------
-    # Governance Overview
-    # --------------------------------------------------
-    #
+    lines.append(
+        "## Governance Overview"
+    )
 
-    lines.append("## Governance Overview")
     lines.append("")
 
     governance_overview = [
         (
             "Governance verdict",
             governance.get(
-                "governance_verdict",
+                "governance_verdict"
             ),
         ),
         (
             "Architecture verdict",
             governance.get(
-                "architecture_verdict",
+                "architecture_verdict"
             ),
         ),
         (
             "Runtime verdict",
             governance.get(
-                "runtime_verdict",
+                "runtime_verdict"
             ),
         ),
         (
             "Artifact backbone verdict",
             governance.get(
-                "artifact_backbone_verdict",
+                "artifact_backbone_verdict"
             ),
         ),
         (
             "Flow contract verdict",
             governance.get(
-                "flow_contract_verdict",
+                "flow_contract_verdict"
             ),
         ),
         (
             "Layer boundary verdict",
             governance.get(
-                "layer_boundary_verdict",
+                "layer_boundary_verdict"
             ),
         ),
         (
             "MCP contract verdict",
             governance.get(
-                "mcp_contract_verdict",
+                "mcp_contract_verdict"
             ),
         ),
         (
             "Deletion verdict",
             governance.get(
-                "deletion_verdict",
+                "deletion_verdict"
             ),
         ),
     ]
-    
+
     if (
         governance.get(
             "governance_verdict"
@@ -6417,18 +6497,25 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         == "runtime_limited"
     ):
         lines.append(
-            "> Runtime readiness is constrained by dependency "
-            "or import reality. This is not automatically a "
-            "governance blocker."
+            "> Runtime readiness is constrained by "
+            "dependency or import reality. "
+            "This is not automatically a governance blocker."
         )
-        lines.append("")    
+        lines.append("")
 
     for label, value in governance_overview:
+
         lines.append(
             f"- {label}: `{value}`"
         )
 
     lines.append("")
+
+    #
+    # ----------------------------------------------------------
+    # Verdict Semantics
+    # ----------------------------------------------------------
+    #
 
     verdict_semantics = governance.get(
         "verdict_semantics",
@@ -6436,25 +6523,26 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     if verdict_semantics:
+
         lines.append(
             "### Verdict Semantics"
         )
+
         lines.append("")
 
         for verdict, description in (
             verdict_semantics.items()
         ):
             lines.append(
-                f"- **{verdict}**: "
-                f"{description}"
+                f"- **{verdict}**: {description}"
             )
 
         lines.append("")
 
     #
-    # --------------------------------------------------
+    # ----------------------------------------------------------
     # Failure Accounting
-    # --------------------------------------------------
+    # ----------------------------------------------------------
     #
 
     dependency_fail_count = governance.get(
@@ -6476,52 +6564,53 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         "derived_failure_count",
         0,
     )
-    
-    blocking_reason_count = (
-        governance.get(
-            "blocking_reason_count",
-            0,
-        )
+
+    blocking_reason_count = governance.get(
+        "blocking_reason_count",
+        0,
     )
 
-    warning_count = (
-        governance.get(
-            "warning_count",
-            0,
-        )
+    warning_count = governance.get(
+        "warning_count",
+        0,
     )
 
     lines.append(
         "## Failure Accounting"
     )
+
     lines.append("")
 
     lines.append(
-        f"- Dependency failures: "
-        f"`{dependency_fail_count}`"
+        f"- Dependency failures: `{dependency_fail_count}`"
     )
 
     lines.append(
-        f"- Governance failures: "
-        f"`{governance_fail_count}`"
+        f"- Governance failures: `{governance_fail_count}`"
     )
 
     lines.append(
-        f"- Root failures: "
-        f"`{root_failure_count}`"
+        f"- Root failures: `{root_failure_count}`"
     )
 
     lines.append(
-        f"- Derived failures: "
-        f"`{derived_failure_count}`"
+        f"- Derived failures: `{derived_failure_count}`"
+    )
+
+    lines.append(
+        f"- Blocking reasons: `{blocking_reason_count}`"
+    )
+
+    lines.append(
+        f"- Warnings: `{warning_count}`"
     )
 
     lines.append("")
 
     #
-    # --------------------------------------------------
+    # ----------------------------------------------------------
     # Root Cause Summary
-    # --------------------------------------------------
+    # ----------------------------------------------------------
     #
 
     root_cause_summary = governance.get(
@@ -6530,9 +6619,11 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     if root_cause_summary:
+
         lines.append(
             "## Root Cause Summary"
         )
+
         lines.append("")
 
         primary_root_contracts = (
@@ -6543,9 +6634,11 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         )
 
         if primary_root_contracts:
+
             lines.append(
                 "### Primary Root Contracts"
             )
+
             lines.append("")
 
             for item in (
@@ -6565,9 +6658,11 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         )
 
         if derived_contracts:
+
             lines.append(
                 "### Derived Contracts"
             )
+
             lines.append("")
 
             for item in (
@@ -6581,152 +6676,23 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
         recommendation = (
             root_cause_summary.get(
-                "recommendation",
+                "recommendation"
             )
         )
 
         if recommendation:
+
             lines.append(
                 "### Recommendation"
             )
+
             lines.append("")
+
             lines.append(
                 recommendation
             )
-            lines.append("")
-
-    #
-    # --------------------------------------------------
-    # Impact Scope
-    # --------------------------------------------------
-    #
-
-    impact_scope = governance.get(
-        "impact_scope",
-        {},
-    )
-
-    if impact_scope:
-        lines.append(
-            "## Impact Scope"
-        )
-        lines.append("")
-
-        root_contract_impacts = (
-            impact_scope.get(
-                "root_contract_impacts",
-                {},
-            )
-        )
-
-        for (
-            root_contract,
-            details,
-        ) in (
-            root_contract_impacts.items()
-        ):
-            lines.append(
-                f"### `{root_contract}`"
-            )
-            lines.append("")
-
-            impact_domain = (
-                details.get(
-                    "impact_domain",
-                )
-            )
-
-            if impact_domain:
-                lines.append(
-                    f"- Impact domain: "
-                    f"`{impact_domain}`"
-                )
-
-            for item in (
-                details.get(
-                    "directly_blocks",
-                    [],
-                )
-            ):
-                lines.append(
-                    f"  - `{item}`"
-                )
 
             lines.append("")
-
-        impact_principle = (
-            impact_scope.get(
-                "impact_principle",
-            )
-        )
-
-        if impact_principle:
-            lines.append(
-                f"> {impact_principle}"
-            )
-            lines.append("")
-
-    #
-    # --------------------------------------------------
-    # Failure Lineage
-    # --------------------------------------------------
-    #
-
-    lineage = governance.get(
-        "lineage",
-        {},
-    )
-
-    if lineage:
-        lines.append(
-            "## Failure Lineage"
-        )
-        lines.append("")
-
-        runtime_lineage = (
-            lineage.get(
-                "runtime_lineage",
-                {},
-            )
-        )
-
-        root_contracts = (
-            runtime_lineage.get(
-                "root_contracts",
-                [],
-            )
-        )
-
-        derived_contracts = (
-            runtime_lineage.get(
-                "derived_contracts",
-                {},
-            )
-        )
-
-        for root_contract in (
-            root_contracts
-        ):
-            lines.append(
-                f"- `{root_contract}`"
-            )
-
-            children = [
-                child
-                for child, parent
-                in derived_contracts.items()
-                if parent
-                == root_contract
-            ]
-
-            for child in sorted(
-                children
-            ):
-                lines.append(
-                    f"  - `{child}`"
-                )
-
-        lines.append("")
 
     #
     # --------------------------------------------------
@@ -6740,14 +6706,16 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     if risk:
+
         lines.append(
             "## Layer Boundary Risk"
         )
+
         lines.append("")
 
         lines.append(
-            f"- Status: "
-            f"`{risk.get('status')}`"
+            f"- Highest confidence: "
+            f"`{risk.get('highest_confidence')}`"
         )
 
         lines.append(
@@ -6765,12 +6733,32 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
             f"`{risk.get('evidence_count', 0)}`"
         )
 
-        lines.append(
-            f"- Governance Blocking: "
-            f"`{risk.get('governance_blocking')}`"
+        lines.append("")
+
+        governance_interpretation = (
+            risk.get(
+                "governance_interpretation",
+                {},
+            )
         )
 
-        lines.append("")
+        if governance_interpretation:
+
+            lines.append(
+                "### Governance Interpretation"
+            )
+
+            lines.append("")
+
+            for verdict, text in (
+                governance_interpretation.items()
+            ):
+
+                lines.append(
+                    f"- **{verdict}**: {text}"
+                )
+
+            lines.append("")
 
     #
     # --------------------------------------------------
@@ -6784,16 +6772,20 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     if policy:
+
         lines.append(
             "## Governance Policy"
         )
+
         lines.append("")
 
-        for k, v in (
-            policy.items()
+        for key in sorted(
+            policy.keys()
         ):
+
             lines.append(
-                f"- **{k}**: {v}"
+                f"- **{key}**: "
+                f"{policy[key]}"
             )
 
         lines.append("")
@@ -6804,7 +6796,10 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     # --------------------------------------------------
     #
 
-    lines.append("## Summary")
+    lines.append(
+        "## Summary"
+    )
+
     lines.append("")
 
     for key, value in sorted(
@@ -6813,6 +6808,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
             {},
         ).items()
     ):
+
         lines.append(
             f"- **{key}**: {value}"
         )
@@ -6828,6 +6824,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     lines.append(
         "## Severity Summary"
     )
+
     lines.append("")
 
     for key, value in sorted(
@@ -6836,6 +6833,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
             {},
         ).items()
     ):
+
         lines.append(
             f"- **{key}**: {value}"
         )
@@ -6851,21 +6849,6 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     artifact_databases = report.get(
         "artifact_databases",
         {},
-    )
-
-    lines.append(
-        "### Artifact Backbone Snapshot"
-    )
-    lines.append("")
-
-    lines.append(
-        f"- Required databases: "
-        f"`{len(artifact_databases.get('required', []))}`"
-    )
-
-    lines.append(
-        f"- Relationship chain entries: "
-        f"`{len(artifact_databases.get('relationship_chain', []))}`"
     )
 
     record_counts = (
@@ -6884,9 +6867,50 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         )
     )
 
+    artifact_snapshot = {
+
+        "required_database_count":
+            len(
+                artifact_databases.get(
+                    "required",
+                    [],
+                )
+            ),
+
+        "relationship_chain_count":
+            len(
+                artifact_databases.get(
+                    "relationship_chain",
+                    [],
+                )
+            ),
+
+        "record_counts":
+            record_counts,
+
+        "total_records":
+            total_records,
+    }
+
+    lines.append(
+        "## Artifact Backbone Snapshot"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"- Required databases: "
+        f"`{artifact_snapshot['required_database_count']}`"
+    )
+
+    lines.append(
+        f"- Relationship chain entries: "
+        f"`{artifact_snapshot['relationship_chain_count']}`"
+    )
+
     lines.append(
         f"- Total records: "
-        f"`{total_records}`"
+        f"`{artifact_snapshot['total_records']}`"
     )
 
     lines.append("")
@@ -6907,17 +6931,13 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     #
     # --------------------------------------------------
     # Repository Discovery
-    #
-    # Repository discovery focuses on repository reality.
-    #
-    # Markdown renders summarized inventories while full
-    # evidence remains available in the JSON report.
     # --------------------------------------------------
     #
 
     lines.append(
         "## Repository Discovery"
     )
+
     lines.append("")
 
     backend_candidates = report.get(
@@ -6981,9 +7001,6 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     #
     # --------------------------------------------------
     # File Group Summary
-    #
-    # Render counts only.
-    # Full paths remain in JSON report.
     # --------------------------------------------------
     #
 
@@ -6992,6 +7009,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     for group_name, value in (
         discovered_files.items()
     ):
+
         if isinstance(
             value,
             list,
@@ -6999,6 +7017,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
             file_group_summary[group_name] = len(
                 value
             )
+
         else:
             file_group_summary[group_name] = 0
 
@@ -7016,6 +7035,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         ) in sorted(
             file_group_summary.items()
         ):
+
             lines.append(
                 f"- **{group_name}**: "
                 f"`{count}`"
@@ -7044,8 +7064,6 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     #
     # --------------------------------------------------
     # Package Discovery
-    #
-    # Repository package inventory summary.
     # --------------------------------------------------
     #
 
@@ -7061,9 +7079,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         ):
             package_summary[
                 package_group
-            ] = len(
-                value
-            )
+            ] = len(value)
 
         elif isinstance(
             value,
@@ -7071,9 +7087,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         ):
             package_summary[
                 package_group
-            ] = len(
-                value
-            )
+            ] = len(value)
 
         else:
             package_summary[
@@ -7094,6 +7108,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         ) in sorted(
             package_summary.items()
         ):
+
             lines.append(
                 f"- **{package_group}**: "
                 f"`{count}`"
@@ -7122,13 +7137,11 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     #
     # --------------------------------------------------
     # Repository Discovery Snapshot
-    #
-    # Compact snapshot for Auditor / Advisor layers.
-    # Full inventories remain available in JSON.
     # --------------------------------------------------
     #
 
     repository_snapshot = {
+
         "backend_candidate_count":
             len(
                 backend_candidates
@@ -7156,6 +7169,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
     )
 
     lines.append("")
+
     lines.append("```json")
 
     lines.append(
@@ -7180,38 +7194,6 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         {},
     )
 
-    lines.append(
-        "## Asset Discovery"
-    )
-    lines.append("")
-    
-    asset_snapshot = {
-    "type_A":
-        len(
-            discovered_assets.get(
-                "type_A",
-                [],
-            )
-        ),
-
-    "type_B":
-        len(
-            discovered_assets.get(
-                "type_B",
-                [],
-            )
-        ),
-
-    "excluded_candidate_count":
-        discovered_assets.get(
-            "excluded_candidate_count",
-            0,
-        ),
-
-    "excluded_by_reason":
-        excluded_by_reason,
-}
-
     excluded_by_reason = (
         discovered_assets.get(
             "excluded_by_reason",
@@ -7219,16 +7201,52 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
         )
     )
 
+    asset_snapshot = {
+
+        "type_A":
+            len(
+                discovered_assets.get(
+                    "type_A",
+                    [],
+                )
+            ),
+
+        "type_B":
+            len(
+                discovered_assets.get(
+                    "type_B",
+                    [],
+                )
+            ),
+
+        "excluded_candidate_count":
+            discovered_assets.get(
+                "excluded_candidate_count",
+                0,
+            ),
+
+        "excluded_by_reason":
+            excluded_by_reason,
+    }
+
+    lines.append(
+        "## Asset Discovery"
+    )
+
+    lines.append("")
+
     if excluded_by_reason:
 
         lines.append(
             "### Excluded Asset Candidates"
         )
+
         lines.append("")
 
         for reason, count in sorted(
             excluded_by_reason.items()
         ):
+
             lines.append(
                 f"- **{reason}**: {count}"
             )
@@ -7239,7 +7257,7 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append(
         json.dumps(
-            discovered_assets,
+            asset_snapshot,
             indent=2,
             ensure_ascii=False,
         )
@@ -7247,85 +7265,6 @@ def write_markdown(report: Dict[str, Any], out_path: Path) -> None:
 
     lines.append("```")
     lines.append("")
-
-    #
-    # --------------------------------------------------
-    # Governance State Snapshot
-    #
-    # Full raw governance JSON.
-    # Keep this after summaries so the report remains
-    # human-readable first and evidence-rich second.
-    # --------------------------------------------------
-    #
-
-    lines.append(
-        "## Governance Evidence Snapshot"
-    )
-    lines.append("")
-
-    lines.append("```json")
-
-    lines.append(
-        json.dumps(
-            governance,
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-
-    lines.append("```")
-    lines.append("")
-
-    #
-    # --------------------------------------------------
-    # Detailed Results
-    # --------------------------------------------------
-    #
-
-    lines.append(
-        "## Detailed Results"
-    )
-    lines.append("")
-
-    for item in report.get("results", []):
-        lines.append(
-            f"### [{item['status'].upper()} / {item['severity'].upper()}] "
-            f"{item['domain']} / {item['check']}"
-        )
-        lines.append("")
-        lines.append(item.get("summary", ""))
-
-        if item.get("governance_domain") or item.get("contract_type"):
-            lines.append("")
-            lines.append(
-                f"Governance domain: `{item.get('governance_domain')}`"
-            )
-            lines.append(
-                f"Contract type: `{item.get('contract_type')}`"
-            )
-
-        evidence = item.get("evidence") or {}
-
-        if evidence:
-            lines.append("")
-            lines.append("```json")
-            lines.append(
-                json.dumps(
-                    evidence,
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            lines.append("```")
-
-        if item.get("suggested_fix"):
-            lines.append("")
-            lines.append(f"Suggested fix: {item['suggested_fix']}")
-
-        lines.append("")
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(lines), encoding="utf-8")
 
 # -----------------------------------------------------------------------------
 # CLI
