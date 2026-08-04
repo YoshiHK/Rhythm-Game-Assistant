@@ -5703,7 +5703,7 @@ class RuntimeVerifier:
                             if item.get("dependency_of")
                             == root_contract
                         ]
-                    }                
+                    },             
 
                 #
                 # --------------------------------------------------
