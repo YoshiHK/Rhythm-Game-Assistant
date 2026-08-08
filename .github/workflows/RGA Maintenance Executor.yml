@@ -28,8 +28,9 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       actions: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -316,13 +317,16 @@ jobs:
       ############################################################
       # Apply Repository Changes
       ############################################################
- 
+
       - name: Apply Repository Changes
         if: always()
         run: |
+          set +e
+
           python - <<'PY'
           import json
           from pathlib import Path
+          import subprocess
 
           mode = "${{ github.event.inputs.executor_mode }}"
 
@@ -331,38 +335,121 @@ jobs:
           )
 
           repository_changes_applied = False
-
           changed_files = []
-
+          written_files = []
           notes = []
+          policy_violations = []
 
           if apply_result_file.exists():
 
-              result = json.loads(
-                  apply_result_file.read_text(
-                      encoding="utf-8"
+              try:
+                  result = json.loads(
+                      apply_result_file.read_text(
+                          encoding="utf-8"
+                      )
                   )
-              )
 
-              changed_files = result.get(
-                  "written_files",
-                  [],
-              )
+                  written_files = result.get(
+                      "written_files",
+                      [],
+                  )
 
-              repository_changes_applied = bool(
-                  changed_files
-              )
+                  policy_violations = result.get(
+                      "policy_violations",
+                      [],
+                  )
+
+              except Exception as exc:
+                  notes.append(
+                      f"Could not parse apply_execution_result.json: {exc}"
+                  )
 
           else:
-
               notes.append(
                   "apply_execution_result.json not found."
               )
 
-          payload = {
+          protected_tokens = [
+              "canonical_row",
+              "pattern_logic",
+              "tips_generation",
+              "personalization",
+              "localization",
+              "recommendation_logic",
+              "Phase 1",
+              "Phase 2",
+              "Phase 3",
+              "Phase 4 - Personalization",
+              "Phase 4.5 - Localization",
+              "Phase 5 - Productionization",
+              "Phase 6 - Hardening and Scaling",
+              "Phase 7 - Games Recommendation",
+          ]
 
+          allowed_roots = [
+              "tools/",
+              "artifacts/",
+              ".github/workflows/",
+              "docs/",
+          ]
+
+          for item in written_files:
+              normalized = str(item).replace("\\", "/")
+
+              if any(
+                  token.lower() in normalized.lower()
+                  for token in protected_tokens
+              ):
+                  policy_violations.append(
+                      f"Protected scope change rejected: {normalized}"
+                  )
+                  continue
+
+              if not any(
+                  normalized.startswith(prefix)
+                  for prefix in allowed_roots
+              ):
+                  policy_violations.append(
+                      f"Change outside allowed roots rejected: {normalized}"
+                  )
+                  continue
+
+              changed_files.append(
+                  normalized
+              )
+
+          #
+          # Capture actual git working tree changes.
+          #
+
+          try:
+              proc = subprocess.run(
+                  [
+                      "git",
+                      "status",
+                      "--short",
+                  ],
+                  check=False,
+                  capture_output=True,
+                  text=True,
+              )
+
+              git_status_short = proc.stdout.splitlines()
+
+          except Exception as exc:
+              git_status_short = []
+              notes.append(
+                  f"Could not inspect git status: {exc}"
+              )
+
+          repository_changes_applied = bool(
+              changed_files
+              or git_status_short
+          )
+
+          payload = {
               "schema":
-                  "rga.repository_changes.v1.0",
+                  "rga.repository_changes.v1.1",
 
               "executor_mode":
                   mode,
@@ -370,22 +457,31 @@ jobs:
               "repository_changes_applied":
                   repository_changes_applied,
 
-              "changed_files":
+              "changed_files_from_executor":
                   changed_files,
+
+              "git_status_short":
+                  git_status_short,
+
+              "policy_violations":
+                  policy_violations,
 
               "notes":
                   notes,
 
-              "allowed_scope": [
+              "allowed_scope":
+                  allowed_roots,
 
-                  "tools/",
+              "protected_scopes":
+                  protected_tokens,
 
-                  "artifacts/",
+              "completed_phases_immutable":
+                  True,
 
-                  ".github/workflows/",
-
-                  "docs/"
-              ]
+              "governance_note": (
+                  "Repository change evidence is derived from runtime_executor "
+                  "outputs and git status. This step does not approve changes."
+              )
           }
 
           Path(
@@ -398,7 +494,7 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY          
+          PY
 
       ############################################################
       # Execution Commit Manifest
@@ -416,6 +512,8 @@ jobs:
           )
 
           changed_files = []
+          git_status_short = []
+          policy_violations = []
 
           if repository_changes.exists():
 
@@ -426,28 +524,57 @@ jobs:
               )
 
               changed_files = data.get(
-                  "changed_files",
+                  "changed_files_from_executor",
                   []
               )
+
+              git_status_short = data.get(
+                  "git_status_short",
+                  []
+              )
+
+              policy_violations = data.get(
+                  "policy_violations",
+                  []
+              )
+
+          commit_required = bool(
+              git_status_short
+          ) and not policy_violations
 
           payload = {
 
               "schema":
-                  "rga.execution_commit_manifest.v1.0",
+                  "rga.execution_commit_manifest.v1.1",
 
               "commit_required":
-                  bool(changed_files),
+                  commit_required,
 
               "commit_candidate_files":
                   changed_files,
+
+              "git_status_short":
+                  git_status_short,
+
+              "policy_violations":
+                  policy_violations,
 
               "commit_message": (
                   "[RGA Executor] Apply approved maintenance execution"
               ),
 
+              "branch_name":
+                  "maintenance/executor-generated",
+
+              "human_review_required":
+                  True,
+
+              "post_audit_required":
+                  True,
+
               "governance_note": (
-                  "Generated by Bot #2. "
-                  "Human review remains required."
+                  "Commit manifest is a candidate only. "
+                  "Bot #2 does not self-approve. Human review remains required."
               )
           }
 
@@ -462,6 +589,7 @@ jobs:
               encoding="utf-8",
           )
           PY
+
 
       ############################################################
       # Execution Pull Request Candidate
@@ -478,7 +606,15 @@ jobs:
               "artifacts/execution_commit_manifest.json"
           )
 
-          commit_required = False
+          pull_request_required = False
+          branch_name = "maintenance/executor-generated"
+          title = "[RGA Executor] Approved maintenance updates"
+          body = (
+              "Generated by RGA Executor. "
+              "Bot #1 post-audit remains required."
+          )
+          commit_candidate_files = []
+          policy_violations = []
 
           if commit_manifest.exists():
 
@@ -488,29 +624,48 @@ jobs:
                   )
               )
 
-              commit_required = data.get(
+              pull_request_required = data.get(
                   "commit_required",
                   False
+              )
+
+              branch_name = data.get(
+                  "branch_name",
+                  branch_name,
+              )
+
+              commit_candidate_files = data.get(
+                  "commit_candidate_files",
+                  [],
+              )
+
+              policy_violations = data.get(
+                  "policy_violations",
+                  [],
               )
 
           payload = {
 
               "schema":
-                  "rga.execution_pull_request_candidate.v1.0",
+                  "rga.execution_pull_request_candidate.v1.1",
 
               "pull_request_required":
-                  commit_required,
+                  pull_request_required,
 
               "branch_name":
-                  "maintenance/executor-generated",
+                  branch_name,
 
               "title":
-                  "[RGA Executor] Approved maintenance updates",
+                  title,
 
-              "body": (
-                  "Generated by RGA Executor. "
-                  "Post-audit by Bot #1 is still required."
-              ),
+              "body":
+                  body,
+
+              "commit_candidate_files":
+                  commit_candidate_files,
+
+              "policy_violations":
+                  policy_violations,
 
               "required_reviewers": [
                   "human_governor"
@@ -522,10 +677,17 @@ jobs:
 
                   "approval_artifact_matching",
 
+                  "execution_scope_verification",
+
                   "execution_policy_verification",
 
                   "post_audit"
-              ]
+              ],
+
+              "governance_note": (
+                  "This file records a PR candidate. "
+                  "Actual PR creation occurs only in the gated PR creation step."
+              )
           }
 
           Path(
@@ -539,6 +701,290 @@ jobs:
               encoding="utf-8",
           )
           PY
+          
+      ############################################################
+      # Create Execution Branch and Commit
+      ############################################################
+
+      - name: Create Execution Branch and Commit
+        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        run: |
+          set +e
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_file = Path(
+              "artifacts/execution_commit_manifest.json"
+          )
+
+          result = {
+              "schema":
+                  "rga.execution_git_commit_result.v1.0",
+
+              "commit_attempted":
+                  False,
+
+              "commit_created":
+                  False,
+
+              "branch_name":
+                  "maintenance/executor-generated",
+
+              "commit_message":
+                  "[RGA Executor] Apply approved maintenance execution",
+
+              "reason":
+                  None,
+          }
+
+          if manifest_file.exists():
+              data = json.loads(
+                  manifest_file.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              result["commit_attempted"] = bool(
+                  data.get(
+                      "commit_required",
+                      False
+                  )
+              )
+
+              result["branch_name"] = data.get(
+                  "branch_name",
+                  result["branch_name"]
+              )
+
+              result["commit_message"] = data.get(
+                  "commit_message",
+                  result["commit_message"]
+              )
+
+              if not data.get("commit_required", False):
+                  result["reason"] = "Commit not required."
+
+              if data.get("policy_violations"):
+                  result["reason"] = "Commit blocked by policy violations."
+
+          else:
+              result["reason"] = "execution_commit_manifest.json not found."
+
+          Path(
+              "artifacts/execution_git_commit_result.json"
+          ).write_text(
+              json.dumps(
+                  result,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+          commit_required=$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/execution_commit_manifest.json")
+
+          if not p.exists():
+              print("false")
+          else:
+              data = json.loads(p.read_text(encoding="utf-8"))
+              if data.get("commit_required") and not data.get("policy_violations"):
+                  print("true")
+              else:
+                  print("false")
+          PY
+          )
+
+          if [ "$commit_required" != "true" ]; then
+            echo "No commit required or commit blocked by policy."
+            exit 0
+          fi
+
+          branch_name=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_commit_manifest.json").read_text(encoding="utf-8"))
+          print(data.get("branch_name", "maintenance/executor-generated"))
+          PY
+          )
+
+          commit_message=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_commit_manifest.json").read_text(encoding="utf-8"))
+          print(data.get("commit_message", "[RGA Executor] Apply approved maintenance execution"))
+          PY
+          )
+
+          git config user.name "rga-executor-bot"
+          git config user.email "rga-executor-bot@users.noreply.github.com"
+
+          git checkout -B "$branch_name"
+
+          git add tools artifacts .github/workflows docs 2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "No staged changes."
+            exit 0
+          fi
+
+          git commit -m "$commit_message"
+
+          git push --set-upstream origin "$branch_name"
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/execution_git_commit_result.json")
+          data = json.loads(p.read_text(encoding="utf-8"))
+
+          data["commit_created"] = True
+          data["reason"] = "Commit created and branch pushed."
+
+          p.write_text(
+              json.dumps(data, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Create Pull Request Candidate
+      ############################################################
+
+      - name: Create Pull Request Candidate
+        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+
+          pr_required=$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/execution_pull_request_candidate.json")
+
+          if not p.exists():
+              print("false")
+          else:
+              data = json.loads(p.read_text(encoding="utf-8"))
+              print("true" if data.get("pull_request_required") else "false")
+          PY
+          )
+
+          if [ "$pr_required" != "true" ]; then
+            echo "Pull request not required."
+            cat > artifacts/execution_pull_request_result.json <<'JSON'
+          {
+            "schema": "rga.execution_pull_request_result.v1.0",
+            "pull_request_attempted": false,
+            "pull_request_created": false,
+            "reason": "Pull request not required."
+          }
+          JSON
+            exit 0
+          fi
+
+          branch_name=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
+          print(data.get("branch_name", "maintenance/executor-generated"))
+          PY
+          )
+
+          pr_title=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
+          print(data.get("title", "[RGA Executor] Approved maintenance updates"))
+          PY
+          )
+
+          pr_body=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
+          print(data.get("body", "Generated by RGA Executor. Bot #1 post-audit remains required."))
+          PY
+          )
+
+          gh pr create \
+            --head "$branch_name" \
+            --base "${{ github.event.repository.default_branch }}" \
+            --title "$pr_title" \
+            --body "$pr_body" \
+            > artifacts/execution_pull_request_url.txt \
+            2> artifacts/execution_pull_request_stderr.txt
+
+          pr_exit=$?
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          url_file = Path("artifacts/execution_pull_request_url.txt")
+          stderr_file = Path("artifacts/execution_pull_request_stderr.txt")
+
+          payload = {
+              "schema":
+                  "rga.execution_pull_request_result.v1.0",
+
+              "pull_request_attempted":
+                  True,
+
+              "pull_request_created":
+                  url_file.exists() and bool(
+                      url_file.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).strip()
+                  ),
+
+              "pull_request_url":
+                  (
+                      url_file.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).strip()
+                      if url_file.exists()
+                      else None
+                  ),
+
+              "stderr":
+                  (
+                      stderr_file.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      )
+                      if stderr_file.exists()
+                      else None
+                  ),
+
+              "post_audit_required":
+                  True,
+          }
+
+          Path(
+              "artifacts/execution_pull_request_result.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+          exit 0          
           
       ############################################################
       # Execution Manifest
@@ -633,6 +1079,14 @@ jobs:
               "execution_commit_manifest.json",
 
               "execution_pull_request_candidate.json",
+              
+              "execution_git_commit_result.json",
+
+              "execution_pull_request_result.json",
+
+              "execution_pull_request_url.txt",
+
+              "execution_pull_request_stderr.txt",              
 
               "execution_manifest.txt",
 
@@ -696,7 +1150,11 @@ jobs:
 
                   "execution_commit_manifest",
 
-                  "execution_pull_request_candidate",                  
+                  "execution_pull_request_candidate",    
+
+                  "execution_git_commit_result",
+
+                  "execution_pull_request_result",                  
 
                   "execution_lineage",
 
