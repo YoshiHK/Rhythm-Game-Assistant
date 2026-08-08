@@ -2853,19 +2853,40 @@ jobs:
         run: |
           set +e
 
-          python tools/runtime_verifier.py \
-            --repo-root . \
-            --mcp-config .vscode/mcp.json \
-            --json-out artifacts/runtime_verifier_report.json \
-            --md-out artifacts/runtime_verifier_report.md \
+          mkdir -p artifacts
+
+          audit_mode="${{ github.event.inputs.audit_mode || 'pre_audit' }}"
+          execution_plan="${{ github.event.inputs.execution_plan || '' }}"
+          pre_audit_report="${{ github.event.inputs.pre_audit_report || '' }}"
+
+          if [ -z "${audit_mode}" ]; then
+            audit_mode="pre_audit"
+          fi
+
+          verifier_args=(
+            "tools/runtime_verifier.py"
+            "--repo-root" "."
+            "--mcp-config" ".vscode/mcp.json"
+            "--audit-mode" "${audit_mode}"
+            "--json-out" "artifacts/runtime_verifier_report.json"
+            "--md-out" "artifacts/runtime_verifier_report.md"
+          )
+
+          if [ -n "${execution_plan}" ]; then
+            verifier_args+=(
+              "--execution-plan" "${execution_plan}"
+            )
+          fi
+
+          if [ -n "${pre_audit_report}" ]; then
+            verifier_args+=(
+              "--pre-audit-report" "${pre_audit_report}"
+            )
+          fi
+
+          python "${verifier_args[@]}" \
             > artifacts/runtime_verifier_stdout.txt \
-            2> artifacts/runtime_verifier_stderr.txt \
-            --audit-mode \
-            "${{ github.event.inputs.audit_mode || 'pre_audit' }}"
-            --execution-plan \
-            "${{ github.event.inputs.execution_plan }}"
-            --pre-audit-report \
-            "${{ github.event.inputs.pre_audit_report }}"           
+            2> artifacts/runtime_verifier_stderr.txt
 
           verifier_exit_code=$?
 
@@ -2874,6 +2895,8 @@ jobs:
 
           echo "verifier_exit_code=${verifier_exit_code}" \
             >> "$GITHUB_OUTPUT"
+
+          echo "RGA Runtime Verifier exited with code: ${verifier_exit_code}"
 
           exit 0
           
