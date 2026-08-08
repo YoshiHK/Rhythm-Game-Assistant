@@ -10886,14 +10886,68 @@ class RuntimeVerifier:
 
         return report
 
-# -----------------------------------------------------------------------------
-# Output helpers
-# -----------------------------------------------------------------------------
-
 def write_markdown(
     report: Dict[str, Any],
     out_path: Path,
 ) -> None:
+
+    #
+    # ----------------------------------------------------------
+    # Defensive helpers
+    #
+    # Markdown rendering should never fail because a report
+    # contains unexpected types.
+    #
+    # Keep rendering best-effort and preserve evidence.
+    # ----------------------------------------------------------
+    #
+
+    def safe_str(
+        value: Any,
+    ) -> str:
+
+        try:
+            return str(value)
+
+        except Exception as exc:
+            return (
+                f"<string_conversion_error:{exc}>"
+            )
+
+    def safe_dict(
+        value: Any,
+    ) -> Dict[str, Any]:
+
+        if isinstance(
+            value,
+            dict,
+        ):
+            return value
+
+        return {}
+
+    def safe_json(
+        value: Any,
+    ) -> str:
+
+        try:
+            return json.dumps(
+                value,
+                indent=2,
+                ensure_ascii=False,
+                default=str,
+            )
+
+        except Exception as exc:
+
+            return json.dumps(
+                {
+                    "markdown_render_error":
+                        safe_str(exc)
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
 
     lines: List[str] = []
 
@@ -10906,33 +10960,157 @@ def write_markdown(
     lines.append(
         "# RGA Runtime Verifier Report"
     )
+
+    lines.append("")
+
+    audit_context = safe_dict(
+        report.get(
+            "audit_context",
+            {},
+        )
+    )
+
+    audit_mode = audit_context.get(
+        "audit_mode",
+        "pre_audit",
+    )
+
+    lines.append(
+        f"Audit Mode: `{safe_str(audit_mode)}`"
+    )
+
+    lines.append(
+        f"Schema: `{safe_str(report.get('schema'))}`"
+    )
+
+    lines.append(
+        f"Generated: `{safe_str(report.get('generated_at'))}`"
+    )
+
+    lines.append(
+        f"Repo root: `{safe_str(report.get('repo_root'))}`"
+    )
+
+    lines.append(
+        f"Backend root: `{safe_str(report.get('backend_root'))}`"
+    )
+
+    lines.append(
+        f"Backend root mode: "
+        f"`{safe_str(report.get('backend_root_mode'))}`"
+    )
+
+    lines.append(
+        f"API URL: `{safe_str(report.get('api_url'))}`"
+    )
+
+    lines.append("")
+
+    #
+    # ----------------------------------------------------------
+    # Audit Context
+    # ----------------------------------------------------------
+    #
+
+    lines.append(
+        "## Audit Context"
+    )
+
     lines.append("")
 
     lines.append(
-        f"Schema: `{report.get('schema')}`"
+        f"- Audit Mode: `{safe_str(audit_mode)}`"
     )
 
-    lines.append(
-        f"Generated: `{report.get('generated_at')}`"
+    execution_plan_path = (
+        audit_context.get(
+            "execution_plan_path"
+        )
     )
 
-    lines.append(
-        f"Repo root: `{report.get('repo_root')}`"
+    if execution_plan_path:
+
+        lines.append(
+            f"- Execution Plan: "
+            f"`{safe_str(execution_plan_path)}`"
+        )
+
+    pre_audit_report_path = (
+        audit_context.get(
+            "pre_audit_report_path"
+        )
     )
 
-    lines.append(
-        f"Backend root: `{report.get('backend_root')}`"
+    if pre_audit_report_path:
+
+        lines.append(
+            f"- Pre-Audit Report: "
+            f"`{safe_str(pre_audit_report_path)}`"
+        )
+
+    approval_authority = (
+        audit_context.get(
+            "approval_authority"
+        )
     )
 
-    lines.append(
-        f"Backend root mode: `{report.get('backend_root_mode')}`"
-    )
+    if approval_authority:
 
-    lines.append(
-        f"API URL: `{report.get('api_url')}`"
-    )
+        lines.append(
+            f"- Approval Authority: "
+            f"`{safe_str(approval_authority)}`"
+        )
 
     lines.append("")
+
+    bot_authority = safe_dict(
+        report.get(
+            "bot_authority",
+            {},
+        )
+    )
+
+    if bot_authority:
+
+        lines.append(
+            "### Bot #1 Authority Model"
+        )
+
+        lines.append("")
+
+        authority_pairs = [
+            ("Checker", "checker"),
+            ("Validator", "validator"),
+            ("Verifier", "verifier"),
+            ("Auditor", "auditor"),
+            ("Advisor", "advisor"),
+            (
+                "Maintainer Support",
+                "maintainer_support",
+            ),
+            ("Governor", "governor"),
+            ("Maintainer", "maintainer"),
+            (
+                "Execution Authority",
+                "execution_authority",
+            ),
+        ]
+
+        for label, key in authority_pairs:
+
+            enabled = bool(
+                bot_authority.get(
+                    key,
+                    False,
+                )
+            )
+
+            lines.append(
+                f"- {label}: "
+                f"`{'enabled' if enabled else 'disabled'}`"
+            )
+
+        lines.append("")
 
     #
     # ----------------------------------------------------------
@@ -10940,9 +11118,11 @@ def write_markdown(
     # ----------------------------------------------------------
     #
 
-    report_generation = report.get(
-        "report_generation",
-        {},
+    report_generation = safe_dict(
+        report.get(
+            "report_generation",
+            {},
+        )
     )
 
     if report_generation:
@@ -10953,7 +11133,7 @@ def write_markdown(
 
         lines.append("")
 
-        for label, value in [
+        generation_fields = [
             (
                 "JSON generated",
                 report_generation.get(
@@ -10972,11 +11152,115 @@ def write_markdown(
                     "markdown_fallback_generated"
                 ),
             ),
-        ]:
+            (
+                "JSON error",
+                report_generation.get(
+                    "json_error"
+                ),
+            ),
+            (
+                "Markdown error",
+                report_generation.get(
+                    "markdown_error"
+                ),
+            ),
+            (
+                "Verifier error",
+                report_generation.get(
+                    "verifier_error"
+                ),
+            ),
+        ]
+
+        for label, value in generation_fields:
 
             lines.append(
-                f"- {label}: `{value}`"
+                f"- {label}: "
+                f"`{safe_str(value)}`"
             )
+
+        lines.append("")
+
+    #
+    # ----------------------------------------------------------
+    # Audit Mode Details
+    # ----------------------------------------------------------
+    #
+
+    if audit_mode == "plan_audit":
+
+        plan_audit = safe_dict(
+            report.get(
+                "plan_audit",
+                {},
+            )
+        )
+
+        lines.append(
+            "## Execution Plan Audit"
+        )
+
+        lines.append("")
+
+        lines.append(
+            safe_json(
+                plan_audit
+            )
+        )
+
+        lines.append("")
+
+    elif audit_mode == "post_audit":
+
+        post_audit = safe_dict(
+            report.get(
+                "post_audit",
+                {},
+            )
+        )
+
+        lines.append(
+            "## Post Audit"
+        )
+
+        lines.append("")
+
+        lines.append(
+            safe_json(
+                post_audit
+            )
+        )
+
+        lines.append("")
+
+    elif audit_mode == "pre_audit":
+
+        pre_audit = safe_dict(
+            report.get(
+                "pre_audit",
+                {},
+            )
+        )
+
+        description = (
+            pre_audit.get(
+                "description"
+            )
+            or
+            "Current repository, runtime, artifact, and governance state was audited."
+        )
+
+        lines.append(
+            "## Pre-Audit"
+        )
+
+        lines.append("")
+
+        lines.append(
+            safe_str(
+                description
+            )
+        )
 
         lines.append("")
 
@@ -11116,6 +11400,296 @@ def write_markdown(
             )
 
         lines.append("")
+        
+    #
+    # ----------------------------------------------------------
+    # Audit Context
+    # ----------------------------------------------------------
+    #
+
+    audit_context = report.get(
+        "audit_context",
+        {},
+    )
+
+    audit_mode = audit_context.get(
+        "audit_mode",
+        "pre_audit",
+    )
+
+    lines.append(
+        "## Audit Context"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"- Audit Mode: `{audit_mode}`"
+    )
+
+    execution_plan_path = audit_context.get(
+        "execution_plan_path",
+    )
+
+    if execution_plan_path:
+
+        lines.append(
+            f"- Execution Plan: "
+            f"`{execution_plan_path}`"
+        )
+
+    pre_audit_report_path = audit_context.get(
+        "pre_audit_report_path",
+    )
+
+    if pre_audit_report_path:
+
+        lines.append(
+            f"- Pre-Audit Report: "
+            f"`{pre_audit_report_path}`"
+        )
+
+    approval_authority = audit_context.get(
+        "approval_authority",
+    )
+
+    if approval_authority:
+
+        lines.append(
+            f"- Approval Authority: "
+            f"`{approval_authority}`"
+        )
+
+    lines.append("")
+
+    bot_authority = report.get(
+        "bot_authority",
+        {},
+    )
+
+    if bot_authority:
+
+        lines.append(
+            "### Bot #1 Authority Model"
+        )
+
+        lines.append("")
+
+        authority_pairs = [
+            ("Checker", "checker"),
+            ("Validator", "validator"),
+            ("Verifier", "verifier"),
+            ("Auditor", "auditor"),
+            ("Advisor", "advisor"),
+            (
+                "Maintainer Support",
+                "maintainer_support",
+            ),
+            ("Governor", "governor"),
+            ("Maintainer", "maintainer"),
+        ]
+
+        for label, key in authority_pairs:
+
+            enabled = bool(
+                bot_authority.get(
+                    key,
+                    False,
+                )
+            )
+
+            lines.append(
+                f"- {label}: "
+                f"`{'enabled' if enabled else 'disabled'}`"
+            )
+
+        lines.append("")
+        
+    if audit_mode == "plan_audit":
+
+        plan_audit = report.get(
+            "plan_audit",
+            {},
+        )
+
+        lines.append(
+            "### Execution Plan Audit"
+        )
+
+        lines.append("")
+
+        lines.append(
+            f"- Verdict: "
+            f"`{plan_audit.get('verdict')}`"
+        )
+
+        lines.append(
+            f"- Plan Loaded: "
+            f"`{plan_audit.get('plan_loaded')}`"
+        )
+
+        lines.append(
+            f"- Rollback Declared: "
+            f"`{plan_audit.get('rollback_declared')}`"
+        )
+
+        lines.append(
+            f"- Proposed Changes: "
+            f"`{plan_audit.get('proposed_change_count')}`"
+        )
+
+        lines.append("")
+
+        issues = plan_audit.get(
+            "issues",
+            [],
+        )
+
+        if issues:
+
+            lines.append(
+                "#### Issues"
+            )
+
+            lines.append("")
+
+            for item in issues:
+
+                lines.append(
+                    f"- {item}"
+                )
+
+            lines.append("")
+
+        violations = plan_audit.get(
+            "forbidden_scope_violations",
+            [],
+        )
+
+        if violations:
+
+            lines.append(
+                "#### Policy Violations"
+            )
+
+            lines.append("")
+
+            for item in violations:
+
+                lines.append(
+                    f"- {item}"
+                )
+
+            lines.append("")
+            
+    elif audit_mode == "post_audit":
+
+        post_audit = report.get(
+            "post_audit",
+            {},
+        )
+
+        lines.append(
+            "### Post Audit"
+        )
+
+        lines.append("")
+
+        lines.append(
+            f"- Verdict: "
+            f"`{post_audit.get('verdict')}`"
+        )
+
+        lines.append(
+            f"- Pre-Audit Loaded: "
+            f"`{post_audit.get('pre_audit_report_loaded')}`"
+        )
+
+        lines.append(
+            f"- Execution Plan Loaded: "
+            f"`{post_audit.get('execution_plan_loaded')}`"
+        )
+
+        lines.append(
+            f"- Deletion Policy OK: "
+            f"`{post_audit.get('deletion_policy_ok')}`"
+        )
+
+        lines.append("")
+
+        changed_verdicts = post_audit.get(
+            "changed_verdicts",
+            {},
+        )
+
+        if changed_verdicts:
+
+            lines.append(
+                "#### Verdict Changes"
+            )
+
+            lines.append("")
+
+            for (
+                verdict_name,
+                change,
+            ) in changed_verdicts.items():
+
+                lines.append(
+                    "- "
+                    f"**{verdict_name}**: "
+                    f"`{change.get('before')}` "
+                    f"→ "
+                    f"`{change.get('after')}`"
+                )
+
+            lines.append("")
+
+        issues = post_audit.get(
+            "issues",
+            [],
+        )
+
+        if issues:
+
+            lines.append(
+                "#### Post-Audit Notes"
+            )
+
+            lines.append("")
+
+            for item in issues:
+
+                lines.append(
+                    f"- {item}"
+                )
+
+            lines.append("")
+            
+    elif audit_mode == "pre_audit":
+
+        pre_audit = report.get(
+            "pre_audit",
+            {},
+        )
+
+        description = pre_audit.get(
+            "description",
+        )
+
+        if description:
+
+            lines.append(
+                "### Pre-Audit"
+            )
+
+            lines.append("")
+
+            lines.append(
+                description
+            )
+
+            lines.append("")
 
     #
     # ----------------------------------------------------------
@@ -11897,6 +12471,61 @@ def main() -> int:
 
     #
     # ----------------------------------------------------------
+    # Audit modes
+    #
+    # Bot #1 authority model:
+    #
+    #   pre_audit
+    #       inspect current state
+    #
+    #   plan_audit
+    #       evaluate Bot #2 proposed execution plan
+    #
+    #   post_audit
+    #       evaluate current state after a proposed or applied
+    #       execution, optionally comparing to a pre-audit report
+    #
+    # Bot #1 remains read-only.
+    # Bot #1 does not approve, merge, mutate, or govern.
+    # ----------------------------------------------------------
+    #
+
+    parser.add_argument(
+        "--audit-mode",
+        choices=[
+            "pre_audit",
+            "plan_audit",
+            "post_audit",
+        ],
+        default="pre_audit",
+        help=(
+            "Bot #1 audit mode. "
+            "pre_audit inspects current state. "
+            "plan_audit evaluates a Bot #2 execution plan. "
+            "post_audit evaluates state after execution."
+        ),
+    )
+
+    parser.add_argument(
+        "--execution-plan",
+        default=None,
+        help=(
+            "Optional path to Bot #2 execution plan JSON. "
+            "Recommended for plan_audit and post_audit."
+        ),
+    )
+
+    parser.add_argument(
+        "--pre-audit-report",
+        default=None,
+        help=(
+            "Optional path to previous Bot #1 pre-audit report JSON. "
+            "Used by post_audit for comparison."
+        ),
+    )
+
+    #
+    # ----------------------------------------------------------
     # Explicit artifact DB overrides
     #
     # Repository discovery remains preferred.
@@ -12024,21 +12653,568 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    json_out = (
-        Path(
-            args.json_out
-        )
-        if args.json_out
-        else None
+    def optional_path(value: Optional[str]) -> Optionalif value is None:
+            return None
+
+        value_text = str(value).strip()
+
+        if not value_text:
+            return None
+
+        return Path(
+            value_text
+        ).expanduser()
+
+    json_out = optional_path(
+        args.json_out
     )
 
-    md_out = (
-        Path(
-            args.md_out
-        )
-        if args.md_out
-        else None
+    md_out = optional_path(
+        args.md_out
     )
+
+    execution_plan_path = optional_path(
+        args.execution_plan
+    )
+
+    pre_audit_report_path = optional_path(
+        args.pre_audit_report
+    )
+
+    #
+    # ----------------------------------------------------------
+    # Local helpers
+    # ----------------------------------------------------------
+    #
+
+    def read_json_optional(
+        path: Optional[Path],
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        if path is None:
+            return None, None
+
+        try:
+            data = json.loads(
+                path.read_text(
+                    encoding="utf-8",
+                )
+            )
+
+            if isinstance(
+                data,
+                dict,
+            ):
+                return data, None
+
+            return None, (
+                f"JSON file does not contain an object: {path}"
+            )
+
+        except Exception as exc:
+            return None, str(
+                exc
+            )
+
+    def append_cli_result(
+        report: Dict[str, Any],
+        *,
+        domain: str,
+        check: str,
+        status: str,
+        severity: str,
+        summary: str,
+        evidence: Dict[str, Any],
+        suggested_fix: Optional[str] = None,
+        governance_domain: Optional[str] = None,
+        contract_type: Optional[str] = None,
+    ) -> None:
+        results = report.setdefault(
+            "results",
+            [],
+        )
+
+        results.append(
+            {
+                "domain":
+                    domain,
+
+                "check":
+                    check,
+
+                "status":
+                    status,
+
+                "severity":
+                    severity,
+
+                "summary":
+                    summary,
+
+                "evidence":
+                    evidence,
+
+                "suggested_fix":
+                    suggested_fix,
+
+                "governance_domain":
+                    governance_domain,
+
+                "contract_type":
+                    contract_type,
+            }
+        )
+
+    def recalculate_report_counts(
+        report: Dict[str, Any],
+    ) -> None:
+        counts: Dict[str, int] = {}
+        severities: Dict[str, int] = {}
+
+        for result in report.get(
+            "results",
+            [],
+        ):
+            status = result.get(
+                "status",
+                "unknown",
+            )
+
+            severity = result.get(
+                "severity",
+                "unknown",
+            )
+
+            counts[status] = (
+                counts.get(
+                    status,
+                    0,
+                )
+                + 1
+            )
+
+            severities[severity] = (
+                severities.get(
+                    severity,
+                    0,
+                )
+                + 1
+            )
+
+        report["summary"] = counts
+        report["severity_summary"] = severities
+        report["result_count"] = len(
+            report.get(
+                "results",
+                [],
+            )
+        )
+
+    def evaluate_execution_plan(
+        plan: Optional[Dict[str, Any]],
+        plan_error: Optional[str],
+    ) -> Dict[str, Any]:
+        forbidden_tokens = [
+            "canonical_row",
+            "tips generation",
+            "tips_generation",
+            "personalization",
+            "localization",
+            "recommendation logic",
+            "recommendation_logic",
+            "source_asset_deletion",
+            "delete source",
+            "database mutation",
+            "db mutation",
+        ]
+
+        issues: List[str] = []
+        policy_violations: List[str] = []
+
+        if plan_error:
+            issues.append(
+                f"Execution plan could not be loaded: {plan_error}"
+            )
+
+        if plan is None:
+            return {
+                "audit_mode":
+                    "plan_audit",
+
+                "plan_loaded":
+                    False,
+
+                "verdict":
+                    "needs_revision",
+
+                "issues":
+                    issues
+                    or [
+                        "No execution plan was provided."
+                    ],
+
+                "policy_violations":
+                    policy_violations,
+
+                "authority_note":
+                    "Bot #1 does not approve or execute plans.",
+            }
+
+        proposed_changes = plan.get(
+            "proposed_changes",
+            [],
+        )
+
+        target_root_failures = plan.get(
+            "target_root_failures",
+            [],
+        )
+
+        forbidden_declared_absent = plan.get(
+            "forbidden_changes_declared_absent",
+            {},
+        )
+
+        rollback = plan.get(
+            "rollback",
+            {},
+        )
+
+        verification_steps = plan.get(
+            "verification_steps",
+            [],
+        )
+
+        plan_text = json.dumps(
+            plan,
+            ensure_ascii=False,
+        ).lower()
+
+        for token in forbidden_tokens:
+            if token.lower() in plan_text:
+                #
+                # If the token appears only as a declared-absent field,
+                # do not automatically reject. The declared-absent block
+                # is expected to mention forbidden scopes.
+                #
+                declared_safe = False
+
+                for key, value in (
+                    forbidden_declared_absent.items()
+                    if isinstance(
+                        forbidden_declared_absent,
+                        dict,
+                    )
+                    else []
+                ):
+                    if (
+                        token.replace(
+                            " ",
+                            "_",
+                        )
+                        in str(
+                            key
+                        ).lower()
+                        and value is True
+                    ):
+                        declared_safe = True
+                        break
+
+                if not declared_safe:
+                    policy_violations.append(
+                        f"Potential forbidden scope reference: {token}"
+                    )
+
+        if not target_root_failures:
+            issues.append(
+                "Execution plan does not declare target_root_failures."
+            )
+
+        if not proposed_changes:
+            issues.append(
+                "Execution plan does not declare proposed_changes."
+            )
+
+        if not rollback or not rollback.get(
+            "available",
+            False,
+        ):
+            issues.append(
+                "Execution plan does not declare an available rollback path."
+            )
+
+        if not verification_steps:
+            issues.append(
+                "Execution plan does not declare verification_steps."
+            )
+
+        if policy_violations:
+            verdict = "rejected_by_policy"
+            severity = "critical"
+            status = "fail"
+
+        elif issues:
+            verdict = "needs_revision"
+            severity = "warning"
+            status = "warning"
+
+        else:
+            verdict = "approved_for_human_review"
+            severity = "info"
+            status = "pass"
+
+        return {
+            "audit_mode":
+                "plan_audit",
+
+            "plan_loaded":
+                True,
+
+            "schema":
+                plan.get(
+                    "schema"
+                ),
+
+            "target_root_failures":
+                target_root_failures,
+
+            "proposed_change_count":
+                len(
+                    proposed_changes
+                )
+                if isinstance(
+                    proposed_changes,
+                    list,
+                )
+                else 0,
+
+            "forbidden_scope_violations":
+                policy_violations,
+
+            "issues":
+                issues,
+
+            "rollback_declared":
+                bool(
+                    rollback
+                    and rollback.get(
+                        "available",
+                        False,
+                    )
+                ),
+
+            "verification_step_count":
+                len(
+                    verification_steps
+                )
+                if isinstance(
+                    verification_steps,
+                    list,
+                )
+                else 0,
+
+            "verdict":
+                verdict,
+
+            "status":
+                status,
+
+            "severity":
+                severity,
+
+            "authority_note":
+                "Bot #1 may evaluate plans but must not approve, execute, merge, or mutate.",
+        }
+
+    def evaluate_post_audit(
+        report: Dict[str, Any],
+        pre_report: Optional[Dict[str, Any]],
+        pre_report_error: Optional[str],
+        plan: Optional[Dict[str, Any]],
+        plan_error: Optional[str],
+    ) -> Dict[str, Any]:
+        current_governance = report.get(
+            "governance",
+            {},
+        )
+
+        previous_governance = (
+            pre_report.get(
+                "governance",
+                {},
+            )
+            if pre_report
+            else {}
+        )
+
+        current_verdicts = {
+            "governance_verdict":
+                current_governance.get(
+                    "governance_verdict"
+                ),
+
+            "architecture_verdict":
+                current_governance.get(
+                    "architecture_verdict"
+                ),
+
+            "runtime_verdict":
+                current_governance.get(
+                    "runtime_verdict"
+                ),
+
+            "artifact_backbone_verdict":
+                current_governance.get(
+                    "artifact_backbone_verdict"
+                ),
+
+            "deletion_verdict":
+                current_governance.get(
+                    "deletion_verdict"
+                ),
+        }
+
+        previous_verdicts = {
+            "governance_verdict":
+                previous_governance.get(
+                    "governance_verdict"
+                ),
+
+            "architecture_verdict":
+                previous_governance.get(
+                    "architecture_verdict"
+                ),
+
+            "runtime_verdict":
+                previous_governance.get(
+                    "runtime_verdict"
+                ),
+
+            "artifact_backbone_verdict":
+                previous_governance.get(
+                    "artifact_backbone_verdict"
+                ),
+
+            "deletion_verdict":
+                previous_governance.get(
+                    "deletion_verdict"
+                ),
+        }
+
+        changed_verdicts = {
+            key: {
+                "before":
+                    previous_verdicts.get(
+                        key
+                    ),
+
+                "after":
+                    current_verdicts.get(
+                        key
+                    ),
+            }
+            for key in current_verdicts
+            if previous_verdicts.get(
+                key
+            )
+            != current_verdicts.get(
+                key
+            )
+        }
+
+        issues: List[str] = []
+
+        if pre_report_error:
+            issues.append(
+                f"Pre-audit report could not be loaded: {pre_report_error}"
+            )
+
+        if pre_report is None:
+            issues.append(
+                "No pre-audit report was provided for comparison."
+            )
+
+        if plan_error:
+            issues.append(
+                f"Execution plan could not be loaded: {plan_error}"
+            )
+
+        deletion_verdict = current_governance.get(
+            "deletion_verdict"
+        )
+
+        deletion_policy_ok = (
+            deletion_verdict != "ready"
+            or current_governance.get(
+                "governance_verdict"
+            )
+            == "ready"
+        )
+
+        if deletion_policy_ok:
+            verdict = (
+                "post_audit_complete"
+                if not issues
+                else "post_audit_complete_with_limitations"
+            )
+
+            status = (
+                "pass"
+                if not issues
+                else "warning"
+            )
+
+            severity = (
+                "info"
+                if not issues
+                else "warning"
+            )
+
+        else:
+            verdict = "rejected_by_policy"
+            status = "fail"
+            severity = "critical"
+
+            issues.append(
+                "Deletion verdict is ready while overall governance is not ready."
+            )
+
+        return {
+            "audit_mode":
+                "post_audit",
+
+            "pre_audit_report_loaded":
+                pre_report is not None,
+
+            "execution_plan_loaded":
+                plan is not None,
+
+            "current_verdicts":
+                current_verdicts,
+
+            "previous_verdicts":
+                previous_verdicts,
+
+            "changed_verdicts":
+                changed_verdicts,
+
+            "issues":
+                issues,
+
+            "deletion_policy_ok":
+                deletion_policy_ok,
+
+            "verdict":
+                verdict,
+
+            "status":
+                status,
+
+            "severity":
+                severity,
+
+            "authority_note":
+                "Bot #1 post-audit verifies outcome only and does not approve or mutate.",
+        }
 
     #
     # ----------------------------------------------------------
@@ -12189,7 +13365,7 @@ def main() -> int:
                     timezone.utc
                 )
                 .replace(
-                    microsecond=0
+                    microsecond=0,
                 )
                 .isoformat(),
 
@@ -12299,6 +13475,183 @@ def main() -> int:
                 }
             ],
         }
+
+    #
+    # ----------------------------------------------------------
+    # Attach audit context
+    # ----------------------------------------------------------
+    #
+
+    report.setdefault(
+        "bot_authority",
+        {}
+    )
+
+    report["bot_authority"].update(
+        {
+            "bot":
+                "rga_backend_bot_1",
+
+            "role":
+                "pre_audit_plan_audit_post_audit",
+
+            "checker":
+                True,
+
+            "validator":
+                True,
+
+            "verifier":
+                True,
+
+            "auditor":
+                True,
+
+            "advisor":
+                True,
+
+            "maintainer_support":
+                True,
+
+            "governor":
+                False,
+
+            "maintainer":
+                False,
+
+            "execution_authority":
+                False,
+        }
+    )
+
+    report.setdefault(
+        "audit_context",
+        {}
+    )
+
+    report["audit_context"].update(
+        {
+            "audit_mode":
+                args.audit_mode,
+
+            "execution_plan_path":
+                str(
+                    execution_plan_path
+                )
+                if execution_plan_path
+                else None,
+
+            "pre_audit_report_path":
+                str(
+                    pre_audit_report_path
+                )
+                if pre_audit_report_path
+                else None,
+
+            "approval_authority":
+                "human",
+
+            "bot_1_may_execute":
+                False,
+
+            "bot_1_may_approve":
+                False,
+        }
+    )
+
+    execution_plan, execution_plan_error = read_json_optional(
+        execution_plan_path
+    )
+
+    pre_audit_report, pre_audit_report_error = read_json_optional(
+        pre_audit_report_path
+    )
+
+    #
+    # ----------------------------------------------------------
+    # Audit mode evaluation
+    # ----------------------------------------------------------
+    #
+
+    if args.audit_mode == "plan_audit":
+        plan_audit = evaluate_execution_plan(
+            execution_plan,
+            execution_plan_error,
+        )
+
+        report["plan_audit"] = plan_audit
+
+        append_cli_result(
+            report,
+            domain="bot_1_plan_audit",
+            check="execution_plan_policy_review",
+            status=plan_audit["status"],
+            severity=plan_audit["severity"],
+            summary=(
+                "Bot #1 evaluated the Bot #2 execution plan."
+            ),
+            evidence=plan_audit,
+            suggested_fix=(
+                "Revise the execution plan before requesting human approval."
+                if plan_audit["verdict"]
+                in {
+                    "needs_revision",
+                    "rejected_by_policy",
+                }
+                else None
+            ),
+            governance_domain="execution_plan_governance",
+            contract_type="execution_plan_audit",
+        )
+
+    elif args.audit_mode == "post_audit":
+        post_audit = evaluate_post_audit(
+            report,
+            pre_audit_report,
+            pre_audit_report_error,
+            execution_plan,
+            execution_plan_error,
+        )
+
+        report["post_audit"] = post_audit
+
+        append_cli_result(
+            report,
+            domain="bot_1_post_audit",
+            check="post_execution_verification",
+            status=post_audit["status"],
+            severity=post_audit["severity"],
+            summary=(
+                "Bot #1 evaluated the current state after proposed or applied execution."
+            ),
+            evidence=post_audit,
+            suggested_fix=(
+                "Review post-audit limitations before approving or continuing execution."
+                if post_audit["status"] != "pass"
+                else None
+            ),
+            governance_domain="post_execution_governance",
+            contract_type="post_audit",
+        )
+
+    else:
+        report["pre_audit"] = {
+            "audit_mode":
+                "pre_audit",
+
+            "description":
+                "Current repository, runtime, artifact, and governance state was audited.",
+
+            "bot_1_may_execute":
+                False,
+
+            "bot_1_may_approve":
+                False,
+        }
+
+    recalculate_report_counts(
+        report
+    )
 
     #
     # ----------------------------------------------------------
