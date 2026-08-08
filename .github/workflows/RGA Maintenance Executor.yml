@@ -71,6 +71,43 @@ jobs:
             "reason": "$REASON"
           }
           JSON
+
+      ############################################################
+      # Human Approval Artifact Verification
+      ############################################################
+
+      - name: Human Approval Artifact Verification
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('artifacts/human_execution_approval.json')
+
+          payload = {
+              'schema':'rga.approval_verification.v1.0',
+              'artifact_present': p.exists()
+          }
+
+          Path('artifacts/approval_verification.json').write_text(
+              json.dumps(payload, indent=2),
+              encoding='utf-8'
+          )
+          PY
+          
+      ############################################################
+      # Run Runtime Executor
+      ############################################################
+
+      - name: Run Runtime Executor
+        continue-on-error: true
+        run: |
+          python -u tools/runtime_executor.py \
+            --mode "${{ github.event.inputs.executor_mode }}" \
+            --verifier-report artifacts/runtime_verifier_report.json \
+            --json-out artifacts/apply_execution_result.json \
+            > artifacts/runtime_executor_stdout.txt 2> artifacts/runtime_executor_stderr.txt || true          
           
       ############################################################
       # Execution Plan Fingerprint
@@ -116,31 +153,7 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY
-
-      ############################################################
-      # Human Approval Artifact Verification
-      ############################################################
-
-      - name: Human Approval Artifact Verification
-        if: always()
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          p = Path('artifacts/human_execution_approval.json')
-
-          payload = {
-              'schema':'rga.approval_verification.v1.0',
-              'artifact_present': p.exists()
-          }
-
-          Path('artifacts/approval_verification.json').write_text(
-              json.dumps(payload, indent=2),
-              encoding='utf-8'
-          )
-          PY
+          PY          
           
       ############################################################
       # Approval Artifact Matching
@@ -274,18 +287,6 @@ jobs:
           }
           JSON
           
-      ############################################################
-      # Run Runtime Executor
-      ############################################################
-
-      - name: Run Runtime Executor
-        continue-on-error: true
-        run: |
-          python -u tools/runtime_executor.py \
-            --mode "${{ github.event.inputs.executor_mode }}" \
-            --verifier-report artifacts/runtime_verifier_report.json \
-            --json-out artifacts/apply_execution_result.json \
-            > artifacts/runtime_executor_stdout.txt 2> artifacts/runtime_executor_stderr.txt || true
 
       ############################################################
       # Apply Execution Result
