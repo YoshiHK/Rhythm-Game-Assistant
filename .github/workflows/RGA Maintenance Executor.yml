@@ -207,44 +207,44 @@ jobs:
           mkdir -p artifacts
 
           python <<'PY'
-import hashlib
-import json
-from pathlib import Path
+          import hashlib
+          import json
+          from pathlib import Path
 
-plan_path = Path(
-    "artifacts/execution_plan.json"
-)
+          plan_path = Path(
+              "artifacts/execution_plan.json"
+          )
 
-fingerprint = None
+          fingerprint = None
 
-if plan_path.exists() and plan_path.is_file():
-    fingerprint = hashlib.sha256(
-        plan_path.read_bytes()
-    ).hexdigest()
+          if plan_path.exists() and plan_path.is_file():
+              fingerprint = hashlib.sha256(
+                  plan_path.read_bytes()
+              ).hexdigest()
 
-payload = {
-    "schema":
-        "rga.execution_plan_fingerprint.v1.0",
+          payload = {
+              "schema":
+                  "rga.execution_plan_fingerprint.v1.0",
 
-    "execution_plan_present":
-        plan_path.exists()
-        and plan_path.is_file(),
+              "execution_plan_present":
+                  plan_path.exists()
+                  and plan_path.is_file(),
 
-    "sha256":
-        fingerprint,
-}
+             "sha256":
+                  fingerprint,
+          }
 
-Path(
-    "artifacts/execution_plan_fingerprint.json"
-).write_text(
-    json.dumps(
-        payload,
-        indent=2,
-        ensure_ascii=False,
-    ),
-    encoding="utf-8",
-)
-PY
+          Path(
+              "artifacts/execution_plan_fingerprint.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
           
       ############################################################
       # Approval Artifact Matching
