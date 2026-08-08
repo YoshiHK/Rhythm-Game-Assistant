@@ -55,7 +55,7 @@ inputs:
 
   execution_approval:
     description: Required approval phrase for execute stage.
-    required: false
+    required: true
     default: ""
 
 runs:
