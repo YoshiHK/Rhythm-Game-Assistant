@@ -6,7 +6,7 @@ Schema: rga.maintenance.workflow.v1.0
 
 Defines the governance and execution workflow between:
 
-- RGA Verifier Bot #1 (Auditing and Suggesting Fixes)
+- RGA Verifier Bot #1 (Auditing and Recommending Fixes)
 - RGA Executor Bot #2 (Maintenance Executor)
 - Human Governor / Maintainer
 
