@@ -4,6 +4,26 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      audit_mode:
+        description: "Bot #1 audit mode"
+        required: false
+        default: "pre_audit"
+        type: choice
+        options:
+          - pre_audit
+          - plan_audit
+          - post_audit
+
+      execution_plan:
+        description: "Optional Bot #2 execution plan JSON path"
+        required: false
+        default: ""
+
+      pre_audit_report:
+        description: "Optional Bot #1 pre-audit report JSON path"
+        required: false
+        default: ""
 
 jobs:
   runtime-verification:
@@ -22,7 +42,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
+          
       ############################################################
       # Artifact Directory
       ############################################################
@@ -32,6 +52,34 @@ jobs:
           mkdir -p artifacts
 
       ############################################################
+      # Install Runtime Dependencies
+      ############################################################
+
+      - name: Install Runtime Dependencies
+        run: |
+          mkdir -p artifacts
+
+          python -m pip install --upgrade pip \
+            > artifacts/pip_upgrade_stdout.txt \
+            2> artifacts/pip_upgrade_stderr.txt
+
+          python -m pip install \
+            fastapi==0.115.0 \
+            "uvicorn[standard]==0.30.6" \
+            pydantic==2.8.2 \
+            openpyxl==3.1.5 \
+            > artifacts/runtime_dependency_install_stdout.txt \
+            2> artifacts/runtime_dependency_install_stderr.txt
+
+          python -c "
+          import fastapi
+          import uvicorn
+          import pydantic
+          import openpyxl
+          print('Runtime dependencies OK')
+          " > artifacts/runtime_dependency_import_check.txt
+
+      ############################################################
       # Evidence Taxonomy
       ############################################################
 
@@ -39,25 +87,87 @@ jobs:
         run: |
           cat > artifacts/evidence_taxonomy.json <<'JSON'
           {
-            "schema": "rga.evidence.taxonomy.v1.0",
+            "schema": "rga.evidence.taxonomy.v1.2",
+
             "mode": "read_only",
+
+            "bot_identity": {
+              "name": "RGA Backend Bot #1",
+              "role": "pre_audit_plan_audit_post_audit",
+              "execution_authority": false,
+              "approval_authority": false
+            },
+
             "bot_role": {
               "checker": true,
               "validator": true,
               "verifier": true,
               "auditor": true,
               "advisor": true,
-
               "maintainer_support": true,
-              
+
+              "plan_auditor": true,
+              "post_execution_auditor": true,
+
               "governor": false,
-              "maintainer": false
+              "maintainer": false,
+              "executor": false
             },
+
+            "audit_modes": {
+              "pre_audit": {
+                "description": "Bot #1 inspects current repository, runtime, artifact, and governance state.",
+                "may_execute": false,
+                "may_approve": false
+              },
+
+              "plan_audit": {
+                "description": "Bot #1 evaluates Bot #2's proposed execution plan before human approval.",
+                "requires_execution_plan": true,
+                "may_execute": false,
+                "may_approve": false
+              },
+
+              "post_audit": {
+                "description": "Bot #1 evaluates repository state after proposed or applied execution.",
+                "requires_pre_audit_report": false,
+                "requires_execution_plan": false,
+                "may_execute": false,
+                "may_approve": false
+              }
+            },
+
+            "double_sideway_verification": {
+              "enabled": true,
+
+              "sequence": [
+                "bot_1_pre_audit",
+                "bot_2_propose_execution_plan",
+                "bot_1_plan_audit",
+                "human_approval",
+                "bot_2_apply_execution",
+                "bot_1_post_audit"
+              ],
+
+              "separation_of_duties": {
+                "bot_1_verifies": true,
+                "bot_1_executes": false,
+                "bot_1_approves": false,
+
+                "bot_2_proposes": true,
+                "bot_2_executes_only_after_human_approval": true,
+                "bot_2_self_approves": false,
+
+                "human_approval_required": true
+              }
+            },
+
             "classification": {
               "repository_reality": {
                 "description": "Files, folders, package roots, and discovered repository surfaces.",
                 "governance_blocking": true
               },
+
               "dependency_reality": {
                 "description": "Python/package dependency availability and import prerequisites.",
                 "governance_blocking": false,
@@ -66,6 +176,7 @@ jobs:
                   "flow_verification"
                 ]
               },
+
               "import_reality": {
                 "description": "Whether Python modules import successfully in the current runtime context.",
                 "governance_blocking": false,
@@ -73,18 +184,24 @@ jobs:
                   "runtime_verdict"
                 ]
               },
+
               "runtime_reality": {
                 "description": "Runtime availability and operational surface evidence.",
                 "governance_blocking": false
               },
+
               "artifact_backbone": {
                 "description": "file_scan_inventory.db -> chart_assets.db -> chart_patterns.db backbone.",
+                "root_contract": "artifact_database_policy",
                 "governance_blocking": true
               },
+
               "deletion_governance": {
                 "description": "Deletion readiness and source asset retention gates.",
+                "root_contract": "deletion_readiness",
                 "governance_blocking": true
               },
+
               "layer_boundary": {
                 "description": "Layer responsibility separation evidence.",
                 "confidence_model": [
@@ -96,44 +213,99 @@ jobs:
                   "evidence"
                 ]
               },
+
               "root_failure": {
                 "description": "Independently actionable governance blocker.",
                 "render_before": [
                   "derived_failure"
                 ]
               },
+
               "derived_failure": {
                 "description": "Downstream consequence of an upstream root contract failure.",
                 "revalidate_after_root_resolution": true
+              },
+
+              "runtime_limited": {
+                "description": "Evidence collection was restricted by dependency, import, or runtime constraints.",
+                "governance_blocking": false,
+                "requires_revalidation": true
+              },
+
+              "review_needed": {
+                "description": "Human review recommended. No governance blocker confirmed.",
+                "governance_blocking": false
               }
             },
-            "runtime_limited": {
-              "description":
-                "Evidence collection was restricted by dependency, import, or runtime constraints.",
-              "governance_blocking": false,
-              "requires_revalidation": true
+
+            "artifact_backbone_chain": [
+              "file_scan_inventory.db",
+              "chart_assets.db",
+              "chart_patterns.db"
+            ],
+
+            "root_contracts": [
+              "artifact_database_policy",
+              "deletion_readiness"
+            ],
+
+            "derived_contracts": {
+              "artifact_relationships": "artifact_database_policy",
+              "artifact_backbone_contract": "artifact_database_policy",
+              "asset_coverage": "artifact_database_policy",
+              "hash_integrity": "artifact_database_policy",
+              "type_A_usability": "artifact_database_policy",
+              "runtime_artifact_readiness": "artifact_database_policy"
             },
-            "review_needed": {
-              "description":
-                "Human review recommended. No governance blocker confirmed.",
-              "governance_blocking": false
+
+            "protected_completed_phases": {
+              "phase_1_2_chart_understanding_and_tips": "immutable",
+              "phase_3_canonical_ingestion": "immutable",
+              "phase_4_personalization": "immutable",
+              "phase_4_5_localization": "immutable",
+              "phase_5_7_recommendation_stack": "immutable"
             },
+
+            "forbidden_bot_1_actions": [
+              "approve_execution",
+              "apply_execution",
+              "merge_changes",
+              "delete_source_assets",
+              "mutate_artifact_databases",
+              "modify_canonical_row",
+              "modify_tips_generation",
+              "modify_personalization",
+              "modify_localization",
+              "modify_recommendation_logic"
+            ],
+
             "governance_principles": {
               "completed_phases": "immutable",
               "verifier_mode": "read_only",
+              "maintenance_mode": "advisor_only",
+
               "dependency_failures_are_not_governance_failures": true,
+              "runtime_limited_is_not_governance_blocked": true,
+              "runtime_blockers_are_not_governance_blockers": true,
+
+              "repository_reality_is_not_runtime_reality": true,
+              "repository_reality_is_not_import_reality": true,
+              "import_reality_is_not_runtime_reality": true,
+
+              "root_failures_take_priority": true,
               "root_failures_should_be_resolved_first": true,
               "derived_failures_should_be_revalidated_after_root_resolution": true,
-              "false_positive_isolation": true,
-              "runtime_limited_is_not_governance_blocked": true,
-              "root_failures_take_priority": true,
+
               "impact_scope_is_advisory_only": true,
               "lineage_does_not_imply_remediation": true,
-              "repository_reality_is_not_runtime_reality": true,
-              "import_reality_is_not_runtime_reality": true,
-              "runtime_blockers_are_not_governance_blockers": true,
+              "false_positive_isolation": true,
+
               "artifact_backbone_is_root_contract": true,
-              "maintenance_mode": "advisor_only"
+              "deletion_readiness_is_root_contract": true,
+
+              "bot_1_plan_audit_does_not_equal_approval": true,
+              "bot_1_post_audit_does_not_equal_approval": true,
+              "human_approval_required_before_execution": true
             }
           }
           JSON
@@ -627,29 +799,6 @@ jobs:
                   ensure_ascii=False,
               )
           PY
-          
-      ############################################################
-      # Setup Python
-      ############################################################
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      ############################################################
-      # Install Runtime Dependencies
-      ############################################################
-
-      - name: Install Runtime Dependencies
-        run: |
-          python -m pip install --upgrade pip
-
-          python -m pip install \
-            fastapi==0.115.0 \
-            "uvicorn[standard]==0.30.6" \
-            pydantic==2.8.2 \
-            openpyxl==3.1.5
           
       ############################################################
       # Dependency Reality Evidence
@@ -2678,7 +2827,188 @@ jobs:
             }
           }
           JSON
+          
+      ############################################################
+      # Execution Plan Contract
+      ############################################################
 
+      - name: Execution Plan Contract
+        run: |
+          cat > artifacts/execution_plan_contract.json <<'JSON'
+          {
+            "schema": "rga.execution_plan_contract.v1.0",
+
+            "bot_1_role": {
+              "pre_audit": true,
+              "plan_audit": true,
+              "post_audit": true,
+
+              "approve_execution": false,
+              "apply_execution": false
+            },
+
+            "bot_2_role": {
+              "plan_generation": true,
+              "execution_candidate": true,
+
+              "self_approval": false
+            },
+
+            "human_role": {
+              "approval_required": true
+            },
+
+            "required_plan_fields": [
+              "schema",
+              "target_root_failures",
+              "proposed_changes",
+              "verification_steps",
+              "rollback"
+            ]
+          }
+          JSON
+          
+      ############################################################
+      # Execution Plan Discovery
+      ############################################################
+
+      - name: Execution Plan Discovery
+        run: |
+          find . -type f \
+            -name "*execution_plan*.json" \
+            | sort \
+            > artifacts/execution_plan_candidates.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(
+              "artifacts/execution_plan_candidates.txt"
+          )
+
+          plans = (
+              [
+                  line.strip()
+                  for line in path.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              ]
+              if path.exists()
+              else []
+          )
+
+          payload = {
+              "schema":
+                  "rga.execution_plan_discovery.v1.0",
+
+              "execution_plan_count":
+                  len(plans),
+
+              "execution_plan_candidates":
+                  plans
+          }
+
+          with open(
+              "artifacts/execution_plan_discovery.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY   
+
+      ############################################################
+      # Plan Audit Evidence
+      ############################################################
+
+      - name: Plan Audit Evidence
+        run: |
+          python - <<'PY'
+          import json
+
+          payload = {
+              "schema":
+                  "rga.plan_audit_evidence.v1.0",
+
+              "bot_1_authority": {
+                  "approve_execution":
+                      False,
+
+                  "apply_execution":
+                      False
+              },
+
+              "plan_audit_principles": {
+
+                  "plan_audit_is_not_approval":
+                      True,
+
+                  "plan_audit_is_not_execution":
+                      True,
+
+                  "execution_requires_human_approval":
+                      True,
+
+                  "completed_phases_remain_immutable":
+                      True
+              }
+          }
+
+          with open(
+              "artifacts/plan_audit_evidence.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+      ############################################################
+      # Post Audit Contract
+      ############################################################
+
+      - name: Post Audit Contract
+        run: |
+          cat > artifacts/post_audit_contract.json <<'JSON'
+          {
+            "schema":
+              "rga.post_audit_contract.v1.0",
+
+            "comparison_model": [
+
+              "pre_audit_report",
+
+              "execution_plan",
+
+              "current_runtime_verifier_report"
+            ],
+
+            "required_checks": [
+
+              "root_failure_progress",
+
+              "derived_failure_progress",
+
+              "new_governance_blockers",
+
+              "deletion_readiness",
+
+              "completed_phase_integrity"
+            ]
+          }
+          JSON          
+          
       ############################################################
       # Run Verifier
       ############################################################
@@ -2695,7 +3025,13 @@ jobs:
             --json-out artifacts/runtime_verifier_report.json \
             --md-out artifacts/runtime_verifier_report.md \
             > artifacts/runtime_verifier_stdout.txt \
-            2> artifacts/runtime_verifier_stderr.txt
+            2> artifacts/runtime_verifier_stderr.txt \
+            --audit-mode \
+            "${{ github.event.inputs.audit_mode || 'pre_audit' }}"
+            --execution-plan \
+            "${{ github.event.inputs.execution_plan }}"
+            --pre-audit-report \
+            "${{ github.event.inputs.pre_audit_report }}"           
 
           verifier_exit_code=$?
 
