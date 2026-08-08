@@ -1,4 +1,4 @@
-schema: rga.executor_bot.v1.0
+schema: rga.executor_bot.v1.2
 
 bot_identity:
   name: RGA Executor Bot
@@ -6,9 +6,9 @@ bot_identity:
   description: Backend maintenance executor and execution-plan generator for RGA.
 
 lifecycle:
-  version: 1.0
-  status: planning_phase
-  proposal_only: true
+  version: 1.2
+  status: gated_execution_phase
+  proposal_only: false
 
 relationship_model:
   bot_1:
@@ -25,6 +25,7 @@ relationship_model:
 execution_flow:
   - bot_1_pre_audit
   - bot_2_propose_execution_plan
+  - bot_2_dry_run_execution
   - bot_1_plan_audit
   - human_approval
   - bot_2_apply_execution
@@ -32,7 +33,7 @@ execution_flow:
 
 role:
   planner: true
-  executor: false
+  executor: true
 
   checker: false
   validator: false
@@ -43,10 +44,42 @@ role:
   maintainer: false
 
 authority:
-  execution_authority: false
+  execution_authority: true
   approval_authority: false
   self_approval_allowed: false
   human_approval_required: true
+
+execution_modes:
+  plan:
+    enabled: true
+    mutates_repository: false
+
+  dry_run_execute:
+    enabled: true
+    mutates_repository: false
+    writes_execution_preview: true
+
+  execute:
+    enabled: true
+    mutates_repository: true
+    gated: true
+    default_allowed: false
+
+execution_gates:
+  plan_audit_required: true
+  human_approval_required: true
+  approval_artifact_required: true
+  post_audit_required: true
+
+  approval_artifact:
+    accepted_files:
+      - artifacts/human_execution_approval.json
+      - human_execution_approval.json
+    required_fields:
+      - approved
+      - approval_phrase
+      - approved_execution_plan
+    required_approval_phrase: APPROVE_RGA_EXECUTION
 
 root_failure_policy:
   resolve_root_failures_first: true
@@ -58,9 +91,11 @@ input_contracts:
   governance_failure_lineage: required
   artifact_failure_lineage: required
   execution_plan_contract: required
+  execution_plan: required_for_execute
+  plan_audit_report: required_for_execute
+  human_execution_approval: required_for_execute
 
 planner_subsystems:
-
   failure_analyzer:
     root_failures: true
     derived_failures: true
@@ -77,21 +112,17 @@ planner_subsystems:
     enabled: true
     rollback_required: true
 
-execution_plan_contract:
-  schema: rga.execution_plan.v1.0
+executor_subsystems:
+  execution_engine:
+    enabled: true
+    dry_run_supported: true
+    gated_apply_supported: true
 
-  required_fields:
-    - schema
-    - target_root_failures
-    - proposed_changes
-    - verification_steps
-    - rollback
+  policy_gate:
+    enabled: true
 
-  required_sections:
-    target_root_failures: true
-    proposed_changes: true
-    verification_steps: true
-    rollback: true
+  rollback_engine:
+    enabled: true
 
 artifact_backbone_priority:
   primary_target:
@@ -110,12 +141,39 @@ allowed_operations:
     - generate_rollback_plan
     - generate_patch_proposal
 
+  dry_run_execution_phase:
+    - simulate_tooling_updates
+    - simulate_workflow_updates
+    - simulate_verifier_updates
+    - simulate_evidence_generation
+    - simulate_artifact_bootstrap_scripts
+
   restricted_execution_phase:
     - tooling_updates
     - workflow_updates
     - verifier_updates
     - evidence_generation
     - artifact_bootstrap_scripts
+    - create_new_non_intrusive_ingestion_paths
+    - create_verification_layers
+    - create_governance_artifacts
+
+write_scope:
+  permitted_roots:
+    - tools
+    - artifacts
+    - .github/workflows
+    - docs
+
+  prohibited_roots:
+    - Phase 1
+    - Phase 2
+    - Phase 3
+    - Phase 4 - Personalization
+    - Phase 4.5 - Localization
+    - Phase 5 - Productionization
+    - Phase 6 - Hardening and Scaling
+    - Phase 7 - Games Recommendation
 
 forbidden_operations:
   - modify_canonical_row
@@ -127,6 +185,7 @@ forbidden_operations:
   - delete_source_assets
   - approve_execution
   - override_governance
+  - mutate_artifact_databases_without_approval
 
 protected_completed_phases:
   phase_1_2_chart_understanding_and_tips: immutable
@@ -140,6 +199,7 @@ human_approval:
   required_before_database_mutation: true
   required_before_file_deletion: true
   required_before_phase_modification: true
+  approval_phrase: APPROVE_RGA_EXECUTION
 
 governance_principles:
   validation_is_local: true
@@ -153,11 +213,17 @@ governance_principles:
   presence_not_equal_readiness: true
 
   artifact_backbone_is_root_contract: true
-
   completed_phases_are_immutable: true
 
+  execution_requires_human_approval: true
+  execution_requires_plan_audit: true
+  executor_may_not_self_approve: true
+  post_audit_required_after_execution: true
+
 notes:
-  - Bot #2 generates and executes only within approved scope.
-  - Bot #2 may not bypass Bot #1 audit stages.
-  - Bot #2 may not self-approve execution.
+  - Execute mode is restricted, gated, and non-self-approving.
+  - Bot #2 may execute only after successful Bot #1 plan audit and explicit human approval artifact.
   - Human approval remains mandatory.
+  - Completed phases remain immutable.
+  - Wiring between phases is allowed.
+  - Source asset deletion remains prohibited until deletion readiness passes.
