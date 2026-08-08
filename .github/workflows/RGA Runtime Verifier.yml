@@ -15,6 +15,21 @@ on:
           - plan_audit
           - post_audit
 
+      executor_mode:
+        description: "Bot #2 executor mode"
+        required: false
+        default: "dry_run_execute"
+        type: choice
+        options:
+          - plan
+          - dry_run_execute
+          - execute
+
+      execution_approval:
+        description: "Required phrase for execute mode: APPROVE_RGA_EXECUTION"
+        required: false
+        default: ""
+
       execution_plan:
         description: "Optional Bot #2 execution plan JSON path"
         required: false
@@ -2829,46 +2844,6 @@ jobs:
           JSON
           
       ############################################################
-      # Execution Plan Contract
-      ############################################################
-
-      - name: Execution Plan Contract
-        run: |
-          cat > artifacts/execution_plan_contract.json <<'JSON'
-          {
-            "schema": "rga.execution_plan_contract.v1.0",
-
-            "bot_1_role": {
-              "pre_audit": true,
-              "plan_audit": true,
-              "post_audit": true,
-
-              "approve_execution": false,
-              "apply_execution": false
-            },
-
-            "bot_2_role": {
-              "plan_generation": true,
-              "execution_candidate": true,
-
-              "self_approval": false
-            },
-
-            "human_role": {
-              "approval_required": true
-            },
-
-            "required_plan_fields": [
-              "schema",
-              "target_root_failures",
-              "proposed_changes",
-              "verification_steps",
-              "rollback"
-            ]
-          }
-          JSON
-          
-      ############################################################
       # Run Verifier
       ############################################################
 
@@ -2982,9 +2957,19 @@ jobs:
 
           mkdir -p artifacts
 
-          executor_mode="${{ github.event.inputs.executor_mode || 'dry_run_execute' }}"
+          requested_mode="${{ github.event.inputs.executor_mode || 'dry_run_execute' }}"
+          can_execute="${{ steps.execution_gate.outputs.can_execute || 'false' }}"
 
-          if [ -z "${executor_mode}" ]; then
+          if [ -z "${requested_mode}" ]; then
+            requested_mode="dry_run_execute"
+          fi
+
+          executor_mode="${requested_mode}"
+
+          if [ "${requested_mode}" = "execute" ] && [ "${can_execute}" != "true" ]; then
+            echo "Execution mode requested but not approved. Falling back to dry_run_execute." \
+              > artifacts/runtime_executor_gate_notice.txt
+
             executor_mode="dry_run_execute"
           fi
 
@@ -3004,7 +2989,7 @@ jobs:
             "policy_result": {
               "policy_passed": false,
               "violations": [
-                "Bot #2 requires Bot #1 runtime_verifier_report.json before plan generation."
+                "Bot #2 requires Bot #1 runtime_verifier_report.json before execution planning or execution."
               ]
             }
           }
@@ -3052,6 +3037,8 @@ jobs:
             executor_config="rga_executor_bot_v1_1.yml"
           fi
 
+          echo "${executor_mode}" > artifacts/runtime_executor_effective_mode.txt
+
           if [ -n "${executor_config}" ]; then
             python "${executor_path}" \
               --verifier-report artifacts/runtime_verifier_report.json \
@@ -3080,6 +3067,7 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
           echo "RGA Runtime Executor exited with code: ${executor_exit_code}"
+          echo "Effective executor mode: ${executor_mode}"
 
           exit 0
 
@@ -3184,6 +3172,128 @@ jobs:
               encoding="utf-8",
           )
           PY
+          
+      ############################################################
+      # Execution Mode Gate
+      ############################################################
+
+      - name: Execution Mode Gate
+        id: execution_gate
+        if: always()
+        run: |
+          mkdir -p artifacts
+
+          requested_mode="${{ github.event.inputs.executor_mode || 'dry_run_execute' }}"
+          approval_phrase="${{ github.event.inputs.execution_approval || '' }}"
+
+          if [ -z "${requested_mode}" ]; then
+            requested_mode="dry_run_execute"
+          fi
+
+          can_execute="false"
+          gate_status="not_requested"
+          gate_reason="Execution mode was not requested."
+
+          if [ "${requested_mode}" = "execute" ]; then
+            gate_status="blocked"
+            gate_reason="Execution mode requires explicit human approval phrase."
+
+            if [ "${approval_phrase}" = "APPROVE_RGA_EXECUTION" ]; then
+              can_execute="true"
+              gate_status="approved_for_execution"
+              gate_reason="Explicit human approval phrase was provided."
+            fi
+          fi
+
+          echo "requested_mode=${requested_mode}" >> "$GITHUB_OUTPUT"
+          echo "can_execute=${can_execute}" >> "$GITHUB_OUTPUT"
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          requested_mode = os.environ.get(
+              "REQUESTED_MODE",
+              "dry_run_execute",
+          )
+
+          can_execute = os.environ.get(
+              "CAN_EXECUTE",
+              "false",
+          ) == "true"
+
+          gate_status = os.environ.get(
+              "GATE_STATUS",
+              "not_requested",
+          )
+
+          gate_reason = os.environ.get(
+              "GATE_REASON",
+              "Execution mode was not requested.",
+          )
+
+          payload = {
+              "schema":
+                  "rga.execution_mode_gate.v1.0",
+
+              "requested_mode":
+                  requested_mode,
+
+              "can_execute":
+                  can_execute,
+
+              "gate_status":
+                  gate_status,
+
+              "gate_reason":
+                  gate_reason,
+
+              "bot_2_authority": {
+                  "execution_candidate":
+                      True,
+
+                  "self_approval":
+                      False,
+
+                  "approval_authority":
+                      False
+              },
+
+              "required_gates": {
+                  "bot_1_plan_audit_required":
+                      True,
+
+                  "human_approval_required":
+                      True,
+
+                  "bot_1_post_audit_required":
+                      True
+              },
+
+              "protected_scopes": [
+                  "canonical_row",
+                  "pattern_logic",
+                  "tips_generation",
+                  "personalization",
+                  "localization",
+                  "recommendation_logic",
+                  "source_asset_deletion"
+              ]
+          }
+
+          Path(
+              "artifacts/execution_mode_gate.json"
+          ).write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          PY
+        env:
+          REQUESTED_MODE: ${{ github.event.inputs.executor_mode || 'dry_run_execute' }}
+          CAN_EXECUTE: ${{ steps.execution_gate.outputs.can_execute || 'false' }}
+          GATE_STATUS: ${{ steps.execution_gate.outputs.can_execute == 'true' && 'approved_for_execution' || 'blocked' }}
+          GATE_REASON: ${{ steps.execution_gate.outputs.can_execute == 'true' && 'Explicit human approval phrase was provided.' || 'Execution mode requires explicit human approval phrase.' }}
 
       ############################################################
       # Plan Audit Evidence
