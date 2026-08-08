@@ -15,28 +15,25 @@ on:
           - plan_audit
           - post_audit
 
-      executor_mode:
-        description: "Bot #2 executor mode"
-        required: false
-        default: "dry_run_execute"
-        type: choice
-        options:
-          - plan
-          - dry_run_execute
-          - execute
-
-      execution_approval:
-        description: "Required phrase for execute mode: APPROVE_RGA_EXECUTION"
+      audit_session_id:
+        description: >
+          Optional maintenance lifecycle correlation id linking
+          pre-audit, Bot #2 implementation plan, Bot #1 plan-audit,
+          Bot #2 execution, and Bot #1 post-audit.
         required: false
         default: ""
 
       execution_plan:
-        description: "Optional Bot #2 execution plan JSON path"
+        description: >
+          Optional Bot #2 implementation / execution plan JSON path.
+          Required for plan_audit and recommended for post_audit.
         required: false
         default: ""
 
       pre_audit_report:
-        description: "Optional Bot #1 pre-audit report JSON path"
+        description: >
+          Optional Bot #1 pre-audit report JSON path.
+          Used by post_audit for comparison against current verifier state.
         required: false
         default: ""
 
