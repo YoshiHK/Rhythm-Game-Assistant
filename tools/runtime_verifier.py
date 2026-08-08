@@ -11270,9 +11270,11 @@ def write_markdown(
     # ----------------------------------------------------------
     #
 
-    governance = report.get(
-        "governance",
-        {},
+    governance = safe_dict(
+        report.get(
+            "governance",
+            {},
+        )
     )
 
     dependency_failures = governance.get(
@@ -11379,9 +11381,11 @@ def write_markdown(
     # ----------------------------------------------------------
     #
 
-    verdict_semantics = governance.get(
-        "verdict_semantics",
-        {},
+    verdict_semantics = safe_dict(
+        governance.get(
+            "verdict_semantics",
+            {},
+        )
     )
 
     if verdict_semantics:
@@ -11396,7 +11400,8 @@ def write_markdown(
             verdict_semantics.items()
         ):
             lines.append(
-                f"- **{verdict}**: {description}"
+                f"- **{safe_str(verdict)}**: "
+                f"{safe_str(description)}"
             )
 
         lines.append("")
@@ -12417,6 +12422,62 @@ def write_markdown(
 
     lines.append("```")
     lines.append("")
+    
+    #
+    # --------------------------------------------------
+    # Write Markdown Output
+    # --------------------------------------------------
+    #
+
+    out_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    markdown_text = "\n".join(
+        str(line)
+        for line in lines
+    )
+
+    #
+    # Safety guard
+    #
+
+    if not markdown_text.strip():
+
+        markdown_text = "\n".join(
+            [
+                "# RGA Runtime Verifier Report",
+                "",
+                "## Empty Markdown Guard",
+                "",
+                (
+                    "Markdown renderer produced no output. "
+                    "Fallback content was generated."
+                ),
+                "",
+            ]
+        )
+
+    out_path.write_text(
+        markdown_text,
+        encoding="utf-8",
+    )
+
+    #
+    # Verify artifact exists
+    #
+
+    if (
+        not out_path.exists()
+        or out_path.stat().st_size == 0
+    ):
+        raise RuntimeError(
+            (
+                "Markdown report was not written "
+                f"successfully: {out_path}"
+            )
+        )    
 
 # -----------------------------------------------------------------------------
 # CLI
@@ -14173,6 +14234,17 @@ def main() -> int:
                 report,
                 md_out,
             )
+            
+            if (
+                not md_out.exists()
+                or md_out.stat().st_size == 0
+            ):
+                raise RuntimeError(
+                    (
+                        "Markdown renderer returned successfully "
+                        "but produced no non-empty markdown file."
+                    )
+                )            
 
             generated_reports[
                 "markdown_generated"
