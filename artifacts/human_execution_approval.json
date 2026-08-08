@@ -1,0 +1,8 @@
+{
+  "approved": true,
+  "approval_phrase": "APPROVE_RGA_EXECUTION",
+  "approved_execution_plan": {
+    "schema": "rga.execution_plan.v1.2",
+    "target_root_failures": []
+  }
+}
