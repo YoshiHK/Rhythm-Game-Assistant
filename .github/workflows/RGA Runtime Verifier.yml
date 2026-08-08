@@ -1345,6 +1345,8 @@ jobs:
 
       - name: Runtime DB Read Evidence
         run: |
+          mkdir -p artifacts
+
           find . -type f \
             \( \
               -name "file_scan_inventory.db" -o \
@@ -1396,9 +1398,14 @@ jobs:
                   True,
 
               "relationship_principles": {
-                  "presence_is_not_readiness": True,
-                  "readability_is_not_relationship_verification": True,
-                  "relationship_verification_precedes_runtime_readiness": True,
+                  "presence_is_not_readiness":
+                      True,
+
+                  "readability_is_not_relationship_verification":
+                      True,
+
+                  "relationship_verification_precedes_runtime_readiness":
+                      True,
               },
 
               "governance_note": (
@@ -1407,18 +1414,17 @@ jobs:
               ),
           }
 
-          with open(
-              "artifacts/runtime_db_read_summary.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
+          Path(
+              "artifacts/runtime_db_read_summary.json"
+          ).write_text(
+              json.dumps(
                   payload,
-                  f,
                   indent=2,
                   ensure_ascii=False,
-              )
-          PY          
+              ),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Artifact Backbone Schema Evidence
@@ -3139,6 +3145,8 @@ jobs:
       - name: Verify Generated Reports
         if: always()
         run: |
+          mkdir -p artifacts
+
           report_ok=true
 
           if [ ! -s artifacts/runtime_verifier_report.json ]; then
@@ -3152,52 +3160,103 @@ jobs:
           fi
 
           if [ "$report_ok" = true ]; then
-            echo "verified" \
-              > artifacts/report_generation_status.txt
+            echo "verified" > artifacts/report_generation_status.txt
           else
-            echo "incomplete" \
-              > artifacts/report_generation_status.txt
+            echo "incomplete" > artifacts/report_generation_status.txt
           fi
 
           python - <<'PY'
           import json
           from pathlib import Path
 
+          status_file = Path(
+              "artifacts/report_generation_status.txt"
+          )
+
+          json_report = Path(
+              "artifacts/runtime_verifier_report.json"
+          )
+
+          markdown_report = Path(
+              "artifacts/runtime_verifier_report.md"
+          )
+
+          stdout_file = Path(
+              "artifacts/runtime_verifier_stdout.txt"
+          )
+
+          stderr_file = Path(
+              "artifacts/runtime_verifier_stderr.txt"
+          )
+
+          exit_code_file = Path(
+              "artifacts/runtime_verifier_exit_code.txt"
+          )
+
+          if status_file.exists():
+              status = status_file.read_text(
+                  encoding="utf-8",
+                  errors="ignore",
+              ).strip()
+          else:
+              status = "unknown"
+
           payload = {
               "schema":
                   "rga.report_generation_status.v1.2",
 
               "json_report_present":
-                  Path(
-                      "artifacts/runtime_verifier_report.json"
-                  ).is_file(),
+                  json_report.is_file(),
+
+              "json_report_nonempty":
+                  json_report.is_file()
+                  and json_report.stat().st_size > 0,
 
               "markdown_report_present":
-                  Path(
-                      "artifacts/runtime_verifier_report.md"
-                  ).is_file(),
+                  markdown_report.is_file(),
 
-              "status": (
-                  "verified"
-                  if Path(
-                      "artifacts/report_generation_status.txt"
-                  ).read_text().strip() == "verified"
-                  else "incomplete"
-              ),
+              "markdown_report_nonempty":
+                  markdown_report.is_file()
+                  and markdown_report.stat().st_size > 0,
+
+              "stdout_present":
+                  stdout_file.is_file(),
+
+              "stderr_present":
+                  stderr_file.is_file(),
+
+              "exit_code_present":
+                  exit_code_file.is_file(),
+
+              "status":
+                  status,
 
               "verification_principles": {
-                  "report_generation_is_not_governance_pass": True,
-                  "artifact_presence_is_not_contract_verification": True,
+                  "report_generation_is_not_governance_pass":
+                      True,
+
+                  "artifact_presence_is_not_contract_verification":
+                      True,
               },
+
+              "diagnostic_note": (
+                  "If JSON or Markdown reports are missing, inspect "
+                  "runtime_verifier_stdout.txt, runtime_verifier_stderr.txt, "
+                  "and runtime_verifier_exit_code.txt."
+              ),
           }
 
           Path(
               "artifacts/report_generation_status.json"
           ).write_text(
-              json.dumps(payload, indent=2, ensure_ascii=False),
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
               encoding="utf-8",
           )
-          PY          
+          PY
 
       ############################################################
       # Runtime Verifier Job Summary
