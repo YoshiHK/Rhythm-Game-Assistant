@@ -59,7 +59,7 @@ jobs:
           python-version: "3.12"
           
       ############################################################
-      # Artifact Directory
+      # Prepare Artifact Directory
       ############################################################
 
       - name: Prepare Artifact Directory
@@ -99,6 +99,7 @@ jobs:
       ############################################################
 
       - name: Evidence Taxonomy
+      
         run: |
           cat > artifacts/evidence_taxonomy.json <<'JSON'
           {
@@ -324,6 +325,242 @@ jobs:
             }
           }
           JSON
+          
+      ############################################################
+      # Governance Lineage Taxonomy
+      ############################################################
+
+      - name: Governance Lineage Taxonomy
+      
+        run: |
+          cat > artifacts/governance_lineage_taxonomy.json <<'JSON'
+          {
+            "schema": "rga.governance.lineage.v1.1",
+
+            "purpose":
+              "Root and derived governance failure rendering.",
+
+            "rendering_order": [
+              "root_failure",
+              "derived_failure"
+            ],
+
+            "failure_classes": {
+
+              "root_failure": {
+                "description":
+                  "Independently actionable governance blocker.",
+
+                "resolution_priority":
+                  1
+              },
+
+              "derived_failure": {
+                "description":
+                  "Downstream failure caused by a root contract failure.",
+
+                "resolution_priority":
+                  2,
+
+                "requires_root_reference":
+                  true,
+
+                "revalidate_after_root_resolution":
+                  true
+              }
+            },
+
+            "artifact_backbone_cascade": {
+
+              "root_contract":
+                "artifact_database_policy",
+
+              "derived_contracts": [
+                "artifact_relationships",
+                "artifact_backbone_contract",
+                "asset_coverage",
+                "hash_integrity",
+                "type_A_usability",
+                "runtime_artifact_readiness"
+              ]
+            },
+
+            "governance_notes": [
+              "Resolve root failures before derived failures.",
+              "Derived failures should be revalidated after root resolution.",
+              "Lineage classification does not imply remediation."
+            ]
+          }
+          JSON                    
+
+      ############################################################
+      # Flow Contract Taxonomy
+      ############################################################
+
+      - name: Flow Contract Taxonomy
+        run: |
+          cat > artifacts/flow_contract_taxonomy.json <<'JSON'
+          {
+            "schema": "rga.flow_contract_taxonomy.v1.1",
+
+            "contracts": {
+
+              "chart_first": {
+
+                "description":
+                  "Chart-selected flow leading to chart understanding and tips generation.",
+
+                "entry_artifact":
+                  "chart",
+
+                "primary_sequence": [
+                  "chart",
+                  "pattern",
+                  "tips",
+                  "personalization",
+                  "localization",
+                  "presentation"
+                ]
+              },
+
+              "player_first": {
+
+                "description":
+                  "Player/profile-driven flow leading to song recommendation.",
+
+                "entry_artifact":
+                  "player",
+
+                "primary_sequence": [
+                  "player",
+                  "recommendation",
+                  "song",
+                  "tips",
+                  "personalization",
+                  "localization",
+                  "presentation"
+                ]
+              },
+
+              "progression": {
+
+                "description":
+                  "Progression-driven flow leading to game and song recommendations.",
+
+                "entry_artifact":
+                  "progression",
+
+                "primary_sequence": [
+                  "progression",
+                  "game",
+                  "song",
+                  "tips",
+                  "personalization",
+                  "localization",
+                  "presentation"
+                ]
+              }
+            },
+
+            "phase_boundary_policy": {
+
+              "phase_1_2_chart_understanding_immutable":
+                true,
+
+              "phase_3_canonical_ingestion_immutable":
+                true,
+
+              "phase_4_personalization_immutable":
+                true,
+
+              "phase_4_5_localization_immutable":
+                true,
+
+              "phase_5_7_recommendation_stack_immutable":
+                true
+            },
+
+            "governance_principles": {
+
+              "flows_are_distinct":
+                true,
+
+              "flows_share_backbone":
+                true,
+
+              "entry_points_are_different":
+                true,
+
+              "recommendation_logic_not_modified":
+                true,
+
+              "tips_generation_not_modified":
+                true,
+
+              "personalization_not_modified":
+                true,
+
+              "localization_not_modified":
+                true,
+
+              "flow_verification_is_repository_driven":
+                true
+            },
+
+            "ui_entry_surface_mapping": {
+
+              "song_pages":
+                "chart_first",
+
+              "recommendation_pages":
+                "chart_first",
+
+              "history_pages":
+                "chart_first",
+
+              "profile_pages":
+                "player_first",
+
+              "ingestion_pages":
+                "player_first",
+
+              "feedback_pages":
+                "player_first",
+
+              "progression_pages":
+                "progression",
+
+              "gamification_pages":
+                "progression"
+            },
+
+            "verification_note":
+              "Flow taxonomy defines expected flow contracts only. Flow taxonomy does not modify runtime behavior, recommendation logic, personalization, localization, or completed phases."
+          }
+          JSON
+
+          {
+            echo "Flow Contract Taxonomy"
+            echo ""
+
+            echo "Contracts:"
+            echo "- chart_first"
+            echo "- player_first"
+            echo "- progression"
+
+            echo ""
+            echo "Phase Boundary Policy:"
+            echo "- Phase 1-2 immutable"
+            echo "- Phase 3 immutable"
+            echo "- Phase 4 immutable"
+            echo "- Phase 4.5 immutable"
+            echo "- Phase 5-7 immutable"
+
+            echo ""
+            echo "Generated Files:"
+            echo "- flow_contract_taxonomy.json"
+
+          } > artifacts/flow_contract_taxonomy_summary.txt
 
       ############################################################
       # Repository Discovery Evidence
@@ -634,73 +871,7 @@ jobs:
                   ensure_ascii=False,
               )
           PY
-          
-      ############################################################
-      # Governance Lineage Taxonomy
-      ############################################################
-
-      - name: Governance Lineage Taxonomy
-        run: |
-          cat > artifacts/governance_lineage_taxonomy.json <<'JSON'
-          {
-            "schema": "rga.governance.lineage.v1.1",
-
-            "purpose":
-              "Root and derived governance failure rendering.",
-
-            "rendering_order": [
-              "root_failure",
-              "derived_failure"
-            ],
-
-            "failure_classes": {
-
-              "root_failure": {
-                "description":
-                  "Independently actionable governance blocker.",
-
-                "resolution_priority":
-                  1
-              },
-
-              "derived_failure": {
-                "description":
-                  "Downstream failure caused by a root contract failure.",
-
-                "resolution_priority":
-                  2,
-
-                "requires_root_reference":
-                  true,
-
-                "revalidate_after_root_resolution":
-                  true
-              }
-            },
-
-            "artifact_backbone_cascade": {
-
-              "root_contract":
-                "artifact_database_policy",
-
-              "derived_contracts": [
-                "artifact_relationships",
-                "artifact_backbone_contract",
-                "asset_coverage",
-                "hash_integrity",
-                "type_A_usability",
-                "runtime_artifact_readiness"
-              ]
-            },
-
-            "governance_notes": [
-              "Resolve root failures before derived failures.",
-              "Derived failures should be revalidated after root resolution.",
-              "Lineage classification does not imply remediation."
-            ]
-          }
-          JSON
-          
+         
       ############################################################
       # Artifact Backbone Discovery
       ############################################################
@@ -1054,6 +1225,200 @@ jobs:
             echo "chart_patterns.db candidates:"
             cat artifacts/chart_patterns_db.txt || true
           } > artifacts/artifact_database_discovery_summary.txt
+          
+      ############################################################
+      # Runtime Reader Discovery Evidence
+      ############################################################
+
+      - name: Runtime Reader Discovery Evidence
+        run: |
+          find . -type f \
+            \( \
+              -iname "*reader*.py" -o \
+              -iname "*readers*.py" \
+            \) \
+            | sort > artifacts/runtime_reader_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*validator*.py" -o \
+              -iname "*validators*.py" \
+            \) \
+            | sort > artifacts/runtime_validator_candidates.txt || true
+
+          find . -type f \
+            \( \
+              -iname "*bridge*.py" -o \
+              -iname "*bridges*.py" \
+            \) \
+            | sort > artifacts/runtime_bridge_candidates.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def count(path_text):
+              path = Path(path_text)
+
+              if not path.exists():
+                  return 0
+
+              return len(
+                  [
+                      line
+                      for line in path.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).splitlines()
+                      if line.strip()
+                  ]
+              )
+
+          payload = {
+              "schema":
+                  "rga.runtime_reader_discovery.v1.2",
+
+              "reader_candidates":
+                  count(
+                      "artifacts/runtime_reader_candidates.txt"
+                  ),
+
+              "validator_candidates":
+                  count(
+                      "artifacts/runtime_validator_candidates.txt"
+                  ),
+
+              "bridge_candidates":
+                  count(
+                      "artifacts/runtime_bridge_candidates.txt"
+                  ),
+
+              "discovery_strategy":
+                  "repository_driven",
+
+              "topology_assumptions":
+                  False,
+
+              "verification_layer":
+                  "runtime_discovery",
+
+              "runtime_pipeline_model": {
+                  "readers": "read_only",
+                  "validators": "correctness",
+                  "bridges": "integration",
+              },
+
+              "verification_note": (
+                  "Repository discovery precedes runtime reader verification."
+              ),
+          }
+
+          with open(
+              "artifacts/runtime_reader_discovery_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY
+
+          {
+            echo "Runtime Reader Discovery Evidence"
+            echo ""
+            echo "Reader candidates:"
+            wc -l artifacts/runtime_reader_candidates.txt || true
+            echo ""
+            echo "Validator candidates:"
+            wc -l artifacts/runtime_validator_candidates.txt || true
+            echo ""
+            echo "Bridge candidates:"
+            wc -l artifacts/runtime_bridge_candidates.txt || true
+          } > artifacts/runtime_reader_discovery_summary.txt
+
+      ############################################################
+      # Runtime DB Read Evidence
+      ############################################################
+
+      - name: Runtime DB Read Evidence
+        run: |
+          find . -type f \
+            \( \
+              -name "file_scan_inventory.db" -o \
+              -name "chart_assets.db" -o \
+              -name "chart_patterns.db" \
+            \) \
+            | sort > artifacts/runtime_db_candidates.txt || true
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(
+              "artifacts/runtime_db_candidates.txt"
+          )
+
+          if path.exists():
+              db_candidates = [
+                  line.strip()
+                  for line in path.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              ]
+          else:
+              db_candidates = []
+
+          payload = {
+              "schema":
+                  "rga.runtime_db_read_evidence.v1.2",
+
+              "candidate_count":
+                  len(db_candidates),
+
+              "artifact_backbone": [
+                  "file_scan_inventory.db",
+                  "chart_assets.db",
+                  "chart_patterns.db",
+              ],
+
+              "verification_layer":
+                  "runtime_artifact_readiness",
+
+              "repository_driven":
+                  True,
+
+              "runtime_limited_possible":
+                  True,
+
+              "relationship_principles": {
+                  "presence_is_not_readiness": True,
+                  "readability_is_not_relationship_verification": True,
+                  "relationship_verification_precedes_runtime_readiness": True,
+              },
+
+              "governance_note": (
+                  "Artifact database discovery establishes runtime read evidence only. "
+                  "Runtime read readiness must be verified separately."
+              ),
+          }
+
+          with open(
+              "artifacts/runtime_db_read_summary.json",
+              "w",
+              encoding="utf-8",
+          ) as f:
+              json.dump(
+                  payload,
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          PY          
 
       ############################################################
       # Artifact Backbone Schema Evidence
@@ -1696,7 +2061,7 @@ jobs:
             }
 
       ############################################################
-      # Hash Evidence
+      # Hash Inventory Evidence
       ############################################################
 
       - name: Hash Inventory Evidence
@@ -1923,175 +2288,6 @@ jobs:
               )
           PY
           
-      ############################################################
-      # Flow Contract Taxonomy
-      ############################################################
-
-      - name: Flow Contract Taxonomy
-        run: |
-          cat > artifacts/flow_contract_taxonomy.json <<'JSON'
-          {
-            "schema": "rga.flow_contract_taxonomy.v1.1",
-
-            "contracts": {
-
-              "chart_first": {
-
-                "description":
-                  "Chart-selected flow leading to chart understanding and tips generation.",
-
-                "entry_artifact":
-                  "chart",
-
-                "primary_sequence": [
-                  "chart",
-                  "pattern",
-                  "tips",
-                  "personalization",
-                  "localization",
-                  "presentation"
-                ]
-              },
-
-              "player_first": {
-
-                "description":
-                  "Player/profile-driven flow leading to song recommendation.",
-
-                "entry_artifact":
-                  "player",
-
-                "primary_sequence": [
-                  "player",
-                  "recommendation",
-                  "song",
-                  "tips",
-                  "personalization",
-                  "localization",
-                  "presentation"
-                ]
-              },
-
-              "progression": {
-
-                "description":
-                  "Progression-driven flow leading to game and song recommendations.",
-
-                "entry_artifact":
-                  "progression",
-
-                "primary_sequence": [
-                  "progression",
-                  "game",
-                  "song",
-                  "tips",
-                  "personalization",
-                  "localization",
-                  "presentation"
-                ]
-              }
-            },
-
-            "phase_boundary_policy": {
-
-              "phase_1_2_chart_understanding_immutable":
-                true,
-
-              "phase_3_canonical_ingestion_immutable":
-                true,
-
-              "phase_4_personalization_immutable":
-                true,
-
-              "phase_4_5_localization_immutable":
-                true,
-
-              "phase_5_7_recommendation_stack_immutable":
-                true
-            },
-
-            "governance_principles": {
-
-              "flows_are_distinct":
-                true,
-
-              "flows_share_backbone":
-                true,
-
-              "entry_points_are_different":
-                true,
-
-              "recommendation_logic_not_modified":
-                true,
-
-              "tips_generation_not_modified":
-                true,
-
-              "personalization_not_modified":
-                true,
-
-              "localization_not_modified":
-                true,
-
-              "flow_verification_is_repository_driven":
-                true
-            },
-
-            "ui_entry_surface_mapping": {
-
-              "song_pages":
-                "chart_first",
-
-              "recommendation_pages":
-                "chart_first",
-
-              "history_pages":
-                "chart_first",
-
-              "profile_pages":
-                "player_first",
-
-              "ingestion_pages":
-                "player_first",
-
-              "feedback_pages":
-                "player_first",
-
-              "progression_pages":
-                "progression",
-
-              "gamification_pages":
-                "progression"
-            },
-
-            "verification_note":
-              "Flow taxonomy defines expected flow contracts only. Flow taxonomy does not modify runtime behavior, recommendation logic, personalization, localization, or completed phases."
-          }
-          JSON
-
-          {
-            echo "Flow Contract Taxonomy"
-            echo ""
-
-            echo "Contracts:"
-            echo "- chart_first"
-            echo "- player_first"
-            echo "- progression"
-
-            echo ""
-            echo "Phase Boundary Policy:"
-            echo "- Phase 1-2 immutable"
-            echo "- Phase 3 immutable"
-            echo "- Phase 4 immutable"
-            echo "- Phase 4.5 immutable"
-            echo "- Phase 5-7 immutable"
-
-            echo ""
-            echo "Generated Files:"
-            echo "- flow_contract_taxonomy.json"
-
-          } > artifacts/flow_contract_taxonomy_summary.txt
-
       ############################################################
       # Layer Separation Evidence
       ############################################################
@@ -2549,200 +2745,6 @@ jobs:
           } > artifacts/runtime_surface_summary.txt
 
       ############################################################
-      # Runtime Reader Discovery Evidence
-      ############################################################
-
-      - name: Runtime Reader Discovery Evidence
-        run: |
-          find . -type f \
-            \( \
-              -iname "*reader*.py" -o \
-              -iname "*readers*.py" \
-            \) \
-            | sort > artifacts/runtime_reader_candidates.txt || true
-
-          find . -type f \
-            \( \
-              -iname "*validator*.py" -o \
-              -iname "*validators*.py" \
-            \) \
-            | sort > artifacts/runtime_validator_candidates.txt || true
-
-          find . -type f \
-            \( \
-              -iname "*bridge*.py" -o \
-              -iname "*bridges*.py" \
-            \) \
-            | sort > artifacts/runtime_bridge_candidates.txt || true
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          def count(path_text):
-              path = Path(path_text)
-
-              if not path.exists():
-                  return 0
-
-              return len(
-                  [
-                      line
-                      for line in path.read_text(
-                          encoding="utf-8",
-                          errors="ignore",
-                      ).splitlines()
-                      if line.strip()
-                  ]
-              )
-
-          payload = {
-              "schema":
-                  "rga.runtime_reader_discovery.v1.2",
-
-              "reader_candidates":
-                  count(
-                      "artifacts/runtime_reader_candidates.txt"
-                  ),
-
-              "validator_candidates":
-                  count(
-                      "artifacts/runtime_validator_candidates.txt"
-                  ),
-
-              "bridge_candidates":
-                  count(
-                      "artifacts/runtime_bridge_candidates.txt"
-                  ),
-
-              "discovery_strategy":
-                  "repository_driven",
-
-              "topology_assumptions":
-                  False,
-
-              "verification_layer":
-                  "runtime_discovery",
-
-              "runtime_pipeline_model": {
-                  "readers": "read_only",
-                  "validators": "correctness",
-                  "bridges": "integration",
-              },
-
-              "verification_note": (
-                  "Repository discovery precedes runtime reader verification."
-              ),
-          }
-
-          with open(
-              "artifacts/runtime_reader_discovery_summary.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
-          PY
-
-          {
-            echo "Runtime Reader Discovery Evidence"
-            echo ""
-            echo "Reader candidates:"
-            wc -l artifacts/runtime_reader_candidates.txt || true
-            echo ""
-            echo "Validator candidates:"
-            wc -l artifacts/runtime_validator_candidates.txt || true
-            echo ""
-            echo "Bridge candidates:"
-            wc -l artifacts/runtime_bridge_candidates.txt || true
-          } > artifacts/runtime_reader_discovery_summary.txt
-
-      ############################################################
-      # Runtime DB Read Evidence
-      ############################################################
-
-      - name: Runtime DB Read Evidence
-        run: |
-          find . -type f \
-            \( \
-              -name "file_scan_inventory.db" -o \
-              -name "chart_assets.db" -o \
-              -name "chart_patterns.db" \
-            \) \
-            | sort > artifacts/runtime_db_candidates.txt || true
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path(
-              "artifacts/runtime_db_candidates.txt"
-          )
-
-          if path.exists():
-              db_candidates = [
-                  line.strip()
-                  for line in path.read_text(
-                      encoding="utf-8",
-                      errors="ignore",
-                  ).splitlines()
-                  if line.strip()
-              ]
-          else:
-              db_candidates = []
-
-          payload = {
-              "schema":
-                  "rga.runtime_db_read_evidence.v1.2",
-
-              "candidate_count":
-                  len(db_candidates),
-
-              "artifact_backbone": [
-                  "file_scan_inventory.db",
-                  "chart_assets.db",
-                  "chart_patterns.db",
-              ],
-
-              "verification_layer":
-                  "runtime_artifact_readiness",
-
-              "repository_driven":
-                  True,
-
-              "runtime_limited_possible":
-                  True,
-
-              "relationship_principles": {
-                  "presence_is_not_readiness": True,
-                  "readability_is_not_relationship_verification": True,
-                  "relationship_verification_precedes_runtime_readiness": True,
-              },
-
-              "governance_note": (
-                  "Artifact database discovery establishes runtime read evidence only. "
-                  "Runtime read readiness must be verified separately."
-              ),
-          }
-
-          with open(
-              "artifacts/runtime_db_read_summary.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
-          PY
-
-      ############################################################
       # Governance Evidence
       ############################################################
 
@@ -2844,7 +2846,7 @@ jobs:
           JSON
           
       ############################################################
-      # Run Verifier
+      # Run RGA Runtime Verifier
       ############################################################
 
       - name: Run RGA Runtime Verifier
@@ -2900,472 +2902,12 @@ jobs:
 
           exit 0
           
-      ############################################################
-      # Execution Plan Contract
-      ############################################################
-
-      - name: Execution Plan Contract
-        run: |
-          mkdir -p artifacts
-
-          cat > artifacts/execution_plan_contract.json <<'JSON'
-          {
-            "schema": "rga.execution_plan_contract.v1.1",
-
-            "bot_1_role": {
-              "pre_audit": true,
-              "plan_audit": true,
-              "post_audit": true,
-
-              "approve_execution": false,
-              "apply_execution": false
-            },
-
-            "bot_2_role": {
-              "plan_generation": true,
-              "dry_run_execution": true,
-              "restricted_execution_candidate": true,
-
-              "self_approval": false,
-              "override_governance": false
-            },
-
-            "human_role": {
-              "approval_required": true,
-              "governor": true,
-              "maintainer": true
-            },
-
-            "execution_sequence": [
-              "bot_1_pre_audit",
-              "bot_2_generate_execution_plan",
-              "bot_2_dry_run_execute",
-              "bot_1_plan_audit",
-              "human_approval",
-              "bot_2_apply_execution",
-              "bot_1_post_audit"
-            ],
-
-            "required_plan_fields": [
-              "schema",
-              "mode",
-              "target_root_failures",
-              "expected_derived_improvements",
-              "proposed_changes",
-              "verification_steps",
-              "rollback",
-              "forbidden_changes_declared_absent",
-              "human_approval_required"
-            ],
-
-            "policy": {
-              "plan_audit_is_not_approval": true,
-              "post_audit_is_not_approval": true,
-              "human_approval_required_before_execution": true,
-              "bot_2_may_not_self_approve": true,
-              "completed_phases_remain_immutable": true
-            }
-          }
-          JSON
 
       ############################################################
-      # Run Runtime Executor
+      # Plan Audit Report
       ############################################################
 
-      - name: Run Runtime Executor
-        id: run_executor
-        continue-on-error: true
-        if: always()
-        run: |
-          set +e
-
-          mkdir -p artifacts
-
-          executor_mode="${{ github.event.inputs.executor_mode }}"
-
-          if [ -z "${executor_mode}" ]; then
-            executor_mode="dry_run_execute"
-          fi
-
-          echo "${executor_mode}" > artifacts/runtime_executor_effective_mode.txt
-
-          if [ -f "tools/runtime_executor.py" ]; then
-            executor_path="tools/runtime_executor.py"
-          elif [ -f "runtime_executor.py" ]; then
-            executor_path="runtime_executor.py"
-          else
-            echo "runtime_executor.py not found." \
-              > artifacts/runtime_executor_stderr.txt
-
-            cat > artifacts/execution_plan.json <<'JSON'
-          {
-            "schema": "rga.runtime_executor.report.v1.1",
-            "mode": "unavailable",
-            "proposal_only": true,
-            "dry_run": false,
-            "execution_authority": false,
-            "approval_authority": false,
-            "error": "runtime_executor.py not found",
-            "policy_result": {
-              "policy_passed": false,
-              "violations": [
-                "Bot #2 runtime_executor.py was not found in tools/ or repository root."
-              ]
-            }
-          }
-          JSON
-
-            echo "1" > artifacts/runtime_executor_exit_code.txt
-            echo "executor_exit_code=1" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ ! -s "artifacts/runtime_verifier_report.json" ]; then
-            echo "runtime_verifier_report.json missing or empty; runtime_executor.py cannot use Bot #1 report." \
-              > artifacts/runtime_executor_stderr.txt
-
-            cat > artifacts/execution_plan.json <<'JSON'
-          {
-            "schema": "rga.runtime_executor.report.v1.1",
-            "mode": "blocked_missing_verifier_report",
-            "proposal_only": true,
-            "dry_run": false,
-            "execution_authority": false,
-            "approval_authority": false,
-            "error": "runtime_verifier_report.json missing or empty",
-            "plan": {
-              "schema": "rga.execution_plan.v1.1",
-              "mode": "blocked_missing_verifier_report",
-              "target_root_failures": [],
-              "expected_derived_improvements": [],
-              "proposed_changes": [],
-              "verification_steps": [],
-              "rollback": {
-                "available": true,
-                "strategy": "Re-run Bot #1 pre_audit and regenerate runtime_verifier_report.json.",
-                "rollback_steps": [
-                  "Inspect runtime_verifier_stderr.txt.",
-                  "Fix Bot #1 verifier invocation or runtime error.",
-                  "Re-run RGA Runtime Verifier.",
-                  "Re-run RGA Maintenance Executor."
-                ]
-              },
-              "forbidden_changes_declared_absent": {
-                "canonical_row": true,
-                "pattern_logic": true,
-                "tips_generation": true,
-                "personalization": true,
-                "localization": true,
-                "recommendation_logic": true,
-                "source_asset_deletion": true,
-                "database_mutation": true
-              },
-              "human_approval_required": true
-            },
-            "diagnostics": {
-              "policy_result": {
-                "policy_passed": false,
-                "violations": [
-                  "Bot #2 requires a non-empty Bot #1 runtime_verifier_report.json before execution planning."
-                ]
-              }
-            }
-          }
-          JSON
-
-            cat > artifacts/execution_plan.md <<'MD'
-          # RGA Executor Bot Report
-
-          ## Blocked
-
-          `runtime_verifier_report.json` is missing or empty.
-
-          Bot #2 cannot generate a valid execution plan without Bot #1 pre-audit evidence.
-
-          ## Required Action
-
-          Re-run Bot #1 / RGA Runtime Verifier and inspect:
-
-          - `artifacts/runtime_verifier_stdout.txt`
-          - `artifacts/runtime_verifier_stderr.txt`
-          - `artifacts/runtime_verifier_exit_code.txt`
-          MD
-
-            echo "1" > artifacts/runtime_executor_exit_code.txt
-            echo "executor_exit_code=1" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          executor_config=""
-
-          if [ -f "rga_executor_bot.yml" ]; then
-            executor_config="rga_executor_bot.yml"
-          elif [ -f "rga_executor_bot_v1_2.yml" ]; then
-            executor_config="rga_executor_bot_v1_2.yml"
-          elif [ -f "rga_executor_bot_v1_1.yml" ]; then
-            executor_config="rga_executor_bot_v1_1.yml"
-          fi
-
-          if [ -n "${executor_config}" ]; then
-            python "${executor_path}" \
-              --mode "${executor_mode}" \
-              --verifier-report artifacts/runtime_verifier_report.json \
-              --executor-config "${executor_config}" \
-              --json-out artifacts/execution_plan.json \
-              --md-out artifacts/execution_plan.md \
-              > artifacts/runtime_executor_stdout.txt \
-              2> artifacts/runtime_executor_stderr.txt
-          else
-            python "${executor_path}" \
-              --mode "${executor_mode}" \
-              --verifier-report artifacts/runtime_verifier_report.json \
-              --json-out artifacts/execution_plan.json \
-              --md-out artifacts/execution_plan.md \
-              > artifacts/runtime_executor_stdout.txt \
-              2> artifacts/runtime_executor_stderr.txt
-          fi
-
-          executor_exit_code=$?
-
-          echo "${executor_exit_code}" \
-            > artifacts/runtime_executor_exit_code.txt
-
-          echo "executor_exit_code=${executor_exit_code}" \
-            >> "$GITHUB_OUTPUT"
-
-          echo "RGA Runtime Executor exited with code: ${executor_exit_code}"
-
-          exit 0
-
-      ############################################################
-      # Execution Plan Discovery
-      ############################################################
-
-      - name: Execution Plan Discovery
-        if: always()
-        run: |
-          mkdir -p artifacts
-
-          find artifacts -type f \
-            \( \
-              -name "execution_plan.json" -o \
-              -name "execution_plan.md" -o \
-              -name "*execution_plan*.json" \
-            \) \
-            | sort \
-            > artifacts/execution_plan_candidates.txt || true
-
-          python - <<'PY'
-          from pathlib import Path
-          import json
-
-          candidate_file = Path(
-              "artifacts/execution_plan_candidates.txt"
-          )
-
-          if candidate_file.exists():
-              plans = [
-                  line.strip()
-                  for line in candidate_file.read_text(
-                      encoding="utf-8",
-                      errors="ignore",
-                  ).splitlines()
-                  if line.strip()
-              ]
-          else:
-              plans = []
-
-          execution_plan_json = Path(
-              "artifacts/execution_plan.json"
-          )
-
-          execution_plan_md = Path(
-              "artifacts/execution_plan.md"
-          )
-
-          executor_exit_code = None
-
-          exit_code_file = Path(
-              "artifacts/runtime_executor_exit_code.txt"
-          )
-
-          if exit_code_file.exists():
-              executor_exit_code = exit_code_file.read_text(
-                  encoding="utf-8",
-                  errors="ignore",
-              ).strip()
-
-          payload = {
-              "schema":
-                  "rga.execution_plan_discovery.v1.1",
-
-              "execution_plan_count":
-                  len(plans),
-
-              "execution_plan_candidates":
-                  plans,
-
-              "execution_plan_json_present":
-                  execution_plan_json.is_file(),
-
-              "execution_plan_md_present":
-                  execution_plan_md.is_file(),
-
-              "runtime_executor_exit_code":
-                  executor_exit_code,
-
-              "status": (
-                  "available"
-                  if execution_plan_json.is_file()
-                  else "not_provided"
-              ),
-
-              "governance_interpretation": (
-                  "Execution plan discovery is evidence collection only. "
-                  "A discovered plan still requires Bot #1 plan-audit and "
-                  "human approval before execution."
-              )
-          }
-
-          Path(
-              "artifacts/execution_plan_discovery.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          PY
-          
-      ############################################################
-      # Execution Mode Gate
-      ############################################################
-
-      - name: Execution Mode Gate
-        id: execution_gate
-        if: always()
-        run: |
-          mkdir -p artifacts
-
-          requested_mode="${{ github.event.inputs.executor_mode || 'dry_run_execute' }}"
-          approval_phrase="${{ github.event.inputs.execution_approval || '' }}"
-
-          if [ -z "${requested_mode}" ]; then
-            requested_mode="dry_run_execute"
-          fi
-
-          can_execute="false"
-          gate_status="not_requested"
-          gate_reason="Execution mode was not requested."
-
-          if [ "${requested_mode}" = "execute" ]; then
-            gate_status="blocked"
-            gate_reason="Execution mode requires explicit human approval phrase."
-
-            if [ "${approval_phrase}" = "APPROVE_RGA_EXECUTION" ]; then
-              can_execute="true"
-              gate_status="approved_for_execution"
-              gate_reason="Explicit human approval phrase was provided."
-            fi
-          fi
-
-          echo "requested_mode=${requested_mode}" >> "$GITHUB_OUTPUT"
-          echo "can_execute=${can_execute}" >> "$GITHUB_OUTPUT"
-
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          requested_mode = os.environ.get(
-              "REQUESTED_MODE",
-              "dry_run_execute",
-          )
-
-          can_execute = os.environ.get(
-              "CAN_EXECUTE",
-              "false",
-          ) == "true"
-
-          gate_status = os.environ.get(
-              "GATE_STATUS",
-              "not_requested",
-          )
-
-          gate_reason = os.environ.get(
-              "GATE_REASON",
-              "Execution mode was not requested.",
-          )
-
-          payload = {
-              "schema":
-                  "rga.execution_mode_gate.v1.0",
-
-              "requested_mode":
-                  requested_mode,
-
-              "can_execute":
-                  can_execute,
-
-              "gate_status":
-                  gate_status,
-
-              "gate_reason":
-                  gate_reason,
-
-              "bot_2_authority": {
-                  "execution_candidate":
-                      True,
-
-                  "self_approval":
-                      False,
-
-                  "approval_authority":
-                      False
-              },
-
-              "required_gates": {
-                  "bot_1_plan_audit_required":
-                      True,
-
-                  "human_approval_required":
-                      True,
-
-                  "bot_1_post_audit_required":
-                      True
-              },
-
-              "protected_scopes": [
-                  "canonical_row",
-                  "pattern_logic",
-                  "tips_generation",
-                  "personalization",
-                  "localization",
-                  "recommendation_logic",
-                  "source_asset_deletion"
-              ]
-          }
-
-          Path(
-              "artifacts/execution_mode_gate.json"
-          ).write_text(
-              json.dumps(payload, indent=2, ensure_ascii=False),
-              encoding="utf-8",
-          )
-          PY
-        env:
-          REQUESTED_MODE: ${{ github.event.inputs.executor_mode || 'dry_run_execute' }}
-          CAN_EXECUTE: ${{ steps.execution_gate.outputs.can_execute || 'false' }}
-          GATE_STATUS: ${{ steps.execution_gate.outputs.can_execute == 'true' && 'approved_for_execution' || 'blocked' }}
-          GATE_REASON: ${{ steps.execution_gate.outputs.can_execute == 'true' && 'Explicit human approval phrase was provided.' || 'Execution mode requires explicit human approval phrase.' }}
-
-      ############################################################
-      # Plan Audit Evidence
-      ############################################################
-
-      - name: Plan Audit Evidence
+      - name: Plan Audit Report
         if: always()
         run: |
           mkdir -p artifacts
@@ -3452,10 +2994,10 @@ jobs:
           PY
 
       ############################################################
-      # Post Audit Contract
+      # Post Audit Verification Contract
       ############################################################
 
-      - name: Post Audit Contract
+      - name: Post Audit Verification Contract
         if: always()
         run: |
           mkdir -p artifacts
@@ -3524,6 +3066,7 @@ jobs:
       ############################################################
 
       - name: Artifact Bundle Manifest
+      
         if: always()
         run: |
           {
@@ -3588,25 +3131,7 @@ jobs:
               encoding="utf-8",
           )
           PY
-
-      ############################################################
-      # Create Downloadable Zip Bundle
-      ############################################################
-
-      - name: Create Downloadable Zip Bundle
-        if: always()
-        run: |
-          cd artifacts
-
-          zip -r ../runtime-verifier-report.zip . || true
-
-          cd ..
-
-          if [ -f runtime-verifier-report.zip ]; then
-            cp runtime-verifier-report.zip \
-              artifacts/runtime-verifier-report.zip
-          fi
-
+          
       ############################################################
       # Verify Generated Reports
       ############################################################
@@ -3672,7 +3197,7 @@ jobs:
               json.dumps(payload, indent=2, ensure_ascii=False),
               encoding="utf-8",
           )
-          PY
+          PY          
 
       ############################################################
       # Runtime Verifier Job Summary
@@ -3729,9 +3254,27 @@ jobs:
             fi
 
           } >> "$GITHUB_STEP_SUMMARY"
+          
+      ############################################################
+      # Create Downloadable Zip Bundle
+      ############################################################
+
+      - name: Create Downloadable Zip Bundle
+        if: always()
+        run: |
+          cd artifacts
+
+          zip -r ../runtime-verifier-report.zip . || true
+
+          cd ..
+
+          if [ -f runtime-verifier-report.zip ]; then
+            cp runtime-verifier-report.zip \
+              artifacts/runtime-verifier-report.zip
+          fi          
 
       ############################################################
-      # Upload Evidence Bundle
+      # Upload Runtime Verifier Bundle
       ############################################################
 
       - name: Upload Runtime Verifier Bundle
@@ -3743,7 +3286,7 @@ jobs:
           if-no-files-found: warn
 
       ############################################################
-      # Upload Raw Evidence
+      # Upload Runtime Verifier Evidence
       ############################################################
 
       - name: Upload Runtime Verifier Evidence
