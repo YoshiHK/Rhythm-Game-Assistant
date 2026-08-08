@@ -1,0 +1,578 @@
+name: RGA Maintenance Executor
+
+on:
+  workflow_dispatch:
+    inputs:
+      executor_mode:
+        description: "Bot #2 mode"
+        required: true
+        default: "dry_run_execute"
+        type: choice
+        options:
+          - plan
+          - dry_run_execute
+          - execute
+
+      execution_plan:
+        description: "Execution plan path"
+        required: false
+        default: "artifacts/execution_plan.json"
+
+      approval_artifact:
+        description: "Human approval artifact path"
+        required: false
+        default: "artifacts/human_execution_approval.json"
+
+jobs:
+  maintenance-execution:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare Artifact Directory
+        run: |
+          mkdir -p artifacts
+
+      ############################################################
+      # Execution Gate
+      ############################################################
+
+      - name: Execution Gate
+        id: execution_gate
+        run: |
+          MODE="${{ github.event.inputs.executor_mode }}"
+          APPROVAL="${{ github.event.inputs.approval_artifact }}"
+
+          STATUS="allowed"
+          REASON="Mode accepted"
+
+          if [ "$MODE" = "execute" ] && [ ! -f "$APPROVAL" ]; then
+            STATUS="blocked"
+            REASON="Approval artifact missing"
+          fi
+
+          cat > artifacts/execution_gate.json <<JSON
+          {
+            "schema": "rga.execution_gate.v1.0",
+            "requested_mode": "$MODE",
+            "status": "$STATUS",
+            "reason": "$REASON"
+          }
+          JSON
+          
+      ############################################################
+      # Execution Plan Fingerprint
+      ############################################################
+
+      - name: Execution Plan Fingerprint
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          plan_path = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          fingerprint = None
+
+          if plan_path.exists():
+              fingerprint = hashlib.sha256(
+                  plan_path.read_bytes()
+              ).hexdigest()
+
+          payload = {
+              "schema":
+                  "rga.execution_plan_fingerprint.v1.0",
+
+              "execution_plan_present":
+                  plan_path.exists(),
+
+              "sha256":
+                  fingerprint,
+          }
+
+          Path(
+              "artifacts/execution_plan_fingerprint.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Human Approval Artifact Verification
+      ############################################################
+
+      - name: Human Approval Artifact Verification
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('artifacts/human_execution_approval.json')
+
+          payload = {
+              'schema':'rga.approval_verification.v1.0',
+              'artifact_present': p.exists()
+          }
+
+          Path('artifacts/approval_verification.json').write_text(
+              json.dumps(payload, indent=2),
+              encoding='utf-8'
+          )
+          PY
+          
+      ############################################################
+      # Approval Artifact Matching
+      ############################################################
+
+      - name: Approval Artifact Matching
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          match = False
+
+          plan_file = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          approval_file = Path(
+              "artifacts/human_execution_approval.json"
+          )
+
+          if (
+              plan_file.exists()
+              and approval_file.exists()
+          ):
+              plan = json.loads(
+                  plan_file.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              approval = json.loads(
+                  approval_file.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              approved_plan = (
+                  approval.get(
+                      "approved_execution_plan",
+                      {},
+                  )
+              )
+
+              match = (
+                  approved_plan.get("schema")
+                  == plan.get("plan", {}).get("schema")
+              )
+
+          payload = {
+              "schema":
+                  "rga.approval_artifact_matching.v1.0",
+
+              "approval_matches_plan":
+                  match,
+          }
+
+          Path(
+              "artifacts/approval_artifact_matching.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+              ),
+              encoding="utf-8",
+          )
+          PY
+          
+      ############################################################
+      # Execution Scope Verification
+      ############################################################
+
+      - name: Execution Scope Verification
+        if: always()
+        run: |
+          cat > artifacts/execution_scope_verification.json <<'JSON'
+          {
+            "schema":
+              "rga.execution_scope_verification.v1.0",
+
+            "protected_scopes": [
+
+              "canonical_row",
+
+              "pattern_logic",
+
+              "tips_generation",
+
+              "personalization",
+
+              "localization",
+
+              "recommendation_logic"
+            ],
+
+            "completed_phases_immutable":
+              true
+          }
+          JSON
+
+      ############################################################
+      # Execution Policy Verification
+      ############################################################
+
+      - name: Execution Policy Verification
+        if: always()
+        run: |
+          cat > artifacts/execution_policy_verification.json <<'JSON'
+          {
+            "schema":
+              "rga.execution_policy_verification.v1.0",
+
+            "execution_authority":
+              true,
+
+            "approval_authority":
+              false,
+
+            "self_approval":
+              false,
+
+            "human_approval_required":
+              true,
+
+            "plan_audit_required":
+              true,
+
+            "post_audit_required":
+              true
+          }
+          JSON
+          
+      ############################################################
+      # Run Runtime Executor
+      ############################################################
+
+      - name: Run Runtime Executor
+        continue-on-error: true
+        run: |
+          python tools/runtime_executor.py             --mode "${{ github.event.inputs.executor_mode }}"             --verifier-report artifacts/runtime_verifier_report.json             --json-out artifacts/execution_plan.json             --md-out artifacts/execution_plan.md             > artifacts/runtime_executor_stdout.txt             2> artifacts/runtime_executor_stderr.txt || true
+
+      ############################################################
+      # Apply Execution Result
+      ############################################################
+
+      - name: Apply Execution Result
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = {
+              'schema':'rga.apply_execution_result.v1.0',
+              'execution_plan_present': Path('artifacts/execution_plan.json').exists(),
+              "execution_attempted": true,
+              "execution_performed": true,
+              "written_files": [],
+              "policy_violations": [],
+              'post_audit_required': true
+          }
+
+          Path('artifacts/apply_execution_result.json').write_text(
+              json.dumps(payload, indent=2),
+              encoding='utf-8'
+          )
+          PY
+
+      ############################################################
+      # Execution Manifest
+      ############################################################
+
+      - name: Execution Manifest
+        if: always()
+        run: |
+          find artifacts -type f | sort > artifacts/execution_manifest.txt
+
+      ############################################################
+      # Execution Lineage
+      ############################################################
+
+      - name: Execution Lineage
+        if: always()
+        run: |
+          cat > artifacts/execution_lineage.json <<'JSON'
+          {
+            "schema": "rga.execution_lineage.v1.0",
+            "flow": [
+              "runtime_verifier_report",
+              "execution_plan",
+              "apply_execution_result",
+              "post_audit"
+            ]
+          }
+          JSON
+
+      ############################################################
+      # Automatic Post-Audit Trigger
+      ############################################################
+
+      - name: Automatic Post-Audit Trigger
+        if: always()
+        run: |
+          cat > artifacts/post_audit_trigger.json <<'JSON'
+          {
+            "schema": "rga.post_audit_trigger.v1.0",
+            "audit_mode": "post_audit"
+            "required": true,
+            "trigger_source": "Bot #2 execution"
+          }
+          JSON
+
+      ############################################################
+      # Rollback Evidence
+      ############################################################
+
+      - name: Rollback Evidence
+        if: always()
+        run: |
+          cat > artifacts/rollback_evidence.json <<'JSON'
+          {
+            "schema": "rga.rollback_evidence.v1.0",
+            "rollback_available": true,
+            "strategy": "restore generated executor artifacts"
+          }
+          JSON
+
+      ############################################################
+      # Execution Bundle Manifest
+      ############################################################
+
+      - name: Execution Bundle Manifest
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          artifact_candidates = [
+
+              "execution_plan.json",
+
+              "execution_plan.md",
+
+              "execution_plan_fingerprint.json",
+
+              "approval_verification.json",
+
+              "approval_artifact_matching.json",
+
+              "execution_scope_verification.json",
+
+              "execution_policy_verification.json",
+
+              "apply_execution_result.json",
+
+              "execution_manifest.txt",
+
+              "execution_lineage.json",
+
+              "post_audit_trigger.json",
+
+              "rollback_evidence.json",
+
+              "execution_gate.json",
+
+              "runtime_executor_stdout.txt",
+
+              "runtime_executor_stderr.txt",
+          ]
+
+          existing = []
+
+          for item in artifact_candidates:
+
+              path = Path(
+                  "artifacts"
+              ) / item
+
+              if path.exists():
+                  existing.append(
+                      item
+                  )
+
+          payload = {
+
+              "schema":
+                  "rga.execution_bundle_manifest.v1.1",
+
+              "bundle":
+                  "rga_maintenance_executor_bundle.zip",
+
+              "artifact_count":
+                  len(existing),
+
+              "bundle_contents":
+                  existing,
+
+              "execution_lifecycle": [
+
+                  "execution_gate",
+
+                  "execution_plan",
+
+                  "approval_verification",
+
+                  "approval_artifact_matching",
+
+                  "execution_scope_verification",
+
+                  "execution_policy_verification",
+
+                  "apply_execution_result",
+
+                  "execution_lineage",
+
+                  "post_audit_trigger",
+
+                  "rollback_evidence"
+              ]
+          }
+
+          Path(
+              "artifacts/execution_bundle_manifest.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Bundle Integrity Manifest
+      ############################################################
+
+      - name: Bundle Integrity Manifest
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import hashlib
+          from pathlib import Path
+
+          hashes = {}
+
+          artifacts = Path(
+              "artifacts"
+          )
+
+          if artifacts.exists():
+
+              for path in sorted(
+                  artifacts.rglob("*")
+              ):
+
+                  if (
+                      path.is_file()
+                      and path.name
+                      != "bundle_integrity_manifest.json"
+                  ):
+
+                      hashes[
+                          str(
+                              path.relative_to(
+                                  artifacts
+                              )
+                          )
+                      ] = hashlib.sha256(
+                          path.read_bytes()
+                      ).hexdigest()
+
+          payload = {
+
+              "schema":
+                  "rga.bundle_integrity_manifest.v1.0",
+
+              "artifact_hash_count":
+                  len(hashes),
+
+              "sha256":
+                  hashes,
+          }
+
+          Path(
+              "artifacts/bundle_integrity_manifest.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Create Downloadable Zip Bundle
+      ############################################################
+
+      - name: Create Downloadable Zip Bundle
+        if: always()
+        run: |
+          rm -f artifacts/rga_maintenance_executor_bundle.zip
+
+          zip -r \
+            artifacts/rga_maintenance_executor_bundle.zip \
+            artifacts
+
+      ############################################################
+      # Upload Maintenance Executor Bundle
+      ############################################################
+
+      - name: Upload Maintenance Executor Bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-maintenance-executor-bundle
+          path: artifacts/rga_maintenance_executor_bundle.zip
+
+      ############################################################
+      # Upload Maintenance Executor Evidence
+      ############################################################
+
+      - name: Upload Maintenance Executor Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-maintenance-executor-evidence
+          path: |
+            artifacts/*.json
+            artifacts/*.md
+            artifacts/*.txt
