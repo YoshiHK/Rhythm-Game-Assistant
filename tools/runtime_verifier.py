@@ -12423,6 +12423,7 @@ def write_markdown(
 # -----------------------------------------------------------------------------
 
 def main() -> int:
+
     parser = argparse.ArgumentParser(
         "RGA Runtime Verifier"
     )
@@ -12472,21 +12473,6 @@ def main() -> int:
     #
     # ----------------------------------------------------------
     # Audit modes
-    #
-    # Bot #1 authority model:
-    #
-    #   pre_audit
-    #       inspect current state
-    #
-    #   plan_audit
-    #       evaluate Bot #2 proposed execution plan
-    #
-    #   post_audit
-    #       evaluate current state after a proposed or applied
-    #       execution, optionally comparing to a pre-audit report
-    #
-    # Bot #1 remains read-only.
-    # Bot #1 does not approve, merge, mutate, or govern.
     # ----------------------------------------------------------
     #
 
@@ -12499,10 +12485,7 @@ def main() -> int:
         ],
         default="pre_audit",
         help=(
-            "Bot #1 audit mode. "
-            "pre_audit inspects current state. "
-            "plan_audit evaluates a Bot #2 execution plan. "
-            "post_audit evaluates state after execution."
+            "Bot #1 audit mode."
         ),
     )
 
@@ -12510,8 +12493,7 @@ def main() -> int:
         "--execution-plan",
         default=None,
         help=(
-            "Optional path to Bot #2 execution plan JSON. "
-            "Recommended for plan_audit and post_audit."
+            "Optional path to Bot #2 execution plan JSON."
         ),
     )
 
@@ -12519,18 +12501,14 @@ def main() -> int:
         "--pre-audit-report",
         default=None,
         help=(
-            "Optional path to previous Bot #1 pre-audit report JSON. "
-            "Used by post_audit for comparison."
+            "Optional path to previous Bot #1 "
+            "pre-audit report JSON."
         ),
     )
 
     #
     # ----------------------------------------------------------
     # Explicit artifact DB overrides
-    #
-    # Repository discovery remains preferred.
-    # These are maintained primarily for troubleshooting
-    # and compatibility scenarios.
     # ----------------------------------------------------------
     #
 
@@ -12538,8 +12516,7 @@ def main() -> int:
         "--asset-db",
         default=None,
         help=(
-            "Optional explicit path to chart_assets.db. "
-            "Retained for compatibility."
+            "Optional explicit path to chart_assets.db."
         ),
     )
 
@@ -12580,8 +12557,7 @@ def main() -> int:
         "--rest",
         action="store_true",
         help=(
-            "Run REST endpoint verification. "
-            "Requires backend availability."
+            "Run REST endpoint verification."
         ),
     )
 
@@ -12593,32 +12569,23 @@ def main() -> int:
 
     parser.add_argument(
         "--json-out",
-        default=None,
+        default="artifacts/runtime_verifier_report.json",
         help=(
-            "Optional JSON report output path."
+            "JSON report output path."
         ),
     )
 
     parser.add_argument(
         "--md-out",
-        default=None,
+        default="artifacts/runtime_verifier_report.md",
         help=(
-            "Optional markdown report output path."
+            "Markdown report output path."
         ),
     )
 
     #
     # ----------------------------------------------------------
     # Strict modes
-    #
-    # Severity mode:
-    #   Uses result severities.
-    #
-    # Governance mode:
-    #   Uses governance verdict only.
-    #
-    # review_needed and runtime_limited are not
-    # treated as blocked governance states.
     # ----------------------------------------------------------
     #
 
@@ -12651,12 +12618,43 @@ def main() -> int:
         ),
     )
 
+    #
+    # ----------------------------------------------------------
+    # Parse args
+    # ----------------------------------------------------------
+    #
+
     args = parser.parse_args()
 
-    def optional_path(value: Optional[str]) -> Optionalif value is None:
+    #
+    # ----------------------------------------------------------
+    # Ensure artifacts directory exists
+    # ----------------------------------------------------------
+    #
+
+    Path(
+        "artifacts"
+    ).mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    #
+    # ----------------------------------------------------------
+    # Optional path helper
+    # ----------------------------------------------------------
+    #
+
+    def optional_path(
+        value: Optional[str]
+    ) -> Optional[Path]:
+
+        if value is None:
             return None
 
-        value_text = str(value).strip()
+        value_text = str(
+            value
+        ).strip()
 
         if not value_text:
             return None
@@ -12665,12 +12663,38 @@ def main() -> int:
             value_text
         ).expanduser()
 
-    json_out = optional_path(
-        args.json_out
+    #
+    # ----------------------------------------------------------
+    # Output paths
+    # ----------------------------------------------------------
+    #
+
+    json_out: Path = (
+        optional_path(
+            args.json_out
+        )
+        or Path(
+            "artifacts/runtime_verifier_report.json"
+        )
     )
 
-    md_out = optional_path(
-        args.md_out
+    md_out: Path = (
+        optional_path(
+            args.md_out
+        )
+        or Path(
+            "artifacts/runtime_verifier_report.md"
+        )
+    )
+
+    json_out.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    md_out.parent.mkdir(
+        parents=True,
+        exist_ok=True,
     )
 
     execution_plan_path = optional_path(
@@ -12683,21 +12707,83 @@ def main() -> int:
 
     #
     # ----------------------------------------------------------
+    # Diagnostics
+    # ----------------------------------------------------------
+    #
+
+    print(
+        f"[Verifier] audit_mode={args.audit_mode}"
+    )
+
+    print(
+        f"[Verifier] json_out={json_out}"
+    )
+
+    print(
+        f"[Verifier] md_out={md_out}"
+    )
+
+    print(
+        f"[Verifier] execution_plan={execution_plan_path}"
+    )
+
+    print(
+        f"[Verifier] pre_audit_report={pre_audit_report_path}"
+    )
+
+    #
+    # ----------------------------------------------------------
     # Local helpers
     # ----------------------------------------------------------
     #
 
+    def safe_dict(
+        value: Any,
+    ) -> Dict[str, Any]:
+
+        if isinstance(
+            value,
+            dict,
+        ):
+            return value
+
+        return {}
+
+
     def read_json_optional(
         path: Optional[Path],
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+
         if path is None:
             return None, None
 
         try:
-            data = json.loads(
-                path.read_text(
-                    encoding="utf-8",
+
+            if not path.exists():
+                return (
+                    None,
+                    f"JSON file does not exist: {path}",
                 )
+
+            if not path.is_file():
+                return (
+                    None,
+                    f"JSON path is not a file: {path}",
+                )
+
+            text = path.read_text(
+                encoding="utf-8",
+                errors="ignore",
+            )
+
+            if not text.strip():
+                return (
+                    None,
+                    f"JSON file is empty: {path}",
+                )
+
+            data = json.loads(
+                text
             )
 
             if isinstance(
@@ -12706,14 +12792,122 @@ def main() -> int:
             ):
                 return data, None
 
-            return None, (
-                f"JSON file does not contain an object: {path}"
+            return (
+                None,
+                f"JSON file does not contain an object: {path}",
             )
 
         except Exception as exc:
-            return None, str(
-                exc
+
+            return (
+                None,
+                str(
+                    exc
+                ),
             )
+
+
+    def unwrap_execution_plan(
+        value: Optional[Dict[str, Any]],
+    ) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+
+        metadata: Dict[str, Any] = {
+            "input_loaded":
+                value is not None,
+
+            "input_shape":
+                None,
+
+            "unwrapped_from_executor_report":
+                False,
+        }
+
+        if value is None:
+            return None, metadata
+
+        if not isinstance(
+            value,
+            dict,
+        ):
+            metadata[
+                "input_shape"
+            ] = str(
+                type(
+                    value
+                )
+            )
+
+            return None, metadata
+
+        metadata[
+            "input_shape"
+        ] = "dict"
+
+        #
+        # runtime_executor.py emits:
+        #
+        # {
+        #   "schema": "rga.runtime_executor.report.v1.x",
+        #   "plan": { ... execution plan ... },
+        #   ...
+        # }
+        #
+        # Bot #1 plan_audit should evaluate the nested plan.
+        #
+
+        nested_plan = value.get(
+            "plan"
+        )
+
+        if isinstance(
+            nested_plan,
+            dict,
+        ):
+            metadata[
+                "unwrapped_from_executor_report"
+            ] = True
+
+            metadata[
+                "executor_report_schema"
+            ] = value.get(
+                "schema"
+            )
+
+            metadata[
+                "executor_mode"
+            ] = value.get(
+                "mode"
+            )
+
+            metadata[
+                "executor_policy_result"
+            ] = (
+                value.get(
+                    "diagnostics",
+                    {},
+                )
+                .get(
+                    "policy_result",
+                    {}
+                )
+                if isinstance(
+                    value.get(
+                        "diagnostics",
+                        {},
+                    ),
+                    dict,
+                )
+                else {}
+            )
+
+            return nested_plan, metadata
+
+        #
+        # Otherwise assume the file itself is the execution plan.
+        #
+
+        return value, metadata
+
 
     def append_cli_result(
         report: Dict[str, Any],
@@ -12728,10 +12922,23 @@ def main() -> int:
         governance_domain: Optional[str] = None,
         contract_type: Optional[str] = None,
     ) -> None:
+
         results = report.setdefault(
             "results",
             [],
         )
+
+        if not isinstance(
+            results,
+            list,
+        ):
+            report[
+                "results"
+            ] = []
+
+            results = report[
+                "results"
+            ]
 
         results.append(
             {
@@ -12764,16 +12971,33 @@ def main() -> int:
             }
         )
 
+
     def recalculate_report_counts(
         report: Dict[str, Any],
     ) -> None:
+
         counts: Dict[str, int] = {}
         severities: Dict[str, int] = {}
 
-        for result in report.get(
+        results = report.get(
             "results",
             [],
+        )
+
+        if not isinstance(
+            results,
+            list,
         ):
+            results = []
+
+        for result in results:
+
+            if not isinstance(
+                result,
+                dict,
+            ):
+                continue
+
             status = result.get(
                 "status",
                 "unknown",
@@ -12784,7 +13008,9 @@ def main() -> int:
                 "unknown",
             )
 
-            counts[status] = (
+            counts[
+                status
+            ] = (
                 counts.get(
                     status,
                     0,
@@ -12792,7 +13018,9 @@ def main() -> int:
                 + 1
             )
 
-            severities[severity] = (
+            severities[
+                severity
+            ] = (
                 severities.get(
                     severity,
                     0,
@@ -12800,23 +13028,35 @@ def main() -> int:
                 + 1
             )
 
-        report["summary"] = counts
-        report["severity_summary"] = severities
-        report["result_count"] = len(
-            report.get(
-                "results",
-                [],
-            )
+        report[
+            "summary"
+        ] = counts
+
+        report[
+            "severity_summary"
+        ] = severities
+
+        report[
+            "result_count"
+        ] = len(
+            results
         )
+
 
     def evaluate_execution_plan(
         plan: Optional[Dict[str, Any]],
         plan_error: Optional[str],
     ) -> Dict[str, Any]:
+
+        unwrapped_plan, unwrap_metadata = unwrap_execution_plan(
+            plan
+        )
+
         forbidden_tokens = [
             "canonical_row",
             "tips generation",
             "tips_generation",
+            "pattern_logic",
             "personalization",
             "localization",
             "recommendation logic",
@@ -12825,6 +13065,8 @@ def main() -> int:
             "delete source",
             "database mutation",
             "db mutation",
+            "override_governance",
+            "approve_execution",
         ]
 
         issues: List[str] = []
@@ -12835,7 +13077,8 @@ def main() -> int:
                 f"Execution plan could not be loaded: {plan_error}"
             )
 
-        if plan is None:
+        if unwrapped_plan is None:
+
             return {
                 "audit_mode":
                     "plan_audit",
@@ -12843,8 +13086,17 @@ def main() -> int:
                 "plan_loaded":
                     False,
 
+                "plan_unwrap_metadata":
+                    unwrap_metadata,
+
                 "verdict":
                     "needs_revision",
+
+                "status":
+                    "warning",
+
+                "severity":
+                    "warning",
 
                 "issues":
                     issues
@@ -12852,65 +13104,97 @@ def main() -> int:
                         "No execution plan was provided."
                     ],
 
-                "policy_violations":
+                "forbidden_scope_violations":
                     policy_violations,
 
                 "authority_note":
-                    "Bot #1 does not approve or execute plans.",
+                    (
+                        "Bot #1 may evaluate plans but must not "
+                        "approve, execute, merge, or mutate."
+                    ),
             }
 
-        proposed_changes = plan.get(
+        proposed_changes = unwrapped_plan.get(
             "proposed_changes",
             [],
         )
 
-        target_root_failures = plan.get(
+        target_root_failures = unwrapped_plan.get(
             "target_root_failures",
             [],
         )
 
-        forbidden_declared_absent = plan.get(
+        forbidden_declared_absent = unwrapped_plan.get(
             "forbidden_changes_declared_absent",
             {},
         )
 
-        rollback = plan.get(
+        rollback = unwrapped_plan.get(
             "rollback",
             {},
         )
 
-        verification_steps = plan.get(
+        verification_steps = unwrapped_plan.get(
             "verification_steps",
             [],
         )
 
-        plan_text = json.dumps(
-            plan,
-            ensure_ascii=False,
-        ).lower()
+        human_approval_required = unwrapped_plan.get(
+            "human_approval_required",
+            None,
+        )
+
+        plan_schema = unwrapped_plan.get(
+            "schema"
+        )
+
+        plan_mode = unwrapped_plan.get(
+            "mode"
+        )
+
+        try:
+
+            plan_text = json.dumps(
+                unwrapped_plan,
+                ensure_ascii=False,
+                default=str,
+            ).lower()
+
+        except Exception:
+
+            plan_text = str(
+                unwrapped_plan
+            ).lower()
+
+        #
+        # Forbidden scope detection.
+        #
+        # If the token appears only inside
+        # forbidden_changes_declared_absent with value True,
+        # this is expected and should not be treated as a violation.
+        #
 
         for token in forbidden_tokens:
-            if token.lower() in plan_text:
-                #
-                # If the token appears only as a declared-absent field,
-                # do not automatically reject. The declared-absent block
-                # is expected to mention forbidden scopes.
-                #
-                declared_safe = False
 
-                for key, value in (
-                    forbidden_declared_absent.items()
-                    if isinstance(
-                        forbidden_declared_absent,
-                        dict,
-                    )
-                    else []
-                ):
+            if token.lower() not in plan_text:
+                continue
+
+            declared_safe = False
+
+            if isinstance(
+                forbidden_declared_absent,
+                dict,
+            ):
+
+                normalized_token = token.replace(
+                    " ",
+                    "_",
+                ).lower()
+
+                for key, value in forbidden_declared_absent.items():
+
                     if (
-                        token.replace(
-                            " ",
-                            "_",
-                        )
+                        normalized_token
                         in str(
                             key
                         ).lower()
@@ -12919,45 +13203,164 @@ def main() -> int:
                         declared_safe = True
                         break
 
-                if not declared_safe:
-                    policy_violations.append(
-                        f"Potential forbidden scope reference: {token}"
-                    )
+            if not declared_safe:
+
+                policy_violations.append(
+                    f"Potential forbidden scope reference: {token}"
+                )
+
+        #
+        # Required contract checks.
+        #
 
         if not target_root_failures:
+
             issues.append(
                 "Execution plan does not declare target_root_failures."
             )
 
-        if not proposed_changes:
+        if not isinstance(
+            proposed_changes,
+            list,
+        ):
+
+            issues.append(
+                "Execution plan proposed_changes must be a list."
+            )
+
+        elif not proposed_changes:
+
             issues.append(
                 "Execution plan does not declare proposed_changes."
             )
 
-        if not rollback or not rollback.get(
+        if not rollback or not isinstance(
+            rollback,
+            dict,
+        ):
+
+            issues.append(
+                "Execution plan does not declare rollback."
+            )
+
+        elif rollback.get(
             "available",
             False,
-        ):
+        ) is not True:
+
             issues.append(
                 "Execution plan does not declare an available rollback path."
             )
 
-        if not verification_steps:
+        if not isinstance(
+            verification_steps,
+            list,
+        ):
+
+            issues.append(
+                "Execution plan verification_steps must be a list."
+            )
+
+        elif not verification_steps:
+
             issues.append(
                 "Execution plan does not declare verification_steps."
             )
 
+        if human_approval_required is not True:
+
+            issues.append(
+                "Execution plan must require human approval."
+            )
+
+        #
+        # Change-level inspection.
+        #
+
+        executable_change_count = 0
+        disallowed_mutation_levels: List[str] = []
+
+        if isinstance(
+            proposed_changes,
+            list,
+        ):
+
+            for change in proposed_changes:
+
+                if not isinstance(
+                    change,
+                    dict,
+                ):
+                    issues.append(
+                        "Execution plan contains a non-object proposed change."
+                    )
+                    continue
+
+                mutation_level = change.get(
+                    "mutation_level"
+                )
+
+                if mutation_level in {
+                    "execute_allowed",
+                    "dry_run_only",
+                    "proposal_only",
+                }:
+
+                    if mutation_level == "execute_allowed":
+                        executable_change_count += 1
+
+                else:
+
+                    disallowed_mutation_levels.append(
+                        str(
+                            mutation_level
+                        )
+                    )
+
+                if change.get(
+                    "requires_human_approval"
+                ) is not True:
+
+                    issues.append(
+                        (
+                            f"Change {change.get('change_id')} "
+                            "does not require human approval."
+                        )
+                    )
+
+        if disallowed_mutation_levels:
+
+            policy_violations.append(
+                (
+                    "Execution plan contains disallowed mutation levels: "
+                    + ", ".join(
+                        sorted(
+                            set(
+                                disallowed_mutation_levels
+                            )
+                        )
+                    )
+                )
+            )
+
+        #
+        # Verdict.
+        #
+
         if policy_violations:
+
             verdict = "rejected_by_policy"
             severity = "critical"
             status = "fail"
 
         elif issues:
+
             verdict = "needs_revision"
             severity = "warning"
             status = "warning"
 
         else:
+
             verdict = "approved_for_human_review"
             severity = "info"
             status = "pass"
@@ -12969,23 +13372,32 @@ def main() -> int:
             "plan_loaded":
                 True,
 
+            "plan_unwrap_metadata":
+                unwrap_metadata,
+
             "schema":
-                plan.get(
-                    "schema"
-                ),
+                plan_schema,
+
+            "mode":
+                plan_mode,
 
             "target_root_failures":
                 target_root_failures,
 
             "proposed_change_count":
-                len(
-                    proposed_changes
-                )
-                if isinstance(
-                    proposed_changes,
-                    list,
-                )
-                else 0,
+                (
+                    len(
+                        proposed_changes
+                    )
+                    if isinstance(
+                        proposed_changes,
+                        list,
+                    )
+                    else 0
+                ),
+
+            "executable_change_count":
+                executable_change_count,
 
             "forbidden_scope_violations":
                 policy_violations,
@@ -12996,6 +13408,10 @@ def main() -> int:
             "rollback_declared":
                 bool(
                     rollback
+                    and isinstance(
+                        rollback,
+                        dict,
+                    )
                     and rollback.get(
                         "available",
                         False,
@@ -13003,14 +13419,19 @@ def main() -> int:
                 ),
 
             "verification_step_count":
-                len(
-                    verification_steps
-                )
-                if isinstance(
-                    verification_steps,
-                    list,
-                )
-                else 0,
+                (
+                    len(
+                        verification_steps
+                    )
+                    if isinstance(
+                        verification_steps,
+                        list,
+                    )
+                    else 0
+                ),
+
+            "human_approval_required":
+                human_approval_required,
 
             "verdict":
                 verdict,
@@ -13022,8 +13443,12 @@ def main() -> int:
                 severity,
 
             "authority_note":
-                "Bot #1 may evaluate plans but must not approve, execute, merge, or mutate.",
+                (
+                    "Bot #1 may evaluate plans but must not "
+                    "approve, execute, merge, or mutate."
+                ),
         }
+
 
     def evaluate_post_audit(
         report: Dict[str, Any],
@@ -13032,72 +13457,57 @@ def main() -> int:
         plan: Optional[Dict[str, Any]],
         plan_error: Optional[str],
     ) -> Dict[str, Any]:
-        current_governance = report.get(
-            "governance",
-            {},
+
+        unwrapped_plan, unwrap_metadata = unwrap_execution_plan(
+            plan
         )
 
-        previous_governance = (
-            pre_report.get(
+        current_governance = safe_dict(
+            report.get(
                 "governance",
                 {},
             )
-            if pre_report
+        )
+
+        previous_governance = (
+            safe_dict(
+                pre_report.get(
+                    "governance",
+                    {},
+                )
+            )
+            if isinstance(
+                pre_report,
+                dict,
+            )
             else {}
         )
 
+        verdict_keys = [
+            "governance_verdict",
+            "architecture_verdict",
+            "runtime_verdict",
+            "artifact_backbone_verdict",
+            "flow_contract_verdict",
+            "layer_boundary_verdict",
+            "mcp_contract_verdict",
+            "deletion_verdict",
+        ]
+
         current_verdicts = {
-            "governance_verdict":
+            key:
                 current_governance.get(
-                    "governance_verdict"
-                ),
-
-            "architecture_verdict":
-                current_governance.get(
-                    "architecture_verdict"
-                ),
-
-            "runtime_verdict":
-                current_governance.get(
-                    "runtime_verdict"
-                ),
-
-            "artifact_backbone_verdict":
-                current_governance.get(
-                    "artifact_backbone_verdict"
-                ),
-
-            "deletion_verdict":
-                current_governance.get(
-                    "deletion_verdict"
-                ),
+                    key
+                )
+            for key in verdict_keys
         }
 
         previous_verdicts = {
-            "governance_verdict":
+            key:
                 previous_governance.get(
-                    "governance_verdict"
-                ),
-
-            "architecture_verdict":
-                previous_governance.get(
-                    "architecture_verdict"
-                ),
-
-            "runtime_verdict":
-                previous_governance.get(
-                    "runtime_verdict"
-                ),
-
-            "artifact_backbone_verdict":
-                previous_governance.get(
-                    "artifact_backbone_verdict"
-                ),
-
-            "deletion_verdict":
-                previous_governance.get(
-                    "deletion_verdict"
-                ),
+                    key
+                )
+            for key in verdict_keys
         }
 
         changed_verdicts = {
@@ -13112,7 +13522,7 @@ def main() -> int:
                         key
                     ),
             }
-            for key in current_verdicts
+            for key in verdict_keys
             if previous_verdicts.get(
                 key
             )
@@ -13124,59 +13534,91 @@ def main() -> int:
         issues: List[str] = []
 
         if pre_report_error:
+
             issues.append(
                 f"Pre-audit report could not be loaded: {pre_report_error}"
             )
 
         if pre_report is None:
+
             issues.append(
                 "No pre-audit report was provided for comparison."
             )
 
         if plan_error:
+
             issues.append(
                 f"Execution plan could not be loaded: {plan_error}"
             )
+
+        if unwrapped_plan is None:
+
+            issues.append(
+                "No execution plan was available for post-audit comparison."
+            )
+
+        #
+        # Deletion safety:
+        #
+        # deletion_verdict may only be ready when overall governance is ready.
+        #
 
         deletion_verdict = current_governance.get(
             "deletion_verdict"
         )
 
-        deletion_policy_ok = (
-            deletion_verdict != "ready"
-            or current_governance.get(
-                "governance_verdict"
-            )
-            == "ready"
+        governance_verdict = current_governance.get(
+            "governance_verdict"
         )
 
-        if deletion_policy_ok:
-            verdict = (
-                "post_audit_complete"
-                if not issues
-                else "post_audit_complete_with_limitations"
-            )
+        deletion_policy_ok = (
+            deletion_verdict != "ready"
+            or governance_verdict == "ready"
+        )
 
-            status = (
-                "pass"
-                if not issues
-                else "warning"
-            )
-
-            severity = (
-                "info"
-                if not issues
-                else "warning"
-            )
-
-        else:
-            verdict = "rejected_by_policy"
-            status = "fail"
-            severity = "critical"
+        if not deletion_policy_ok:
 
             issues.append(
                 "Deletion verdict is ready while overall governance is not ready."
             )
+
+        #
+        # Plan outcome summary.
+        #
+
+        target_root_failures = []
+
+        if isinstance(
+            unwrapped_plan,
+            dict,
+        ):
+
+            target_root_failures = unwrapped_plan.get(
+                "target_root_failures",
+                [],
+            )
+
+        #
+        # Verdict.
+        #
+
+        if not deletion_policy_ok:
+
+            verdict = "rejected_by_policy"
+            status = "fail"
+            severity = "critical"
+
+        elif issues:
+
+            verdict = "post_audit_complete_with_limitations"
+            status = "warning"
+            severity = "warning"
+
+        else:
+
+            verdict = "post_audit_complete"
+            status = "pass"
+            severity = "info"
 
         return {
             "audit_mode":
@@ -13186,7 +13628,13 @@ def main() -> int:
                 pre_report is not None,
 
             "execution_plan_loaded":
-                plan is not None,
+                unwrapped_plan is not None,
+
+            "plan_unwrap_metadata":
+                unwrap_metadata,
+
+            "target_root_failures":
+                target_root_failures,
 
             "current_verdicts":
                 current_verdicts,
@@ -13213,7 +13661,10 @@ def main() -> int:
                 severity,
 
             "authority_note":
-                "Bot #1 post-audit verifies outcome only and does not approve or mutate.",
+                (
+                    "Bot #1 post-audit verifies outcome only and "
+                    "does not approve, execute, merge, or mutate."
+                ),
         }
 
     #
@@ -13655,38 +14106,64 @@ def main() -> int:
 
     #
     # ----------------------------------------------------------
-    # Attach initial report generation metadata.
-    #
-    # Important:
-    # Do not use ellipsis here. report_generation.update(...)
-    # causes TypeError because ellipsis is not iterable.
+    # Report Generation Bootstrap
     # ----------------------------------------------------------
     #
 
+    if not isinstance(
+        report,
+        dict,
+    ):
+        report = {
+            "schema":
+                "rga.runtime_verifier_report.v1.3",
+
+            "report_error":
+                "Verifier generated a non-dictionary report.",
+
+            "report_type":
+                str(
+                    type(
+                        report
+                    )
+                ),
+        }
+
+    generated_reports: Dict[
+        str,
+        Any,
+    ] = {
+        "markdown_generated":
+            False,
+
+        "markdown_fallback_generated":
+            False,
+
+        "json_generated":
+            False,
+    }
+
     report.setdefault(
         "report_generation",
-        {}
+        {},
     )
 
-    report["report_generation"].update(
+    report[
+        "report_generation"
+    ].update(
         generated_reports
     )
 
     #
     # ----------------------------------------------------------
     # Markdown Report
-    #
-    # Markdown is attempted before final JSON output so JSON can
-    # record Markdown generation success or failure.
-    #
-    # If write_markdown fails, generate a fallback Markdown report
-    # so the workflow artifact is not missing.
     # ----------------------------------------------------------
     #
 
     if md_out is not None:
 
         try:
+
             md_out.parent.mkdir(
                 parents=True,
                 exist_ok=True,
@@ -13697,50 +14174,85 @@ def main() -> int:
                 md_out,
             )
 
-            generated_reports["markdown_generated"] = True
+            generated_reports[
+                "markdown_generated"
+            ] = True
 
         except Exception as exc:
+
             import traceback
 
-            generated_reports["markdown_error"] = (
-                str(
-                    exc
-                )
+            generated_reports[
+                "markdown_error"
+            ] = str(
+                exc
             )
 
             try:
+
                 md_out.parent.mkdir(
                     parents=True,
                     exist_ok=True,
                 )
 
                 fallback_lines = [
+
                     "# RGA Runtime Verifier Report",
+
                     "",
+
                     "## Fallback Report Generated",
+
                     "",
-                    "The normal Markdown renderer failed, so this fallback Markdown report was generated.",
+
+                    (
+                        "The primary Markdown renderer failed. "
+                        "A diagnostic fallback report was generated."
+                    ),
+
                     "",
-                    "## Markdown Error",
+
+                    "## Error",
+
                     "",
+
                     "```text",
+
                     str(
                         exc
                     ),
+
                     "```",
+
                     "",
-                    "## Markdown Traceback",
+
+                    "## Traceback",
+
                     "",
+
                     "```text",
+
                     traceback.format_exc(),
+
                     "```",
+
                     "",
-                    "## Governance Interpretation",
+
+                    "## Governance Note",
+
                     "",
-                    "- Fallback report generation does **not** modify verifier logic.",
-                    "- Fallback report generation does **not** modify completed phases.",
-                    "- Fallback report generation exists only to preserve diagnostic evidence.",
-                    "",
+
+                    (
+                        "- Fallback generation preserves evidence only."
+                    ),
+
+                    (
+                        "- No verifier logic was modified."
+                    ),
+
+                    (
+                        "- Completed phases remain immutable."
+                    ),
                 ]
 
                 md_out.write_text(
@@ -13750,69 +14262,101 @@ def main() -> int:
                     encoding="utf-8",
                 )
 
-                generated_reports["markdown_generated"] = True
-                generated_reports["markdown_fallback_generated"] = True
+                generated_reports[
+                    "markdown_generated"
+                ] = True
+
+                generated_reports[
+                    "markdown_fallback_generated"
+                ] = True
 
             except Exception as fallback_exc:
-                generated_reports["markdown_error"] = (
-                    f"{exc}; fallback_failed={fallback_exc}"
+
+                generated_reports[
+                    "markdown_generated"
+                ] = False
+
+                generated_reports[
+                    "markdown_error"
+                ] = (
+                    f"{exc}; "
+                    f"fallback_failed={fallback_exc}"
                 )
 
     #
     # ----------------------------------------------------------
-    # Finalize report generation metadata after Markdown attempt.
+    # Finalize metadata before JSON serialization
     # ----------------------------------------------------------
     #
 
-    report["report_generation"].update(
+    report[
+        "report_generation"
+    ].update(
         generated_reports
     )
 
     #
     # ----------------------------------------------------------
     # JSON Report
-    #
-    # JSON is written after report_generation is finalized, so the
-    # JSON artifact contains report output metadata.
-    #
-    # json_generated is set before serialization so the written JSON
-    # contains json_generated=true when writing succeeds.
     # ----------------------------------------------------------
     #
 
     if json_out is not None:
 
         try:
+
             json_out.parent.mkdir(
                 parents=True,
                 exist_ok=True,
             )
 
-            generated_reports["json_generated"] = True
+            generated_reports[
+                "json_generated"
+            ] = True
 
-            report["report_generation"].update(
+            report[
+                "report_generation"
+            ].update(
                 generated_reports
             )
 
-            text = json.dumps(
+            json_text = json.dumps(
                 report,
                 indent=2,
                 ensure_ascii=False,
             )
 
             json_out.write_text(
-                text,
+                json_text,
                 encoding="utf-8",
             )
 
         except Exception as exc:
-            generated_reports["json_generated"] = False
-            generated_reports["json_error"] = str(
+
+            generated_reports[
+                "json_generated"
+            ] = False
+
+            generated_reports[
+                "json_error"
+            ] = str(
                 exc
             )
 
-            report["report_generation"].update(
+            report[
+                "report_generation"
+            ].update(
                 generated_reports
+            )
+
+            print(
+                "\n[Verifier] JSON artifact generation failed:\n"
+            )
+
+            print(
+                str(
+                    exc
+                )
             )
 
             print(
@@ -13827,13 +14371,13 @@ def main() -> int:
 
     #
     # ----------------------------------------------------------
-    # Final stdout output
-    #
-    # Print the final report, including report_generation status.
+    # Emit final verifier report
     # ----------------------------------------------------------
     #
 
-    report["report_generation"].update(
+    report[
+        "report_generation"
+    ].update(
         generated_reports
     )
 
@@ -13848,18 +14392,6 @@ def main() -> int:
     #
     # ----------------------------------------------------------
     # Governance-aware strict mode
-    #
-    # blocked
-    #     -> exit 1
-    #
-    # runtime_limited
-    # review_needed
-    #     -> exit 0
-    #
-    # Consistent with:
-    #
-    # Dependency Reality
-    # != Governance Reality
     # ----------------------------------------------------------
     #
 
@@ -13896,6 +14428,7 @@ def main() -> int:
             args.strict_severity
             == "critical"
         ):
+
             if (
                 severity_summary.get(
                     "critical",
@@ -13909,6 +14442,7 @@ def main() -> int:
             args.strict_severity
             == "fail"
         ):
+
             if (
                 severity_summary.get(
                     "fail",
@@ -13926,15 +14460,16 @@ def main() -> int:
 
     #
     # ----------------------------------------------------------
-    # Non-strict execution state
-    #
-    # If verifier execution itself failed, return non-zero after
-    # preserving reports. The workflow can still continue because
-    # the workflow step uses set +e / continue-on-error.
+    # Verifier runtime failure
     # ----------------------------------------------------------
     #
 
     if verifier_execution_failed:
+
+        print(
+            "[Verifier] execution completed with runtime failures."
+        )
+
         return 1
 
     return 0
