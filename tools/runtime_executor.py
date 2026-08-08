@@ -1337,7 +1337,7 @@ class RuntimeExecutor:
                 "Restore generated tooling artifacts if required.",
                 "Remove generated bootstrap scripts if rejected.",
                 "Discard execution_plan.json if execution is canceled.",
-                "Discard execution_plan.md if execution is canceled.",
+                "Discard runtime_executor_report.md if execution is canceled.",
                 "Discard dry_run_result evidence if generated.",
                 "Re-run Bot #1 pre_audit for a fresh baseline.",
                 "Re-run Bot #1 post_audit after rollback.",
@@ -2091,62 +2091,151 @@ if __name__ == "__main__":
             result
         )
 
-
 # -----------------------------------------------------------------------------
 # CLI
 # -----------------------------------------------------------------------------
 
 def main() -> int:
+
     parser = argparse.ArgumentParser(
         "RGA Runtime Executor"
     )
 
+    #
+    # ----------------------------------------------------------
+    # Bot #1 report
+    # ----------------------------------------------------------
+    #
+
     parser.add_argument(
         "--verifier-report",
-        required=True,
-        help="Path to Bot #1 runtime_verifier_report.json.",
+        required=False,
+        default=None,
+        help=(
+            "Path to Bot #1 runtime_verifier_report.json."
+        ),
     )
+
+    parser.add_argument(
+        "--pre-audit-report",
+        required=False,
+        default=None,
+        help=(
+            "Alias of --verifier-report."
+        ),
+    )
+
+    #
+    # ----------------------------------------------------------
+    # Executor config
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--executor-config",
         default=None,
-        help="Optional path to rga_executor_bot.yml.",
+        help=(
+            "Optional path to "
+            "rga_executor_bot.yml."
+        ),
     )
+
+    #
+    # ----------------------------------------------------------
+    # Mode
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--mode",
         choices=SUPPORTED_MODES,
         default=DEFAULT_MODE,
         help=(
-            "Executor mode. plan generates an execution plan only. "
-            "dry_run_execute simulates execution without writing files."
+            "Executor mode. "
+            "plan generates an execution plan only. "
+            "dry_run_execute simulates execution "
+            "without writing files."
         ),
     )
+
+    #
+    # ----------------------------------------------------------
+    # Execution plan artifact
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--json-out",
         default="artifacts/execution_plan.json",
-        help="Execution plan JSON output path.",
+        help=(
+            "Execution plan JSON output path."
+        ),
     )
+
+    #
+    # ----------------------------------------------------------
+    # Executor report markdown
+    # ----------------------------------------------------------
+    #
 
     parser.add_argument(
         "--md-out",
-        default="artifacts/execution_plan.md",
-        help="Execution plan Markdown output path.",
+        default="artifacts/runtime_executor_report.md",
+        help=(
+            "Runtime executor markdown report path."
+        ),
+    )
+
+    #
+    # ----------------------------------------------------------
+    # Executor report json
+    # ----------------------------------------------------------
+    #
+
+    parser.add_argument(
+        "--report-json-out",
+        default=(
+            "artifacts/runtime_executor_report.json"
+        ),
+        help=(
+            "Runtime executor JSON report path."
+        ),
     )
 
     args = parser.parse_args()
 
+    #
+    # ----------------------------------------------------------
+    # Report Path Resolution
+    # ----------------------------------------------------------
+    #
+
+    verifier_report_path = (
+        args.verifier_report
+        or args.pre_audit_report
+    )
+
+    if not verifier_report_path:
+
+        raise ValueError(
+            "Either --verifier-report "
+            "or --pre-audit-report "
+            "must be supplied."
+        )
+
     try:
+
         verifier_report = read_json_file(
             Path(
-                args.verifier_report
+                verifier_report_path
             )
         )
 
-        executor_config_text = read_text_optional(
-            Path(
-                args.executor_config
+        executor_config_text = (
+            read_text_optional(
+                Path(
+                    args.executor_config
+                )
             )
             if args.executor_config
             else None
@@ -2160,12 +2249,40 @@ def main() -> int:
 
         result = executor.run_all()
 
+        #
+        # ------------------------------------------------------
+        # Execution Plan
+        # ------------------------------------------------------
+        #
+
         write_json(
-            result,
+            result.get(
+                "plan",
+                {},
+            ),
             Path(
                 args.json_out
             ),
         )
+
+        #
+        # ------------------------------------------------------
+        # Runtime Executor Report JSON
+        # ------------------------------------------------------
+        #
+
+        write_json(
+            result,
+            Path(
+                args.report_json_out
+            ),
+        )
+
+        #
+        # ------------------------------------------------------
+        # Runtime Executor Report Markdown
+        # ------------------------------------------------------
+        #
 
         write_markdown(
             result,
@@ -2173,6 +2290,12 @@ def main() -> int:
                 args.md_out
             ),
         )
+
+        #
+        # ------------------------------------------------------
+        # Stdout
+        # ------------------------------------------------------
+        #
 
         print(
             safe_json(
@@ -2195,30 +2318,73 @@ def main() -> int:
             )
         )
 
-        return 0 if policy_passed else 1
+        return (
+            0
+            if policy_passed
+            else 1
+        )
 
     except Exception as exc:
+
         fallback = {
             "schema": EXECUTOR_SCHEMA,
+
             "generated_at": datetime.now(
                 timezone.utc
             ).replace(
                 microsecond=0,
             ).isoformat(),
+
             "mode": args.mode,
-            "proposal_only": args.mode == "plan",
-            "dry_run": args.mode == "dry_run_execute",
-            "execution_authority": False,
-            "approval_authority": False,
-            "error": str(exc),
-            "traceback": traceback.format_exc(),
+
+            "proposal_only":
+                args.mode == "plan",
+
+            "dry_run":
+                args.mode == "dry_run_execute",
+
+            "execution_authority":
+                False,
+
+            "approval_authority":
+                False,
+
+            "error":
+                str(exc),
+
+            "traceback":
+                traceback.format_exc(),
+
             "policy_result": {
                 "policy_passed": False,
                 "violations": [
-                    "runtime_executor.py failed before execution plan or dry-run generation completed."
+                    (
+                        "runtime_executor.py "
+                        "failed before execution "
+                        "plan or dry-run generation "
+                        "completed."
+                    )
                 ],
             },
         }
+
+        #
+        # ------------------------------------------------------
+        # Write Fallback Executor Report
+        # ------------------------------------------------------
+        #
+
+        try:
+
+            write_json(
+                fallback,
+                Path(
+                    args.report_json_out
+                ),
+            )
+
+        except Exception:
+            pass
 
         print(
             safe_json(
@@ -2230,6 +2396,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+
     raise SystemExit(
         main()
     )
