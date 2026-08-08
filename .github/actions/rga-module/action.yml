@@ -131,6 +131,7 @@ runs:
       run: |
         set -euo pipefail
 
+        # Validate the execution_approval early (execute stage checked previously)
         if [ "$STAGE" = "execute" ]; then
           if [ -z "$EXECUTION_APPROVAL" ]; then
             echo "execution_approval missing" >&2
@@ -143,30 +144,96 @@ runs:
           fi
         fi
 
+        #
+        # Choose workflow file and inputs per lifecycle stage
+        #
         case "$STAGE" in
           pre_audit)
             WORKFLOW_FILE="RGA Runtime Verifier.yml"
-            ...
+            # runtime verifier pre_audit: set audit_mode and audit_session_id
+            python - <<PY > /tmp/payload.json
+import json, os
+p = {
+  "ref": os.environ.get("REF_INPUT","main"),
+  "inputs": {
+    "audit_mode": "pre_audit",
+    "audit_session_id": os.environ.get("AUDIT_SESSION_ID","")
+  }
+}
+print(json.dumps(p))
+PY
             ;;
 
           implementation_plan)
             WORKFLOW_FILE="RGA Maintenance Executor.yml"
-            ...
+            # executor should run in plan mode and receive pre_audit_report
+            python - <<PY > /tmp/payload.json
+import json, os
+p = {
+  "ref": os.environ.get("REF_INPUT","main"),
+  "inputs": {
+    "executor_mode": "plan",
+    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
+    "pre_audit_report": os.environ.get("PRE_AUDIT_REPORT","")
+  }
+}
+print(json.dumps(p))
+PY
             ;;
 
           plan_audit)
             WORKFLOW_FILE="RGA Runtime Verifier.yml"
-            ...
+            # runtime verifier plan_audit: include execution_plan to audit
+            python - <<PY > /tmp/payload.json
+import json, os
+p = {
+  "ref": os.environ.get("REF_INPUT","main"),
+  "inputs": {
+    "audit_mode": "plan_audit",
+    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
+    "execution_plan": os.environ.get("EXECUTION_PLAN","")
+  }
+}
+print(json.dumps(p))
+PY
             ;;
 
           execute)
             WORKFLOW_FILE="RGA Maintenance Executor.yml"
-            ...
+            # executor execute: requires execution_plan, approval artifact and approval phrase
+            python - <<PY > /tmp/payload.json
+import json, os
+p = {
+  "ref": os.environ.get("REF_INPUT","main"),
+  "inputs": {
+    "executor_mode": "execute",
+    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
+    "execution_plan": os.environ.get("EXECUTION_PLAN",""),
+    "approval_artifact": os.environ.get("APPROVAL_ARTIFACT",""),
+    "execution_approval": os.environ.get("EXECUTION_APPROVAL",
+"")
+  }
+}
+print(json.dumps(p))
+PY
             ;;
 
           post_audit)
             WORKFLOW_FILE="RGA Runtime Verifier.yml"
-            ...
+            # runtime verifier post_audit: include execution_plan and optional pre_audit_report
+            python - <<PY > /tmp/payload.json
+import json, os
+p = {
+  "ref": os.environ.get("REF_INPUT","main"),
+  "inputs": {
+    "audit_mode": "post_audit",
+    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
+    "execution_plan": os.environ.get("EXECUTION_PLAN","") ,
+    "pre_audit_report": os.environ.get("PRE_AUDIT_REPORT","")
+  }
+}
+print(json.dumps(p))
+PY
             ;;
 
           *)
@@ -174,3 +241,35 @@ runs:
             exit 1
             ;;
         esac
+
+        #
+        # URL-encode the workflow filename (it may contain spaces)
+        #
+        enc_workflow=$(python - <<PY
+import sys, urllib.parse
+print(urllib.parse.quote(sys.argv[1], safe=''))
+PY
+"$WORKFLOW_FILE"
+)
+
+        api_url="https://api.github.com/repos/${REPO}/actions/workflows/${enc_workflow}/dispatches"
+
+        # POST the dispatch payload
+        http_status=$(curl -sS -o /tmp/dispatch_resp -w "%{http_code}" \
+          -X POST \
+          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "$api_url" \
+          -d @/tmp/payload.json || true)
+
+        # GitHub returns 204 No Content on success
+        if [ "$http_status" != "204" ]; then
+          echo "Workflow dispatch failed (HTTP $http_status)" >&2
+          echo "API response:" >&2
+          sed -n '1,200p' /tmp/dispatch_resp >&2 || true
+          echo "Payload sent:" >&2
+          sed -n '1,200p' /tmp/payload.json >&2 || true
+          exit 1
+        fi
+
+        echo "Dispatched workflow '${WORKFLOW_FILE}' for stage '${STAGE}' (ref: ${REF_INPUT})"
