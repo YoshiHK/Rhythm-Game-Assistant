@@ -2,7 +2,7 @@
 """
 runtime_executor.py
 
-RGA Executor Bot v1.0
+RGA Executor Bot v1.1
 Backend Maintenance Executor / Execution Plan Generator
 
 Purpose:
@@ -10,11 +10,11 @@ Purpose:
 - Analyze root, derived, dependency, and governance failures.
 - Generate an execution_plan.json for Bot #1 plan-audit.
 - Generate a repair DAG and rollback plan.
-- Operate in proposal-only mode by default.
+- Support dry_run_execute mode without mutating the repository.
 
 Authority:
 - Does not approve execution.
-- Does not apply execution.
+- Does not perform real execution in dry_run_execute mode.
 - Does not mutate databases.
 - Does not delete source assets.
 - Does not modify completed Phases 1-7.
@@ -24,6 +24,7 @@ Bot #1 pre-audit
     -> Bot #2 execution plan generation
     -> Bot #1 plan-audit
     -> Human approval
+    -> Bot #2 dry-run execution simulation
     -> Bot #2 execution, future gated mode only
     -> Bot #1 post-audit
 """
@@ -36,16 +37,21 @@ import traceback
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
 
-EXECUTOR_SCHEMA = "rga.runtime_executor.report.v1.0"
-EXECUTION_PLAN_SCHEMA = "rga.execution_plan.v1.0"
+EXECUTOR_SCHEMA = "rga.runtime_executor.report.v1.1"
+EXECUTION_PLAN_SCHEMA = "rga.execution_plan.v1.1"
 DEFAULT_MODE = "plan"
+
+SUPPORTED_MODES = [
+    "plan",
+    "dry_run_execute",
+]
 
 FORBIDDEN_OPERATIONS = [
     "modify_canonical_row",
@@ -116,6 +122,18 @@ class VerificationStep:
 
 
 @dataclass
+class DryRunAction:
+    action_id: str
+    source_change_id: str
+    would_touch_files: List[str]
+    would_create_files: List[str]
+    would_modify_files: List[str]
+    would_delete_files: List[str]
+    allowed_by_policy: bool
+    note: str
+
+
+@dataclass
 class ExecutionPlan:
     schema: str
     mode: str
@@ -134,9 +152,11 @@ class ExecutorResult:
     generated_at: str
     mode: str
     proposal_only: bool
+    dry_run: bool
     execution_authority: bool
     approval_authority: bool
     plan: Dict[str, Any]
+    dry_run_result: Dict[str, Any]
     diagnostics: Dict[str, Any]
 
 
@@ -199,6 +219,7 @@ def write_markdown(data: Dict[str, Any], out_path: Path) -> None:
     plan = data.get("plan", {})
     diagnostics = data.get("diagnostics", {})
     policy_result = diagnostics.get("policy_result", {})
+    dry_run_result = data.get("dry_run_result", {})
 
     lines.append("# RGA Executor Bot Report")
     lines.append("")
@@ -210,6 +231,7 @@ def write_markdown(data: Dict[str, Any], out_path: Path) -> None:
     lines.append("## Authority")
     lines.append("")
     lines.append(f"- Proposal only: `{data.get('proposal_only')}`")
+    lines.append(f"- Dry run: `{data.get('dry_run')}`")
     lines.append(f"- Execution authority: `{data.get('execution_authority')}`")
     lines.append(f"- Approval authority: `{data.get('approval_authority')}`")
     lines.append("")
@@ -242,6 +264,24 @@ def write_markdown(data: Dict[str, Any], out_path: Path) -> None:
         lines.append(f"- Mutation level: `{item.get('mutation_level')}`")
         lines.append(f"- Requires human approval: `{item.get('requires_human_approval')}`")
         lines.append(f"- Purpose: {item.get('purpose')}")
+        lines.append("")
+
+    lines.append("## Dry Run Execution")
+    lines.append("")
+
+    if dry_run_result:
+        lines.append(f"- Dry run performed: `{dry_run_result.get('dry_run_performed')}`")
+        lines.append(f"- Would mutate repository: `{dry_run_result.get('would_mutate_repository')}`")
+        lines.append(f"- Would mutate databases: `{dry_run_result.get('would_mutate_databases')}`")
+        lines.append(f"- Would delete files: `{dry_run_result.get('would_delete_files')}`")
+        lines.append(f"- Action count: `{len(dry_run_result.get('actions', []))}`")
+        lines.append("")
+        lines.append("```json")
+        lines.append(safe_json(dry_run_result))
+        lines.append("```")
+        lines.append("")
+    else:
+        lines.append("Dry run was not requested.")
         lines.append("")
 
     lines.append("## Repair DAG")
@@ -313,6 +353,7 @@ class RuntimeExecutor:
         self.diagnostics: Dict[str, Any] = {
             "executor_config_loaded": executor_config_text is not None,
             "executor_mode": mode,
+            "supported_modes": SUPPORTED_MODES,
         }
 
     def analyze_failures(self) -> Dict[str, Any]:
@@ -417,17 +458,17 @@ class RuntimeExecutor:
                     requires_human_approval=True,
                 ),
                 ProposedChange(
-                    change_id="generate_artifact_backbone_bootstrap_script_proposal",
-                    change_type="bootstrap_script_proposal",
+                    change_id="dry_run_artifact_backbone_bootstrap_script",
+                    change_type="dry_run_bootstrap_script",
                     target_files=[
                         "tools/artifact_backbone_bootstrap.py",
                     ],
                     purpose=(
-                        "Propose a non-destructive bootstrap script for artifact "
-                        "database creation. Script generation only; script execution "
-                        "requires human approval and Bot #1 plan audit."
+                        "Dry-run creation of a non-destructive artifact backbone "
+                        "bootstrap script. Dry run records the intended file only; "
+                        "no file is written in dry_run_execute mode."
                     ),
-                    mutation_level="proposal_only",
+                    mutation_level="dry_run_only",
                     requires_human_approval=True,
                 ),
             ]
@@ -539,10 +580,11 @@ class RuntimeExecutor:
 
         rollback = RollbackPlan(
             available=True,
-            strategy="No repository mutation is performed in proposal_only mode.",
+            strategy="No repository mutation is performed in plan or dry_run_execute mode.",
             rollback_steps=[
                 "Discard generated execution_plan.json.",
                 "Discard generated execution_plan.md.",
+                "Discard generated dry_run_result evidence.",
                 "Re-run Bot #1 pre_audit if a fresh baseline is needed.",
             ],
         )
@@ -573,15 +615,81 @@ class RuntimeExecutor:
             human_approval_required=True,
         )
 
-    def enforce_policy(
+    def simulate_dry_run_execution(
         self,
         plan: ExecutionPlan,
     ) -> Dict[str, Any]:
+        actions: List[DryRunAction] = []
+
+        for change in plan.proposed_changes:
+            would_create_files: List[str] = []
+            would_modify_files: List[str] = []
+            would_delete_files: List[str] = []
+
+            if change.change_type in {
+                "dry_run_bootstrap_script",
+                "bootstrap_script_proposal",
+            }:
+                would_create_files = list(change.target_files)
+
+            elif change.target_files:
+                would_modify_files = list(change.target_files)
+
+            allowed_by_policy = (
+                not would_delete_files
+                and change.mutation_level in {
+                    "proposal_only",
+                    "dry_run_only",
+                }
+            )
+
+            actions.append(
+                DryRunAction(
+                    action_id=f"dry_run_{change.change_id}",
+                    source_change_id=change.change_id,
+                    would_touch_files=list(change.target_files),
+                    would_create_files=would_create_files,
+                    would_modify_files=would_modify_files,
+                    would_delete_files=would_delete_files,
+                    allowed_by_policy=allowed_by_policy,
+                    note=(
+                        "Dry run only. No repository, database, source asset, "
+                        "or completed-phase mutation was performed."
+                    ),
+                )
+            )
+
+        result = {
+            "schema": "rga.runtime_executor.dry_run_result.v1.0",
+            "dry_run_performed": self.mode == "dry_run_execute",
+            "would_mutate_repository": False,
+            "would_mutate_databases": False,
+            "would_delete_files": False,
+            "completed_phase_mutation": False,
+            "actions": [
+                asdict(action)
+                for action in actions
+            ],
+            "policy_note": (
+                "dry_run_execute simulates intended execution effects only. "
+                "It does not write files, mutate databases, delete assets, "
+                "or modify completed phases."
+            ),
+        }
+
+        self.diagnostics["dry_run_result"] = result
+        return result
+
+    def enforce_policy(
+        self,
+        plan: ExecutionPlan,
+        dry_run_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
         violations: List[str] = []
 
-        if self.mode != "plan":
+        if self.mode not in SUPPORTED_MODES:
             violations.append(
-                "Only proposal-only plan mode is enabled in runtime_executor.py v1.0."
+                f"Unsupported mode: {self.mode}"
             )
 
         if not plan.human_approval_required:
@@ -589,10 +697,19 @@ class RuntimeExecutor:
                 "Execution plan must require human approval."
             )
 
+        allowed_mutation_levels = {
+            "proposal_only",
+        }
+
+        if self.mode == "dry_run_execute":
+            allowed_mutation_levels.add(
+                "dry_run_only"
+            )
+
         for change in plan.proposed_changes:
-            if change.mutation_level != "proposal_only":
+            if change.mutation_level not in allowed_mutation_levels:
                 violations.append(
-                    f"Change {change.change_id} is not proposal_only."
+                    f"Change {change.change_id} uses disallowed mutation level: {change.mutation_level}."
                 )
 
             if not change.requires_human_approval:
@@ -603,17 +720,32 @@ class RuntimeExecutor:
         declared_absent = plan.forbidden_changes_declared_absent
 
         for operation in FORBIDDEN_OPERATIONS:
-            key = operation
-            if key in declared_absent and declared_absent[key] is not True:
+            if operation in declared_absent and declared_absent[operation] is not True:
                 violations.append(
                     f"Forbidden operation not declared absent: {operation}"
                 )
+
+        if dry_run_result.get("would_mutate_databases"):
+            violations.append(
+                "dry_run_execute must not mutate databases."
+            )
+
+        if dry_run_result.get("would_delete_files"):
+            violations.append(
+                "dry_run_execute must not delete files."
+            )
+
+        if dry_run_result.get("completed_phase_mutation"):
+            violations.append(
+                "dry_run_execute must not modify completed phases."
+            )
 
         policy_result = {
             "policy_passed": not violations,
             "violations": violations,
             "mode": self.mode,
-            "proposal_only": True,
+            "proposal_only": self.mode == "plan",
+            "dry_run": self.mode == "dry_run_execute",
             "execution_authority": False,
             "approval_authority": False,
             "protected_completed_phases": PROTECTED_COMPLETED_PHASES,
@@ -634,8 +766,16 @@ class RuntimeExecutor:
             repair_dag,
         )
 
+        dry_run_result: Dict[str, Any] = {}
+
+        if self.mode == "dry_run_execute":
+            dry_run_result = self.simulate_dry_run_execution(
+                plan
+            )
+
         policy_result = self.enforce_policy(
-            plan
+            plan,
+            dry_run_result,
         )
 
         result = ExecutorResult(
@@ -646,10 +786,12 @@ class RuntimeExecutor:
                 microsecond=0,
             ).isoformat(),
             mode=self.mode,
-            proposal_only=True,
+            proposal_only=self.mode == "plan",
+            dry_run=self.mode == "dry_run_execute",
             execution_authority=False,
             approval_authority=False,
             plan=asdict(plan),
+            dry_run_result=dry_run_result,
             diagnostics={
                 **self.diagnostics,
                 "policy_result": policy_result,
@@ -682,11 +824,12 @@ def main() -> int:
 
     parser.add_argument(
         "--mode",
-        choices=[
-            "plan",
-        ],
+        choices=SUPPORTED_MODES,
         default=DEFAULT_MODE,
-        help="Executor mode. v1.0 supports proposal-only planning only.",
+        help=(
+            "Executor mode. plan generates an execution plan only. "
+            "dry_run_execute simulates execution without writing files."
+        ),
     )
 
     parser.add_argument(
@@ -772,7 +915,8 @@ def main() -> int:
                 microsecond=0,
             ).isoformat(),
             "mode": args.mode,
-            "proposal_only": True,
+            "proposal_only": args.mode == "plan",
+            "dry_run": args.mode == "dry_run_execute",
             "execution_authority": False,
             "approval_authority": False,
             "error": str(exc),
@@ -780,7 +924,7 @@ def main() -> int:
             "policy_result": {
                 "policy_passed": False,
                 "violations": [
-                    "runtime_executor.py failed before execution plan generation completed."
+                    "runtime_executor.py failed before execution plan or dry-run generation completed."
                 ],
             },
         }
