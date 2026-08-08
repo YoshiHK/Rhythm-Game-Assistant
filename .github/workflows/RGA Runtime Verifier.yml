@@ -2869,147 +2869,6 @@ jobs:
           JSON
           
       ############################################################
-      # Execution Plan Discovery
-      ############################################################
-
-      - name: Execution Plan Discovery
-        run: |
-          find . -type f \
-            -name "*execution_plan*.json" \
-            | sort \
-            > artifacts/execution_plan_candidates.txt || true
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path(
-              "artifacts/execution_plan_candidates.txt"
-          )
-
-          plans = (
-              [
-                  line.strip()
-                  for line in path.read_text(
-                      encoding="utf-8",
-                      errors="ignore",
-                  ).splitlines()
-                  if line.strip()
-              ]
-              if path.exists()
-              else []
-          )
-
-          payload = {
-              "schema":
-                  "rga.execution_plan_discovery.v1.0",
-
-              "execution_plan_count":
-                  len(plans),
-
-              "execution_plan_candidates":
-                  plans
-          }
-
-          with open(
-              "artifacts/execution_plan_discovery.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
-          PY   
-
-      ############################################################
-      # Plan Audit Evidence
-      ############################################################
-
-      - name: Plan Audit Evidence
-        run: |
-          python - <<'PY'
-          import json
-
-          payload = {
-              "schema":
-                  "rga.plan_audit_evidence.v1.0",
-
-              "bot_1_authority": {
-                  "approve_execution":
-                      False,
-
-                  "apply_execution":
-                      False
-              },
-
-              "plan_audit_principles": {
-
-                  "plan_audit_is_not_approval":
-                      True,
-
-                  "plan_audit_is_not_execution":
-                      True,
-
-                  "execution_requires_human_approval":
-                      True,
-
-                  "completed_phases_remain_immutable":
-                      True
-              }
-          }
-
-          with open(
-              "artifacts/plan_audit_evidence.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
-          PY
-
-      ############################################################
-      # Post Audit Contract
-      ############################################################
-
-      - name: Post Audit Contract
-        run: |
-          cat > artifacts/post_audit_contract.json <<'JSON'
-          {
-            "schema":
-              "rga.post_audit_contract.v1.0",
-
-            "comparison_model": [
-
-              "pre_audit_report",
-
-              "execution_plan",
-
-              "current_runtime_verifier_report"
-            ],
-
-            "required_checks": [
-
-              "root_failure_progress",
-
-              "derived_failure_progress",
-
-              "new_governance_blockers",
-
-              "deletion_readiness",
-
-              "completed_phase_integrity"
-            ]
-          }
-          JSON          
-          
-      ############################################################
       # Run Verifier
       ############################################################
 
@@ -3042,6 +2901,426 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
           exit 0
+          
+      ############################################################
+      # Execution Plan Contract
+      ############################################################
+
+      - name: Execution Plan Contract
+        run: |
+          mkdir -p artifacts
+
+          cat > artifacts/execution_plan_contract.json <<'JSON'
+          {
+            "schema": "rga.execution_plan_contract.v1.1",
+
+            "bot_1_role": {
+              "pre_audit": true,
+              "plan_audit": true,
+              "post_audit": true,
+
+              "approve_execution": false,
+              "apply_execution": false
+            },
+
+            "bot_2_role": {
+              "plan_generation": true,
+              "dry_run_execution": true,
+              "restricted_execution_candidate": true,
+
+              "self_approval": false,
+              "override_governance": false
+            },
+
+            "human_role": {
+              "approval_required": true,
+              "governor": true,
+              "maintainer": true
+            },
+
+            "execution_sequence": [
+              "bot_1_pre_audit",
+              "bot_2_generate_execution_plan",
+              "bot_2_dry_run_execute",
+              "bot_1_plan_audit",
+              "human_approval",
+              "bot_2_apply_execution",
+              "bot_1_post_audit"
+            ],
+
+            "required_plan_fields": [
+              "schema",
+              "mode",
+              "target_root_failures",
+              "expected_derived_improvements",
+              "proposed_changes",
+              "verification_steps",
+              "rollback",
+              "forbidden_changes_declared_absent",
+              "human_approval_required"
+            ],
+
+            "policy": {
+              "plan_audit_is_not_approval": true,
+              "post_audit_is_not_approval": true,
+              "human_approval_required_before_execution": true,
+              "bot_2_may_not_self_approve": true,
+              "completed_phases_remain_immutable": true
+            }
+          }
+          JSON
+
+      ############################################################
+      # Run RGA Runtime Executor
+      ############################################################
+
+      - name: Run RGA Runtime Executor
+        id: run_executor
+        continue-on-error: true
+        run: |
+          set +e
+
+          mkdir -p artifacts
+
+          executor_mode="${{ github.event.inputs.executor_mode || 'dry_run_execute' }}"
+
+          if [ -z "${executor_mode}" ]; then
+            executor_mode="dry_run_execute"
+          fi
+
+          if [ ! -f "artifacts/runtime_verifier_report.json" ]; then
+            echo "runtime_verifier_report.json not found; runtime_executor.py cannot generate execution plan." \
+              > artifacts/runtime_executor_stderr.txt
+
+            cat > artifacts/execution_plan.json <<'JSON'
+          {
+            "schema": "rga.runtime_executor.report.v1.1",
+            "mode": "unavailable",
+            "proposal_only": true,
+            "dry_run": false,
+            "execution_authority": false,
+            "approval_authority": false,
+            "error": "runtime_verifier_report.json not found",
+            "policy_result": {
+              "policy_passed": false,
+              "violations": [
+                "Bot #2 requires Bot #1 runtime_verifier_report.json before plan generation."
+              ]
+            }
+          }
+          JSON
+
+            echo "executor_exit_code=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -f "tools/runtime_executor.py" ]; then
+            executor_path="tools/runtime_executor.py"
+          elif [ -f "runtime_executor.py" ]; then
+            executor_path="runtime_executor.py"
+          else
+            echo "runtime_executor.py not found." \
+              > artifacts/runtime_executor_stderr.txt
+
+            cat > artifacts/execution_plan.json <<'JSON'
+          {
+            "schema": "rga.runtime_executor.report.v1.1",
+            "mode": "unavailable",
+            "proposal_only": true,
+            "dry_run": false,
+            "execution_authority": false,
+            "approval_authority": false,
+            "error": "runtime_executor.py not found",
+            "policy_result": {
+              "policy_passed": false,
+              "violations": [
+                "Bot #2 runtime_executor.py was not found in tools/ or repository root."
+              ]
+            }
+          }
+          JSON
+
+            echo "executor_exit_code=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          executor_config=""
+
+          if [ -f "rga_executor_bot.yml" ]; then
+            executor_config="rga_executor_bot.yml"
+          elif [ -f "rga_executor_bot_v1_1.yml" ]; then
+            executor_config="rga_executor_bot_v1_1.yml"
+          fi
+
+          if [ -n "${executor_config}" ]; then
+            python "${executor_path}" \
+              --verifier-report artifacts/runtime_verifier_report.json \
+              --executor-config "${executor_config}" \
+              --mode "${executor_mode}" \
+              --json-out artifacts/execution_plan.json \
+              --md-out artifacts/execution_plan.md \
+              > artifacts/runtime_executor_stdout.txt \
+              2> artifacts/runtime_executor_stderr.txt
+          else
+            python "${executor_path}" \
+              --verifier-report artifacts/runtime_verifier_report.json \
+              --mode "${executor_mode}" \
+              --json-out artifacts/execution_plan.json \
+              --md-out artifacts/execution_plan.md \
+              > artifacts/runtime_executor_stdout.txt \
+              2> artifacts/runtime_executor_stderr.txt
+          fi
+
+          executor_exit_code=$?
+
+          echo "${executor_exit_code}" \
+            > artifacts/runtime_executor_exit_code.txt
+
+          echo "executor_exit_code=${executor_exit_code}" \
+            >> "$GITHUB_OUTPUT"
+
+          echo "RGA Runtime Executor exited with code: ${executor_exit_code}"
+
+          exit 0
+
+      ############################################################
+      # Execution Plan Discovery
+      ############################################################
+
+      - name: Execution Plan Discovery
+        if: always()
+        run: |
+          mkdir -p artifacts
+
+          find artifacts -type f \
+            \( \
+              -name "execution_plan.json" -o \
+              -name "execution_plan.md" -o \
+              -name "*execution_plan*.json" \
+            \) \
+            | sort \
+            > artifacts/execution_plan_candidates.txt || true
+
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          candidate_file = Path(
+              "artifacts/execution_plan_candidates.txt"
+          )
+
+          if candidate_file.exists():
+              plans = [
+                  line.strip()
+                  for line in candidate_file.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).splitlines()
+                  if line.strip()
+              ]
+          else:
+              plans = []
+
+          execution_plan_json = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          execution_plan_md = Path(
+              "artifacts/execution_plan.md"
+          )
+
+          executor_exit_code = None
+
+          exit_code_file = Path(
+              "artifacts/runtime_executor_exit_code.txt"
+          )
+
+          if exit_code_file.exists():
+              executor_exit_code = exit_code_file.read_text(
+                  encoding="utf-8",
+                  errors="ignore",
+              ).strip()
+
+          payload = {
+              "schema":
+                  "rga.execution_plan_discovery.v1.1",
+
+              "execution_plan_count":
+                  len(plans),
+
+              "execution_plan_candidates":
+                  plans,
+
+              "execution_plan_json_present":
+                  execution_plan_json.is_file(),
+
+              "execution_plan_md_present":
+                  execution_plan_md.is_file(),
+
+              "runtime_executor_exit_code":
+                  executor_exit_code,
+
+              "status": (
+                  "available"
+                  if execution_plan_json.is_file()
+                  else "not_provided"
+              ),
+
+              "governance_interpretation": (
+                  "Execution plan discovery is evidence collection only. "
+                  "A discovered plan still requires Bot #1 plan-audit and "
+                  "human approval before execution."
+              )
+          }
+
+          Path(
+              "artifacts/execution_plan_discovery.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Plan Audit Evidence
+      ############################################################
+
+      - name: Plan Audit Evidence
+        if: always()
+        run: |
+          mkdir -p artifacts
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          execution_plan = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          plan_available = execution_plan.is_file()
+
+          payload = {
+              "schema":
+                  "rga.plan_audit_evidence.v1.1",
+
+              "execution_plan_available":
+                  plan_available,
+
+              "bot_1_authority": {
+                  "approve_execution":
+                      False,
+
+                  "apply_execution":
+                      False,
+
+                  "plan_audit":
+                      True,
+
+                  "post_audit":
+                      True
+              },
+
+              "bot_2_authority": {
+                  "generate_execution_plan":
+                      True,
+
+                  "dry_run_execute":
+                      True,
+
+                  "self_approval":
+                      False
+              },
+
+              "plan_audit_principles": {
+
+                  "plan_audit_is_not_approval":
+                      True,
+
+                  "plan_audit_is_not_execution":
+                      True,
+
+                  "execution_requires_human_approval":
+                      True,
+
+                  "bot_2_may_not_self_approve":
+                      True,
+
+                  "completed_phases_remain_immutable":
+                      True
+              },
+
+              "required_checks": [
+                  "target_root_failures",
+                  "proposed_changes",
+                  "rollback",
+                  "forbidden_scope_declared_absent",
+                  "human_approval_required"
+              ]
+          }
+
+          Path(
+              "artifacts/plan_audit_evidence.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Post Audit Contract
+      ############################################################
+
+      - name: Post Audit Contract
+        if: always()
+        run: |
+          mkdir -p artifacts
+
+          cat > artifacts/post_audit_contract.json <<'JSON'
+          {
+            "schema":
+              "rga.post_audit_contract.v1.1",
+
+            "comparison_model": [
+              "pre_audit_report",
+              "execution_plan",
+              "current_runtime_verifier_report"
+            ],
+
+            "required_checks": [
+              "root_failure_progress",
+              "derived_failure_progress",
+              "new_governance_blockers",
+              "deletion_readiness",
+              "completed_phase_integrity"
+            ],
+
+            "policy": {
+              "post_audit_is_not_approval": true,
+              "post_audit_is_not_execution": true,
+              "human_approval_remains_required": true,
+              "completed_phases_remain_immutable": true
+            },
+
+            "protected_scopes": [
+              "canonical_row",
+              "pattern_logic",
+              "tips_generation",
+              "personalization",
+              "localization",
+              "recommendation_logic",
+              "source_asset_deletion"
+            ]
+          }
+          JSON     
 
       ############################################################
       # Artifact Bundle Manifest
