@@ -294,23 +294,86 @@ jobs:
       - name: Apply Execution Result
         if: always()
         run: |
+          mkdir -p artifacts
+
           python - <<'PY'
           import json
           from pathlib import Path
 
-          payload = {
-              'schema':'rga.apply_execution_result.v1.0',
-              'execution_plan_present': Path('artifacts/execution_plan.json').exists(),
-              "execution_attempted": True,
-              "execution_performed": True,
-              "written_files": [],
-              "policy_violations": [],
-              'post_audit_required': True
-          }
+          executor_report_file = Path(
+              "artifacts/execution_plan.json"
+          )
 
-          Path('artifacts/apply_execution_result.json').write_text(
-              json.dumps(payload, indent=2),
-              encoding='utf-8'
+          result = {}
+
+          if executor_report_file.exists():
+              try:
+                  executor_report = json.loads(
+                      executor_report_file.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+
+                  result = executor_report.get(
+                      "apply_execution_result",
+                      {},
+                  )
+
+              except Exception as exc:
+                  result = {
+                      "schema":
+                          "rga.apply_execution_result.v1.0",
+
+                      "execution_attempted":
+                          False,
+
+                      "execution_performed":
+                          False,
+
+                      "written_files":
+                          [],
+
+                      "policy_violations": [
+                          f"Could not parse executor report: {exc}"
+                      ],
+
+                      "post_audit_required":
+                          True,
+                  }
+
+          if not result:
+              result = {
+                  "schema":
+                      "rga.apply_execution_result.v1.0",
+
+                  "execution_attempted":
+                      False,
+
+                  "execution_performed":
+                      False,
+
+                  "written_files":
+                      [],
+
+                  "policy_violations":
+                      [],
+
+                  "post_audit_required":
+                      True,
+
+                  "note":
+                      "No apply_execution_result was emitted by runtime_executor.py."
+              }
+
+          Path(
+              "artifacts/apply_execution_result.json"
+          ).write_text(
+              json.dumps(
+                  result,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
           )
           PY
           
@@ -1021,14 +1084,81 @@ jobs:
       - name: Automatic Post-Audit Trigger
         if: always()
         run: |
-          cat > artifacts/post_audit_trigger.json <<'JSON'
-          {
-            "schema": "rga.post_audit_trigger.v1.0",
-            "audit_mode": "post_audit",
-            "required": true,
-            "trigger_source": "Bot #2 execution"
+          mkdir -p artifacts
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          apply_result_file = Path(
+              "artifacts/apply_execution_result.json"
+          )
+
+          execution_performed = False
+          post_audit_required = True
+
+          if apply_result_file.exists():
+              try:
+                  apply_result = json.loads(
+                      apply_result_file.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+
+                  execution_performed = bool(
+                      apply_result.get(
+                          "execution_performed",
+                          False,
+                      )
+                  )
+
+                  post_audit_required = bool(
+                      apply_result.get(
+                          "post_audit_required",
+                          True,
+                      )
+                  )
+
+              except Exception:
+                  execution_performed = False
+                  post_audit_required = True
+
+          payload = {
+              "schema":
+                  "rga.post_audit_trigger.v1.1",
+
+              "audit_mode":
+                  "post_audit",
+
+              "required":
+                  post_audit_required,
+
+              "execution_performed":
+                  execution_performed,
+
+              "trigger_source":
+                  "Bot #2 execution",
+
+              "recommended_workflow":
+                  "RGA Runtime Verifier",
+
+              "governance_note": (
+                  "Post-audit should be run by Bot #1 after any "
+                  "successful Bot #2 execution."
+              )
           }
-          JSON
+
+          Path(
+              "artifacts/post_audit_trigger.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Rollback Evidence

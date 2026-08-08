@@ -2969,58 +2969,25 @@ jobs:
           JSON
 
       ############################################################
-      # Run RGA Runtime Executor
+      # Run Runtime Executor
       ############################################################
 
-      - name: Run RGA Runtime Executor
+      - name: Run Runtime Executor
         id: run_executor
         continue-on-error: true
+        if: always()
         run: |
           set +e
 
           mkdir -p artifacts
 
-          requested_mode="${{ github.event.inputs.executor_mode || 'dry_run_execute' }}"
-          can_execute="${{ steps.execution_gate.outputs.can_execute || 'false' }}"
+          executor_mode="${{ github.event.inputs.executor_mode }}"
 
-          if [ -z "${requested_mode}" ]; then
-            requested_mode="dry_run_execute"
-          fi
-
-          executor_mode="${requested_mode}"
-
-          if [ "${requested_mode}" = "execute" ] && [ "${can_execute}" != "true" ]; then
-            echo "Execution mode requested but not approved. Falling back to dry_run_execute." \
-              > artifacts/runtime_executor_gate_notice.txt
-
+          if [ -z "${executor_mode}" ]; then
             executor_mode="dry_run_execute"
           fi
 
-          if [ ! -f "artifacts/runtime_verifier_report.json" ]; then
-            echo "runtime_verifier_report.json not found; runtime_executor.py cannot generate execution plan." \
-              > artifacts/runtime_executor_stderr.txt
-
-            cat > artifacts/execution_plan.json <<'JSON'
-          {
-            "schema": "rga.runtime_executor.report.v1.1",
-            "mode": "unavailable",
-            "proposal_only": true,
-            "dry_run": false,
-            "execution_authority": false,
-            "approval_authority": false,
-            "error": "runtime_verifier_report.json not found",
-            "policy_result": {
-              "policy_passed": false,
-              "violations": [
-                "Bot #2 requires Bot #1 runtime_verifier_report.json before execution planning or execution."
-              ]
-            }
-          }
-          JSON
-
-            echo "executor_exit_code=1" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          echo "${executor_mode}" > artifacts/runtime_executor_effective_mode.txt
 
           if [ -f "tools/runtime_executor.py" ]; then
             executor_path="tools/runtime_executor.py"
@@ -3048,6 +3015,83 @@ jobs:
           }
           JSON
 
+            echo "1" > artifacts/runtime_executor_exit_code.txt
+            echo "executor_exit_code=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ ! -s "artifacts/runtime_verifier_report.json" ]; then
+            echo "runtime_verifier_report.json missing or empty; runtime_executor.py cannot use Bot #1 report." \
+              > artifacts/runtime_executor_stderr.txt
+
+            cat > artifacts/execution_plan.json <<'JSON'
+          {
+            "schema": "rga.runtime_executor.report.v1.1",
+            "mode": "blocked_missing_verifier_report",
+            "proposal_only": true,
+            "dry_run": false,
+            "execution_authority": false,
+            "approval_authority": false,
+            "error": "runtime_verifier_report.json missing or empty",
+            "plan": {
+              "schema": "rga.execution_plan.v1.1",
+              "mode": "blocked_missing_verifier_report",
+              "target_root_failures": [],
+              "expected_derived_improvements": [],
+              "proposed_changes": [],
+              "verification_steps": [],
+              "rollback": {
+                "available": true,
+                "strategy": "Re-run Bot #1 pre_audit and regenerate runtime_verifier_report.json.",
+                "rollback_steps": [
+                  "Inspect runtime_verifier_stderr.txt.",
+                  "Fix Bot #1 verifier invocation or runtime error.",
+                  "Re-run RGA Runtime Verifier.",
+                  "Re-run RGA Maintenance Executor."
+                ]
+              },
+              "forbidden_changes_declared_absent": {
+                "canonical_row": true,
+                "pattern_logic": true,
+                "tips_generation": true,
+                "personalization": true,
+                "localization": true,
+                "recommendation_logic": true,
+                "source_asset_deletion": true,
+                "database_mutation": true
+              },
+              "human_approval_required": true
+            },
+            "diagnostics": {
+              "policy_result": {
+                "policy_passed": false,
+                "violations": [
+                  "Bot #2 requires a non-empty Bot #1 runtime_verifier_report.json before execution planning."
+                ]
+              }
+            }
+          }
+          JSON
+
+            cat > artifacts/execution_plan.md <<'MD'
+          # RGA Executor Bot Report
+
+          ## Blocked
+
+          `runtime_verifier_report.json` is missing or empty.
+
+          Bot #2 cannot generate a valid execution plan without Bot #1 pre-audit evidence.
+
+          ## Required Action
+
+          Re-run Bot #1 / RGA Runtime Verifier and inspect:
+
+          - `artifacts/runtime_verifier_stdout.txt`
+          - `artifacts/runtime_verifier_stderr.txt`
+          - `artifacts/runtime_verifier_exit_code.txt`
+          MD
+
+            echo "1" > artifacts/runtime_executor_exit_code.txt
             echo "executor_exit_code=1" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -3056,25 +3100,25 @@ jobs:
 
           if [ -f "rga_executor_bot.yml" ]; then
             executor_config="rga_executor_bot.yml"
+          elif [ -f "rga_executor_bot_v1_2.yml" ]; then
+            executor_config="rga_executor_bot_v1_2.yml"
           elif [ -f "rga_executor_bot_v1_1.yml" ]; then
             executor_config="rga_executor_bot_v1_1.yml"
           fi
 
-          echo "${executor_mode}" > artifacts/runtime_executor_effective_mode.txt
-
           if [ -n "${executor_config}" ]; then
             python "${executor_path}" \
+              --mode "${executor_mode}" \
               --verifier-report artifacts/runtime_verifier_report.json \
               --executor-config "${executor_config}" \
-              --mode "${executor_mode}" \
               --json-out artifacts/execution_plan.json \
               --md-out artifacts/execution_plan.md \
               > artifacts/runtime_executor_stdout.txt \
               2> artifacts/runtime_executor_stderr.txt
           else
             python "${executor_path}" \
-              --verifier-report artifacts/runtime_verifier_report.json \
               --mode "${executor_mode}" \
+              --verifier-report artifacts/runtime_verifier_report.json \
               --json-out artifacts/execution_plan.json \
               --md-out artifacts/execution_plan.md \
               > artifacts/runtime_executor_stdout.txt \
@@ -3090,7 +3134,6 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
           echo "RGA Runtime Executor exited with code: ${executor_exit_code}"
-          echo "Effective executor mode: ${executor_mode}"
 
           exit 0
 
@@ -3417,43 +3460,64 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          cat > artifacts/post_audit_contract.json <<'JSON'
-          {
-            "schema":
-              "rga.post_audit_contract.v1.1",
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
-            "comparison_model": [
-              "pre_audit_report",
-              "execution_plan",
-              "current_runtime_verifier_report"
-            ],
+          payload = {
+              "schema":
+                  "rga.post_audit_contract.v1.1",
 
-            "required_checks": [
-              "root_failure_progress",
-              "derived_failure_progress",
-              "new_governance_blockers",
-              "deletion_readiness",
-              "completed_phase_integrity"
-            ],
+              "comparison_model": [
+                  "pre_audit_report",
+                  "execution_plan",
+                  "current_runtime_verifier_report"
+              ],
 
-            "policy": {
-              "post_audit_is_not_approval": true,
-              "post_audit_is_not_execution": true,
-              "human_approval_remains_required": true,
-              "completed_phases_remain_immutable": true
-            },
+              "required_checks": [
+                  "root_failure_progress",
+                  "derived_failure_progress",
+                  "new_governance_blockers",
+                  "deletion_readiness",
+                  "completed_phase_integrity"
+              ],
 
-            "protected_scopes": [
-              "canonical_row",
-              "pattern_logic",
-              "tips_generation",
-              "personalization",
-              "localization",
-              "recommendation_logic",
-              "source_asset_deletion"
-            ]
+              "policy": {
+                  "post_audit_is_not_approval":
+                      True,
+
+                  "post_audit_is_not_execution":
+                      True,
+
+                  "human_approval_remains_required":
+                      True,
+
+                  "completed_phases_remain_immutable":
+                      True
+              },
+
+              "protected_scopes": [
+                  "canonical_row",
+                  "pattern_logic",
+                  "tips_generation",
+                  "personalization",
+                  "localization",
+                  "recommendation_logic",
+                  "source_asset_deletion"
+              ]
           }
-          JSON     
+
+          Path(
+              "artifacts/post_audit_contract.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Artifact Bundle Manifest
