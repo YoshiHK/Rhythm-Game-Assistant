@@ -1,142 +1,144 @@
 name: RGA Workflows Module
+
 description: >
-  Dispatches the RGA Maintenance Executor or RGA Runtime Verifier workflows
-  in this repository using the workflow_dispatch API. This composite action
-  triggers the existing workflow file (by filename) in this repository and
-  does not run the workflow logic itself.
+  Dispatches the RGA maintenance-and-operation lifecycle workflows using
+  GitHub workflow_dispatch. The module does not run verifier or executor
+  logic directly; it routes each lifecycle stage to Bot #1 or Bot #2.
+
+  Intended lifecycle:
+    1. pre_audit            -> Bot #1 Runtime Verifier
+    2. implementation_plan  -> Bot #2 Maintenance Executor, executor_mode=plan
+    3. plan_audit           -> Bot #1 Runtime Verifier, audit_mode=plan_audit
+    4. execute              -> Bot #2 Maintenance Executor, executor_mode=execute
+    5. post_audit           -> Bot #1 Runtime Verifier, audit_mode=post_audit
+
 inputs:
-  module:
-    description: Which module to dispatch. One of: maintenance-executor, runtime-verifier
+  lifecycle_stage:
+    description: >
+      RGA maintenance lifecycle stage.
+      One of: pre_audit, implementation_plan, plan_audit, execute, post_audit.
     required: true
-    default: maintenance-executor
+    default: pre_audit
+
   ref:
-    description: Git ref (branch or sha) to run the workflow on.
+    description: Git ref, branch, or SHA to run the workflow on.
     required: false
     default: main
+
   github_token:
-    description: Token used to call the Actions API (use ${{ secrets.GITHUB_TOKEN }}).
+    description: >
+      Token used to call the GitHub Actions workflow_dispatch API.
+      The workflow that uses this action needs actions: write permission.
     required: true
-  # Common / Maintenance Executor inputs
-  executor_mode:
-    description: Executor mode for the maintenance workflow (plan|dry_run_execute|execute)
+
+  audit_session_id:
+    description: >
+      Correlation id linking pre-audit, implementation plan, plan-audit,
+      execution, and post-audit artifacts.
     required: false
-    default: dry_run_execute
+    default: ""
+
+  pre_audit_report:
+    description: Bot #1 pre-audit report path used by Bot #2 planning and Bot #1 post-audit.
+    required: false
+    default: artifacts/runtime_verifier_report.json
+
   execution_plan:
-    description: Execution plan path (for maintenance)
+    description: Bot #2 implementation / execution plan path.
     required: false
     default: artifacts/execution_plan.json
+
   approval_artifact:
-    description: Human approval artifact path (for maintenance)
+    description: Human approval artifact path used by execute stage.
     required: false
     default: artifacts/human_execution_approval.json
-  # Runtime Verifier inputs
-  audit_mode:
-    description: Bot #1 audit mode (pre_audit|plan_audit|post_audit)
-    required: false
-    default: pre_audit
+
   execution_approval:
-    description: Required phrase for execute mode: APPROVE_RGA_EXECUTION
+    description: Required approval phrase for execute stage.
     required: false
     default: ""
-  pre_audit_report:
-    description: Optional Bot #1 pre-audit report JSON path
-    required: false
-    default: ""
+
 runs:
   using: composite
   steps:
-    - name: Validate module input
+    - name: Validate lifecycle stage
       shell: bash
       run: |
-        if [ "${{ inputs.module }}" != "maintenance-executor" ] && [ "${{ inputs.module }}" != "runtime-verifier" ]; then
-          echo "Unsupported module: ${{ inputs.module }}" >&2
-          exit 1
-        fi
+        set -euo pipefail
 
-    - name: Export inputs as environment variables
-      shell: bash
-      run: |
-        # Export action inputs to environment variables used by the dispatch logic
-        export MODULE="${{ inputs.module }}"
-        export REF_INPUT="${{ inputs.ref }}"
-        export EXECUTOR_MODE="${{ inputs.executor_mode }}"
-        export EXECUTION_PLAN="${{ inputs.execution_plan }}"
-        export APPROVAL_ARTIFACT="${{ inputs.approval_artifact }}"
-        export AUDIT_MODE="${{ inputs.audit_mode }}"
-        export EXECUTION_APPROVAL="${{ inputs.execution_approval }}"
-        export PRE_AUDIT_REPORT="${{ inputs.pre_audit_report }}"
+        case "${{ inputs.lifecycle_stage }}" in
+          pre_audit|implementation_plan|plan_audit|execute|post_audit)
+            ;;
+          *)
+            echo "Unsupported lifecycle_stage: ${{ inputs.lifecycle_stage }}" >&2
+            echo "Expected one of: pre_audit, implementation_plan, plan_audit, execute, post_audit" >&2
+            exit 1
+            ;;
+        esac
 
     - name: Build payload and dispatch workflow
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         REPO: ${{ github.repository }}
+        STAGE: ${{ inputs.lifecycle_stage }}
+        REF_INPUT: ${{ inputs.ref }}
+        AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
+        PRE_AUDIT_REPORT: ${{ inputs.pre_audit_report }}
+        EXECUTION_PLAN: ${{ inputs.execution_plan }}
+        APPROVAL_ARTIFACT: ${{ inputs.approval_artifact }}
+        EXECUTION_APPROVAL: ${{ inputs.execution_approval }}
       run: |
         set -euo pipefail
 
-        MODULE="${MODULE}"
-        REF="${REF_INPUT}"
+        case "$STAGE" in
+          pre_audit)
+            WORKFLOW_FILE="RGA Runtime Verifier.yml"
+            DISPATCH_INPUTS=$(python -c 'import json, os; print(json.dumps({"audit_mode":"pre_audit","audit_session_id":os.environ.get("AUDIT_SESSION_ID","")}))')
+            ;;
 
-        if [ "$MODULE" = "maintenance-executor" ]; then
-          WORKFLOW_FILE="RGA Maintenance Executor.yml"
-          PY_INPUTS=$(python - <<'PY'
-import os, json
-inputs = {
-  "executor_mode": {"value": os.environ.get("EXECUTOR_MODE", "dry_run_execute")},
-  "execution_plan": {"value": os.environ.get("EXECUTION_PLAN", "artifacts/execution_plan.json")},
-  "approval_artifact": {"value": os.environ.get("APPROVAL_ARTIFACT", "artifacts/human_execution_approval.json")}
-}
-print(json.dumps(inputs))
-PY
-)
-        else
-          WORKFLOW_FILE="RGA Runtime Verifier.yml"
-          PY_INPUTS=$(python - <<'PY'
-import os, json
-inputs = {
-  "audit_mode": {"value": os.environ.get("AUDIT_MODE", "pre_audit")},
-  "executor_mode": {"value": os.environ.get("EXECUTOR_MODE", "dry_run_execute")},
-  "execution_approval": {"value": os.environ.get("EXECUTION_APPROVAL", "")},
-  "execution_plan": {"value": os.environ.get("EXECUTION_PLAN", "")},
-  "pre_audit_report": {"value": os.environ.get("PRE_AUDIT_REPORT", "")}
-}
-print(json.dumps(inputs))
-PY
-)
-        fi
+          implementation_plan)
+            WORKFLOW_FILE="RGA Maintenance Executor.yml"
+            DISPATCH_INPUTS=$(python -c 'import json, os; print(json.dumps({"executor_mode":"plan","pre_audit_report":os.environ.get("PRE_AUDIT_REPORT",""),"audit_session_id":os.environ.get("AUDIT_SESSION_ID","")}))')
+            ;;
 
-        # URL-encode the workflow filename for the API path
-        ENCODED=$(python - <<PY
-import urllib.parse,sys
-print(urllib.parse.quote(sys.argv[1], safe=''))
-PY
-"$WORKFLOW_FILE")
+          plan_audit)
+            WORKFLOW_FILE="RGA Runtime Verifier.yml"
+            DISPATCH_INPUTS=$(python -c 'import json, os; print(json.dumps({"audit_mode":"plan_audit","execution_plan":os.environ.get("EXECUTION_PLAN",""),"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT",""),"audit_session_id":os.environ.get("AUDIT_SESSION_ID","")}))')
+            ;;
 
-        API_URL="https://api.github.com/repos/${REPO}/actions/workflows/${ENCODED}/dispatches"
+          execute)
+            WORKFLOW_FILE="RGA Maintenance Executor.yml"
+            DISPATCH_INPUTS=$(python -c 'import json, os; print(json.dumps({"executor_mode":"execute","execution_plan":os.environ.get("EXECUTION_PLAN",""),"approval_artifact":os.environ.get("APPROVAL_ARTIFACT",""),"execution_approval":os.environ.get("EXECUTION_APPROVAL",""),"audit_session_id":os.environ.get("AUDIT_SESSION_ID","")}))')
+            ;;
 
-        # Build final payload safely using python to avoid shell quoting issues
-        PAYLOAD=$(python - <<PY
-import json,sys
-inputs = json.loads('''$PY_INPUTS''')
-payload = {"ref": "$REF", "inputs": inputs}
-print(json.dumps(payload))
-PY
-)
+          post_audit)
+            WORKFLOW_FILE="RGA Runtime Verifier.yml"
+            DISPATCH_INPUTS=$(python -c 'import json, os; print(json.dumps({"audit_mode":"post_audit","execution_plan":os.environ.get("EXECUTION_PLAN",""),"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT",""),"audit_session_id":os.environ.get("AUDIT_SESSION_ID","")}))')
+            ;;
+        esac
 
-        echo "Dispatching workflow '${WORKFLOW_FILE}' on ref '${REF}'..."
-        HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-          -H "Accept: application/vnd.github+json" \
-          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-          -H "Content-Type: application/json" \
-          --data "$PAYLOAD" \
-          "$API_URL")
+        ENCODED_WORKFLOW=$(python -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$WORKFLOW_FILE")
+
+        PAYLOAD=$(python -c 'import json, os; print(json.dumps({"ref": os.environ["REF_INPUT"], "inputs": json.loads(os.environ["DISPATCH_INPUTS"])}))' )
+
+        API_URL="https://api.github.com/repos/${REPO}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
+
+        echo "Dispatching workflow: ${WORKFLOW_FILE}"
+        echo "Lifecycle stage: ${STAGE}"
+        echo "Ref: ${REF_INPUT}"
+        echo "Inputs: ${DISPATCH_INPUTS}"
+
+        HTTP_RESPONSE=$(curl -s -w "
+%{http_code}" -X POST           -H "Accept: application/vnd.github+json"           -H "Authorization: Bearer ${GITHUB_TOKEN}"           -H "Content-Type: application/json"           --data "$PAYLOAD"           "$API_URL")
 
         BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
         CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
 
         echo "HTTP status: $CODE"
+
         if [ "$CODE" -ge 400 ]; then
-          echo "Failed to dispatch workflow. Response body:" >&2
+          echo "Workflow dispatch failed." >&2
           echo "$BODY" >&2
           exit 1
         fi
