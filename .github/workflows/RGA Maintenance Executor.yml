@@ -191,7 +191,8 @@ jobs:
           python -u tools/runtime_executor.py \
             --mode "${{ github.event.inputs.executor_mode }}" \
             --verifier-report artifacts/runtime_verifier_report.json \
-            --json-out artifacts/apply_execution_result.json \
+            --json-out artifacts/execution_plan.json \
+            --md-out artifacts/execution_plan.md \
             > artifacts/runtime_executor_stdout.txt 2> artifacts/runtime_executor_stderr.txt || true          
           
       ############################################################
