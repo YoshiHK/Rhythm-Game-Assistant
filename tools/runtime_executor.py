@@ -1468,6 +1468,10 @@ class RuntimeExecutor:
     def find_human_approval_artifact(
         self,
     ) -> Optional[Path]:
+        """
+        Search known locations for a human approval artifact and return the Path
+        to the first match. Returns None when no artifact is found.
+        """
         candidates = [
             Path("artifacts/human_execution_approval.json"),
             Path("human_execution_approval.json"),
