@@ -200,45 +200,41 @@ jobs:
 
       - name: Execution Plan Fingerprint
         if: always()
+        shell: bash
         run: |
-          python <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
+          set -euo pipefail
 
-          plan_path = Path(
-              "artifacts/execution_plan.json"
-          )
+          mkdir -p artifacts
 
-          fingerprint = None
+          python -c '
+import hashlib
+import json
+from pathlib import Path
 
-          if plan_path.exists():
-              fingerprint = hashlib.sha256(
-                  plan_path.read_bytes()
-              ).hexdigest()
+plan_path = Path("artifacts/execution_plan.json")
 
-          payload = {
-              "schema":
-                  "rga.execution_plan_fingerprint.v1.0",
+fingerprint = None
 
-              "execution_plan_present":
-                  plan_path.exists(),
+if plan_path.exists() and plan_path.is_file():
+    fingerprint = hashlib.sha256(
+        plan_path.read_bytes()
+    ).hexdigest()
 
-              "sha256":
-                  fingerprint,
-          }
+payload = {
+    "schema": "rga.execution_plan_fingerprint.v1.0",
+    "execution_plan_present": plan_path.exists() and plan_path.is_file(),
+    "sha256": fingerprint,
+}
 
-          Path(
-              "artifacts/execution_plan_fingerprint.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-      PY
+Path("artifacts/execution_plan_fingerprint.json").write_text(
+    json.dumps(
+        payload,
+        indent=2,
+        ensure_ascii=False,
+    ),
+    encoding="utf-8",
+)
+'
           
       ############################################################
       # Approval Artifact Matching
