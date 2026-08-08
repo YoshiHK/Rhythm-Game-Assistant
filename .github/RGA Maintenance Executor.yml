@@ -1,0 +1,1501 @@
+name: RGA Maintenance Executor
+
+on:
+  workflow_dispatch:
+    inputs:
+      executor_mode:
+        description: >
+          Bot #2 executor mode.
+
+          plan:
+            Generate an implementation plan from Bot #1 pre-audit evidence.
+
+          dry_run_execute:
+            Simulate execution and generate execution evidence without
+            mutating repository state.
+
+          execute:
+            Apply gated execution after Bot #1 plan-audit and human approval.
+        required: true
+        default: "dry_run_execute"
+        type: choice
+        options:
+          - plan
+          - dry_run_execute
+          - execute
+
+      audit_session_id:
+        description: >
+          Optional lifecycle correlation id linking:
+          Bot #1 pre-audit,
+          Bot #2 implementation plan,
+          Bot #1 plan-audit,
+          human approval,
+          Bot #2 execution,
+          and Bot #1 post-audit.
+        required: false
+        default: ""
+
+      pre_audit_report:
+        description: >
+          Bot #1 pre-audit report path.
+
+          This is the source material for Bot #2 implementation planning.
+          Used when executor_mode=plan.
+        required: false
+        default: "artifacts/runtime_verifier_report.json"
+
+      execution_plan:
+        description: >
+          Bot #2 implementation / execution plan path.
+
+          Used by dry_run_execute and execute stages.
+        required: false
+        default: "artifacts/execution_plan.json"
+
+      approval_artifact:
+        description: >
+          Human approval artifact path.
+
+          Required before execute mode may apply gated execution.
+        required: false
+        default: "artifacts/human_execution_approval.json"
+
+      execution_approval:
+        description: >
+          Optional approval phrase for execute mode.
+
+          Expected value:
+            APPROVE_RGA_EXECUTION
+
+          This does not replace the approval artifact; it is an additional
+          safety signal for gated execution.
+        required: false
+        default: ""
+
+jobs:
+  maintenance-execution:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare Artifact Directory
+        run: |
+          mkdir -p artifacts
+
+          cat > artifacts/maintenance_lifecycle_context.json <<'JSON'
+          {
+            "schema": "rga.maintenance_lifecycle_context.v1.0",
+            "workflow": "RGA Maintenance Executor",
+            "bot": "rga_executor_bot",
+            "bot_role": "planner_executor",
+            "lifecycle_model": [
+              "bot_1_pre_audit",
+              "bot_2_implementation_plan",
+              "bot_1_plan_audit",
+              "human_approval",
+              "bot_2_execute",
+              "bot_1_post_audit"
+            ],
+            "authority": {
+              "bot_2_may_plan": true,
+              "bot_2_may_execute": true,
+              "bot_2_may_approve": false,
+              "bot_2_may_self_approve": false,
+              "human_approval_required": true
+            },
+            "phase_boundary_policy": {
+              "completed_phases_immutable": true,
+              "canonical_row_modification_allowed": false,
+              "pattern_logic_modification_allowed": false,
+              "tips_generation_modification_allowed": false,
+              "personalization_modification_allowed": false,
+              "localization_modification_allowed": false,
+              "recommendation_logic_modification_allowed": false
+            }
+          }
+          JSON
+
+      ############################################################
+      # Execution Gate
+      ############################################################
+
+      - name: Execution Gate
+        id: execution_gate
+        run: |
+          MODE="${{ github.event.inputs.executor_mode }}"
+          APPROVAL="${{ github.event.inputs.approval_artifact }}"
+
+          STATUS="allowed"
+          REASON="Mode accepted"
+
+          if [ "$MODE" = "execute" ] && [ ! -f "$APPROVAL" ]; then
+            STATUS="blocked"
+            REASON="Approval artifact missing"
+          fi
+
+          cat > artifacts/execution_gate.json <<JSON
+          {
+            "schema": "rga.execution_gate.v1.0",
+            "requested_mode": "$MODE",
+            "status": "$STATUS",
+            "reason": "$REASON"
+          }
+          JSON
+
+      ############################################################
+      # Human Approval Artifact Verification
+      ############################################################
+
+      - name: Human Approval Artifact Verification
+        if: always()
+        run: |
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('artifacts/human_execution_approval.json')
+
+          payload = {
+              'schema':'rga.approval_verification.v1.0',
+              'artifact_present': p.exists()
+          }
+
+          Path('artifacts/approval_verification.json').write_text(
+              json.dumps(payload, indent=2),
+              encoding='utf-8'
+          )
+          PY
+          
+      ############################################################
+      # Run Runtime Executor
+      ############################################################
+
+      - name: Run Runtime Executor
+        continue-on-error: true
+        run: |
+          python -u tools/runtime_executor.py \
+            --mode "${{ github.event.inputs.executor_mode }}" \
+            --verifier-report artifacts/runtime_verifier_report.json \
+            --json-out artifacts/apply_execution_result.json \
+            > artifacts/runtime_executor_stdout.txt 2> artifacts/runtime_executor_stderr.txt || true          
+          
+      ############################################################
+      # Execution Plan Fingerprint
+      ############################################################
+
+      - name: Execution Plan Fingerprint
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          python <<'PY'
+import hashlib
+import json
+from pathlib import Path
+
+plan_path = Path(
+    "artifacts/execution_plan.json"
+)
+
+fingerprint = None
+
+if plan_path.exists() and plan_path.is_file():
+    fingerprint = hashlib.sha256(
+        plan_path.read_bytes()
+    ).hexdigest()
+
+payload = {
+    "schema":
+        "rga.execution_plan_fingerprint.v1.0",
+
+    "execution_plan_present":
+        plan_path.exists()
+        and plan_path.is_file(),
+
+    "sha256":
+        fingerprint,
+}
+
+Path(
+    "artifacts/execution_plan_fingerprint.json"
+).write_text(
+    json.dumps(
+        payload,
+        indent=2,
+        ensure_ascii=False,
+    ),
+    encoding="utf-8",
+)
+PY
+          
+      ############################################################
+      # Approval Artifact Matching
+      ############################################################
+
+      - name: Approval Artifact Matching
+        if: always()
+        run: |
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          match = False
+
+          plan_file = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          approval_file = Path(
+              "artifacts/human_execution_approval.json"
+          )
+
+          if (
+              plan_file.exists()
+              and approval_file.exists()
+          ):
+              plan = json.loads(
+                  plan_file.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              approval = json.loads(
+                  approval_file.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              approved_plan = (
+                  approval.get(
+                      "approved_execution_plan",
+                      {},
+                  )
+              )
+
+              match = (
+                  approved_plan.get("schema")
+                  == plan.get("plan", {}).get("schema")
+              )
+
+          payload = {
+              "schema":
+                  "rga.approval_artifact_matching.v1.0",
+
+              "approval_matches_plan":
+                  match,
+          }
+
+          Path(
+              "artifacts/approval_artifact_matching.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+              ),
+              encoding="utf-8",
+          )
+          PY
+          
+      ############################################################
+      # Execution Scope Verification
+      ############################################################
+
+      - name: Execution Scope Verification
+        if: always()
+        run: |
+          cat > artifacts/execution_scope_verification.json <<'JSON'
+          {
+            "schema":
+              "rga.execution_scope_verification.v1.0",
+
+            "protected_scopes": [
+
+              "canonical_row",
+
+              "pattern_logic",
+
+              "tips_generation",
+
+              "personalization",
+
+              "localization",
+
+              "recommendation_logic"
+            ],
+
+            "completed_phases_immutable":
+              true
+          }
+          JSON
+
+      ############################################################
+      # Execution Policy Verification
+      ############################################################
+
+      - name: Execution Policy Verification
+        if: always()
+        run: |
+          cat > artifacts/execution_policy_verification.json <<'JSON'
+          {
+            "schema":
+              "rga.execution_policy_verification.v1.0",
+
+            "execution_authority":
+              true,
+
+            "approval_authority":
+              false,
+
+            "self_approval":
+              false,
+
+            "human_approval_required":
+              true,
+
+            "plan_audit_required":
+              true,
+
+            "post_audit_required":
+              true
+          }
+          JSON
+          
+
+      ############################################################
+      # Apply Execution Result
+      ############################################################
+
+      - name: Apply Execution Result
+        if: always()
+        run: |
+          mkdir -p artifacts
+
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          executor_report_file = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          result = {}
+
+          if executor_report_file.exists():
+              try:
+                  executor_report = json.loads(
+                      executor_report_file.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+
+                  result = executor_report.get(
+                      "apply_execution_result",
+                      {},
+                  )
+
+              except Exception as exc:
+                  result = {
+                      "schema":
+                          "rga.apply_execution_result.v1.0",
+
+                      "execution_attempted":
+                          False,
+
+                      "execution_performed":
+                          False,
+
+                      "written_files":
+                          [],
+
+                      "policy_violations": [
+                          f"Could not parse executor report: {exc}"
+                      ],
+
+                      "post_audit_required":
+                          True,
+                  }
+
+          if not result:
+              result = {
+                  "schema":
+                      "rga.apply_execution_result.v1.0",
+
+                  "execution_attempted":
+                      False,
+
+                  "execution_performed":
+                      False,
+
+                  "written_files":
+                      [],
+
+                  "policy_violations":
+                      [],
+
+                  "post_audit_required":
+                      True,
+
+                  "note":
+                      "No apply_execution_result was emitted by runtime_executor.py."
+              }
+
+          Path(
+              "artifacts/apply_execution_result.json"
+          ).write_text(
+              json.dumps(
+                  result,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+          
+      ############################################################
+      # Apply Repository Changes
+      ############################################################
+
+      - name: Apply Repository Changes
+        if: always()
+        run: |
+          set +e
+
+          python <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+
+          mode = "${{ github.event.inputs.executor_mode }}"
+
+          apply_result_file = Path(
+              "artifacts/apply_execution_result.json"
+          )
+
+          repository_changes_applied = False
+          changed_files = []
+          written_files = []
+          notes = []
+          policy_violations = []
+
+          if apply_result_file.exists():
+
+              try:
+                  result = json.loads(
+                      apply_result_file.read_text(
+                          encoding="utf-8"
+                      )
+                  )
+
+                  written_files = result.get(
+                      "written_files",
+                      [],
+                  )
+
+                  policy_violations = result.get(
+                      "policy_violations",
+                      [],
+                  )
+
+              except Exception as exc:
+                  notes.append(
+                      f"Could not parse apply_execution_result.json: {exc}"
+                  )
+
+          else:
+              notes.append(
+                  "apply_execution_result.json not found."
+              )
+
+          protected_tokens = [
+              "canonical_row",
+              "pattern_logic",
+              "tips_generation",
+              "personalization",
+              "localization",
+              "recommendation_logic",
+              "Phase 1",
+              "Phase 2",
+              "Phase 3",
+              "Phase 4 - Personalization",
+              "Phase 4.5 - Localization",
+              "Phase 5 - Productionization",
+              "Phase 6 - Hardening and Scaling",
+              "Phase 7 - Games Recommendation",
+          ]
+
+          allowed_roots = [
+              "tools/",
+              "artifacts/",
+              ".github/workflows/",
+              "docs/",
+          ]
+
+          for item in written_files:
+              normalized = str(item).replace("\\", "/")
+
+              if any(
+                  token.lower() in normalized.lower()
+                  for token in protected_tokens
+              ):
+                  policy_violations.append(
+                      f"Protected scope change rejected: {normalized}"
+                  )
+                  continue
+
+              if not any(
+                  normalized.startswith(prefix)
+                  for prefix in allowed_roots
+              ):
+                  policy_violations.append(
+                      f"Change outside allowed roots rejected: {normalized}"
+                  )
+                  continue
+
+              changed_files.append(
+                  normalized
+              )
+
+          #
+          # Capture actual git working tree changes.
+          #
+
+          try:
+              proc = subprocess.run(
+                  [
+                      "git",
+                      "status",
+                      "--short",
+                  ],
+                  check=False,
+                  capture_output=True,
+                  text=True,
+              )
+
+              git_status_short = proc.stdout.splitlines()
+
+          except Exception as exc:
+              git_status_short = []
+              notes.append(
+                  f"Could not inspect git status: {exc}"
+              )
+
+          repository_changes_applied = bool(
+              changed_files
+              or git_status_short
+          )
+
+          payload = {
+              "schema":
+                  "rga.repository_changes.v1.1",
+
+              "executor_mode":
+                  mode,
+
+              "repository_changes_applied":
+                  repository_changes_applied,
+
+              "changed_files_from_executor":
+                  changed_files,
+
+              "git_status_short":
+                  git_status_short,
+
+              "policy_violations":
+                  policy_violations,
+
+              "notes":
+                  notes,
+
+              "allowed_scope":
+                  allowed_roots,
+
+              "protected_scopes":
+                  protected_tokens,
+
+              "completed_phases_immutable":
+                  True,
+
+              "governance_note": (
+                  "Repository change evidence is derived from runtime_executor "
+                  "outputs and git status. This step does not approve changes."
+              )
+          }
+
+          Path(
+              "artifacts/repository_changes.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Execution Commit Manifest
+      ############################################################
+
+      - name: Execution Commit Manifest
+        if: always()
+        run: |
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          repository_changes = Path(
+              "artifacts/repository_changes.json"
+          )
+
+          changed_files = []
+          git_status_short = []
+          policy_violations = []
+
+          if repository_changes.exists():
+
+              data = json.loads(
+                  repository_changes.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              changed_files = data.get(
+                  "changed_files_from_executor",
+                  []
+              )
+
+              git_status_short = data.get(
+                  "git_status_short",
+                  []
+              )
+
+              policy_violations = data.get(
+                  "policy_violations",
+                  []
+              )
+
+          commit_required = bool(
+              git_status_short
+          ) and not policy_violations
+
+          payload = {
+
+              "schema":
+                  "rga.execution_commit_manifest.v1.1",
+
+              "commit_required":
+                  commit_required,
+
+              "commit_candidate_files":
+                  changed_files,
+
+              "git_status_short":
+                  git_status_short,
+
+              "policy_violations":
+                  policy_violations,
+
+              "commit_message": (
+                  "[RGA Executor] Apply approved maintenance execution"
+              ),
+
+              "branch_name":
+                  "maintenance/executor-generated",
+
+              "human_review_required":
+                  True,
+
+              "post_audit_required":
+                  True,
+
+              "governance_note": (
+                  "Commit manifest is a candidate only. "
+                  "Bot #2 does not self-approve. Human review remains required."
+              )
+          }
+
+          Path(
+              "artifacts/execution_commit_manifest.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+
+      ############################################################
+      # Execution Pull Request Candidate
+      ############################################################
+
+      - name: Execution Pull Request Candidate
+        if: always()
+        run: |
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          commit_manifest = Path(
+              "artifacts/execution_commit_manifest.json"
+          )
+
+          pull_request_required = False
+          branch_name = "maintenance/executor-generated"
+          title = "[RGA Executor] Approved maintenance updates"
+          body = (
+              "Generated by RGA Executor. "
+              "Bot #1 post-audit remains required."
+          )
+          commit_candidate_files = []
+          policy_violations = []
+
+          if commit_manifest.exists():
+
+              data = json.loads(
+                  commit_manifest.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              pull_request_required = data.get(
+                  "commit_required",
+                  False
+              )
+
+              branch_name = data.get(
+                  "branch_name",
+                  branch_name,
+              )
+
+              commit_candidate_files = data.get(
+                  "commit_candidate_files",
+                  [],
+              )
+
+              policy_violations = data.get(
+                  "policy_violations",
+                  [],
+              )
+
+          payload = {
+
+              "schema":
+                  "rga.execution_pull_request_candidate.v1.1",
+
+              "pull_request_required":
+                  pull_request_required,
+
+              "branch_name":
+                  branch_name,
+
+              "title":
+                  title,
+
+              "body":
+                  body,
+
+              "commit_candidate_files":
+                  commit_candidate_files,
+
+              "policy_violations":
+                  policy_violations,
+
+              "required_reviewers": [
+                  "human_governor"
+              ],
+
+              "required_gates": [
+
+                  "execution_gate",
+
+                  "approval_artifact_matching",
+
+                  "execution_scope_verification",
+
+                  "execution_policy_verification",
+
+                  "post_audit"
+              ],
+
+              "governance_note": (
+                  "This file records a PR candidate. "
+                  "Actual PR creation occurs only in the gated PR creation step."
+              )
+          }
+
+          Path(
+              "artifacts/execution_pull_request_candidate.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+          
+      ############################################################
+      # Create Execution Branch and Commit
+      ############################################################
+
+      - name: Create Execution Branch and Commit
+        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        run: |
+          set +e
+
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_file = Path(
+              "artifacts/execution_commit_manifest.json"
+          )
+
+          result = {
+              "schema":
+                  "rga.execution_git_commit_result.v1.0",
+
+              "commit_attempted":
+                  False,
+
+              "commit_created":
+                  False,
+
+              "branch_name":
+                  "maintenance/executor-generated",
+
+              "commit_message":
+                  "[RGA Executor] Apply approved maintenance execution",
+
+              "reason":
+                  None,
+          }
+
+          if manifest_file.exists():
+              data = json.loads(
+                  manifest_file.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              result["commit_attempted"] = bool(
+                  data.get(
+                      "commit_required",
+                      False
+                  )
+              )
+
+              result["branch_name"] = data.get(
+                  "branch_name",
+                  result["branch_name"]
+              )
+
+              result["commit_message"] = data.get(
+                  "commit_message",
+                  result["commit_message"]
+              )
+
+              if not data.get("commit_required", False):
+                  result["reason"] = "Commit not required."
+
+              if data.get("policy_violations"):
+                  result["reason"] = "Commit blocked by policy violations."
+
+          else:
+              result["reason"] = "execution_commit_manifest.json not found."
+
+          Path(
+              "artifacts/execution_git_commit_result.json"
+          ).write_text(
+              json.dumps(
+                  result,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+          commit_required=$(python <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/execution_commit_manifest.json")
+
+          if not p.exists():
+              print("false")
+          else:
+              data = json.loads(p.read_text(encoding="utf-8"))
+              if data.get("commit_required") and not data.get("policy_violations"):
+                  print("true")
+              else:
+                  print("false")
+          PY
+          )
+
+          if [ "$commit_required" != "true" ]; then
+            echo "No commit required or commit blocked by policy."
+            exit 0
+          fi
+
+          branch_name=$(python <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_commit_manifest.json").read_text(encoding="utf-8"))
+          print(data.get("branch_name", "maintenance/executor-generated"))
+          PY
+          )
+
+          commit_message=$(python <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_commit_manifest.json").read_text(encoding="utf-8"))
+          print(data.get("commit_message", "[RGA Executor] Apply approved maintenance execution"))
+          PY
+          )
+
+          git config user.name "rga-executor-bot"
+          git config user.email "rga-executor-bot@users.noreply.github.com"
+
+          git checkout -B "$branch_name"
+
+          git add tools artifacts .github/workflows docs 2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "No staged changes."
+            exit 0
+          fi
+
+          git commit -m "$commit_message"
+
+          git push --set-upstream origin "$branch_name"
+
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/execution_git_commit_result.json")
+          data = json.loads(p.read_text(encoding="utf-8"))
+
+          data["commit_created"] = True
+          data["reason"] = "Commit created and branch pushed."
+
+          p.write_text(
+              json.dumps(data, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Create Pull Request Candidate
+      ############################################################
+
+      - name: Create Pull Request Candidate
+        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+
+          pr_required=$(python <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/execution_pull_request_candidate.json")
+
+          if not p.exists():
+              print("false")
+          else:
+              data = json.loads(p.read_text(encoding="utf-8"))
+              print("true" if data.get("pull_request_required") else "false")
+          PY
+          )
+
+          if [ "$pr_required" != "true" ]; then
+            echo "Pull request not required."
+            cat > artifacts/execution_pull_request_result.json <<'JSON'
+          {
+            "schema": "rga.execution_pull_request_result.v1.0",
+            "pull_request_attempted": false,
+            "pull_request_created": false,
+            "reason": "Pull request not required."
+          }
+          JSON
+            exit 0
+          fi
+
+          branch_name=$(python <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
+          print(data.get("branch_name", "maintenance/executor-generated"))
+          PY
+          )
+
+          pr_title=$(python <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
+          print(data.get("title", "[RGA Executor] Approved maintenance updates"))
+          PY
+          )
+
+          pr_body=$(python <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
+          print(data.get("body", "Generated by RGA Executor. Bot #1 post-audit remains required."))
+          PY
+          )
+
+          gh pr create \
+            --head "$branch_name" \
+            --base "${{ github.event.repository.default_branch }}" \
+            --title "$pr_title" \
+            --body "$pr_body" \
+            > artifacts/execution_pull_request_url.txt \
+            2> artifacts/execution_pull_request_stderr.txt
+
+          pr_exit=$?
+
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          url_file = Path("artifacts/execution_pull_request_url.txt")
+          stderr_file = Path("artifacts/execution_pull_request_stderr.txt")
+
+          payload = {
+              "schema":
+                  "rga.execution_pull_request_result.v1.0",
+
+              "pull_request_attempted":
+                  True,
+
+              "pull_request_created":
+                  url_file.exists() and bool(
+                      url_file.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).strip()
+                  ),
+
+              "pull_request_url":
+                  (
+                      url_file.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      ).strip()
+                      if url_file.exists()
+                      else None
+                  ),
+
+              "stderr":
+                  (
+                      stderr_file.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      )
+                      if stderr_file.exists()
+                      else None
+                  ),
+
+              "post_audit_required":
+                  True,
+          }
+
+          Path(
+              "artifacts/execution_pull_request_result.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+          exit 0          
+          
+      ############################################################
+      # Execution Manifest
+      ############################################################
+
+      - name: Execution Manifest
+        if: always()
+        run: |
+          find artifacts -type f | sort > artifacts/execution_manifest.txt
+
+      ############################################################
+      # Execution Lineage
+      ############################################################
+
+      - name: Execution Lineage
+        if: always()
+        run: |
+          cat > artifacts/execution_lineage.json <<'JSON'
+          {
+            "schema": "rga.execution_lineage.v1.0",
+            "flow": [
+              "runtime_verifier_report",
+              "execution_plan",
+              "apply_execution_result",
+              "post_audit"
+            ]
+          }
+          JSON
+
+      ############################################################
+      # Automatic Post-Audit Trigger
+      ############################################################
+
+      - name: Automatic Post-Audit Trigger
+        if: always()
+        run: |
+          mkdir -p artifacts
+
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          apply_result_file = Path(
+              "artifacts/apply_execution_result.json"
+          )
+
+          execution_performed = False
+          post_audit_required = True
+
+          if apply_result_file.exists():
+              try:
+                  apply_result = json.loads(
+                      apply_result_file.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+
+                  execution_performed = bool(
+                      apply_result.get(
+                          "execution_performed",
+                          False,
+                      )
+                  )
+
+                  post_audit_required = bool(
+                      apply_result.get(
+                          "post_audit_required",
+                          True,
+                      )
+                  )
+
+              except Exception:
+                  execution_performed = False
+                  post_audit_required = True
+
+          payload = {
+              "schema":
+                  "rga.post_audit_trigger.v1.1",
+
+              "audit_mode":
+                  "post_audit",
+
+              "required":
+                  post_audit_required,
+
+              "execution_performed":
+                  execution_performed,
+
+              "trigger_source":
+                  "Bot #2 execution",
+
+              "recommended_workflow":
+                  "RGA Runtime Verifier",
+
+              "governance_note": (
+                  "Post-audit should be run by Bot #1 after any "
+                  "successful Bot #2 execution."
+              )
+          }
+
+          Path(
+              "artifacts/post_audit_trigger.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Rollback Evidence
+      ############################################################
+
+      - name: Rollback Evidence
+        if: always()
+        run: |
+          cat > artifacts/rollback_evidence.json <<'JSON'
+          {
+            "schema": "rga.rollback_evidence.v1.0",
+            "rollback_available": true,
+            "strategy": "restore generated executor artifacts"
+          }
+          JSON
+
+      ############################################################
+      # Execution Bundle Manifest
+      ############################################################
+
+      - name: Execution Bundle Manifest
+        if: always()
+        run: |
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          artifact_candidates = [
+
+              "execution_plan.json",
+
+              "execution_plan.md",
+
+              "execution_plan_fingerprint.json",
+
+              "approval_verification.json",
+
+              "approval_artifact_matching.json",
+
+              "execution_scope_verification.json",
+
+              "execution_policy_verification.json",
+
+              "apply_execution_result.json",
+              
+              "repository_changes.json",
+
+              "execution_commit_manifest.json",
+
+              "execution_pull_request_candidate.json",
+              
+              "execution_git_commit_result.json",
+
+              "execution_pull_request_result.json",
+
+              "execution_pull_request_url.txt",
+
+              "execution_pull_request_stderr.txt",              
+
+              "execution_manifest.txt",
+
+              "execution_lineage.json",
+
+              "post_audit_trigger.json",
+
+              "rollback_evidence.json",
+
+              "execution_gate.json",
+
+              "runtime_executor_stdout.txt",
+
+              "runtime_executor_stderr.txt",
+          ]
+
+          existing = []
+
+          for item in artifact_candidates:
+
+              path = Path(
+                  "artifacts"
+              ) / item
+
+              if path.exists():
+                  existing.append(
+                      item
+                  )
+
+          payload = {
+
+              "schema":
+                  "rga.execution_bundle_manifest.v1.1",
+
+              "bundle":
+                  "rga_maintenance_executor_bundle.zip",
+
+              "artifact_count":
+                  len(existing),
+
+              "bundle_contents":
+                  existing,
+
+              "execution_lifecycle": [
+
+                  "execution_gate",
+
+                  "execution_plan",
+
+                  "approval_verification",
+
+                  "approval_artifact_matching",
+
+                  "execution_scope_verification",
+
+                  "execution_policy_verification",
+
+                  "apply_execution_result",
+                  
+                  "repository_changes",
+
+                  "execution_commit_manifest",
+
+                  "execution_pull_request_candidate",    
+
+                  "execution_git_commit_result",
+
+                  "execution_pull_request_result",                  
+
+                  "execution_lineage",
+
+                  "post_audit_trigger",
+
+                  "rollback_evidence"
+              ]
+          }
+
+          Path(
+              "artifacts/execution_bundle_manifest.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Bundle Integrity Manifest
+      ############################################################
+
+      - name: Bundle Integrity Manifest
+        if: always()
+        run: |
+          python <<'PY'
+          import json
+          import hashlib
+          from pathlib import Path
+
+          hashes = {}
+
+          artifacts = Path(
+              "artifacts"
+          )
+
+          if artifacts.exists():
+
+              for path in sorted(
+                  artifacts.rglob("*")
+              ):
+
+                  if (
+                      path.is_file()
+                      and path.name
+                      != "bundle_integrity_manifest.json"
+                  ):
+
+                      hashes[
+                          str(
+                              path.relative_to(
+                                  artifacts
+                              )
+                          )
+                      ] = hashlib.sha256(
+                          path.read_bytes()
+                      ).hexdigest()
+
+          payload = {
+
+              "schema":
+                  "rga.bundle_integrity_manifest.v1.0",
+
+              "artifact_hash_count":
+                  len(hashes),
+
+              "sha256":
+                  hashes,
+          }
+
+          Path(
+              "artifacts/bundle_integrity_manifest.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Create Downloadable Zip Bundle
+      ############################################################
+
+      - name: Create Downloadable Zip Bundle
+        if: always()
+        run: |
+          rm -f artifacts/rga_maintenance_executor_bundle.zip
+
+          zip -r \
+            artifacts/rga_maintenance_executor_bundle.zip \
+            artifacts
+
+      ############################################################
+      # Upload Maintenance Executor Bundle
+      ############################################################
+
+      - name: Upload Maintenance Executor Bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-maintenance-executor-bundle
+          path: artifacts/rga_maintenance_executor_bundle.zip
+
+      ############################################################
+      # Upload Maintenance Executor Evidence
+      ############################################################
+
+      - name: Upload Maintenance Executor Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-maintenance-executor-evidence
+          path: |
+            artifacts/*.json
+            artifacts/*.md
+            artifacts/*.txt
