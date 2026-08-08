@@ -1467,13 +1467,10 @@ class RuntimeExecutor:
         
     def find_human_approval_artifact(
         self,
-    ) -> Optionalcandidates = [
-            Path(
-                "artifacts/human_execution_approval.json"
-            ),
-            Path(
-                "human_execution_approval.json"
-            ),
+    ) -> Optional[Path]:
+        candidates = [
+            Path("artifacts/human_execution_approval.json"),
+            Path("human_execution_approval.json"),
         ]
 
         for path in candidates:
