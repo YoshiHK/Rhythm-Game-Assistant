@@ -37,7 +37,7 @@ import traceback
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # -----------------------------------------------------------------------------
@@ -51,6 +51,7 @@ DEFAULT_MODE = "plan"
 SUPPORTED_MODES = [
     "plan",
     "dry_run_execute",
+    "execute",
 ]
 
 FORBIDDEN_OPERATIONS = [
@@ -157,8 +158,8 @@ class ExecutorResult:
     approval_authority: bool
     plan: Dict[str, Any]
     dry_run_result: Dict[str, Any]
+    apply_execution_result: Dict[str, Any]
     diagnostics: Dict[str, Any]
-
 
 # -----------------------------------------------------------------------------
 # Utility helpers
@@ -522,6 +523,7 @@ class RuntimeExecutor:
         analysis: Dict[str, Any],
         repair_dag: Dict[str, Any],
     ) -> ExecutionPlan:
+
         target_root_failures = sorted(
             analysis.get(
                 "root_contracts",
@@ -529,89 +531,246 @@ class RuntimeExecutor:
             )
         )
 
-        proposed_changes: List[ProposedChange] = []
+        proposed_changes: List[
+            ProposedChange
+        ] = []
+
+        #
+        # ----------------------------------------------------------
+        # Root Failure First
+        # ----------------------------------------------------------
+        #
 
         for root_contract in target_root_failures:
+
             proposed_changes.extend(
                 self.proposed_changes_for_root(
                     root_contract
                 )
             )
 
+        #
+        # ----------------------------------------------------------
+        # No Root Failure
+        # ----------------------------------------------------------
+        #
+
         if not proposed_changes:
+
             proposed_changes.append(
                 ProposedChange(
-                    change_id="no_root_failure_execution_required",
-                    change_type="no_op_plan",
+                    change_id=
+                        "no_root_failure_execution_required",
+
+                    change_type=
+                        "no_op_plan",
+
                     target_files=[],
+
                     purpose=(
-                        "No root failures were detected. No execution proposal is required."
+                        "No root failures were detected. "
+                        "No execution proposal is required."
                     ),
-                    mutation_level="proposal_only",
-                    requires_human_approval=True,
+
+                    mutation_level=
+                        "proposal_only",
+
+                    requires_human_approval=
+                        True,
                 )
             )
 
+        #
+        # ----------------------------------------------------------
+        # Mode Normalization
+        #
+        # upgrade executable proposals when
+        # execute mode is explicitly requested.
+        # ----------------------------------------------------------
+        #
+
+        if self.mode == "execute":
+
+            for change in proposed_changes:
+
+                if change.change_id in {
+
+                    "dry_run_artifact_backbone_bootstrap_script",
+
+                    "generate_artifact_backbone_bootstrap_script_proposal",
+
+                }:
+
+                    change.mutation_level = (
+                        "execute_allowed"
+                    )
+
+        elif self.mode == "dry_run_execute":
+
+            for change in proposed_changes:
+
+                if change.change_id in {
+
+                    "dry_run_artifact_backbone_bootstrap_script",
+
+                    "generate_artifact_backbone_bootstrap_script_proposal",
+
+                }:
+
+                    change.mutation_level = (
+                        "dry_run_only"
+                    )
+
+        #
+        # ----------------------------------------------------------
+        # Verification Steps
+        # ----------------------------------------------------------
+        #
+
         verification_steps = [
+
             VerificationStep(
-                step_id="run_bot_1_plan_audit",
+
+                step_id=
+                    "run_bot_1_plan_audit",
+
                 description=(
-                    "Run Bot #1 in plan_audit mode against this execution plan."
+                    "Run Bot #1 in plan_audit mode "
+                    "against this execution plan."
                 ),
+
                 expected_evidence=(
-                    "runtime_verifier_report.json containing plan_audit section."
+                    "runtime_verifier_report.json "
+                    "containing plan_audit section."
                 ),
             ),
+
             VerificationStep(
-                step_id="obtain_human_approval",
+
+                step_id=
+                    "obtain_human_approval",
+
                 description=(
-                    "Human reviews Bot #1 plan-audit output and approves or rejects execution."
+                    "Human reviews Bot #1 plan-audit "
+                    "output and approves or rejects execution."
                 ),
-                expected_evidence="explicit human approval artifact",
+
+                expected_evidence=
+                    "human_execution_approval.json",
             ),
+
             VerificationStep(
-                step_id="run_bot_1_post_audit",
+
+                step_id=
+                    "run_bot_1_post_audit",
+
                 description=(
-                    "Run Bot #1 in post_audit mode after approved execution is applied."
+                    "Run Bot #1 in post_audit mode "
+                    "after approved execution is applied."
                 ),
-                expected_evidence="post_audit report",
+
+                expected_evidence=
+                    "post_audit report",
             ),
         ]
 
+        #
+        # ----------------------------------------------------------
+        # Rollback
+        # ----------------------------------------------------------
+        #
+
         rollback = RollbackPlan(
+
             available=True,
-            strategy="No repository mutation is performed in plan or dry_run_execute mode.",
+
+            strategy=(
+
+                "Execution is governed by Bot #1 "
+                "plan audit, human approval, "
+                "and post-audit verification."
+
+            ),
+
             rollback_steps=[
-                "Discard generated execution_plan.json.",
-                "Discard generated execution_plan.md.",
-                "Discard generated dry_run_result evidence.",
-                "Re-run Bot #1 pre_audit if a fresh baseline is needed.",
+
+                "Restore generated tooling artifacts if required.",
+
+                "Remove generated bootstrap scripts if rejected.",
+
+                "Discard execution_plan.json if execution is canceled.",
+
+                "Discard execution_plan.md if execution is canceled.",
+
+                "Discard dry_run_result evidence if generated.",
+
+                "Re-run Bot #1 pre_audit for a fresh baseline.",
+
+                "Re-run Bot #1 post_audit after rollback."
             ],
         )
 
+        #
+        # ----------------------------------------------------------
+        # Execution Plan
+        # ----------------------------------------------------------
+        #
+
         return ExecutionPlan(
-            schema=EXECUTION_PLAN_SCHEMA,
-            mode=self.mode,
-            target_root_failures=target_root_failures,
-            expected_derived_improvements=sorted(
-                analysis.get(
-                    "derived_dependency_map",
-                    {},
-                ).keys()
-            ),
-            proposed_changes=proposed_changes,
-            verification_steps=verification_steps,
-            rollback=rollback,
+
+            schema=
+                EXECUTION_PLAN_SCHEMA,
+
+            mode=
+                self.mode,
+
+            target_root_failures=
+                target_root_failures,
+
+            expected_derived_improvements=
+                sorted(
+                    analysis.get(
+                        "derived_dependency_map",
+                        {},
+                    ).keys()
+                ),
+
+            proposed_changes=
+                proposed_changes,
+
+            verification_steps=
+                verification_steps,
+
+            rollback=
+                rollback,
+
             forbidden_changes_declared_absent={
-                "canonical_row": True,
-                "pattern_logic": True,
-                "tips_generation": True,
-                "personalization": True,
-                "localization": True,
-                "recommendation_logic": True,
-                "source_asset_deletion": True,
-                "database_mutation": True,
+
+                "canonical_row":
+                    True,
+
+                "pattern_logic":
+                    True,
+
+                "tips_generation":
+                    True,
+
+                "personalization":
+                    True,
+
+                "localization":
+                    True,
+
+                "recommendation_logic":
+                    True,
+
+                "source_asset_deletion":
+                    True,
+
+                "database_mutation":
+                    True,
             },
+
             human_approval_required=True,
         )
 
@@ -679,11 +838,420 @@ class RuntimeExecutor:
 
         self.diagnostics["dry_run_result"] = result
         return result
+        
+    def find_human_approval_artifact(
+        self,
+    ) -> Optionalcandidates = [
+            Path(
+                "artifacts/human_execution_approval.json"
+            ),
+            Path(
+                "human_execution_approval.json"
+            ),
+        ]
+
+        for path in candidates:
+            if path.exists() and path.is_file():
+                return path
+
+        return None
+
+
+    def load_human_approval(
+        self,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        approval_path = self.find_human_approval_artifact()
+
+        if approval_path is None:
+            return (
+                None,
+                "Human execution approval artifact was not found.",
+            )
+
+        try:
+            data = read_json_file(
+                approval_path
+            )
+
+            return (
+                data,
+                None,
+            )
+
+        except Exception as exc:
+            return (
+                None,
+                str(exc),
+            )
+
+
+    def approval_matches_plan(
+        self,
+        *,
+        approval: Dict[str, Any],
+        plan: ExecutionPlan,
+    ) -> Tuple[bool, List[str]]:
+        issues: List[str] = []
+
+        approved = approval.get(
+            "approved",
+            False,
+        )
+
+        approval_phrase = approval.get(
+            "approval_phrase",
+        )
+
+        approved_execution_plan = approval.get(
+            "approved_execution_plan",
+            {},
+        )
+
+        if approved is not True:
+            issues.append(
+                "Approval artifact does not set approved=true."
+            )
+
+        if approval_phrase != "APPROVE_RGA_EXECUTION":
+            issues.append(
+                "Approval artifact does not contain the required approval phrase."
+            )
+
+        if not isinstance(
+            approved_execution_plan,
+            dict,
+        ):
+            issues.append(
+                "approved_execution_plan must be an object."
+            )
+
+            return (
+                False,
+                issues,
+            )
+
+        approved_targets = sorted(
+            approved_execution_plan.get(
+                "target_root_failures",
+                [],
+            )
+        )
+
+        plan_targets = sorted(
+            plan.target_root_failures
+        )
+
+        if approved_targets != plan_targets:
+            issues.append(
+                "Approval artifact target_root_failures do not match the generated execution plan."
+            )
+
+        approved_schema = approved_execution_plan.get(
+            "schema",
+        )
+
+        if approved_schema != plan.schema:
+            issues.append(
+                "Approval artifact schema does not match execution plan schema."
+            )
+
+        return (
+            not issues,
+            issues,
+        )
+
+
+    def is_write_path_allowed(
+        self,
+        path_text: str,
+    ) -> Tuple[bool, str]:
+        normalized = (
+            path_text
+            .replace("\\", "/")
+            .strip()
+        )
+
+        if not normalized:
+            return (
+                False,
+                "Empty path is not allowed.",
+            )
+
+        prohibited_tokens = [
+            "Phase 1",
+            "Phase 2",
+            "Phase 3",
+            "Phase 4 - Personalization",
+            "Phase 4.5 - Localization",
+            "Phase 5 - Productionization",
+            "Phase 6 - Hardening and Scaling",
+            "Phase 7 - Games Recommendation",
+            "canonical_row",
+            "pattern_logic",
+            "tips_generation",
+            "personalization",
+            "localization",
+            "recommendation_logic",
+        ]
+
+        for token in prohibited_tokens:
+            if token.lower() in normalized.lower():
+                return (
+                    False,
+                    f"Path is inside or refers to protected scope: {token}",
+                )
+
+        allowed_prefixes = [
+            "tools/",
+            "artifacts/",
+            ".github/workflows/",
+            "docs/",
+        ]
+
+        normalized_lower = normalized.lower()
+
+        if any(
+            normalized_lower.startswith(
+                prefix.lower()
+            )
+            for prefix in allowed_prefixes
+        ):
+            return (
+                True,
+                "Path is inside permitted execution scope.",
+            )
+
+        return (
+            False,
+            "Path is outside permitted execution scope.",
+        )
+
+
+    def render_artifact_backbone_bootstrap_script(
+        self,
+    ) -> str:
+        return '''#!/usr/bin/env python3
+"""
+artifact_backbone_bootstrap.py
+
+Generated by RGA Executor Bot.
+
+Purpose:
+- Prepare non-destructive artifact backbone bootstrap scaffolding.
+- Does not run automatically.
+- Does not delete source assets.
+- Does not modify completed phases.
+
+Backbone:
+file_scan_inventory.db
+    -> chart_assets.db
+    -> chart_patterns.db
+"""
+
+from __future__ import annotations
+
+
+def main() -> int:
+    print("Artifact backbone bootstrap scaffold.")
+    print("This script is intentionally non-destructive.")
+    print("Manual review and Bot #1 verification are required before use.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+
+    def apply_execution(
+        self,
+        plan: ExecutionPlan,
+    ) -> Dict[str, Any]:
+        #
+        # ----------------------------------------------------------
+        # Gated Apply Execution
+        #
+        # This is intentionally narrow.
+        #
+        # It may create approved tooling/governance/evidence files.
+        #
+        # It must not:
+        #   - mutate databases
+        #   - delete source assets
+        #   - modify completed phases
+        #   - approve itself
+        #   - override governance
+        # ----------------------------------------------------------
+        #
+
+        approval, approval_error = self.load_human_approval()
+
+        execution_result: Dict[str, Any] = {
+            "schema":
+                "rga.runtime_executor.apply_execution_result.v1.0",
+
+            "execution_attempted":
+                False,
+
+            "execution_performed":
+                False,
+
+            "approval_loaded":
+                approval is not None,
+
+            "approval_error":
+                approval_error,
+
+            "written_files":
+                [],
+
+            "skipped_changes":
+                [],
+
+            "policy_violations":
+                [],
+
+            "db_mutation_performed":
+                False,
+
+            "source_asset_deletion_performed":
+                False,
+
+            "completed_phase_mutation_performed":
+                False,
+
+            "post_audit_required":
+                True,
+        }
+
+        if self.mode != "execute":
+            execution_result[
+                "skipped_changes"
+            ].append(
+                "Execution skipped because mode is not execute."
+            )
+
+            return execution_result
+
+        execution_result[
+            "execution_attempted"
+        ] = True
+
+        if approval is None:
+            execution_result[
+                "policy_violations"
+            ].append(
+                approval_error
+                or "Human approval artifact missing."
+            )
+
+            return execution_result
+
+        approval_ok, approval_issues = (
+            self.approval_matches_plan(
+                approval=approval,
+                plan=plan,
+            )
+        )
+
+        if not approval_ok:
+            execution_result[
+                "policy_violations"
+            ].extend(
+                approval_issues
+            )
+
+            return execution_result
+
+        for change in plan.proposed_changes:
+            if change.mutation_level not in {
+                "execute_allowed",
+                "dry_run_only",
+                "proposal_only",
+            }:
+                execution_result[
+                    "policy_violations"
+                ].append(
+                    (
+                        f"Change {change.change_id} has unsupported "
+                        f"mutation_level={change.mutation_level}."
+                    )
+                )
+                continue
+
+            #
+            # v1.0 gated execution only materializes the artifact
+            # backbone bootstrap script. Other changes remain advisory.
+            #
+
+            if change.change_id in {
+                "dry_run_artifact_backbone_bootstrap_script",
+                "generate_artifact_backbone_bootstrap_script_proposal",
+            }:
+                for target in change.target_files:
+                    allowed, reason = self.is_write_path_allowed(
+                        target
+                    )
+
+                    if not allowed:
+                        execution_result[
+                            "policy_violations"
+                        ].append(
+                            (
+                                f"Target path rejected for "
+                                f"{change.change_id}: {target}; {reason}"
+                            )
+                        )
+                        continue
+
+                    target_path = Path(
+                        target
+                    )
+
+                    target_path.parent.mkdir(
+                        parents=True,
+                        exist_ok=True,
+                    )
+
+                    target_path.write_text(
+                        self.render_artifact_backbone_bootstrap_script(),
+                        encoding="utf-8",
+                    )
+
+                    execution_result[
+                        "written_files"
+                    ].append(
+                        str(
+                            target_path
+                        )
+                    )
+
+            else:
+                execution_result[
+                    "skipped_changes"
+                ].append(
+                    (
+                        f"{change.change_id} is not executable in "
+                        "the current gated execution implementation."
+                    )
+                )
+
+        execution_result[
+            "execution_performed"
+        ] = bool(
+            execution_result[
+                "written_files"
+            ]
+        )
+
+        return execution_result
+
 
     def enforce_policy(
         self,
         plan: ExecutionPlan,
         dry_run_result: Dict[str, Any],
+        apply_execution_result: Dict[str, Any],
     ) -> Dict[str, Any]:
         violations: List[str] = []
 
@@ -706,10 +1274,21 @@ class RuntimeExecutor:
                 "dry_run_only"
             )
 
+        if self.mode == "execute":
+            allowed_mutation_levels.update(
+                {
+                    "dry_run_only",
+                    "execute_allowed",
+                }
+            )
+
         for change in plan.proposed_changes:
             if change.mutation_level not in allowed_mutation_levels:
                 violations.append(
-                    f"Change {change.change_id} uses disallowed mutation level: {change.mutation_level}."
+                    (
+                        f"Change {change.change_id} uses disallowed "
+                        f"mutation level: {change.mutation_level}."
+                    )
                 )
 
             if not change.requires_human_approval:
@@ -720,41 +1299,108 @@ class RuntimeExecutor:
         declared_absent = plan.forbidden_changes_declared_absent
 
         for operation in FORBIDDEN_OPERATIONS:
-            if operation in declared_absent and declared_absent[operation] is not True:
+            if (
+                operation in declared_absent
+                and declared_absent[operation] is not True
+            ):
                 violations.append(
                     f"Forbidden operation not declared absent: {operation}"
                 )
 
-        if dry_run_result.get("would_mutate_databases"):
+        if dry_run_result.get(
+            "would_mutate_databases"
+        ):
             violations.append(
                 "dry_run_execute must not mutate databases."
             )
 
-        if dry_run_result.get("would_delete_files"):
+        if dry_run_result.get(
+            "would_delete_files"
+        ):
             violations.append(
                 "dry_run_execute must not delete files."
             )
 
-        if dry_run_result.get("completed_phase_mutation"):
+        if dry_run_result.get(
+            "completed_phase_mutation"
+        ):
             violations.append(
                 "dry_run_execute must not modify completed phases."
             )
 
+        if self.mode == "execute":
+            if not apply_execution_result:
+                violations.append(
+                    "execute mode requires apply_execution_result."
+                )
+
+            elif apply_execution_result.get(
+                "policy_violations"
+            ):
+                violations.extend(
+                    apply_execution_result.get(
+                        "policy_violations",
+                        [],
+                    )
+                )
+
+            if apply_execution_result.get(
+                "db_mutation_performed"
+            ):
+                violations.append(
+                    "execute mode must not mutate databases in this gated implementation."
+                )
+
+            if apply_execution_result.get(
+                "source_asset_deletion_performed"
+            ):
+                violations.append(
+                    "execute mode must not delete source assets."
+                )
+
+            if apply_execution_result.get(
+                "completed_phase_mutation_performed"
+            ):
+                violations.append(
+                    "execute mode must not modify completed phases."
+                )
+
         policy_result = {
-            "policy_passed": not violations,
-            "violations": violations,
-            "mode": self.mode,
-            "proposal_only": self.mode == "plan",
-            "dry_run": self.mode == "dry_run_execute",
-            "execution_authority": False,
-            "approval_authority": False,
-            "protected_completed_phases": PROTECTED_COMPLETED_PHASES,
+            "policy_passed":
+                not violations,
+
+            "violations":
+                violations,
+
+            "mode":
+                self.mode,
+
+            "proposal_only":
+                self.mode == "plan",
+
+            "dry_run":
+                self.mode == "dry_run_execute",
+
+            "execution_authority":
+                self.mode == "execute",
+
+            "approval_authority":
+                False,
+
+            "protected_completed_phases":
+                PROTECTED_COMPLETED_PHASES,
         }
 
-        self.diagnostics["policy_result"] = policy_result
+        self.diagnostics[
+            "policy_result"
+        ] = policy_result
+
         return policy_result
 
-    def run_all(self) -> Dict[str, Any]:
+
+    def run_all(
+        self,
+    ) -> Dict[str, Any]:
         analysis = self.analyze_failures()
 
         repair_dag = self.build_repair_dag(
@@ -773,9 +1419,17 @@ class RuntimeExecutor:
                 plan
             )
 
+        apply_execution_result: Dict[str, Any] = {}
+
+        if self.mode == "execute":
+            apply_execution_result = self.apply_execution(
+                plan
+            )
+
         policy_result = self.enforce_policy(
             plan,
             dry_run_result,
+            apply_execution_result,
         )
 
         result = ExecutorResult(
@@ -788,17 +1442,21 @@ class RuntimeExecutor:
             mode=self.mode,
             proposal_only=self.mode == "plan",
             dry_run=self.mode == "dry_run_execute",
-            execution_authority=False,
+            execution_authority=self.mode == "execute",
             approval_authority=False,
             plan=asdict(plan),
             dry_run_result=dry_run_result,
+            apply_execution_result=apply_execution_result,
             diagnostics={
                 **self.diagnostics,
-                "policy_result": policy_result,
+                "policy_result":
+                    policy_result,
             },
         )
 
-        return asdict(result)
+        return asdict(
+            result
+        )
 
 
 # -----------------------------------------------------------------------------
