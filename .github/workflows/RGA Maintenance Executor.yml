@@ -280,7 +280,11 @@ jobs:
       - name: Run Runtime Executor
         continue-on-error: true
         run: |
-          python tools/runtime_executor.py             --mode "${{ github.event.inputs.executor_mode }}"             --verifier-report artifacts/runtime_verifier_report.json             --json-out artifacts/execution_plan.json             --md-out artifacts/execution_plan.md             > artifacts/runtime_executor_stdout.txt             2> artifacts/runtime_executor_stderr.txt || true
+          python -u tools/runtime_executor.py \
+            --mode "${{ github.event.inputs.executor_mode }}" \
+            --verifier-report artifacts/runtime_verifier_report.json \
+            --json-out artifacts/apply_execution_result.json \
+            > artifacts/runtime_executor_stdout.txt 2> artifacts/runtime_executor_stderr.txt || true
 
       ############################################################
       # Apply Execution Result
@@ -296,11 +300,11 @@ jobs:
           payload = {
               'schema':'rga.apply_execution_result.v1.0',
               'execution_plan_present': Path('artifacts/execution_plan.json').exists(),
-              "execution_attempted": true,
-              "execution_performed": true,
+              "execution_attempted": True,
+              "execution_performed": True,
               "written_files": [],
               "policy_violations": [],
-              'post_audit_required': true
+              'post_audit_required': True
           }
 
           Path('artifacts/apply_execution_result.json').write_text(
@@ -312,7 +316,7 @@ jobs:
       ############################################################
       # Apply Repository Changes
       ############################################################
-
+ 
       - name: Apply Repository Changes
         if: always()
         run: |
@@ -574,7 +578,7 @@ jobs:
           cat > artifacts/post_audit_trigger.json <<'JSON'
           {
             "schema": "rga.post_audit_trigger.v1.0",
-            "audit_mode": "post_audit"
+            "audit_mode": "post_audit",
             "required": true,
             "trigger_source": "Bot #2 execution"
           }
