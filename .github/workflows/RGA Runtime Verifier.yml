@@ -2908,14 +2908,28 @@ jobs:
 
       ############################################################
       # Plan Audit Report
+      #
+      # Bot #1 plan-audit mode:
+      #
+      #   - Reviews Bot #2 implementation / execution plan.
+      #   - Does not approve execution.
+      #   - Does not execute.
+      #   - Does not mutate repository state.
+      #
+      # Canonical output:
+      #
+      #   artifacts/plan_audit_evidence.json
       ############################################################
 
       - name: Plan Audit Report
         if: always()
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
 
-          python - <<'PY'
+          cat > artifacts/plan_audit_generator.py <<'PY'
           import json
           from pathlib import Path
 
@@ -2923,19 +2937,210 @@ jobs:
               "artifacts/execution_plan.json"
           )
 
-          plan_available = execution_plan.is_file()
+          plan_available = (
+              execution_plan.exists()
+              and execution_plan.is_file()
+              and execution_plan.stat().st_size > 0
+          )
+
+          plan_schema = None
+          plan_mode = None
+          target_root_failures = []
+          proposed_change_count = 0
+          human_approval_required = None
+          plan_audit_required = None
+          post_audit_required = None
+          forbidden_changes_declared_absent = {}
+          phase_boundary_validation = {}
+          plan_load_error = None
+
+          if plan_available:
+              try:
+                  plan_data = json.loads(
+                      execution_plan.read_text(
+                          encoding="utf-8",
+                          errors="ignore",
+                      )
+                  )
+
+                  if isinstance(plan_data, dict):
+                      plan_schema = plan_data.get(
+                          "schema"
+                      )
+
+                      plan_mode = plan_data.get(
+                          "mode"
+                      )
+
+                      target_root_failures = plan_data.get(
+                         "target_root_failures",
+                          [],
+                      )
+
+                      proposed_changes = plan_data.get(
+                          "proposed_changes",
+                          [],
+                      )
+
+                      proposed_change_count = (
+                          len(proposed_changes)
+                          if isinstance(
+                              proposed_changes,
+                              list,
+                          )
+                          else 0
+                      )
+
+                      human_approval_required = plan_data.get(
+                          "human_approval_required"
+                      )
+
+                      plan_audit_required = plan_data.get(
+                          "plan_audit_required"
+                      )
+
+                      post_audit_required = plan_data.get(
+                          "post_audit_required"
+                      )
+
+                      forbidden_changes_declared_absent = plan_data.get(
+                          "forbidden_changes_declared_absent",
+                          {},
+                      )
+
+                      phase_boundary_validation = plan_data.get(
+                          "phase_boundary_validation",
+                          {},
+                      )
+
+              except Exception as exc:
+                  plan_load_error = str(exc)
+
+          required_checks = [
+              "target_root_failures",
+              "proposed_changes",
+              "rollback",
+              "forbidden_scope_declared_absent",
+              "human_approval_required",
+              "plan_audit_required",
+              "post_audit_required",
+              "completed_phase_integrity",
+          ]
+
+          issues = []
+
+          if not plan_available:
+              issues.append(
+                  "execution_plan.json is missing or empty."
+              )
+
+          if plan_load_error:
+              issues.append(
+                  f"execution_plan.json could not be parsed: {plan_load_error}"
+              )
+
+          if human_approval_required is not True:
+              issues.append(
+                  "execution plan must require human approval."
+              )
+
+          if plan_audit_required is not True:
+              issues.append(
+                  "execution plan must require Bot #1 plan audit."
+              )
+
+          if post_audit_required is not True:
+              issues.append(
+                  "execution plan must require Bot #1 post audit."
+              )
+
+          forbidden_scope_ok = True
+
+          if isinstance(
+              forbidden_changes_declared_absent,
+              dict,
+          ):
+              for key in [
+                  "canonical_row",
+                  "pattern_logic",
+                  "tips_generation",
+                  "personalization",
+                  "localization",
+                  "recommendation_logic",
+                  "source_asset_deletion",
+                  "database_mutation",
+              ]:
+                  if forbidden_changes_declared_absent.get(key) is not True:
+                      forbidden_scope_ok = False
+                      issues.append(
+                          f"forbidden_changes_declared_absent.{key} is not true."
+                      )
+          else:
+              forbidden_scope_ok = False
+              issues.append(
+                  "forbidden_changes_declared_absent is missing or not an object."
+              )
+
+          completed_phase_ok = True
+
+          if isinstance(
+              phase_boundary_validation,
+              dict,
+          ):
+              for key, value in phase_boundary_validation.items():
+                  if value is not False:
+                      completed_phase_ok = False
+                      issues.append(
+                          f"phase boundary violation detected: {key}={value}"
+                      )
+          else:
+              completed_phase_ok = False
+              issues.append(
+                  "phase_boundary_validation is missing or not an object."
+              )
 
           payload = {
               "schema":
-                  "rga.plan_audit_evidence.v1.1",
+                  "rga.plan_audit_evidence.v1.2",
+ 
+              "canonical_output":
+                  "artifacts/plan_audit_evidence.json",
 
               "execution_plan_available":
                   plan_available,
 
+              "execution_plan_path":
+                  str(
+                      execution_plan
+                  ),
+
+              "execution_plan_summary": {
+                  "schema":
+                      plan_schema,
+
+                  "mode":
+                      plan_mode,
+
+                  "target_root_failures":
+                      target_root_failures,
+
+                  "proposed_change_count":
+                      proposed_change_count,
+
+                  "human_approval_required":
+                      human_approval_required,
+
+                  "plan_audit_required":
+                      plan_audit_required,
+
+                  "post_audit_required":
+                      post_audit_required,
+              },
+
               "bot_1_authority": {
                   "approve_execution":
                       False,
-
+  
                   "apply_execution":
                       False,
 
@@ -2943,22 +3148,24 @@ jobs:
                       True,
 
                   "post_audit":
-                      True
+                      True,
               },
 
               "bot_2_authority": {
-                  "generate_execution_plan":
+                  "generate_implementation_plan":
                       True,
 
                   "dry_run_execute":
                       True,
 
+                  "execute_after_approval":
+                      True,
+
                   "self_approval":
-                      False
+                      False,
               },
 
               "plan_audit_principles": {
-
                   "plan_audit_is_not_approval":
                       True,
 
@@ -2972,16 +3179,52 @@ jobs:
                       True,
 
                   "completed_phases_remain_immutable":
-                      True
+                      True,
               },
 
-              "required_checks": [
-                  "target_root_failures",
-                  "proposed_changes",
-                  "rollback",
-                  "forbidden_scope_declared_absent",
-                  "human_approval_required"
-              ]
+              "required_checks":
+                  required_checks,
+
+              "check_results": {
+                  "forbidden_scope_declared_absent_ok":
+                      forbidden_scope_ok,
+
+                  "completed_phase_integrity_ok":
+                      completed_phase_ok,
+
+                  "human_approval_required_ok":
+                      human_approval_required is True,
+
+                  "plan_audit_required_ok":
+                      plan_audit_required is True,
+
+                  "post_audit_required_ok":
+                      post_audit_required is True,
+              },
+
+              "issues":
+                  issues,
+
+              "status":
+                  (
+                      "pass"
+                      if not issues
+                      else "warning"
+                  ),
+
+              "severity":
+                  (
+                      "info"
+                      if not issues
+                      else "warning"
+                  ),
+
+              "verdict":
+                  (
+                      "ready_for_human_review"
+                      if not issues
+                      else "needs_review"
+                  ),
           }
 
           Path(
@@ -2996,35 +3239,104 @@ jobs:
           )
           PY
 
+          python artifacts/plan_audit_generator.py
+
       ############################################################
       # Post Audit Verification Contract
+      #
+      # Bot #1 post-audit mode:
+      #
+      #   - Compares post-execution state against pre-audit and plan.
+      #   - Does not approve execution.
+      #   - Does not execute.
+      #   - Does not mutate repository state.
+      #
+      # Canonical output:
+      #
+      #   artifacts/post_audit_contract.json
       ############################################################
 
       - name: Post Audit Verification Contract
         if: always()
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
 
-          python - <<'PY'
+          cat > artifacts/post_audit_contract_generator.py <<'PY'
           import json
           from pathlib import Path
 
+          pre_audit_report = Path(
+              "artifacts/runtime_verifier_report.json"
+          )
+
+          execution_plan = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          current_runtime_verifier_report = Path(
+              "artifacts/runtime_verifier_report.json"
+          )
+
           payload = {
               "schema":
-                  "rga.post_audit_contract.v1.1",
+                  "rga.post_audit_contract.v1.2",
+  
+              "canonical_output":
+                  "artifacts/post_audit_contract.json",
 
               "comparison_model": [
                   "pre_audit_report",
                   "execution_plan",
-                  "current_runtime_verifier_report"
+                  "current_runtime_verifier_report",
               ],
+
+              "comparison_inputs": {
+                  "pre_audit_report": {
+                      "path":
+                          str(
+                              pre_audit_report
+                          ),
+
+                      "available":
+                          pre_audit_report.exists()
+                          and pre_audit_report.is_file()
+                          and pre_audit_report.stat().st_size > 0,
+                  },
+
+                  "execution_plan": {
+                      "path":
+                          str(
+                              execution_plan
+                          ),
+
+                      "available":
+                          execution_plan.exists()
+                          and execution_plan.is_file()
+                          and execution_plan.stat().st_size > 0,
+                  },
+
+                  "current_runtime_verifier_report": {
+                      "path":
+                          str(
+                              current_runtime_verifier_report
+                          ),
+
+                      "available":
+                          current_runtime_verifier_report.exists()
+                          and current_runtime_verifier_report.is_file()
+                          and current_runtime_verifier_report.stat().st_size > 0,
+                  },
+              },
 
               "required_checks": [
                   "root_failure_progress",
                   "derived_failure_progress",
                   "new_governance_blockers",
                   "deletion_readiness",
-                  "completed_phase_integrity"
+                  "completed_phase_integrity",
               ],
 
               "policy": {
@@ -3038,7 +3350,7 @@ jobs:
                       True,
 
                   "completed_phases_remain_immutable":
-                      True
+                      True,
               },
 
               "protected_scopes": [
@@ -3048,8 +3360,47 @@ jobs:
                   "personalization",
                   "localization",
                   "recommendation_logic",
-                  "source_asset_deletion"
-              ]
+                  "source_asset_deletion",
+              ],
+
+              "bot_1_authority": {
+                  "approve_execution":
+                      False,
+
+                  "apply_execution":
+                      False,
+
+                  "plan_audit":
+                      True,
+
+                  "post_audit":
+                      True,
+              },
+
+              "bot_2_authority": {
+                  "generate_implementation_plan":
+                      True,
+
+                  "execute_after_human_approval":
+                      True,
+
+                  "self_approval":
+                      False,
+              },
+
+              "post_audit_principles": {
+                  "post_audit_is_verification_only":
+                      True,
+
+                  "post_audit_does_not_replace_human_governance":
+                      True,
+
+                  "post_audit_must_not_modify_completed_phases":
+                      True,
+
+                  "post_audit_checks_for_regression":
+                      True,
+              },
           }
 
           Path(
@@ -3063,6 +3414,8 @@ jobs:
               encoding="utf-8",
           )
           PY
+
+          python artifacts/post_audit_contract_generator.py
 
       ############################################################
       # Artifact Bundle Manifest
