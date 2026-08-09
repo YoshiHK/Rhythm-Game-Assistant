@@ -37,7 +37,7 @@ Phase Boundary Policy:
 - Do not modify personalization.
 - Do not modify localization.
 - Do not modify recommendation logic.
-- Additive tooling, verification, governance artifacts, and new ingestion paths are allowed.
+- Additive tooling, audit, governance artifacts, and new ingestion paths are allowed.
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ class RollbackPlan:
 
 
 @dataclass
-class VerificationStep:
+class auditStep:
     step_id: str
     description: str
     expected_evidence: str
@@ -199,7 +199,7 @@ class ExecutionPlan:
 
     proposed_changes: List[ProposedChange]
 
-    verification_steps: List[VerificationStep]
+    audit_steps: List[auditStep]
 
     rollback: RollbackPlan
 
@@ -518,7 +518,7 @@ def write_markdown(
     )
 
     lines.append(
-        "- Additive tooling, governance artifacts, verification layers, and non-intrusive ingestion paths are allowed."
+        "- Additive tooling, governance artifacts, audit layers, and non-intrusive ingestion paths are allowed."
     )
 
     lines.append("")
@@ -1024,7 +1024,7 @@ class RuntimeExecutor:
                 "repair_priority": 1,
                 "requires_plan_audit": True,
                 "requires_human_approval": True,
-                "verification_sequence": [
+                "audit_sequence": [
                     "bot_1_plan_audit",
                     "human_approval",
                     "bot_2_execute",
@@ -1048,7 +1048,7 @@ class RuntimeExecutor:
         if DELETION_ROOT_CONTRACT in root_contracts:
             dag[DELETION_ROOT_CONTRACT]["deletion_policy"] = {
                 "default_deletion": "blocked",
-                "requires_global_verification": True,
+                "requires_global_audit": True,
             }
 
         self.diagnostics["repair_dag"] = dag
@@ -1342,7 +1342,7 @@ class RuntimeExecutor:
         #
         # execute:
         #   gated execution only for explicitly allowed additive
-        #   tooling / governance / verification changes
+        #   tooling / governance / audit changes
         # ----------------------------------------------------------
         #
 
@@ -1451,14 +1451,14 @@ class RuntimeExecutor:
 
         #
         # ----------------------------------------------------------
-        # Verification Steps
+        # audit Steps
         #
         # These represent the intended maintenance lifecycle.
         # ----------------------------------------------------------
         #
 
-        verification_steps = [
-            VerificationStep(
+        audit_steps = [
+            auditStep(
                 step_id=
                     "generate_implementation_plan",
 
@@ -1471,7 +1471,7 @@ class RuntimeExecutor:
                     "execution_plan.json",
             ),
 
-            VerificationStep(
+            auditStep(
                 step_id=
                     "run_bot_1_plan_audit",
 
@@ -1486,7 +1486,7 @@ class RuntimeExecutor:
                 ),
             ),
 
-            VerificationStep(
+            auditStep(
                 step_id=
                     "obtain_human_approval",
 
@@ -1499,7 +1499,7 @@ class RuntimeExecutor:
                     "human_execution_approval.json",
             ),
 
-            VerificationStep(
+            auditStep(
                 step_id=
                     "run_bot_2_gated_execution",
 
@@ -1512,7 +1512,7 @@ class RuntimeExecutor:
                     "apply_execution_result.json",
             ),
 
-            VerificationStep(
+            auditStep(
                 step_id=
                     "run_bot_1_post_audit",
 
@@ -1539,7 +1539,7 @@ class RuntimeExecutor:
             strategy=(
                 "Execution is governed by Bot #1 plan audit, "
                 "human approval, gated Bot #2 execution, "
-                "and Bot #1 post-audit verification."
+                "and Bot #1 post-audit audit."
             ),
 
             rollback_steps=[
@@ -1581,8 +1581,8 @@ class RuntimeExecutor:
             proposed_changes=
                 proposed_changes,
 
-            verification_steps=
-                verification_steps,
+            audit_steps=
+                audit_steps,
 
             rollback=
                 rollback,
@@ -1925,7 +1925,7 @@ from __future__ import annotations
 def main() -> int:
     print("Artifact backbone bootstrap scaffold.")
     print("This script is intentionally non-destructive.")
-    print("Manual review and Bot #1 verification are required before use.")
+    print("Manual review and Bot #1 audit are required before use.")
     return 0
 
 

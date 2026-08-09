@@ -268,7 +268,7 @@ ARTIFACT_DATABASE_LOGICAL_NAMES: Dict[str, str] = {
 #       ->
 # chart_patterns.db
 #
-# Verification helpers may inspect this chain.
+# audit helpers may inspect this chain.
 # They must not mutate it.
 #
 ARTIFACT_RELATIONSHIP_CHAIN = [
@@ -309,7 +309,7 @@ MAX_REPORT_SAMPLE_VALUE_LENGTH = 500
 #
 # v0.6 proved that extension-only detection is too broad because general repository
 # JSON files can be mistaken for chart assets. v0.7 keeps repository-wide evidence,
-# but introduces explicit scope helpers so verification can distinguish:
+# but introduces explicit scope helpers so audit can distinguish:
 #
 #   repository files != chart assets
 #
@@ -571,7 +571,7 @@ DERIVED_FAILURE_POLICY: Dict[str, str] = {
     #
     # Missing or unreadable artifact databases
     # naturally prevent all downstream artifact validation
-    # and verification contracts from succeeding.
+    # and audit contracts from succeeding.
     #
 
     "artifact_relationships":
@@ -1803,7 +1803,7 @@ class RuntimeAuditor:
         if (
             domain == "rest_api"
             and check
-            == "rest_verification_enabled"
+            == "rest_audit_enabled"
             and base_status == "skipped"
         ):
             return (
@@ -1812,7 +1812,7 @@ class RuntimeAuditor:
             )
 
         if (
-            domain == "flow_verification"
+            domain == "flow_audit"
             and base_status == "skipped"
         ):
             return (
@@ -1821,7 +1821,7 @@ class RuntimeAuditor:
             )
 
         if (
-            domain == "flow_contract_verification"
+            domain == "flow_contract_audit"
             and base_status == "skipped"
         ):
             return (
@@ -1991,7 +1991,7 @@ class RuntimeAuditor:
                 "artifact_relationships",
                 "artifact_backbone",
                 "mcp_contract",
-                "flow_contract_verification",
+                "flow_contract_audit",
             }
             and base_status == "fail"
         ):
@@ -3380,7 +3380,7 @@ class RuntimeAuditor:
         db_name: str,
     ) -> bool:
         #
-        # Verification helper.
+        # audit helper.
         #
         # Presence alone is insufficient.
         # At least one readable row must exist.
@@ -3589,7 +3589,7 @@ class RuntimeAuditor:
             "readiness_state":
                 readiness_state,
 
-            "verification_layer":
+            "audit_layer":
                 "artifact_backbone_governance",
 
             "governance_interpretation": (
@@ -3630,7 +3630,7 @@ class RuntimeAuditor:
                 "platform":
                     platform.platform(),
 
-                "verification_layer":
+                "audit_layer":
                     "environment",
 
                 "note": (
@@ -3691,7 +3691,7 @@ class RuntimeAuditor:
                     "be treated as a governance failure."
                 ),
 
-                "verification_layer":
+                "audit_layer":
                     "environment",
             },
             suggested_fix=(
@@ -3827,7 +3827,7 @@ class RuntimeAuditor:
                 "discovered_assets":
                     self.discovered_assets,
 
-                "verification_layer":
+                "audit_layer":
                     "repository_discovery",
 
                 "boundary_note": (
@@ -4022,7 +4022,7 @@ class RuntimeAuditor:
                 "separation_state":
                     separation_state,
 
-                "verification_layer":
+                "audit_layer":
                     "repository_import_runtime_separation",
 
                 "architectural_principle": {
@@ -4069,7 +4069,7 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         # Package Layout
         #
-        # Repository structure verification only.
+        # Repository structure audit only.
         #
         # This check verifies:
         #   package identity
@@ -4118,7 +4118,7 @@ class RuntimeAuditor:
                 "other_rhythm_like_dirs":
                     other_dirs,
 
-                "verification_layer":
+                "audit_layer":
                     "package_inventory",
 
                 "note": (
@@ -4229,7 +4229,7 @@ class RuntimeAuditor:
                 "exists":
                     package_root_exists,
 
-                "verification_layer":
+                "audit_layer":
                     "package_root_resolution",
             },
             suggested_fix=(
@@ -4377,12 +4377,12 @@ class RuntimeAuditor:
                 "package_failures":
                     package_failures,
 
-                "verification_layer":
+                "audit_layer":
                     "import_reality",
 
                 "dependency_note": (
                     "Dependency failures should remain separate "
-                    "from package-root verification."
+                    "from package-root audit."
                 ),
             },
             suggested_fix=suggested_fix,
@@ -4523,7 +4523,7 @@ class RuntimeAuditor:
                 "api_runtime_missing":
                     api_runtime_missing,
 
-                "verification_layer":
+                "audit_layer":
                     "dependency_reality",
 
                 "dependency_classification": {
@@ -4547,7 +4547,7 @@ class RuntimeAuditor:
                 if status == "pass"
                 else (
                     "Install missing runtime dependencies or adjust "
-                    "CI/runtime setup before running runtime verification."
+                    "CI/runtime setup before running runtime audit."
                 )
             ),
             governance_domain="runtime_dependencies",
@@ -4560,7 +4560,7 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         # Repository Shape
         #
-        # Repository structure verification only.
+        # Repository structure audit only.
         # ----------------------------------------------------------
         #
 
@@ -4635,7 +4635,7 @@ class RuntimeAuditor:
                             self.backend_root
                         ),
 
-                    "verification_layer":
+                    "audit_layer":
                         "repository_shape",
                 },
                 governance_domain="architecture_contracts",
@@ -4648,7 +4648,7 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         # Runtime Import Reality
         #
-        # Runtime import verification only.
+        # Runtime import audit only.
         #
         # Recommendation logic is not modified.
         # Wiring inspection only.
@@ -4733,11 +4733,11 @@ class RuntimeAuditor:
                             self.backend_root
                         ),
 
-                    "verification_layer":
+                    "audit_layer":
                         "runtime_import_reality",
 
                     "phase_boundary_note": (
-                        "Import verification does not modify "
+                        "Import audit does not modify "
                         "recommendation internals."
                     ),
                 },
@@ -4764,7 +4764,7 @@ class RuntimeAuditor:
                                 "games_recommender=...)"
                             ),
 
-                        "verification_layer":
+                        "audit_layer":
                             "runtime_wiring",
 
                         "boundary_note": (
@@ -4797,7 +4797,7 @@ class RuntimeAuditor:
                                 )
                             ),
 
-                        "verification_layer":
+                        "audit_layer":
                             "runtime_wiring",
                     },
                     governance_domain="architecture_contracts",
@@ -4845,7 +4845,7 @@ class RuntimeAuditor:
                     "traceback":
                         traceback.format_exc(),
 
-                    "verification_layer":
+                    "audit_layer":
                         "runtime_import_reality",
                 },
                 suggested_fix=suggested_fix,
@@ -4890,7 +4890,7 @@ class RuntimeAuditor:
             #
             # v1.0 artifact/runtime-adjacent expectations.
             #
-            # These are verification-only expectations. Missing keys
+            # These are audit-only expectations. Missing keys
             # are reported, but the auditor must not modify
             # runtime_meta.py automatically.
             #
@@ -4975,7 +4975,7 @@ class RuntimeAuditor:
                     "metadata_state":
                         metadata_state,
 
-                    "verification_layer":
+                    "audit_layer":
                         "runtime_metadata_contract",
 
                     "boundary_note": (
@@ -5034,7 +5034,7 @@ class RuntimeAuditor:
                     "traceback":
                         traceback.format_exc(),
 
-                    "verification_layer":
+                    "audit_layer":
                         "runtime_metadata_contract",
 
                     "governance_interpretation": (
@@ -5044,7 +5044,7 @@ class RuntimeAuditor:
                 },
                 suggested_fix=(
                     "Resolve dependency or import reality first, then re-run "
-                    "runtime metadata verification."
+                    "runtime metadata audit."
                 ),
                 governance_domain="architecture_contracts",
                 contract_type="runtime_metadata_contract",
@@ -5484,7 +5484,7 @@ class RuntimeAuditor:
                     db_status,
 
                 #
-                # Verification policy
+                # audit policy
                 #
 
                 "role":
@@ -5497,7 +5497,7 @@ class RuntimeAuditor:
                     "schema_inventory",
                     "readability_check",
                     "record_count",
-                    "relationship_verification",
+                    "relationship_audit",
                 ],
 
                 "prohibited_operations": [
@@ -5541,7 +5541,7 @@ class RuntimeAuditor:
                 "policy_note": (
                     "This check acts as a root artifact-backbone contract. "
                     "Missing, unreadable, or empty artifact databases may "
-                    "cause derived failures in downstream artifact verification "
+                    "cause derived failures in downstream artifact audit "
                     "domains."
                 ),
 
@@ -5586,7 +5586,7 @@ class RuntimeAuditor:
         #       -> chart_assets.db
         #       -> chart_patterns.db
         #
-        # This is read-only relationship verification.
+        # This is read-only relationship audit.
         # No DB rows or repository files are modified.
         # ----------------------------------------------------------
         #
@@ -6325,7 +6325,7 @@ class RuntimeAuditor:
 
                     "dependency_note": (
                         "Missing chart_assets.db may cause downstream asset "
-                        "coverage, hash verification, Type A usability, and "
+                        "coverage, hash audit, Type A usability, and "
                         "runtime DB readiness checks to fail as derived issues."
                     ),
 
@@ -6404,7 +6404,7 @@ class RuntimeAuditor:
                         sqlite_errors
                     ),
 
-                "verification_layer":
+                "audit_layer":
                     "asset_pipeline_persistence",
             },
             suggested_fix=(
@@ -6455,7 +6455,7 @@ class RuntimeAuditor:
                     "or review-needed."
                 ),
 
-                "verification_layer":
+                "audit_layer":
                     "asset_pipeline_population",
             },
             suggested_fix=(
@@ -6661,7 +6661,7 @@ class RuntimeAuditor:
                 "orphan_db_entries":
                     orphan_db_entries,
 
-                "verification_layer":
+                "audit_layer":
                     "coverage",
 
                 "matching_strategy":
@@ -6783,7 +6783,7 @@ class RuntimeAuditor:
                     "runtime_artifact_readiness",
                 ],
 
-                "verification_layer":
+                "audit_layer":
                     "artifact_backbone_contract",
 
                 "read_mode":
@@ -6801,7 +6801,7 @@ class RuntimeAuditor:
                 else (
                     "Restore missing database, relationship, or runtime "
                     "artifact capability before treating downstream artifact "
-                    "verification failures as independently actionable."
+                    "audit failures as independently actionable."
                 )
             ),
             governance_domain="artifact_backbone",
@@ -6809,12 +6809,12 @@ class RuntimeAuditor:
         )
 
 
-    def check_hash_verification(self) -> None:
+    def check_hash_audit(self) -> None:
         #
         # ----------------------------------------------------------
-        # Hash Verification
+        # Hash audit
         #
-        # Hash verification compares scoped repository asset hashes
+        # Hash audit compares scoped repository asset hashes
         # against persisted chart_assets.db hash evidence.
         #
         # No repository or DB mutation occurs here.
@@ -6922,7 +6922,7 @@ class RuntimeAuditor:
         )
 
         self.add(
-            domain="hash_verification",
+            domain="hash_audit",
             check="repository_db_hash_consistency",
             status=(
                 "pass"
@@ -6933,7 +6933,7 @@ class RuntimeAuditor:
                 "Scoped repository asset hashes are consistent with chart_assets.db."
                 if pass_condition
                 else (
-                    "Hash verification found missing, orphan, duplicate, "
+                    "Hash audit found missing, orphan, duplicate, "
                     "or insufficient hash evidence."
                 )
             ),
@@ -6974,13 +6974,13 @@ class RuntimeAuditor:
                 "hash_state":
                     hash_state,
 
-                "verification_layer":
+                "audit_layer":
                     "hash_integrity",
 
                 "scope_note": (
                     "v1.0 hashes scoped asset candidates rather than all "
                     "repository files. Zero scoped hashes is insufficient "
-                    "evidence, not a successful hash verification."
+                    "evidence, not a successful hash audit."
                 ),
 
                 "completed_phase_protection": {
@@ -7178,7 +7178,7 @@ class RuntimeAuditor:
                 "usability_state":
                     usability_state,
 
-                "verification_layer":
+                "audit_layer":
                     "type_A_runtime_usability",
 
                 "type_A_contract": {
@@ -7295,7 +7295,7 @@ class RuntimeAuditor:
                 status="skipped",
                 summary=(
                     "No Type B assets were discovered; Type B "
-                    "intelligence verification was skipped."
+                    "intelligence audit was skipped."
                 ),
                 evidence={
                     "type_B_file_count":
@@ -7320,11 +7320,11 @@ class RuntimeAuditor:
                             "were discovered."
                         ),
 
-                    "verification_layer":
+                    "audit_layer":
                         "type_B_reference_intelligence",
 
                     "note": (
-                        "Skipped Type B verification does not imply "
+                        "Skipped Type B audit does not imply "
                         "Type B readiness. It only means no Type B "
                         "evidence was available."
                     ),
@@ -7422,7 +7422,7 @@ class RuntimeAuditor:
                 "intelligence_state":
                     intelligence_state,
 
-                "verification_layer":
+                "audit_layer":
                     "type_B_reference_intelligence",
 
                 "expected": [
@@ -7809,7 +7809,7 @@ class RuntimeAuditor:
         # Deletion is conservative.
         #
         # Source chart files must be retained until artifact coverage,
-        # hash verification, Type A usability, relationship verification,
+        # hash audit, Type A usability, relationship audit,
         # and runtime DB readiness pass.
         # ----------------------------------------------------------
         #
@@ -7851,7 +7851,7 @@ class RuntimeAuditor:
             (
                 result
                 for result in self.results
-                if result.domain == "hash_verification"
+                if result.domain == "hash_audit"
                 and result.check == "repository_db_hash_consistency"
             ),
             None,
@@ -8024,11 +8024,11 @@ class RuntimeAuditor:
                     else None
                 ),
 
-                "verification_layer":
+                "audit_layer":
                     "deletion_governance",
 
                 "governance_principle": (
-                    "Deletion is permitted only after global verification "
+                    "Deletion is permitted only after global audit "
                     "passes. Validation alone is not sufficient."
                 ),
 
@@ -8049,19 +8049,19 @@ class RuntimeAuditor:
                 else (
                     "Keep source chart files until artifact coverage, "
                     "hash consistency, Type A usability, relationship "
-                    "verification, and runtime DB readiness pass."
+                    "audit, and runtime DB readiness pass."
                 )
             ),
             governance_domain="artifact_backbone",
             contract_type="deletion_readiness",
         )
 
-    def check_flow_verification(self) -> None:
+    def check_flow_audit(self) -> None:
         #
         # ----------------------------------------------------------
-        # Flow Verification
+        # Flow audit
         #
-        # Flow verification checks static runtime flow presence and
+        # Flow audit checks static runtime flow presence and
         # wiring evidence only.
         #
         # It does not validate recommendation quality, gameplay
@@ -8105,11 +8105,11 @@ class RuntimeAuditor:
             or not runtime_import_ready
         ):
             self.add(
-                domain="flow_verification",
+                domain="flow_audit",
                 check="runtime_flow_entrypoints",
                 status="skipped",
                 summary=(
-                    "Flow verification was skipped because dependency "
+                    "Flow audit was skipped because dependency "
                     "or runtime import readiness is incomplete."
                 ),
                 evidence={
@@ -8120,7 +8120,7 @@ class RuntimeAuditor:
                         runtime_import_ready,
 
                     "reason": (
-                        "Flow verification requires dependency reality "
+                        "Flow audit requires dependency reality "
                         "and runtime import reality to pass first."
                     ),
 
@@ -8133,7 +8133,7 @@ class RuntimeAuditor:
                         True,
 
                     "governance_interpretation": (
-                        "Skipped flow verification caused by dependency "
+                        "Skipped flow audit caused by dependency "
                         "or import constraints should be interpreted as "
                         "runtime-limited, not as an automatic governance "
                         "blocker."
@@ -8251,7 +8251,7 @@ class RuntimeAuditor:
         )
 
         self.add(
-            domain="flow_verification",
+            domain="flow_audit",
             check="runtime_flow_entrypoints",
             status=(
                 "pass"
@@ -8270,10 +8270,10 @@ class RuntimeAuditor:
                 "failed_flows":
                     failed_flows,
 
-                "verification_style":
+                "audit_style":
                     "static_keyword_entrypoint_check",
 
-                "verification_scope":
+                "audit_scope":
                     "flow_existence",
 
                 "required_flows":
@@ -8285,7 +8285,7 @@ class RuntimeAuditor:
                     False,
 
                 "note": (
-                    "Flow verification checks flow presence and wiring "
+                    "Flow audit checks flow presence and wiring "
                     "evidence only. It does not validate recommendation "
                     "quality, gameplay inference correctness, "
                     "personalization, or localization."
@@ -8664,7 +8664,7 @@ class RuntimeAuditor:
                 "audit_style":
                     "tiered_static_boundary_governance",
 
-                "verification_scope":
+                "audit_scope":
                     "layer_responsibility",
 
                 "layer_model":
@@ -8809,7 +8809,7 @@ class RuntimeAuditor:
                 },
                 suggested_fix=(
                     "Provide a readable MCP config path or omit "
-                    "--mcp-config when MCP verification is not required."
+                    "--mcp-config when MCP audit is not required."
                 ),
                 governance_domain="mcp_contracts",
                 contract_type="mcp_config_presence",
@@ -9151,7 +9151,7 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         # REST Contract
         #
-        # REST verification is optional and only runs when --rest is
+        # REST audit is optional and only runs when --rest is
         # explicitly enabled.
         # ----------------------------------------------------------
         #
@@ -9159,9 +9159,9 @@ class RuntimeAuditor:
         if not self.run_rest:
             self.add(
                 domain="rest_api",
-                check="rest_verification_enabled",
+                check="rest_audit_enabled",
                 status="skipped",
-                summary="REST checks were skipped. Use --rest to enable REST verification.",
+                summary="REST checks were skipped. Use --rest to enable REST audit.",
                 evidence={
                     "api_url":
                         self.api_url,
@@ -9327,7 +9327,7 @@ class RuntimeAuditor:
                     suggested_fix=(
                         (
                             "Provide games_recommender wiring when game-mode "
-                            "REST verification is intended."
+                            "REST audit is intended."
                         )
                         if expected_runtime_gap
                         else None
@@ -9364,10 +9364,10 @@ class RuntimeAuditor:
                 )
 
 
-    def check_flow_contract_verification(self) -> None:
+    def check_flow_contract_audit(self) -> None:
         #
         # ----------------------------------------------------------
-        # Flow Contract Verification
+        # Flow Contract audit
         #
         # This verifies flow boundary evidence only.
         # It does not validate recommendation quality, gameplay
@@ -9379,7 +9379,7 @@ class RuntimeAuditor:
             (
                 result
                 for result in self.results
-                if result.domain == "flow_verification"
+                if result.domain == "flow_audit"
                 and result.check == "runtime_flow_entrypoints"
             ),
             None,
@@ -9387,12 +9387,12 @@ class RuntimeAuditor:
 
         if flow_result is None:
             self.add(
-                domain="flow_contract_verification",
+                domain="flow_contract_audit",
                 check="flow_contract_compliance",
                 status="skipped",
                 summary=(
-                    "Flow contract verification was skipped because flow "
-                    "verification has not produced evidence."
+                    "Flow contract audit was skipped because flow "
+                    "audit has not produced evidence."
                 ),
                 evidence={
                     "reason":
@@ -9413,12 +9413,12 @@ class RuntimeAuditor:
 
         if flow_result.status == "skipped":
             self.add(
-                domain="flow_contract_verification",
+                domain="flow_contract_audit",
                 check="flow_contract_compliance",
                 status="skipped",
                 summary=(
-                    "Flow contract verification was skipped because flow "
-                    "verification preconditions were not met."
+                    "Flow contract audit was skipped because flow "
+                    "audit preconditions were not met."
                 ),
                 evidence={
                     "source_status":
@@ -9436,7 +9436,7 @@ class RuntimeAuditor:
                         True,
 
                     "governance_interpretation": (
-                        "Skipped flow verification caused by runtime or "
+                        "Skipped flow audit caused by runtime or "
                         "dependency constraints should be treated as "
                         "runtime_limited, not as an automatic governance block."
                     ),
@@ -9519,7 +9519,7 @@ class RuntimeAuditor:
         )
 
         self.add(
-            domain="flow_contract_verification",
+            domain="flow_contract_audit",
             check="flow_contract_compliance",
             status=(
                 "pass"
@@ -9544,7 +9544,7 @@ class RuntimeAuditor:
                 "failed_flows":
                     failed_flows,
 
-                "verification_scope":
+                "audit_scope":
                     "flow_contract_compliance",
 
                 "note": (
@@ -9804,7 +9804,7 @@ class RuntimeAuditor:
         # Runtime readiness is treated separately from governance.
         #
         # Missing runtime dependencies may constrain runtime and flow
-        # verification, but should not automatically block architecture
+        # audit, but should not automatically block architecture
         # governance.
         # ----------------------------------------------------------
         #
@@ -9854,7 +9854,7 @@ class RuntimeAuditor:
         #
         # Deletion is a governance gate.
         # It remains blocked until artifact coverage, hash integrity,
-        # Type A usability, relationship verification, and runtime DB
+        # Type A usability, relationship audit, and runtime DB
         # readiness pass.
         # ----------------------------------------------------------
         #
@@ -9884,7 +9884,7 @@ class RuntimeAuditor:
         #
         # The artifact backbone is a governance-relevant root domain.
         # Missing or unreadable artifact DBs should block downstream
-        # artifact verification and deletion readiness.
+        # artifact audit and deletion readiness.
         # ----------------------------------------------------------
         #
 
@@ -9998,7 +9998,7 @@ class RuntimeAuditor:
             (
                 result
                 for result in self.results
-                if result.domain == "flow_contract_verification"
+                if result.domain == "flow_contract_audit"
                 and result.check == "flow_contract_compliance"
             ),
             None,
@@ -10142,7 +10142,7 @@ class RuntimeAuditor:
         # Dynamic Impact Scope
         #
         # Impact scope is derived from the actual root/derived
-        # lineage discovered during verification.
+        # lineage discovered during audit.
         # ----------------------------------------------------------
         #
 
@@ -10301,7 +10301,7 @@ class RuntimeAuditor:
                     "recommendation": (
                         "Resolve root failures first, "
                         "then re-run all derived "
-                        "verification contracts."
+                        "audit contracts."
                     ),
                 },
 
@@ -10709,7 +10709,7 @@ class RuntimeAuditor:
                 if governance_verdict == "ready"
                 else (
                     "Resolve runtime dependency or import constraints, "
-                    "then re-run runtime and flow verification. Governance "
+                    "then re-run runtime and flow audit. Governance "
                     "is not independently blocked by runtime-limited status."
                     if governance_verdict == "runtime_limited"
                     else (
@@ -10755,14 +10755,14 @@ class RuntimeAuditor:
 
         self.check_asset_pipeline()
         self.check_asset_coverage()
-        self.check_hash_verification()
+        self.check_hash_audit()
         self.check_type_A_usability()
         self.check_type_B_intelligence()
         self.check_runtime_db_read()
         self.check_deletion_readiness()
 
-        self.check_flow_verification()
-        self.check_flow_contract_verification()
+        self.check_flow_audit()
+        self.check_flow_contract_audit()
         self.check_layer_separation()
 
         self.check_mcp_config()
@@ -12618,7 +12618,7 @@ def main() -> int:
         "--rest",
         action="store_true",
         help=(
-            "Run REST endpoint verification."
+            "Run REST endpoint audit."
         ),
     )
 
@@ -13195,8 +13195,8 @@ def main() -> int:
             {},
         )
 
-        verification_steps = unwrapped_plan.get(
-            "verification_steps",
+        audit_steps = unwrapped_plan.get(
+            "audit_steps",
             [],
         )
 
@@ -13314,18 +13314,18 @@ def main() -> int:
             )
 
         if not isinstance(
-            verification_steps,
+            audit_steps,
             list,
         ):
 
             issues.append(
-                "Execution plan verification_steps must be a list."
+                "Execution plan audit_steps must be a list."
             )
 
-        elif not verification_steps:
+        elif not audit_steps:
 
             issues.append(
-                "Execution plan does not declare verification_steps."
+                "Execution plan does not declare audit_steps."
             )
 
         if human_approval_required is not True:
@@ -13479,13 +13479,13 @@ def main() -> int:
                     )
                 ),
 
-            "verification_step_count":
+            "audit_step_count":
                 (
                     len(
-                        verification_steps
+                        audit_steps
                     )
                     if isinstance(
-                        verification_steps,
+                        audit_steps,
                         list,
                     )
                     else 0
@@ -14130,7 +14130,7 @@ def main() -> int:
         append_cli_result(
             report,
             domain="bot_1_post_audit",
-            check="post_execution_verification",
+            check="post_execution_audit",
             status=post_audit["status"],
             severity=post_audit["severity"],
             summary=(
