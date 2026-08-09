@@ -232,26 +232,23 @@ jobs:
                 STAGE="$(
                   python3 -c '
                 import json
+                import pathlib
                 import sys
-                from pathlib import Path
-
-                event_file = Path(sys.argv[1])
 
                 try:
-                    data = json.loads(
-                        event_file.read_text(
-                            encoding="utf-8",
-                            errors="ignore",
-                        )
-                    )
-
                     print(
-                        data.get(
+                        json.loads(
+                            pathlib.Path(
+                                sys.argv[1]
+                            ).read_text(
+                                encoding="utf-8",
+                                errors="ignore",
+                            )
+                        ).get(
                             "next_stage",
                             "halted",
                         )
                     )
-
                 except Exception:
                     print("halted")
                 ' "$EVENT_FILE"
