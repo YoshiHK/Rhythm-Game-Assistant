@@ -183,16 +183,406 @@ jobs:
           
       ############################################################
       # Run Runtime Executor
+      #
+      # Bot #2 lifecycle role:
+      #
+      #   plan:
+      #     Generate implementation plan from Bot #1 pre-audit evidence.
+      #
+      #   dry_run_execute:
+      #     Simulate execution and produce execution evidence without
+      #     mutating repository state.
+      #
+      #   execute:
+      #     Apply gated execution only after Bot #1 plan-audit and
+      #     human approval.
+      #
+      # This step intentionally preserves:
+      #
+      #   runtime_executor_report.json
+      #   runtime_executor_report.md
+      #   execution_plan.json
+      #   runtime_executor_stdout.txt
+      #   runtime_executor_stderr.txt
+      #   runtime_executor_stderr_summary.json
+      #   runtime_executor_exit_code.txt
+      #
+      # Empty stderr is not treated as a failure. It is summarized as
+      # explicit zero-error evidence.
       ############################################################
 
       - name: Run Runtime Executor
         continue-on-error: true
+        shell: bash
         run: |
+          set -uo pipefail
+
+          mkdir -p artifacts
+
+          EXECUTOR_MODE="${{ github.event.inputs.executor_mode }}"
+          PRE_AUDIT_REPORT="${{ github.event.inputs.pre_audit_report }}"
+          EXECUTION_PLAN="${{ github.event.inputs.execution_plan }}"
+
+          if [ -z "$PRE_AUDIT_REPORT" ]; then
+            PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
+          fi
+
+          if [ -z "$EXECUTION_PLAN" ]; then
+            EXECUTION_PLAN="artifacts/execution_plan.json"
+          fi
+
+          echo "RGA Runtime Executor"
+          echo "Mode: ${EXECUTOR_MODE}"
+          echo "Pre-audit report: ${PRE_AUDIT_REPORT}"
+          echo "Execution plan output: ${EXECUTION_PLAN}"
+
+          set +e
+
           python -u tools/runtime_executor.py \
-            --mode "${{ github.event.inputs.executor_mode }}" \
-            --verifier-report artifacts/runtime_verifier_report.json \
-            --json-out artifacts/apply_execution_result.json \
-            > artifacts/runtime_executor_stdout.txt 2> artifacts/runtime_executor_stderr.txt || true          
+            --mode "${EXECUTOR_MODE}" \
+            --pre-audit-report "${PRE_AUDIT_REPORT}" \
+            --json-out "${EXECUTION_PLAN}" \
+            --report-json-out "artifacts/runtime_executor_report.json" \
+            --md-out "artifacts/runtime_executor_report.md" \
+            > "artifacts/runtime_executor_stdout.txt" \
+            2> "artifacts/runtime_executor_stderr.txt"
+
+          EXECUTOR_EXIT_CODE="$?"
+
+          set -e
+
+          echo "${EXECUTOR_EXIT_CODE}" > artifacts/runtime_executor_exit_code.txt
+
+          ########################################################
+          # Ensure stdout / stderr artifacts exist
+          ########################################################
+
+          if [ ! -f artifacts/runtime_executor_stdout.txt ]; then
+            touch artifacts/runtime_executor_stdout.txt
+          fi
+
+          if [ ! -f artifacts/runtime_executor_stderr.txt ]; then
+            touch artifacts/runtime_executor_stderr.txt
+          fi
+
+          ########################################################
+          # Structured stderr summary
+          ########################################################
+
+          python <<'PY'
+            import json
+            from pathlib import Path
+
+            stderr_path = Path(
+                "artifacts/runtime_executor_stderr.txt"
+            )
+
+            stdout_path = Path(
+                "artifacts/runtime_executor_stdout.txt"
+            )
+
+            exit_code_path = Path(
+                "artifacts/runtime_executor_exit_code.txt"
+            )
+
+            stderr_text = (
+                stderr_path.read_text(
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+                if stderr_path.exists()
+                else ""
+            )
+
+            stdout_text = (
+                stdout_path.read_text(
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+                if stdout_path.exists()
+                else ""
+            )
+
+            try:
+                exit_code = int(
+                    exit_code_path.read_text(
+                        encoding="utf-8",
+                        errors="ignore",
+                    ).strip()
+                    or "0"
+                )
+            except Exception:
+                exit_code = None
+
+            error_markers = [
+                "Traceback",
+                "Error",
+                "Exception",
+                "ModuleNotFoundError",
+                "RuntimeError",
+                "ValueError",
+            ]
+
+            warning_markers = [
+                "warning",
+                "Warning",
+                "WARN",
+            ]
+
+            error_hits = [
+                marker
+                for marker in error_markers
+                if marker in stderr_text
+            ]
+
+            warning_hits = [
+                marker
+                for marker in warning_markers
+                if marker in stderr_text
+            ]
+
+            payload = {
+                "schema":
+                    "rga.runtime_executor.stderr_summary.v1.0",
+
+                "stderr_present":
+                    stderr_path.exists(),
+
+                "stderr_empty":
+                    len(
+                        stderr_text.strip()
+                    )
+                    == 0,
+
+                "stdout_present":
+                    stdout_path.exists(),
+
+                "stdout_empty":
+                    len(
+                        stdout_text.strip()
+                    )
+                    == 0,
+
+                "executor_exit_code":
+                    exit_code,
+
+                "execution_failed":
+                    (
+                        exit_code is not None
+                        and exit_code != 0
+                    ),
+
+                "error_marker_count":
+                    len(
+                        error_hits
+                    ),
+
+                "warning_marker_count":
+                    len(
+                        warning_hits
+                    ),
+
+                "error_markers":
+                    error_hits,
+
+                "warning_markers":
+                    warning_hits,
+
+                "interpretation":
+                    (
+                        "stderr_empty_no_error_output"
+                        if len(stderr_text.strip()) == 0
+                        else "stderr_contains_output"
+                    ),
+            }
+
+            Path(
+                "artifacts/runtime_executor_stderr_summary.json"
+            ).write_text(
+                json.dumps(
+                    payload,
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            PY
+
+          ########################################################
+          # Fallback runtime_executor_report.json
+          #
+          # This should normally be produced by runtime_executor.py.
+          # If absent, preserve a structured fallback so the bundle
+          # still has Bot #2 canonical evidence.
+          ########################################################
+
+          if [ ! -s artifacts/runtime_executor_report.json ]; then
+            python <<'PY'
+            import json
+            from datetime import datetime, timezone
+            from pathlib import Path
+
+            exit_code_path = Path(
+                "artifacts/runtime_executor_exit_code.txt"
+            )
+
+            stderr_path = Path(
+                "artifacts/runtime_executor_stderr.txt"
+            )
+
+            stdout_path = Path(
+                "artifacts/runtime_executor_stdout.txt"
+            )
+
+            try:
+                exit_code = int(
+                    exit_code_path.read_text(
+                        encoding="utf-8",
+                        errors="ignore",
+                    ).strip()
+                    or "0"
+                )
+            except Exception:
+                exit_code = None
+
+            stderr_text = (
+                stderr_path.read_text(
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+                if stderr_path.exists()
+                else ""
+            )
+
+            stdout_text = (
+                stdout_path.read_text(
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+                if stdout_path.exists()
+                else ""
+            )
+
+            payload = {
+                "schema":
+                    "rga.runtime_executor.report.fallback.v1.0",
+
+                "generated_at":
+                    datetime.now(
+                        timezone.utc
+                    )
+                    .replace(
+                        microsecond=0
+                    )
+                    .isoformat(),
+
+                "mode":
+                    None,
+
+                "proposal_only":
+                    None,
+
+                "dry_run":
+                    None,
+
+                "execution_authority":
+                    False,
+
+                "approval_authority":
+                    False,
+
+                "plan":
+                    {},
+
+                "dry_run_result":
+                    {},
+
+                "apply_execution_result":
+                    {},
+
+                "diagnostics": {
+                    "fallback_report_generated":
+                        True,
+
+                    "executor_exit_code":
+                        exit_code,
+
+                    "stdout_present":
+                        stdout_path.exists(),
+
+                    "stderr_present":
+                        stderr_path.exists(),
+
+                    "stdout_empty":
+                        len(
+                            stdout_text.strip()
+                        )
+                        == 0,
+
+                    "stderr_empty":
+                        len(
+                            stderr_text.strip()
+                        )
+                        == 0,
+
+                    "policy_result": {
+                        "policy_passed":
+                            False,
+
+                        "violations": [
+                            (
+                                "runtime_executor.py did not emit "
+                                "runtime_executor_report.json."
+                            )
+                        ],
+                    },
+                },
+            }
+
+            Path(
+                "artifacts/runtime_executor_report.json"
+            ).write_text(
+                json.dumps(
+                    payload,
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            PY
+          fi
+
+          ########################################################
+          # Fallback runtime_executor_report.md
+          ########################################################
+
+          if [ ! -s artifacts/runtime_executor_report.md ]; then
+            cat > artifacts/runtime_executor_report.md <<'MD'
+            # RGA Runtime Executor Report
+
+            ## Fallback Report
+
+            `runtime_executor.py` did not emit a non-empty Markdown report.
+
+            See:
+
+            - `runtime_executor_report.json`
+            - `runtime_executor_stdout.txt`
+            - `runtime_executor_stderr.txt`
+            - `runtime_executor_stderr_summary.json`
+            - `runtime_executor_exit_code.txt`
+            MD
+          fi
+
+          ########################################################
+          # Step outcome
+          #
+          # Keep workflow alive for evidence upload. Policy outcome
+          # is represented in runtime_executor_report.json.
+          ########################################################
+
+          echo "Runtime executor exit code: ${EXECUTOR_EXIT_CODE}"
+          echo "Runtime executor evidence artifacts generated."       
           
       ############################################################
       # Execution Plan Fingerprint
