@@ -4,20 +4,20 @@ description: >
   Dispatches the RGA maintenance-and-operation lifecycle workflows using
   GitHub workflow_dispatch.
 
-  This module does not run verifier or executor logic directly.
+  This module does not run auditor or executor logic directly.
   It routes lifecycle stages to Bot #1 or Bot #2.
 
   Lifecycle:
 
     pre_audit
-      -> Bot #1 Runtime Verifier
+      -> Bot #1 Runtime Auditor
 
     implementation_plan
       -> Bot #2 Maintenance Executor
          executor_mode=plan
 
     plan_audit
-      -> Bot #1 Runtime Verifier
+      -> Bot #1 Runtime Auditor
          audit_mode=plan_audit
 
     execute
@@ -25,7 +25,7 @@ description: >
          executor_mode=execute
 
     post_audit
-      -> Bot #1 Runtime Verifier
+      -> Bot #1 Runtime Auditor
          audit_mode=post_audit
 
 inputs:
@@ -55,7 +55,7 @@ inputs:
 
   audit_session_id:
     description: >
-      Correlation id connecting lifecycle artifacts.
+      Correlation id connecting lifecycle audit artifacts.
     required: false
     default: ""
 
@@ -63,7 +63,7 @@ inputs:
     description: >
       Bot #1 pre-audit report artifact path.
     required: false
-    default: "artifacts/runtime_verifier_report.json"
+    default: "artifacts/runtime_auditor_report.json"
 
   execution_plan:
     description: >
@@ -131,7 +131,9 @@ runs:
       run: |
         set -euo pipefail
 
-        # Validate the execution_approval early (execute stage checked previously)
+        #
+        # Execute-stage approval validation
+        #
         if [ "$STAGE" = "execute" ]; then
           if [ -z "$EXECUTION_APPROVAL" ]; then
             echo "execution_approval missing" >&2
@@ -148,121 +150,191 @@ runs:
         # Choose workflow file and inputs per lifecycle stage
         #
         case "$STAGE" in
+
           pre_audit)
-            WORKFLOW_FILE="RGA Runtime Verifier.yml"
-            # runtime verifier pre_audit: set audit_mode and audit_session_id
+
+            WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
+            # Runtime Auditor pre-audit
+
             python - <<PY > /tmp/payload.json
 import json, os
+
 p = {
-  "ref": os.environ.get("REF_INPUT","main"),
+  "ref": os.environ.get("REF_INPUT", "main"),
   "inputs": {
     "audit_mode": "pre_audit",
-    "audit_session_id": os.environ.get("AUDIT_SESSION_ID","")
-  }
+    "audit_session_id": os.environ.get(
+        "AUDIT_SESSION_ID",
+        "",
+    ),
+  },
 }
+
 print(json.dumps(p))
 PY
             ;;
 
           implementation_plan)
+
             WORKFLOW_FILE="RGA Maintenance Executor.yml"
-            # executor should run in plan mode and receive pre_audit_report
+
+            # Bot #2 implementation planning
+            # Uses Bot #1 pre-audit report
+
             python - <<PY > /tmp/payload.json
 import json, os
+
 p = {
-  "ref": os.environ.get("REF_INPUT","main"),
+  "ref": os.environ.get("REF_INPUT", "main"),
   "inputs": {
     "executor_mode": "plan",
-    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
-    "pre_audit_report": os.environ.get("PRE_AUDIT_REPORT","")
-  }
+    "audit_session_id": os.environ.get(
+        "AUDIT_SESSION_ID",
+        "",
+    ),
+    "pre_audit_report": os.environ.get(
+        "PRE_AUDIT_REPORT",
+        "",
+    ),
+  },
 }
+
 print(json.dumps(p))
 PY
             ;;
 
           plan_audit)
-            WORKFLOW_FILE="RGA Runtime Verifier.yml"
-            # runtime verifier plan_audit: include execution_plan to audit
+
+            WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
+            # Runtime Auditor plan-audit
+
             python - <<PY > /tmp/payload.json
 import json, os
+
 p = {
-  "ref": os.environ.get("REF_INPUT","main"),
+  "ref": os.environ.get("REF_INPUT", "main"),
   "inputs": {
     "audit_mode": "plan_audit",
-    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
-    "execution_plan": os.environ.get("EXECUTION_PLAN","")
-  }
+    "audit_session_id": os.environ.get(
+        "AUDIT_SESSION_ID",
+        "",
+    ),
+    "execution_plan": os.environ.get(
+        "EXECUTION_PLAN",
+        "",
+    ),
+  },
 }
+
 print(json.dumps(p))
 PY
             ;;
 
           execute)
+
             WORKFLOW_FILE="RGA Maintenance Executor.yml"
-            # executor execute: requires execution_plan, approval artifact and approval phrase
+
+            # Bot #2 execute
+            # Human approval remains mandatory
+
             python - <<PY > /tmp/payload.json
 import json, os
+
 p = {
-  "ref": os.environ.get("REF_INPUT","main"),
+  "ref": os.environ.get("REF_INPUT", "main"),
   "inputs": {
     "executor_mode": "execute",
-    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
-    "execution_plan": os.environ.get("EXECUTION_PLAN",""),
-    "approval_artifact": os.environ.get("APPROVAL_ARTIFACT",""),
-    "execution_approval": os.environ.get("EXECUTION_APPROVAL",
-"")
-  }
+    "audit_session_id": os.environ.get(
+        "AUDIT_SESSION_ID",
+        "",
+    ),
+    "execution_plan": os.environ.get(
+        "EXECUTION_PLAN",
+        "",
+    ),
+    "approval_artifact": os.environ.get(
+        "APPROVAL_ARTIFACT",
+        "",
+    ),
+    "execution_approval": os.environ.get(
+        "EXECUTION_APPROVAL",
+        "",
+    ),
+  },
 }
+
 print(json.dumps(p))
 PY
             ;;
 
           post_audit)
-            WORKFLOW_FILE="RGA Runtime Verifier.yml"
-            # runtime verifier post_audit: include execution_plan and optional pre_audit_report
+
+            WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
+            # Runtime Auditor post-audit
+
             python - <<PY > /tmp/payload.json
 import json, os
+
 p = {
-  "ref": os.environ.get("REF_INPUT","main"),
+  "ref": os.environ.get("REF_INPUT", "main"),
   "inputs": {
     "audit_mode": "post_audit",
-    "audit_session_id": os.environ.get("AUDIT_SESSION_ID",""),
-    "execution_plan": os.environ.get("EXECUTION_PLAN","") ,
-    "pre_audit_report": os.environ.get("PRE_AUDIT_REPORT","")
-  }
+    "audit_session_id": os.environ.get(
+        "AUDIT_SESSION_ID",
+        "",
+    ),
+    "execution_plan": os.environ.get(
+        "EXECUTION_PLAN",
+        "",
+    ),
+    "pre_audit_report": os.environ.get(
+        "PRE_AUDIT_REPORT",
+        "",
+    ),
+  },
 }
+
 print(json.dumps(p))
 PY
             ;;
 
           *)
+
             echo "Unsupported stage: $STAGE" >&2
             exit 1
             ;;
+
         esac
 
         #
-        # URL-encode the workflow filename (it may contain spaces)
+        # URL-encode workflow file
         #
         enc_workflow=$(python - <<PY
 import sys, urllib.parse
-print(urllib.parse.quote(sys.argv[1], safe=''))
+print(
+    urllib.parse.quote(
+        sys.argv[1],
+        safe=""
+    )
+)
 PY
 "$WORKFLOW_FILE"
 )
 
         api_url="https://api.github.com/repos/${REPO}/actions/workflows/${enc_workflow}/dispatches"
 
-        # POST the dispatch payload
-        http_status=$(curl -sS -o /tmp/dispatch_resp -w "%{http_code}" \
+        http_status=$(curl -sS \
+          -o /tmp/dispatch_resp \
+          -w "%{http_code}" \
           -X POST \
           -H "Authorization: Bearer ${GITHUB_TOKEN}" \
           -H "Accept: application/vnd.github+json" \
           "$api_url" \
           -d @/tmp/payload.json || true)
 
-        # GitHub returns 204 No Content on success
         if [ "$http_status" != "204" ]; then
           echo "Workflow dispatch failed (HTTP $http_status)" >&2
           echo "API response:" >&2
