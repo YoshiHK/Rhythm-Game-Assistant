@@ -5,7 +5,7 @@ audit_modes:
   pre_audit:
 
     role:
-      discovery_and_verification
+      discovery_and_audit
 
     canonical_outputs:
       - runtime_auditor_report.json
@@ -27,7 +27,7 @@ audit_modes:
   post_audit:
 
     role:
-      execution_verification
+      execution_audit
 
     canonical_outputs:
       - post_audit_contract.json
@@ -126,10 +126,10 @@ identity:
   philosophy:
 
     #
-    # Verification Philosophy
+    # audit Philosophy
     #
 
-    - "Verification is global."
+    - "audit is global."
     - "Validation is local."
 
     #
@@ -163,7 +163,7 @@ identity:
     - "Coverage must be verified before deletion readiness."
     - "Artifact backbone integrity precedes deletion eligibility."
 
-  verification_model:
+  audit_model:
 
     validation:
 
@@ -180,7 +180,7 @@ identity:
 
         - type_a_conversion
 
-    verification:
+    audit:
 
       scope:
         global
@@ -199,11 +199,11 @@ identity:
 
   principles:
 
-    validation_is_not_verification: true
+    validation_is_not_audit: true
 
-    verification_is_global: true
+    audit_is_global: true
 
-    discovery_precedes_verification: true
+    discovery_precedes_audit: true
 
 layer_boundary_policy:
 
@@ -271,7 +271,7 @@ mcp_contract:
 
     - RGA_REST_URL
 
-  verification_scope:
+  audit_scope:
 
     - configuration
     - runtime_visibility
@@ -314,7 +314,7 @@ artifact_database_policy:
   modification:
     prohibited
 
-  verification_scope:
+  audit_scope:
 
     - presence
     - readability
@@ -327,7 +327,7 @@ artifact_database_policy:
     - schema_inventory
     - readability_check
     - record_count
-    - relationship_verification
+    - relationship_audit
 
   prohibited_operations:
 
@@ -384,7 +384,7 @@ artifact_database_policy:
 
       - asset_pipeline
  
-      - verification_layer
+      - audit_layer
 
       - governance_layer
 
@@ -459,7 +459,7 @@ asset_expectations:
 
   philosophy:
 
-    - asset_verification_precedes_deletion_readiness
+    - asset_audit_precedes_deletion_readiness
     - repository_reality_precedes_coverage_analysis
     - asset_backbone_integrity_precedes_runtime_readiness
 
@@ -474,7 +474,7 @@ asset_expectations:
       - usable_content
       - usability_verified
 
-    verification:
+    audit:
       - text_presence
       - conversion_success
       - content_non_empty
@@ -488,7 +488,7 @@ asset_expectations:
     expected:
       - reference_url
 
-    verification:
+    audit:
       - reference_url_presence
       - reference_visibility
 
@@ -506,7 +506,7 @@ asset_expectations:
       show_coverage_percentage: true
 
 
-verification_gates:
+audit_gates:
 
   deletion_readiness:
 
@@ -676,7 +676,7 @@ severity_policy:
     asset_coverage_failure:
       severity: fail
 
-    hash_verification_failure:
+    hash_audit_failure:
       severity: fail
 
     type_A_usability_failure:
@@ -786,7 +786,7 @@ root_cause_categories:
   - orphan_db_entry
 
   #
-  # Hash Verification
+  # Hash audit
   #
 
   - hash_mismatch
@@ -1289,21 +1289,21 @@ reporting:
     - runtime_reality
 
     #
-    # Artifact Verification
+    # Artifact audit
     #
 
-    - artifact_verification
+    - artifact_audit
     - artifact_backbone_contract
     - artifact_relationships
 
-    - asset_verification
+    - asset_audit
     - asset_coverage
     - coverage_percentage
 
     - orphan_files
     - orphan_db_entries
 
-    - hash_verification
+    - hash_audit
 
     - type_A_usability
 
@@ -1375,7 +1375,7 @@ role_separation:
 
   deployment_gate:
 
-    responsibility: build_verification
+    responsibility: build_audit
 
   rga_auditor_bot:
 
@@ -1390,7 +1390,7 @@ role_separation:
 
       - artifact_backbone
 
-      - asset_verification
+      - asset_audit
 
       - flow_contracts
 
@@ -1414,7 +1414,7 @@ charter:
     "Completed Phases are immutable."
 
   principle_2:
-    "Verification may diagnose but may not mutate."
+    "audit may diagnose but may not mutate."
 
   principle_3:
     "Expected behavior is not authoritative behavior."
@@ -1435,10 +1435,10 @@ charter:
     "Import reality must be distinguished from runtime reality."
 
   principle_9:
-    "Asset verification must not modify asset state."
+    "Asset audit must not modify asset state."
 
   principle_10:
-    "Coverage verification precedes deletion readiness."
+    "Coverage audit precedes deletion readiness."
 
   principle_11:
     "Artifact backbone integrity precedes deletion eligibility."
@@ -1468,7 +1468,7 @@ charter:
     "Governance reports should prioritize actionable causes."
 
   principle_20:
-    "Verification outputs may support advisory reasoning but remain read-only."
+    "audit outputs may support advisory reasoning but remain read-only."
 
   principle_21:
     "Derived failures must never obscure independently actionable root contracts."
@@ -1535,7 +1535,7 @@ future_capabilities:
     # Advanced Asset Intelligence
     #
 
-    - semantic_readiness_verification
+    - semantic_readiness_audit
 
     - type_A_usability_forecasting
 

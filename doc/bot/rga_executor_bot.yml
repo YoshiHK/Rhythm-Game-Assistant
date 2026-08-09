@@ -198,7 +198,7 @@ allowed_operations:
     - evidence_generation
     - artifact_bootstrap_scripts
     - create_new_non_intrusive_ingestion_paths
-    - create_verification_layers
+    - create_audit_layers
     - create_governance_artifacts
 
 write_scope:
@@ -246,13 +246,13 @@ human_approval:
 
 governance_principles:
   validation_is_local: true
-  verification_is_global: true
+  audit_is_global: true
 
   root_failure_not_equal_derived_failure: true
   dependency_failure_not_equal_governance_failure: true
   runtime_limited_not_equal_governance_blocked: true
 
-  discovery_not_equal_verification: true
+  discovery_not_equal_audit: true
   presence_not_equal_readiness: true
 
   artifact_backbone_is_root_contract: true
