@@ -99,8 +99,8 @@ jobs:
       
         run: |
           cat > artifacts/evidence_taxonomy.json <<'JSON'
-          {
-            "schema": "rga.evidence.taxonomy.v1.2",
+{
+  "schema": "rga.evidence.taxonomy.v1.2",
 
             "mode": "read_only",
 
@@ -331,8 +331,8 @@ jobs:
       
         run: |
           cat > artifacts/governance_lineage_taxonomy.json <<'JSON'
-          {
-            "schema": "rga.governance.lineage.v1.1",
+{
+  "schema": "rga.governance.lineage.v1.1",
 
             "purpose":
               "Root and derived governance failure rendering.",
@@ -397,8 +397,8 @@ jobs:
       - name: Flow Contract Taxonomy
         run: |
           cat > artifacts/flow_contract_taxonomy.json <<'JSON'
-          {
-            "schema": "rga.flow_contract_taxonomy.v1.1",
+{
+  "schema": "rga.flow_contract_taxonomy.v1.1",
 
             "contracts": {
 
@@ -754,53 +754,29 @@ jobs:
           } > artifacts/runtime_discovery_summary.txt
 
           python - <<'PY'
-          import json
-          from pathlib import Path
+import json
+from pathlib import Path
 
-          payload = {
-              "schema":
-                  "rga.runtime_discovery_evidence.v1.1",
+payload = {
+    "schema": "rga.runtime_discovery_evidence.v1.1",
+    "repository_driven": True,
+    "runtime_surfaces": {
+        "main": "main_candidates.txt",
+        "recommend": "recommend_candidates.txt",
+        "runtime_meta": "runtime_meta_candidates.txt",
+        "mcp": "mcp_server_candidates.txt",
+    },
+    "discovery_strategy": "repository_driven",
+    "audit_note": (
+        "Runtime discovery identifies candidate "
+        "runtime surfaces but does not imply "
+        "runtime readiness."
+    ),
+}
 
-              "repository_driven":
-                  True,
-
-              "runtime_surfaces": {
-                  "main":
-                      "main_candidates.txt",
-
-                  "recommend":
-                      "recommend_candidates.txt",
-
-                  "runtime_meta":
-                      "runtime_meta_candidates.txt",
-
-                  "mcp":
-                      "mcp_server_candidates.txt",
-              },
-
-              "discovery_strategy":
-                  "repository_driven",
-
-              "audit_note":
-                  (
-                      "Runtime discovery identifies candidate "
-                      "runtime surfaces but does not imply "
-                      "runtime readiness."
-                  ),
-          }
-
-          with open(
-              "artifacts/runtime_discovery_summary.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
-          PY
+with open("artifacts/runtime_discovery_summary.json", "w", encoding="utf-8") as f:
+    json.dump(payload, f, indent=2, ensure_ascii=False)
+PY
 
       ############################################################
       # Package Reality Evidence
@@ -834,40 +810,22 @@ jobs:
           } > artifacts/package_reality_summary.txt
 
           python - <<'PY'
-          import json
+import json
 
-          payload = {
-              "schema":
-                  "rga.package_reality_evidence.v1.1",
+payload = {
+    "schema": "rga.package_reality_evidence.v1.1",
+    "canonical_package": "rhythm_ingestion",
+    "repository_driven": True,
+    "package_reality": "independent",
+    "audit_note": (
+        "Package reality should be evaluated "
+        "before import reality."
+    ),
+}
 
-              "canonical_package":
-                  "rhythm_ingestion",
-
-              "repository_driven":
-                  True,
-
-              "package_reality":
-                  "independent",
-
-              "audit_note":
-                  (
-                      "Package reality should be evaluated "
-                      "before import reality."
-                  ),
-          }
-
-          with open(
-              "artifacts/package_reality_summary.json",
-              "w",
-              encoding="utf-8",
-          ) as f:
-              json.dump(
-                  payload,
-                  f,
-                  indent=2,
-                  ensure_ascii=False,
-              )
-          PY
+with open("artifacts/package_reality_summary.json", "w", encoding="utf-8") as f:
+    json.dump(payload, f, indent=2, ensure_ascii=False)
+PY
          
       ############################################################
       # Artifact Backbone Discovery
