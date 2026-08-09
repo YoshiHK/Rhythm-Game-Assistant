@@ -4,18 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       executor_mode:
-        description: >
+        description: >-
           Bot #2 executor mode.
 
           plan:
-            Generate an implementation plan from Bot #1 pre-audit evidence.
+          Generate an implementation plan from Bot #1 pre-audit evidence.
 
           dry_run_execute:
-            Simulate execution and generate execution evidence without
-            mutating repository state.
+          Simulate execution and generate execution evidence without
+          mutating repository state.
 
           execute:
-            Apply gated execution after Bot #1 plan-audit and human approval.
+          Apply gated execution after Bot #1 plan-audit and human approval.
         required: true
         default: "dry_run_execute"
         type: choice
@@ -25,7 +25,7 @@ on:
           - execute
 
       audit_session_id:
-        description: >
+        description: >-
           Optional lifecycle correlation id linking:
           Bot #1 pre-audit,
           Bot #2 implementation plan,
@@ -37,7 +37,7 @@ on:
         default: ""
 
       pre_audit_report:
-        description: >
+        description: >-
           Bot #1 pre-audit report path.
 
           This is the source material for Bot #2 implementation planning.
@@ -46,7 +46,7 @@ on:
         default: "artifacts/runtime_verifier_report.json"
 
       execution_plan:
-        description: >
+        description: >-
           Bot #2 implementation / execution plan path.
 
           Used by dry_run_execute and execute stages.
@@ -54,7 +54,7 @@ on:
         default: "artifacts/execution_plan.json"
 
       approval_artifact:
-        description: >
+        description: >-
           Human approval artifact path.
 
           Required before execute mode may apply gated execution.
@@ -62,11 +62,11 @@ on:
         default: "artifacts/human_execution_approval.json"
 
       execution_approval:
-        description: >
+        description: >-
           Optional approval phrase for execute mode.
 
           Expected value:
-            APPROVE_RGA_EXECUTION
+          APPROVE_RGA_EXECUTION
 
           This does not replace the approval artifact; it is an additional
           safety signal for gated execution.
