@@ -1,4 +1,4 @@
-name: RGA Runtime Verifier
+name: RGA Runtime Auditor
 
 on:
   push:
