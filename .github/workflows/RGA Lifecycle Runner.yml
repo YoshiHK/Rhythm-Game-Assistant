@@ -160,9 +160,9 @@ jobs:
               REASON="Triggering workflow did not complete successfully."
             else
               if find lifecycle_trigger -type f -name 'runtime_auditor_report.json' | grep -q .; then
-                STAGE="implementation_plan"
+                STAGE="plan"
               elif find lifecycle_trigger -type f -name 'runtime_verifier_report.json' | grep -q .; then
-                STAGE="implementation_plan"
+                STAGE="plan"
                 PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
               elif find lifecycle_trigger -type f -name 'runtime_executor_report.json' | grep -q .; then
                 if find lifecycle_trigger -type f -name 'execution_plan.json' | grep -q .; then
@@ -191,7 +191,7 @@ jobs:
           case "$STAGE" in
             pre_audit)
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
-              NEXT_STAGE="implementation_plan"
+              NEXT_STAGE="plan"
               DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"pre_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"]}))')
               ;;
 
