@@ -44,9 +44,11 @@ on:
         default: artifacts/human_execution_approval.json
 
       execution_approval:
-        description: Approval phrase for execute stage. Expected APPROVE_RGA_EXECUTION.
+        description: Approval phrase for execute stage. Required only when lifecycle_stage=execute.
         required: false
         default: ""
+        Expected value: APPROVE_RGA_EXECUTION
+        
 
   workflow_run:
     workflows:
@@ -58,6 +60,8 @@ on:
 permissions:
   actions: write
   contents: read
+  checks: read
+  pull-requests: read
 
 jobs:
   lifecycle-runner:
@@ -293,7 +297,7 @@ jobs:
                 echo "Lifecycle event found: $EVENT_FILE"
 
                 STAGE="$(
-                  python3 -c '
+                python3 -c '
                 import json
                 import pathlib
                 import sys
@@ -1172,32 +1176,65 @@ jobs:
       ############################################################
 
       - name: Dispatch next workflow
-        if: ${{ env.DISPATCH_REQUIRED == 'true' }}
+        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          ENCODED_WORKFLOW=$(python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$WORKFLOW_FILE")
+          if [ "${DISPATCH_REQUIRED:-false}" != "true" ]; then
+            echo "Dispatch not required."
+            echo "Resolved stage: ${RESOLVED_STAGE:-unknown}"
+            echo "Next stage: ${NEXT_STAGE:-unknown}"
+            echo "Reason: ${LIFECYCLE_REASON:-none}"
+            exit 0
+          fi
 
-          PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"ref": os.environ["REF_INPUT"], "inputs": json.loads(os.environ["DISPATCH_INPUTS"])}))')
+          if [ -z "${WORKFLOW_FILE:-}" ]; then
+            echo "WORKFLOW_FILE is empty but dispatch was required." >&2
+            exit 1
+          fi
+
+          if [ -z "${DISPATCH_INPUTS:-}" ]; then
+            echo "DISPATCH_INPUTS is empty but dispatch was required." >&2
+            exit 1
+          fi
+
+          ENCODED_WORKFLOW=$(
+            python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$WORKFLOW_FILE"
+          )
+
+          PAYLOAD=$(
+            python3 -c 'import json, os; print(json.dumps({"ref": os.environ["REF_INPUT"], "inputs": json.loads(os.environ["DISPATCH_INPUTS"])}))'
+          )
 
           API_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
 
-          HTTP_STATUS=$(curl -sS \
-            -o /tmp/rga_lifecycle_dispatch_response.json \
-            -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "Content-Type: application/json" \
-            "$API_URL" \
-            -d "$PAYLOAD" || true)
+          echo "Dispatching workflow: ${WORKFLOW_FILE}"
+          echo "Resolved lifecycle stage: ${RESOLVED_STAGE:-unknown}"
+          echo "Next lifecycle stage: ${NEXT_STAGE:-unknown}"
+          echo "Ref: ${REF_INPUT}"
+          echo "Payload:"
+          echo "$PAYLOAD"
+
+          HTTP_STATUS=$(
+            curl -sS \
+              -o /tmp/rga_lifecycle_dispatch_response.json \
+              -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "$API_URL" \
+              -d "$PAYLOAD" || true
+          )
 
           if [ "$HTTP_STATUS" != "204" ]; then
             echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
+            echo "API response:" >&2
             sed -n '1,200p' /tmp/rga_lifecycle_dispatch_response.json >&2 || true
+            echo "Payload sent:" >&2
             echo "$PAYLOAD" >&2
             exit 1
           fi
