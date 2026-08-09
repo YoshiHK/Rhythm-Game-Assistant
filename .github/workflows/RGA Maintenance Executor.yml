@@ -97,7 +97,7 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          python - <<'PY'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -154,7 +154,7 @@ jobs:
             REASON="Approval artifact missing"
           fi
 
-          python - <<'PY'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -572,7 +572,7 @@ jobs:
           ########################################################
 
           if [ ! -s artifacts/runtime_executor_report.md ]; then
-            python - <<'PY'
+            python <<-'PY'
             from pathlib import Path
             content = """# RGA Runtime Executor Report
 
@@ -728,7 +728,7 @@ jobs:
       - name: Execution Scope Verification
         if: always()
         run: |
-          python - <<'PY'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -756,7 +756,7 @@ jobs:
       - name: Execution Policy Verification
         if: always()
         run: |
-          python - <<'PY'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -1432,7 +1432,7 @@ jobs:
 
           if [ "$pr_required" != "true" ]; then
             echo "Pull request not required."
-            python - <<'PY'
+            python <<-'PY'
             import json
             from pathlib import Path
             payload = {
@@ -1559,7 +1559,7 @@ jobs:
       - name: Execution Lineage
         if: always()
         run: |
-          python - <<'PY'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -1667,7 +1667,7 @@ jobs:
       - name: Rollback Evidence
         if: always()
         run: |
-          python - <<'PY'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
