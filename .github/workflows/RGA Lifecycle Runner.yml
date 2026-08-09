@@ -184,95 +184,415 @@ jobs:
           DISPATCH_INPUTS="{}"
           REASON=""
 
+          ##########################################################
+          # Workflow Run Lifecycle Resolution
+          #
+          # Priority:
+          #
+          #   1. lifecycle_event.json
+          #   2. legacy canonical artifact fallback
+          #
+          # Canonical lifecycle stages:
+          #
+          #   pre_audit
+          #   plan
+          #   plan_audit
+          #   human_approval
+          #   execute
+          #   post_audit
+          ##########################################################
+
           if [ "$TRIGGER_SOURCE" = "workflow_run" ]; then
+
             if [ "$TRIGGERING_CONCLUSION" != "success" ]; then
-              NEXT_STAGE="halted"
+
+              STAGE="halted"
               DISPATCH_REQUIRED="false"
               REASON="Triggering workflow did not complete successfully."
+
             else
-              if find lifecycle_trigger -type f -name 'runtime_auditor_report.json' | grep -q .; then
-                STAGE="plan"
-              elif find lifecycle_trigger -type f -name 'runtime_verifier_report.json' | grep -q .; then
-                STAGE="plan"
-                PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
-              elif find lifecycle_trigger -type f -name 'runtime_executor_report.json' | grep -q .; then
-                if find lifecycle_trigger -type f -name 'execution_plan.json' | grep -q .; then
-                  STAGE="plan_audit"
-                elif find lifecycle_trigger -type f -name 'apply_execution_result.json' | grep -q .; then
-                  STAGE="post_audit"
+
+              ######################################################
+              # Lifecycle Event Contract First
+              ######################################################
+
+              EVENT_FILE="$(
+                find lifecycle_trigger \
+                  -type f \
+                  -name 'lifecycle_event.json' \
+                  -print \
+                  -quit \
+                  || true
+              )"
+
+              if [ -n "$EVENT_FILE" ]; then
+
+                echo "Lifecycle event found: $EVENT_FILE"
+
+                STAGE="$(
+                  python3 - "$EVENT_FILE" <<'PY'
+                  import json
+                  import sys
+                  from pathlib import Path
+
+                  event_file = Path(sys.argv[1])
+
+                  try:
+                      data = json.loads(
+                          event_file.read_text(
+                              encoding="utf-8",
+                              errors="ignore",
+                          )
+                      )
+
+                      print(
+                          data.get(
+                              "next_stage",
+                              "halted",
+                          )
+                      )
+
+                  except Exception:
+                      print("halted")
+                  PY
+                )"
+
+                REASON="Lifecycle stage resolved from lifecycle_event.json."
+
+              else
+
+                ####################################################
+                # Legacy Artifact Fallback
+                #
+                # This is retained only for backward compatibility.
+                ####################################################
+
+                echo "No lifecycle_event.json found."
+                echo "Falling back to legacy artifact detection."
+
+                if find lifecycle_trigger \
+                  -type f \
+                  -name 'runtime_auditor_report.json' \
+                  | grep -q .
+                then
+
+                  STAGE="plan"
+
+                elif find lifecycle_trigger \
+                  -type f \
+                  -name 'runtime_verifier_report.json' \
+                  | grep -q .
+                then
+
+                  STAGE="plan"
+                  PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
+                  export PRE_AUDIT_REPORT
+
+                elif find lifecycle_trigger \
+                  -type f \
+                  -name 'runtime_executor_report.json' \
+                  | grep -q .
+                then
+
+                  if find lifecycle_trigger \
+                    -type f \
+                    -name 'execution_plan.json' \
+                    | grep -q .
+                  then
+
+                    STAGE="plan_audit"
+
+                  elif find lifecycle_trigger \
+                    -type f \
+                    -name 'apply_execution_result.json' \
+                    | grep -q .
+                  then
+
+                    STAGE="post_audit"
+
+                  else
+
+                    STAGE="halted"
+                    DISPATCH_REQUIRED="false"
+                    REASON="Executor artifacts found, but no execution_plan.json or apply_execution_result.json was found."
+
+                  fi
+
+                elif find lifecycle_trigger \
+                  -type f \
+                  -name 'plan_audit_evidence.json' \
+                  | grep -q .
+                then
+
+                  STAGE="human_approval"
+
+                elif find lifecycle_trigger \
+                  -type f \
+                  -name 'post_audit_contract.json' \
+                  | grep -q .
+                then
+
+                  STAGE="complete"
+                  DISPATCH_REQUIRED="false"
+                  REASON="Post-audit contract was produced; lifecycle is complete."
+
                 else
+
                   STAGE="halted"
                   DISPATCH_REQUIRED="false"
-                  REASON="Executor artifacts found, but no execution_plan.json or apply_execution_result.json was found."
+                  REASON="No lifecycle_event.json or recognized legacy canonical artifact was found in triggering workflow artifacts."
+
                 fi
-              elif find lifecycle_trigger -type f -name 'plan_audit_evidence.json' | grep -q .; then
-                STAGE="human_approval"
-              elif find lifecycle_trigger -type f -name 'post_audit_contract.json' | grep -q .; then
-                STAGE="complete"
-                DISPATCH_REQUIRED="false"
-                REASON="Post-audit contract was produced; lifecycle is complete."
-              else
-                STAGE="halted"
-                DISPATCH_REQUIRED="false"
-                REASON="No recognized canonical artifact was found in triggering workflow artifacts."
+
               fi
+
             fi
+
           fi
 
+          ##########################################################
+          # Canonical Lifecycle Routing
+          ##########################################################
+
           case "$STAGE" in
+
             pre_audit)
+
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="plan"
-              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"pre_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"]}))')
+
+              DISPATCH_INPUTS="$(
+                python3 -c '
+                import json
+                import os
+
+                payload = {
+                    "audit_mode":
+                        "pre_audit",
+
+                    "audit_session_id":
+                        os.environ["AUDIT_SESSION_ID"],
+                }
+
+                print(
+                    json.dumps(
+                        payload,
+                        separators=(",", ":"),
+                    )
+                )
+                '
+              )"
+
               ;;
 
             plan)
+
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="plan_audit"
-              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"executor_mode":"plan","audit_session_id":os.environ["AUDIT_SESSION_ID"],"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT","")}))')
+
+              DISPATCH_INPUTS="$(
+                python3 -c '
+                import json
+                import os
+
+                payload = {
+                    "executor_mode":
+                        "plan",
+
+                    "audit_session_id":
+                        os.environ["AUDIT_SESSION_ID"],
+
+                    "pre_audit_report":
+                        os.environ.get(
+                            "PRE_AUDIT_REPORT",
+                            "",
+                        ),
+                }
+
+                print(
+                    json.dumps(
+                        payload,
+                        separators=(",", ":"),
+                    )
+                )
+                '
+              )"
+
               ;;
 
             plan_audit)
+
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="human_approval"
-              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"plan_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN","")}))')
+
+              DISPATCH_INPUTS="$(
+                python3 -c '
+                import json
+                import os
+
+                payload = {
+                    "audit_mode":
+                        "plan_audit",
+
+                    "audit_session_id":
+                        os.environ["AUDIT_SESSION_ID"],
+
+                    "execution_plan":
+                        os.environ.get(
+                            "EXECUTION_PLAN",
+                            "",
+                        ),
+                }
+
+                print(
+                    json.dumps(
+                        payload,
+                        separators=(",", ":"),
+                    )
+                )
+                '
+              )"
+
               ;;
 
             human_approval)
+
               NEXT_STAGE="execute"
               DISPATCH_REQUIRED="false"
-              REASON="Human approval checkpoint. Create or provide human_execution_approval.json before running execute."
+              REASON="Human approval checkpoint reached. Create or provide human_execution_approval.json before running execute."
+
               ;;
 
             execute)
+
               if [ -z "$EXECUTION_APPROVAL" ]; then
                 echo "execution_approval missing" >&2
                 exit 1
               fi
+
               if [ "$EXECUTION_APPROVAL" != "APPROVE_RGA_EXECUTION" ]; then
                 echo "invalid execution_approval phrase" >&2
                 exit 1
               fi
+
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="post_audit"
-              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"executor_mode":"execute","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN",""),"approval_artifact":os.environ.get("APPROVAL_ARTIFACT",""),"execution_approval":os.environ.get("EXECUTION_APPROVAL","")}))')
+
+              DISPATCH_INPUTS="$(
+                python3 -c '
+                import json
+                import os
+
+                payload = {
+                    "executor_mode":
+                        "execute",
+
+                    "audit_session_id":
+                        os.environ["AUDIT_SESSION_ID"],
+
+                    "execution_plan":
+                        os.environ.get(
+                            "EXECUTION_PLAN",
+                            "",
+                        ),
+
+                    "approval_artifact":
+                        os.environ.get(
+                            "APPROVAL_ARTIFACT",
+                            "",
+                        ),
+
+                    "execution_approval":
+                        os.environ.get(
+                            "EXECUTION_APPROVAL",
+                            "",
+                        ),
+                }
+
+                print(
+                    json.dumps(
+                        payload,
+                        separators=(",", ":"),
+                    )
+                )
+                '
+              )"
+
               ;;
 
             post_audit)
+
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="complete"
-              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"post_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN",""),"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT","")}))')
+
+              DISPATCH_INPUTS="$(
+                python3 -c '
+                import json
+                import os
+
+                payload = {
+                    "audit_mode":
+                        "post_audit",
+
+                    "audit_session_id":
+                        os.environ["AUDIT_SESSION_ID"],
+
+                    "execution_plan":
+                        os.environ.get(
+                            "EXECUTION_PLAN",
+                            "",
+                        ),
+
+                    "pre_audit_report":
+                        os.environ.get(
+                            "PRE_AUDIT_REPORT",
+                            "",
+                        ),
+                }
+
+                print(
+                    json.dumps(
+                        payload,
+                        separators=(",", ":"),
+                    )
+                )
+                '
+              )"
+
               ;;
 
-            complete|halted)
+            complete)
+
               DISPATCH_REQUIRED="false"
+
+              if [ -z "$REASON" ]; then
+                REASON="Lifecycle complete."
+              fi
+
+              ;;
+
+            halted)
+
+              DISPATCH_REQUIRED="false"
+
+              if [ -z "$REASON" ]; then
+                REASON="Lifecycle halted."
+              fi
+
               ;;
 
             *)
+
               echo "Unsupported resolved stage: $STAGE" >&2
               exit 1
+
               ;;
+
           esac
+
+          ##########################################################
+          # Export lifecycle routing outcome
+          ##########################################################
 
           {
             echo "RESOLVED_STAGE=$STAGE"
@@ -495,6 +815,148 @@ jobs:
               encoding="utf-8",
           )
           PY
+          
+      ############################################################
+      # Lifecycle Event Contract
+      #
+      # Canonical output:
+      #
+      #   artifacts/lifecycle_event.json
+      #
+      # Purpose:
+      #
+      #   - Explicitly declares which lifecycle stage
+      #     has completed.
+      #
+      #   - Defines the next lifecycle stage.
+      #
+      #   - Eliminates artifact-name guessing.
+      #
+      #   - Serves as the contract between:
+      #
+      #       Bot #1 Auditor
+      #       Bot #2 Executor
+      #       Lifecycle Runner
+      #
+      ############################################################
+
+      - name: Write Lifecycle Event Contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+
+          from pathlib import Path
+          from datetime import (
+              datetime,
+              timezone,
+          )
+
+          current_stage = os.environ.get(
+              "RESOLVED_STAGE",
+              "",
+          )
+
+          next_stage = os.environ.get(
+              "NEXT_STAGE",
+              "",
+          )
+
+          payload = {
+
+              "schema":
+                  "rga.lifecycle_event.v1.0",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "audit_session_id":
+                  os.environ.get(
+                      "AUDIT_SESSION_ID",
+                      "",
+                  ),
+
+              "trigger_source":
+                  os.environ.get(
+                      "TRIGGER_SOURCE",
+                      "",
+                  ),
+
+              "completed_stage":
+                  current_stage,
+
+              "next_stage":
+                  next_stage,
+
+              "dispatch_required":
+                  (
+                      os.environ.get(
+                          "DISPATCH_REQUIRED",
+                          "false",
+                      )
+                      == "true"
+                  ),
+
+              "workflow_file":
+                  (
+                      os.environ.get(
+                          "WORKFLOW_FILE"
+                      )
+                      or None
+                  ),
+
+              "event_contract": {
+
+                  "completed_stage_declared":
+                      True,
+
+                  "next_stage_declared":
+                      True,
+
+                  "artifact_guessing_required":
+                      False,
+
+                  "runner_must_infer_stage":
+                      False,
+              },
+
+              "governance": {
+
+                  "bot_1_role":
+                      "auditor",
+
+                  "bot_2_role":
+                      "planner_executor",
+
+                  "approval_authority":
+                      "human",
+
+                  "human_approval_required":
+                      True,
+
+                  "completed_phases_remain_immutable":
+                      True,
+              },
+          }
+
+          Path(
+              "artifacts/lifecycle_event.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY          
 
       - name: Dispatch next workflow
         if: ${{ env.DISPATCH_REQUIRED == 'true' }}
