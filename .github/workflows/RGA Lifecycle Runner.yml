@@ -6,13 +6,13 @@ on:
       lifecycle_stage:
         description: >
           Stage to start or resume.
-          One of: pre_audit, implementation_plan, plan_audit, human_approval, execute, post_audit.
+          One of: pre_audit, plan, plan_audit, human_approval, execute, post_audit.
         required: true
         default: pre_audit
         type: choice
         options:
           - pre_audit
-          - implementation_plan
+          - plan
           - plan_audit
           - human_approval
           - execute
@@ -195,7 +195,7 @@ jobs:
               DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"pre_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"]}))')
               ;;
 
-            implementation_plan)
+            plan)
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="plan_audit"
               DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"executor_mode":"plan","audit_session_id":os.environ["AUDIT_SESSION_ID"],"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT","")}))')
@@ -281,7 +281,7 @@ jobs:
               "reason": os.environ.get("LIFECYCLE_REASON", ""),
               "canonical_lifecycle": [
                   "pre_audit",
-                  "implementation_plan",
+                  "plan",
                   "plan_audit",
                   "human_approval",
                   "execute",
