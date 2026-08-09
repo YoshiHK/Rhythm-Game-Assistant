@@ -38,7 +38,7 @@ on:
         default: ""
 
 jobs:
-  runtime-verification:
+  runtime-audit:
     runs-on: ubuntu-latest
 
     permissions:
@@ -150,7 +150,7 @@ jobs:
               }
             },
 
-            "double_sideway_verification": {
+            "double_sideway_audit": {
               "enabled": true,
 
               "sequence": [
@@ -186,7 +186,7 @@ jobs:
                 "governance_blocking": false,
                 "affects": [
                   "runtime_verdict",
-                  "flow_verification"
+                  "flow_audit"
                 ]
               },
 
@@ -500,7 +500,7 @@ jobs:
               "localization_not_modified":
                 true,
 
-              "flow_verification_is_repository_driven":
+              "flow_audit_is_repository_driven":
                 true
             },
 
@@ -531,7 +531,7 @@ jobs:
                 "progression"
             },
 
-            "verification_note":
+            "audit_note":
               "Flow taxonomy defines expected flow contracts only. Flow taxonomy does not modify runtime behavior, recommendation logic, personalization, localization, or completed phases."
           }
           JSON
@@ -648,7 +648,7 @@ jobs:
               "evidence_role":
                   "repository_reality",
 
-              "verification_note":
+              "audit_note":
                   (
                       "Repository discovery establishes "
                       "repository reality only. Runtime "
@@ -781,7 +781,7 @@ jobs:
               "discovery_strategy":
                   "repository_driven",
 
-              "verification_note":
+              "audit_note":
                   (
                       "Runtime discovery identifies candidate "
                       "runtime surfaces but does not imply "
@@ -849,7 +849,7 @@ jobs:
               "package_reality":
                   "independent",
 
-              "verification_note":
+              "audit_note":
                   (
                       "Package reality should be evaluated "
                       "before import reality."
@@ -960,7 +960,7 @@ jobs:
                       and bool(inventory["chart_patterns"])
                   ),
 
-              "verification_note":
+              "audit_note":
                   (
                       "Artifact backbone discovery establishes "
                       "candidate evidence only. Readability, "
@@ -1172,7 +1172,7 @@ jobs:
                       "architecture_issue",
               },
 
-              "verification_note": (
+              "audit_note": (
                   "Import failures should be interpreted "
                   "against dependency reality before being "
                   "treated as package-layout defects."   
@@ -1296,7 +1296,7 @@ jobs:
               "topology_assumptions":
                   False,
 
-              "verification_layer":
+              "audit_layer":
                   "runtime_discovery",
 
               "runtime_pipeline_model": {
@@ -1305,8 +1305,8 @@ jobs:
                   "bridges": "integration",
               },
 
-              "verification_note": (
-                  "Repository discovery precedes runtime reader verification."
+              "audit_note": (
+                  "Repository discovery precedes runtime reader audit."
               ),
           }
 
@@ -1385,7 +1385,7 @@ jobs:
                   "chart_patterns.db",
               ],
 
-              "verification_layer":
+              "audit_layer":
                   "runtime_artifact_readiness",
 
               "repository_driven":
@@ -1398,10 +1398,10 @@ jobs:
                   "presence_is_not_readiness":
                       True,
 
-                  "readability_is_not_relationship_verification":
+                  "readability_is_not_relationship_audit":
                       True,
 
-                  "relationship_verification_precedes_runtime_readiness":
+                  "relationship_audit_precedes_runtime_readiness":
                       True,
               },
 
@@ -1500,7 +1500,7 @@ jobs:
               "artifact_contract_root":
                   "artifact_database_policy",
 
-              "verification_layer":
+              "audit_layer":
                   "artifact_backbone",
 
               "governance_role":
@@ -1650,10 +1650,10 @@ jobs:
               "coverage_verified":
                   False,
 
-              "verification_note":
+              "audit_note":
                   (
                       "Repository inventory evidence does not imply "
-                      "asset coverage verification."
+                      "asset coverage audit."
                   ),
           }
 
@@ -1773,7 +1773,7 @@ jobs:
                   "included_in_asset_coverage":
                       False,
 
-                  "included_in_hash_verification":
+                  "included_in_hash_audit":
                       False,
 
                   "included_in_deletion_readiness":
@@ -2003,13 +2003,13 @@ jobs:
 
               "relationship_principles": {
 
-                "presence_is_not_relationship_verification":
+                "presence_is_not_relationship_audit":
                   true,
 
-                "readability_is_not_relationship_verification":
+                "readability_is_not_relationship_audit":
                   true,
 
-                "relationship_verification_precedes_asset_coverage":
+                "relationship_audit_precedes_asset_coverage":
                   true,
 
                 "asset_coverage_precedes_deletion_readiness":
@@ -2030,8 +2030,8 @@ jobs:
                 "database_readability":
                   "validation",
 
-                "relationship_verification":
-                  "verification",
+                "relationship_audit":
+                  "audit",
 
                 "deletion_readiness":
                   "governance_gate"
@@ -2058,7 +2058,7 @@ jobs:
               "governance_notes": [
                 "Artifact database policy is the canonical artifact-backbone root contract.",
                 "Derived contracts should be revalidated after root contract restoration.",
-                "Relationship verification requires more than database discovery.",
+                "Relationship audit requires more than database discovery.",
                 "Deletion readiness must not be inferred from discovery evidence."
               ]
             }
@@ -2127,7 +2127,7 @@ jobs:
                       "persisted artifact records."
                   ),
                   
-              "future_verification_dependencies": [
+              "future_audit_dependencies": [
                   "hash_integrity",
                   "asset_coverage",
                   "deletion_readiness",
@@ -2148,10 +2148,10 @@ jobs:
           PY
 
       ############################################################
-      # Flow Verification Evidence
+      # Flow audit Evidence
       ############################################################
 
-      - name: Flow Verification Evidence
+      - name: Flow audit Evidence
         run: |
           find . -type f \
             \( \
@@ -2177,7 +2177,7 @@ jobs:
             > artifacts/flow_keyword_hits.txt || true
 
           {
-            echo "Flow Verification Evidence"
+            echo "Flow audit Evidence"
             echo ""
             echo "Expected Flow Contracts"
             echo "-----------------------"
@@ -2188,14 +2188,14 @@ jobs:
             echo "Flow Governance"
             echo "---------------"
             echo "Flow contracts are expected contracts."
-            echo "Repository discovery precedes flow verification."
-            echo "Flow verification may be runtime-limited."
+            echo "Repository discovery precedes flow audit."
+            echo "Flow audit may be runtime-limited."
             echo ""
             echo "Generated Files"
             echo "---------------"
             echo "flow_candidates.txt"
             echo "flow_keyword_hits.txt"
-          } > artifacts/flow_verification_summary.txt
+          } > artifacts/flow_audit_summary.txt
 
           python - <<'PY'
           import json
@@ -2220,7 +2220,7 @@ jobs:
 
           payload = {
               "schema":
-                  "rga.flow_verification_evidence.v1.0",
+                  "rga.flow_audit_evidence.v1.0",
 
               "expected_flow_contracts": [
                   "chart_first",
@@ -2242,10 +2242,10 @@ jobs:
                   True,
 
               "governance_principles": {
-                  "repository_discovery_precedes_flow_verification":
+                  "repository_discovery_precedes_flow_audit":
                       True,
 
-                  "dependency_reality_may_limit_flow_verification":
+                  "dependency_reality_may_limit_flow_audit":
                       True,
 
                   "runtime_limited_is_not_automatic_governance_failure":
@@ -2279,7 +2279,7 @@ jobs:
           }
 
           with open(
-              "artifacts/flow_verification_summary.json",
+              "artifacts/flow_audit_summary.json",
               "w",
               encoding="utf-8",
           ) as f:
@@ -2482,7 +2482,7 @@ jobs:
               "schema":
                   "rga.layer_boundary_risk.v1.2",
 
-              "verification_layer":
+              "audit_layer":
                   "layer_boundaries",
 
               "repository_driven":
@@ -2549,7 +2549,7 @@ jobs:
                   "runtime_limited_is_not_governance_blocked":
                       True,
 
-                  "repository_discovery_is_not_runtime_verification":
+                  "repository_discovery_is_not_runtime_audit":
                       True,
 
                   "layer_separation_is_repository_driven":
@@ -2628,7 +2628,7 @@ jobs:
             echo "Evidence-level findings may block governance."
 
             echo ""
-            echo "Repository discovery is not runtime verification."
+            echo "Repository discovery is not runtime audit."
             echo "Runtime-limited is not governance-blocked."
             echo "Layer boundary evidence is repository-driven."
 
@@ -2702,17 +2702,17 @@ jobs:
               "repository_driven":
                   True,
 
-              "verification_layer":
+              "audit_layer":
                   "runtime_surface_discovery",
 
               "runtime_principles": {
                   "repository_discovery_is_not_runtime_readiness":
                       True,
 
-                  "runtime_surface_visibility_is_not_runtime_verification":
+                  "runtime_surface_visibility_is_not_runtime_audit":
                       True,
 
-                  "dependency_reality_precedes_runtime_verification":
+                  "dependency_reality_precedes_runtime_audit":
                       True,
               },
 
@@ -3244,7 +3244,7 @@ jobs:
           rm -f artifacts/plan_audit_generator.py
 
       ############################################################
-      # Post Audit Verification Contract
+      # Post Audit audit Contract
       #
       # Bot #1 post-audit mode:
       #
@@ -3258,7 +3258,7 @@ jobs:
       #   artifacts/post_audit_contract.json
       ############################################################
 
-      - name: Post Audit Verification Contract
+      - name: Post Audit audit Contract
         if: ${{ always() && github.event.inputs.audit_mode == 'post_audit' }}
         shell: bash
         run: |
@@ -3391,7 +3391,7 @@ jobs:
               },
 
               "post_audit_principles": {
-                  "post_audit_is_verification_only":
+                  "post_audit_is_audit_only":
                       True,
 
                   "post_audit_does_not_replace_human_governance":
@@ -3477,7 +3477,7 @@ jobs:
                   len(files),
 
               "bundle_role":
-                  "verification_evidence",
+                  "audit_evidence",
 
               "audit_mode":
                   "pre_audit",

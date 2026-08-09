@@ -170,10 +170,10 @@ jobs:
           PY
 
       ############################################################
-      # Human Approval Artifact Verification
+      # Human Approval Artifact audit
       ############################################################
 
-      - name: Human Approval Artifact Verification
+      - name: Human Approval Artifact audit
         if: always()
         run: |
           python - <<'PY'
@@ -183,11 +183,11 @@ jobs:
           p = Path('artifacts/human_execution_approval.json')
 
           payload = {
-              'schema':'rga.approval_verification.v1.0',
+              'schema':'rga.approval_audit.v1.0',
               'artifact_present': p.exists()
           }
 
-          Path('artifacts/approval_verification.json').write_text(
+          Path('artifacts/approval_audit.json').write_text(
               json.dumps(payload, indent=2),
               encoding='utf-8'
           )
@@ -708,17 +708,17 @@ jobs:
           PY
           
       ############################################################
-      # Execution Scope Verification
+      # Execution Scope audit
       ############################################################
 
-      - name: Execution Scope Verification
+      - name: Execution Scope audit
         if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           payload = {
-              "schema": "rga.execution_scope_verification.v1.0",
+              "schema": "rga.execution_scope_audit.v1.0",
               "protected_scopes": [
                   "canonical_row",
                   "pattern_logic",
@@ -729,24 +729,24 @@ jobs:
               ],
               "completed_phases_immutable": True,
           }
-          Path("artifacts/execution_scope_verification.json").write_text(
+          Path("artifacts/execution_scope_audit.json").write_text(
               json.dumps(payload, indent=2),
               encoding="utf-8",
           )
           PY
 
       ############################################################
-      # Execution Policy Verification
+      # Execution Policy audit
       ############################################################
 
-      - name: Execution Policy Verification
+      - name: Execution Policy audit
         if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           payload = {
-              "schema": "rga.execution_policy_verification.v1.0",
+              "schema": "rga.execution_policy_audit.v1.0",
               "execution_authority": True,
               "approval_authority": False,
               "self_approval": False,
@@ -754,7 +754,7 @@ jobs:
               "plan_audit_required": True,
               "post_audit_required": True,
           }
-          Path("artifacts/execution_policy_verification.json").write_text(
+          Path("artifacts/execution_policy_audit.json").write_text(
               json.dumps(payload, indent=2),
               encoding="utf-8",
           )
@@ -1214,9 +1214,9 @@ jobs:
 
                   "approval_artifact_matching",
 
-                  "execution_scope_verification",
+                  "execution_scope_audit",
 
-                  "execution_policy_verification",
+                  "execution_policy_audit",
 
                   "post_audit"
               ],
