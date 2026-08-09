@@ -97,7 +97,7 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -154,7 +154,7 @@ jobs:
             REASON="Approval artifact missing"
           fi
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -176,7 +176,7 @@ jobs:
       - name: Human Approval Artifact Verification
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -285,7 +285,7 @@ jobs:
           # Structured stderr summary
           ########################################################
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -433,7 +433,7 @@ jobs:
           ########################################################
 
           if [ ! -s artifacts/runtime_executor_report.json ]; then
-            python - <<'py'
+            python <<-'PY'
             import json
             from datetime import datetime, timezone
             from pathlib import Path
@@ -572,7 +572,7 @@ jobs:
           ########################################################
 
           if [ ! -s artifacts/runtime_executor_report.md ]; then
-            python - <<'py'
+            python <<-'PY'
             from pathlib import Path
             content = """# RGA Runtime Executor Report
 
@@ -613,7 +613,7 @@ jobs:
 
           mkdir -p artifacts
 
-          python - <<'py'
+          python <<-'PY'
           import hashlib
           import json
           from pathlib import Path
@@ -660,7 +660,7 @@ jobs:
       - name: Approval Artifact Matching
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -728,7 +728,7 @@ jobs:
       - name: Execution Scope Verification
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -756,7 +756,7 @@ jobs:
       - name: Execution Policy Verification
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -784,7 +784,7 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -874,7 +874,7 @@ jobs:
         run: |
           set +e
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
           import subprocess
@@ -1054,7 +1054,7 @@ jobs:
       - name: Execution Commit Manifest
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1149,7 +1149,7 @@ jobs:
       - name: Execution Pull Request Candidate
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1262,7 +1262,7 @@ jobs:
         run: |
           set +e
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1335,7 +1335,7 @@ jobs:
           )
           PY
 
-          commit_required=$(python - <<'py'
+          commit_required=$(python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1357,7 +1357,7 @@ jobs:
             exit 0
           fi
 
-          branch_name=$(python - <<'py'
+          branch_name=$(python <<-'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/execution_commit_manifest.json").read_text(encoding="utf-8"))
@@ -1365,7 +1365,7 @@ jobs:
           PY
           )
 
-          commit_message=$(python - <<'py'
+          commit_message=$(python <<-'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/execution_commit_manifest.json").read_text(encoding="utf-8"))
@@ -1389,7 +1389,7 @@ jobs:
 
           git push --set-upstream origin "$branch_name"
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1416,7 +1416,7 @@ jobs:
         run: |
           set +e
 
-          pr_required=$(python - <<'py'
+          pr_required=$(python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1432,7 +1432,7 @@ jobs:
 
           if [ "$pr_required" != "true" ]; then
             echo "Pull request not required."
-            python - <<'py'
+            python <<-'PY'
             import json
             from pathlib import Path
             payload = {
@@ -1449,7 +1449,7 @@ jobs:
             exit 0
           fi
 
-          branch_name=$(python - <<'py'
+          branch_name=$(python <<-'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
@@ -1457,7 +1457,7 @@ jobs:
           PY
           )
 
-          pr_title=$(python - <<'py'
+          pr_title=$(python <<-'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
@@ -1465,7 +1465,7 @@ jobs:
           PY
           )
 
-          pr_body=$(python - <<'py'
+          pr_body=$(python <<-'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("artifacts/execution_pull_request_candidate.json").read_text(encoding="utf-8"))
@@ -1483,7 +1483,7 @@ jobs:
 
           pr_exit=$?
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1559,7 +1559,7 @@ jobs:
       - name: Execution Lineage
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -1586,7 +1586,7 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1667,7 +1667,7 @@ jobs:
       - name: Rollback Evidence
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
           payload = {
@@ -1688,7 +1688,7 @@ jobs:
       - name: Execution Bundle Manifest
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           from pathlib import Path
 
@@ -1819,7 +1819,7 @@ jobs:
       - name: Bundle Integrity Manifest
         if: always()
         run: |
-          python - <<'py'
+          python <<-'PY'
           import json
           import hashlib
           from pathlib import Path
