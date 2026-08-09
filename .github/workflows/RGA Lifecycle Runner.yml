@@ -296,32 +296,25 @@ jobs:
 
                 echo "Lifecycle event found: $EVENT_FILE"
 
-                STAGE="$(
-                  python3 -c '
-                import json
-                import pathlib
-                import sys
+                STAGE=$(
+                  grep -oE '"next_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
+                    "$EVENT_FILE" \
+                    | head -n1 \
+                    | sed -E 's/.*"([^"]+)"/\1/'
+                )
 
-                try:
-                    print(
-                        json.loads(
-                            pathlib.Path(
-                                sys.argv[1]
-                            ).read_text(
-                                encoding="utf-8",
-                                errors="ignore",
-                            )
-                        ).get(
-                            "next_stage",
-                            "halted",
-                        )
-                    )
-                except Exception:
-                    print("halted")
-                ' "$EVENT_FILE"
-                )"
+                if [ -z "$STAGE" ]; then
 
-                REASON="Lifecycle stage resolved from lifecycle_event.json."
+                  STAGE="halted"
+                  DISPATCH_REQUIRED="false"
+
+                  REASON="Lifecycle event contract exists but next_stage could not be resolved."
+
+                else
+
+                  REASON="Lifecycle stage resolved from lifecycle_event.json."
+
+                fi
 
               else
 
@@ -425,19 +418,14 @@ jobs:
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="plan"
 
-              DISPATCH_INPUTS="$(
-                python3 -c '
-import json
-import os
+              cat > /tmp/dispatch_inputs.json <<EOF
+              {
+                "audit_mode": "pre_audit",
+                "audit_session_id": "${AUDIT_SESSION_ID}"
+              }
+              EOF
 
-payload = {
-    "audit_mode": "pre_audit",
-    "audit_session_id": os.environ["AUDIT_SESSION_ID"],
-}
-
-print(json.dumps(payload, separators=(",", ":")))
-'
-              )"
+              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
 
               ;;
 
@@ -446,33 +434,15 @@ print(json.dumps(payload, separators=(",", ":")))
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="plan_audit"
 
-              DISPATCH_INPUTS="$(
-                python3 -c '
-import json
-import os
+              cat > /tmp/dispatch_inputs.json <<EOF
+              {
+                "executor_mode": "plan",
+                "audit_session_id": "${AUDIT_SESSION_ID}",
+                "pre_audit_report": "${PRE_AUDIT_REPORT}"
+              }
+              EOF
 
-payload = {
-    "executor_mode":
-        "plan",
-
-    "audit_session_id":
-        os.environ["AUDIT_SESSION_ID"],
-
-    "pre_audit_report":
-        os.environ.get(
-            "PRE_AUDIT_REPORT",
-            "",
-        ),
-}
-
-print(
-    json.dumps(
-        payload,
-        separators=(",", ":"),
-    )
-)
-'
-              )"
+              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
 
               ;;
 
@@ -481,33 +451,15 @@ print(
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="human_approval"
 
-              DISPATCH_INPUTS="$(
-                python3 -c '
-import json
-import os
+              cat > /tmp/dispatch_inputs.json <<EOF
+              {
+                "audit_mode": "plan_audit",
+                "audit_session_id": "${AUDIT_SESSION_ID}",
+                "execution_plan": "${EXECUTION_PLAN}"
+              }
+              EOF
 
-payload = {
-    "audit_mode":
-        "plan_audit",
-
-    "audit_session_id":
-        os.environ["AUDIT_SESSION_ID"],
-
-    "execution_plan":
-        os.environ.get(
-            "EXECUTION_PLAN",
-            "",
-        ),
-}
-
-print(
-    json.dumps(
-        payload,
-        separators=(",", ":"),
-    )
-)
-'
-              )"
+              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
 
               ;;
 
@@ -534,45 +486,17 @@ print(
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="post_audit"
 
-              DISPATCH_INPUTS="$(
-                python3 -c '
-import json
-import os
+              cat > /tmp/dispatch_inputs.json <<EOF
+              {
+                "executor_mode": "execute",
+                "audit_session_id": "${AUDIT_SESSION_ID}",
+                "execution_plan": "${EXECUTION_PLAN}",
+                "approval_artifact": "${APPROVAL_ARTIFACT}",
+                "execution_approval": "${EXECUTION_APPROVAL}"
+              }
+              EOF
 
-payload = {
-    "executor_mode":
-        "execute",
-
-    "audit_session_id":
-        os.environ["AUDIT_SESSION_ID"],
-
-    "execution_plan":
-        os.environ.get(
-            "EXECUTION_PLAN",
-            "",
-        ),
-
-    "approval_artifact":
-        os.environ.get(
-            "APPROVAL_ARTIFACT",
-            "",
-        ),
-
-    "execution_approval":
-        os.environ.get(
-            "EXECUTION_APPROVAL",
-            "",
-        ),
-}
-
-print(
-    json.dumps(
-        payload,
-        separators=(",", ":"),
-    )
-)
-'
-              )"
+              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
 
               ;;
 
@@ -581,39 +505,16 @@ print(
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="complete"
 
-              DISPATCH_INPUTS="$(
-                python3 -c '
-import json
-import os
+              cat > /tmp/dispatch_inputs.json <<EOF
+              {
+                "audit_mode": "post_audit",
+                "audit_session_id": "${AUDIT_SESSION_ID}",
+                "execution_plan": "${EXECUTION_PLAN}",
+                "pre_audit_report": "${PRE_AUDIT_REPORT}"
+              }
+              EOF
 
-payload = {
-    "audit_mode":
-        "post_audit",
-
-    "audit_session_id":
-        os.environ["AUDIT_SESSION_ID"],
-
-    "execution_plan":
-        os.environ.get(
-            "EXECUTION_PLAN",
-            "",
-        ),
-
-    "pre_audit_report":
-        os.environ.get(
-            "PRE_AUDIT_REPORT",
-            "",
-        ),
-}
-
-print(
-    json.dumps(
-        payload,
-        separators=(",", ":"),
-    )
-)
-'
-              )"
+              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
 
               ;;
 
@@ -668,289 +569,190 @@ print(
         run: |
           set -euo pipefail
 
-          python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-from datetime import datetime, timezone
+          mkdir -p artifacts
 
-path = Path("artifacts/lifecycle_state.json")
+          COMPLETED_STAGES="[]"
+          COMPLETED_COUNT="0"
+          PROGRESS_PERCENT="0"
 
-          canonical_lifecycle = [
+          case "${RESOLVED_STAGE}" in
 
-              "pre_audit",
+            pre_audit)
 
-              "plan",
+              COMPLETED_STAGES='["pre_audit"]'
+              COMPLETED_COUNT="1"
+              PROGRESS_PERCENT="16.67"
 
-              "plan_audit",
+              ;;
 
-              "human_approval",
+            plan)
 
-              "execute",
+              COMPLETED_STAGES='["pre_audit","plan"]'
+              COMPLETED_COUNT="2"
+              PROGRESS_PERCENT="33.33"
 
-              "post_audit",
-          ]
+              ;;
 
-          current_stage = os.environ.get(
-              "RESOLVED_STAGE",
-              "",
-          )
+            plan_audit)
 
-          next_stage = os.environ.get(
-              "NEXT_STAGE",
-              "",
-          )
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit"]'
+              COMPLETED_COUNT="3"
+              PROGRESS_PERCENT="50.00"
 
-          completed_stages = []
+              ;;
 
-          if current_stage in canonical_lifecycle:
+            human_approval)
 
-              idx = canonical_lifecycle.index(
-                  current_stage
-              )
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval"]'
+              COMPLETED_COUNT="4"
+              PROGRESS_PERCENT="66.67"
 
-              completed_stages = (
-                  canonical_lifecycle[: idx + 1]
-              )
+              ;;
 
-          payload = {
+            execute)
 
-              "schema":
-                  "rga.lifecycle_state.v1.2",
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute"]'
+              COMPLETED_COUNT="5"
+              PROGRESS_PERCENT="83.33"
 
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
+              ;;
 
-              "audit_session_id":
-                  os.environ.get(
-                      "AUDIT_SESSION_ID",
-                      "",
-                  ),
+            post_audit)
 
-              "trigger_source":
-                  os.environ.get(
-                      "TRIGGER_SOURCE",
-                      "",
-                  ),
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
+              COMPLETED_COUNT="6"
+              PROGRESS_PERCENT="100.00"
 
-              "triggering_workflow":
-                  os.environ.get(
-                      "TRIGGERING_WORKFLOW",
-                      "",
-                  ),
+              ;;
 
-              "triggering_run_id":
-                  os.environ.get(
-                      "TRIGGERING_RUN_ID",
-                      "",
-                  ),
+            *)
 
-              "triggering_conclusion":
-                  os.environ.get(
-                      "TRIGGERING_CONCLUSION",
-                      "",
-                  ),
+              COMPLETED_STAGES='[]'
+              COMPLETED_COUNT="0"
+              PROGRESS_PERCENT="0"
 
-              "current_stage":
-                  current_stage,
+              ;;
 
-              "next_stage":
-                  next_stage,
+          esac
 
-              "completed_stages":
-                  completed_stages,
+          cat > artifacts/lifecycle_state.json <<EOF
+{
+  "schema": "rga.lifecycle_state.v1.2",
 
-              "dispatch_required":
-                  (
-                      os.environ.get(
-                          "DISPATCH_REQUIRED",
-                          "false",
-                      )
-                      == "true"
-                  ),
+  "audit_session_id": "${AUDIT_SESSION_ID}",
 
-              "workflow_file":
-                  (
-                      os.environ.get(
-                          "WORKFLOW_FILE"
-                      )
-                      or None
-                  ),
+  "trigger_source": "${TRIGGER_SOURCE}",
 
-              "dispatch_inputs":
-                  json.loads(
-                      os.environ.get(
-                          "DISPATCH_INPUTS",
-                          "{}",
-                      )
-                  ),
+  "triggering_workflow": "${TRIGGERING_WORKFLOW}",
 
-              "reason":
-                  os.environ.get(
-                      "LIFECYCLE_REASON",
-                      "",
-                  ),
+  "triggering_run_id": "${TRIGGERING_RUN_ID}",
 
-              "canonical_lifecycle":
-                  canonical_lifecycle,
+  "triggering_conclusion": "${TRIGGERING_CONCLUSION}",
 
-              "lifecycle_progress": {
+  "current_stage": "${RESOLVED_STAGE}",
 
-                  "stage_count":
-                      len(
-                          canonical_lifecycle
-                      ),
+  "next_stage": "${NEXT_STAGE}",
 
-                  "completed_count":
-                      len(
-                          completed_stages
-                      ),
+  "completed_stages": ${COMPLETED_STAGES},
 
-                  "progress_percent":
-                      round(
-                          (
-                              len(
-                                  completed_stages
-                              )
-                              / len(
-                                  canonical_lifecycle
-                              )
-                          )
-                          * 100,
-                          2,
-                      ),
-              },
+  "dispatch_required": ${DISPATCH_REQUIRED},
 
-              "governance": {
+  "workflow_file": "${WORKFLOW_FILE}",
 
-                  "human_approval_required_for_execute":
-                      True,
+  "reason": "${LIFECYCLE_REASON}",
 
-                  "completed_phases_remain_immutable":
-                      True,
+  "canonical_lifecycle": [
+    "pre_audit",
+    "plan",
+    "plan_audit",
+    "human_approval",
+    "execute",
+    "post_audit"
+  ],
 
-                  "validation_is_not_verification":
-                      True,
+  "lifecycle_progress": {
 
-                  "bot_1_role":
-                      "auditor",
+    "stage_count": 6,
 
-                  "bot_2_role":
-                      "planner_executor",
+    "completed_count": ${COMPLETED_COUNT},
 
-                  "approval_authority":
-                      "human",
-              },
+    "progress_percent": ${PROGRESS_PERCENT}
 
-              "policy": {
+  },
 
-                  "runner_does_not_audit":
-                      True,
+  "governance": {
 
-                  "runner_does_not_execute":
-                      True,
+    "human_approval_required_for_execute": true,
 
-                  "runner_does_not_approve":
-                      True,
-              },
-          }
+    "completed_phases_remain_immutable": true,
 
-          path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-          PY
+    "validation_is_not_verification": true,
+
+    "bot_1_role": "auditor",
+
+    "bot_2_role": "planner_executor",
+
+    "approval_authority": "human"
+
+  },
+
+  "policy": {
+
+    "runner_does_not_audit": true,
+
+    "runner_does_not_execute": true,
+
+    "runner_does_not_approve": true
+
+  }
+
+}
+EOF
+
+          echo "Lifecycle state written:"
+          cat artifacts/lifecycle_state.json
           
       ############################################################
       # Write Lifecycle Event Contract
-      #
-      # Canonical output:
-      #
-      #   artifacts/lifecycle_event.json
-      #
-      # Purpose:
-      #
-      #   - Explicitly declares which lifecycle stage
-      #     has completed.
-      #
-      #   - Defines the next lifecycle stage.
-      #
-      #   - Eliminates artifact-name guessing.
-      #
-      #   - Serves as the contract between:
-      #
-      #       Bot #1 Auditor
-      #       Bot #2 Executor
-      #       Lifecycle Runner
-      #
       ############################################################
 
       - name: Write Lifecycle Event Contract
-      
         shell: bash
         run: |
           set -euo pipefail
 
-          python3 -c '
-import json, os
-from pathlib import Path
-from datetime import datetime, timezone
+          mkdir -p artifacts
 
-current_stage = os.environ.get("RESOLVED_STAGE", "")
-next_stage = os.environ.get("NEXT_STAGE", "")
-
-payload = {
+          cat > artifacts/lifecycle_event.json <<EOF
+{
   "schema": "rga.lifecycle_event.v1.0",
-  "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-  "audit_session_id": os.environ.get("AUDIT_SESSION_ID", ""),
-  "trigger_source": os.environ.get("TRIGGER_SOURCE", ""),
-  "completed_stage": current_stage,
-  "next_stage": next_stage,
-  "dispatch_required": os.environ.get("DISPATCH_REQUIRED", "false") == "true",
-  "workflow_file": (os.environ.get("WORKFLOW_FILE") or None),
+  "audit_session_id": "${AUDIT_SESSION_ID}",
+  "trigger_source": "${TRIGGER_SOURCE}",
+  "completed_stage": "${RESOLVED_STAGE}",
+  "next_stage": "${NEXT_STAGE}",
+  "dispatch_required": ${DISPATCH_REQUIRED},
+  "workflow_file": "${WORKFLOW_FILE}",
   "event_contract": {
-      "completed_stage_declared": True,
-      "next_stage_declared": True,
-      "artifact_guessing_required": False,
-      "runner_must_infer_stage": False,
+    "completed_stage_declared": true,
+    "next_stage_declared": true,
+    "artifact_guessing_required": false,
+    "runner_must_infer_stage": false
   },
   "governance": {
-      "bot_1_role": "auditor",
-      "bot_2_role": "planner_executor",
-      "approval_authority": "human",
-      "human_approval_required": True,
-      "completed_phases_remain_immutable": True,
-  },
+    "bot_1_role": "auditor",
+    "bot_2_role": "planner_executor",
+    "approval_authority": "human",
+    "human_approval_required": true,
+    "completed_phases_remain_immutable": true
+  }
 }
+EOF
 
-Path("artifacts/lifecycle_event.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-'    
+          echo "Lifecycle event contract written:"
+          cat artifacts/lifecycle_event.json
           
       ############################################################
       # Validate Lifecycle Event Contract
-      #
-      # Purpose:
-      #
-      #   - Validate lifecycle_event.json before dispatch.
-      #
-      #   - Ensure stage transitions follow the canonical
-      #     lifecycle contract.
-      #
-      #   - Prevent invalid transitions such as:
-      #
-      #       pre_audit -> post_audit
-      #       plan -> execute
-      #
-      # Canonical Lifecycle:
-      #
-      #   pre_audit
-      #   plan
-      #   plan_audit
-      #   human_approval
-      #   execute
-      #   post_audit
-      #   complete
       ############################################################
 
       - name: Validate Lifecycle Event Contract
@@ -965,71 +767,59 @@ Path("artifacts/lifecycle_event.json").write_text(json.dumps(payload, indent=2, 
             exit 1
           fi
 
-          VALIDATION_RESULT="$(
-            python3 -c '
-import json
-import pathlib
-import sys
+          COMPLETED_STAGE=$(
+            grep -oE '"completed_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
+              "$EVENT_FILE" \
+              | head -n1 \
+              | sed -E 's/.*"([^"]+)"/\1/'
+          )
 
-event_file = pathlib.Path(sys.argv[1])
+          NEXT_STAGE=$(
+            grep -oE '"next_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
+              "$EVENT_FILE" \
+              | head -n1 \
+              | sed -E 's/.*"([^"]+)"/\1/'
+          )
 
-data = json.loads(
-    event_file.read_text(
-        encoding="utf-8"
-    )
-)
+          VALID="false"
 
-completed_stage = data.get(
-    "completed_stage",
-    "",
-)
+          case "${COMPLETED_STAGE}:${NEXT_STAGE}" in
 
-next_stage = data.get(
-    "next_stage",
-    "",
-)
+            pre_audit:plan)
+              VALID="true"
+              ;;
 
-allowed = {
+            plan:plan_audit)
+              VALID="true"
+              ;;
 
-    "pre_audit":
-        ["plan"],
+            plan_audit:human_approval)
+              VALID="true"
+              ;;
 
-    "plan":
-        ["plan_audit"],
+            human_approval:execute)
+              VALID="true"
+              ;;
 
-    "plan_audit":
-        ["human_approval"],
+            execute:post_audit)
+              VALID="true"
+              ;;
 
-    "human_approval":
-        ["execute"],
+            post_audit:complete)
+              VALID="true"
+              ;;
 
-    "execute":
-        ["post_audit"],
+            *)
+              VALID="false"
+              ;;
 
-    "post_audit":
-        ["complete"],
+          esac
 
-    "complete":
-        [],
-
-    "halted":
-        [],
-}
-
-if completed_stage not in allowed:
-    print("INVALID")
-    sys.exit(0)
-
-if next_stage not in allowedprint("INVALID")
-    sys.exit(0)
-
-print("VALID")
-' "$EVENT_FILE"
-          )"
-
-          if [ "$VALIDATION_RESULT" != "VALID" ]; then
+          if [ "$VALID" != "true" ]; then
 
             echo "Invalid lifecycle event contract." >&2
+            echo "Completed stage: ${COMPLETED_STAGE}" >&2
+            echo "Next stage: ${NEXT_STAGE}" >&2
 
             echo "Expected transitions:" >&2
             echo "  pre_audit -> plan" >&2
@@ -1043,7 +833,7 @@ print("VALID")
 
           fi
 
-          echo "Lifecycle Event Contract validation passed."        
+          echo "Lifecycle Event Contract validation passed."    
 
       ############################################################
       # Lifecycle Summary
@@ -1073,6 +863,24 @@ print("VALID")
 
       ############################################################
       # Dispatch Next Workflow
+      #
+      # Purpose:
+      #
+      #   - Dispatches the next governed workflow when required.
+      #
+      #   - Uses the already-computed lifecycle routing values:
+      #
+      #       RESOLVED_STAGE
+      #       NEXT_STAGE
+      #       DISPATCH_REQUIRED
+      #       WORKFLOW_FILE
+      #       DISPATCH_INPUTS
+      #
+      #   - Does not audit.
+      #   - Does not execute.
+      #   - Does not approve.
+      #
+      #   - Only routes the next lifecycle stage.
       ############################################################
 
       - name: Dispatch next workflow
@@ -1083,6 +891,10 @@ print("VALID")
         run: |
           set -euo pipefail
 
+          ########################################################
+          # Dispatch gate
+          ########################################################
+
           if [ "${DISPATCH_REQUIRED:-false}" != "true" ]; then
             echo "Dispatch not required."
             echo "Resolved stage: ${RESOLVED_STAGE:-unknown}"
@@ -1090,6 +902,10 @@ print("VALID")
             echo "Reason: ${LIFECYCLE_REASON:-none}"
             exit 0
           fi
+
+          ########################################################
+          # Required values
+          ########################################################
 
           if [ -z "${WORKFLOW_FILE:-}" ]; then
             echo "WORKFLOW_FILE is empty but dispatch was required." >&2
@@ -1101,24 +917,86 @@ print("VALID")
             exit 1
           fi
 
-          ENCODED_WORKFLOW=$(
-            python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$WORKFLOW_FILE"
-          )
+          if [ -z "${REF_INPUT:-}" ]; then
+            echo "REF_INPUT is empty but dispatch was required." >&2
+            exit 1
+          fi
 
-          PAYLOAD=$(
-            python3 -c 'import json, os; print(json.dumps({"ref": os.environ["REF_INPUT"], "inputs": json.loads(os.environ["DISPATCH_INPUTS"])}))'
-          )
+          ########################################################
+          # Tooling guard
+          ########################################################
+
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq is required for payload construction and URL encoding." >&2
+            exit 1
+          fi
+
+          ########################################################
+          # Encode workflow filename
+          #
+          # Example:
+          #
+          #   RGA Runtime Auditor.yml
+          #
+          # becomes URL-safe for:
+          #
+          #   /actions/workflows/{workflow_id_or_file}/dispatches
+          ########################################################
+
+          ENCODED_WORKFLOW="$(
+            printf '%s' "$WORKFLOW_FILE" \
+              | jq -sRr @uri
+          )"
+
+          ########################################################
+          # Build dispatch payload
+          #
+          # DISPATCH_INPUTS must already be valid JSON.
+          #
+          # Example:
+          #
+          #   {"audit_mode":"pre_audit","audit_session_id":"..."}
+          ########################################################
+
+          echo "$DISPATCH_INPUTS" \
+            | jq empty
+
+          jq -n \
+            --arg ref "$REF_INPUT" \
+            --argjson inputs "$DISPATCH_INPUTS" \
+            '{
+              ref: $ref,
+              inputs: $inputs
+            }' \
+            > /tmp/rga_lifecycle_dispatch_payload.json
+
+          PAYLOAD="$(
+            cat /tmp/rga_lifecycle_dispatch_payload.json
+          )"
 
           API_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
 
+          ########################################################
+          # Dispatch diagnostics
+          ########################################################
+
           echo "Dispatching workflow: ${WORKFLOW_FILE}"
+          echo "Encoded workflow: ${ENCODED_WORKFLOW}"
           echo "Resolved lifecycle stage: ${RESOLVED_STAGE:-unknown}"
           echo "Next lifecycle stage: ${NEXT_STAGE:-unknown}"
           echo "Ref: ${REF_INPUT}"
           echo "Payload:"
-          echo "$PAYLOAD"
+          cat /tmp/rga_lifecycle_dispatch_payload.json
 
-          HTTP_STATUS=$(
+          ########################################################
+          # GitHub workflow_dispatch API
+          #
+          # Expected success status:
+          #
+          #   204 No Content
+          ########################################################
+
+          HTTP_STATUS="$(
             curl -sS \
               -o /tmp/rga_lifecycle_dispatch_response.json \
               -w "%{http_code}" \
@@ -1127,16 +1005,22 @@ print("VALID")
               -H "Accept: application/vnd.github+json" \
               -H "Content-Type: application/json" \
               "$API_URL" \
-              -d "$PAYLOAD" || true
-          )
+              -d @/tmp/rga_lifecycle_dispatch_payload.json \
+              || true
+          )"
 
           if [ "$HTTP_STATUS" != "204" ]; then
+
             echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
+
             echo "API response:" >&2
             sed -n '1,200p' /tmp/rga_lifecycle_dispatch_response.json >&2 || true
+
             echo "Payload sent:" >&2
-            echo "$PAYLOAD" >&2
+            sed -n '1,200p' /tmp/rga_lifecycle_dispatch_payload.json >&2 || true
+
             exit 1
+
           fi
 
           echo "Dispatched workflow '${WORKFLOW_FILE}' for lifecycle stage '${RESOLVED_STAGE}'."

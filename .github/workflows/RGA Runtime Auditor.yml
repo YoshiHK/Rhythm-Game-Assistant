@@ -68,12 +68,23 @@ jobs:
       ############################################################
 
       - name: Install Runtime Dependencies
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
+
+          ########################################################
+          # Upgrade pip
+          ########################################################
 
           python -m pip install --upgrade pip \
             > artifacts/pip_upgrade_stdout.txt \
             2> artifacts/pip_upgrade_stderr.txt
+
+          ########################################################
+          # Install runtime dependencies
+          ########################################################
 
           python -m pip install \
             fastapi==0.115.0 \
@@ -83,13 +94,40 @@ jobs:
             > artifacts/runtime_dependency_install_stdout.txt \
             2> artifacts/runtime_dependency_install_stderr.txt
 
-          python -c "
-          import fastapi
-          import uvicorn
-          import pydantic
-          import openpyxl
-          print('Runtime dependencies OK')
-          " > artifacts/runtime_dependency_import_check.txt
+          ########################################################
+          # Import validation
+          ########################################################
+
+          {
+            echo "fastapi:"
+            python -m pip show fastapi \
+              | grep "^Version:" \
+              || true
+
+            echo ""
+
+            echo "uvicorn:"
+            python -m pip show uvicorn \
+              | grep "^Version:" \
+              || true
+
+            echo ""
+
+            echo "pydantic:"
+            python -m pip show pydantic \
+              | grep "^Version:" \
+              || true
+
+            echo ""
+
+            echo "openpyxl:"
+            python -m pip show openpyxl \
+              | grep "^Version:" \
+              || true
+
+          } > artifacts/runtime_dependency_import_check.txt
+
+          echo "Runtime dependencies OK"
 
       ############################################################
       # Evidence Taxonomy
@@ -3530,18 +3568,6 @@ PY
           
       ############################################################
       # Write Lifecycle Event Contract
-      #
-      # Bot #1 Runtime Auditor
-      #
-      # Supported audit modes:
-      #
-      #   pre_audit
-      #   plan_audit
-      #   post_audit
-      #
-      # Canonical output:
-      #
-      #   artifacts/lifecycle_event.json
       ############################################################
 
       - name: Write Lifecycle Event Contract
@@ -3561,112 +3587,47 @@ PY
           case "$AUDIT_MODE" in
 
             pre_audit)
-
               EVENT_STAGE="pre_audit"
               NEXT_STAGE="plan"
-
               ;;
 
             plan_audit)
-
               EVENT_STAGE="plan_audit"
               NEXT_STAGE="human_approval"
-
               ;;
 
             post_audit)
-
               EVENT_STAGE="post_audit"
               NEXT_STAGE="complete"
               DISPATCH_REQUIRED="false"
-
               ;;
 
             *)
-
               echo "Unsupported AUDIT_MODE: $AUDIT_MODE" >&2
               exit 1
-
               ;;
-
           esac
 
-          export EVENT_STAGE
-          export NEXT_STAGE
-          export DISPATCH_REQUIRED
-
-          python3 -c '
-import json
-import os
-from pathlib import Path
-from datetime import datetime, timezone
-
-payload = {
-
-    "schema":
-        "rga.lifecycle_event.v1.0",
-
-    "generated_at":
-        datetime.now(
-            timezone.utc
-        ).replace(
-            microsecond=0
-        ).isoformat(),
-
-    "producer":
-        "runtime_auditor",
-
-    "audit_session_id":
-        os.environ.get(
-            "AUDIT_SESSION_ID",
-            "",
-        ),
-
-    "audit_mode":
-        os.environ.get(
-            "AUDIT_MODE",
-            "",
-        ),
-
-    "completed_stage":
-        os.environ["EVENT_STAGE"],
-
-    "next_stage":
-        os.environ["NEXT_STAGE"],
-
-    "dispatch_required":
-        (
-            os.environ["DISPATCH_REQUIRED"]
-            == "true"
-        ),
-
-    "event_contract": {
-
-        "completed_stage_declared":
-            True,
-
-        "next_stage_declared":
-            True,
-
-        "artifact_guessing_required":
-            False,
-
-        "runner_must_infer_stage":
-            False,
-    },
+          cat > artifacts/lifecycle_event.json <<EOF
+{
+  "schema": "rga.lifecycle_event.v1.0",
+  "producer": "runtime_auditor",
+  "audit_session_id": "${AUDIT_SESSION_ID}",
+  "audit_mode": "${AUDIT_MODE}",
+  "completed_stage": "${EVENT_STAGE}",
+  "next_stage": "${NEXT_STAGE}",
+  "dispatch_required": ${DISPATCH_REQUIRED},
+  "event_contract": {
+    "completed_stage_declared": true,
+    "next_stage_declared": true,
+    "artifact_guessing_required": false,
+    "runner_must_infer_stage": false
+  }
 }
+EOF
 
-Path(
-    "artifacts/lifecycle_event.json"
-).write_text(
-    json.dumps(
-        payload,
-        indent=2,
-        ensure_ascii=False,
-    ),
-    encoding="utf-8",
-)
-'     
+          echo "Lifecycle event contract written:"
+          cat artifacts/lifecycle_event.json   
           
       ############################################################
       # Upload Lifecycle Event
