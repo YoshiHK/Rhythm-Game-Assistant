@@ -1,53 +1,53 @@
 """
-runtime_verifier.py
+runtime_auditor.py
 
-MCP Verifier Bot v1.0
+MCP Auditor Bot v1.0
 RGA Systems Auditor
 
 New in v1.0:
-- Governance Verification
-- Architecture Contract Verification
-- Artifact Backbone Verification
-- Flow Contract Verification
-- MCP Contract Verification
-- Completed Phase Boundary Verification
-- Layer Governance Verification
+- Governance Audit
+- Architecture Contract Audit
+- Artifact Backbone Audit
+- Flow Contract Audit
+- MCP Contract Audit
+- Completed Phase Boundary Audit
+- Layer Governance Audit
 
 Carried forward from v0.7:
-- Artifact Database Verification
-- Artifact Relationship Verification
-- Dependency Reality Verification
-- Asset Scope Policy Verification
-- Flow Verification
+- Artifact Database Audit
+- Artifact Relationship Audit
+- Dependency Reality Audit
+- Asset Scope Policy Audit
+- Flow Audit
 - Layer Separation Audit
-- Type B Intelligence Verification
+- Type B Intelligence Audit
 
 Carried forward from v0.6:
-- Asset Coverage Verification
-- Hash Verification
-- Type A Usability Verification
-- Runtime DB Read Verification
+- Asset Coverage Audit
+- Hash Audit
+- Type A Usability Audit
+- Runtime DB Read Audit
 - Repository Reality vs Import Reality vs Runtime Reality separation
-- Asset Pipeline Verification
+- Asset Pipeline Audit
 - chart_assets.db discovery and read-only inspection
 - Type A / Type B asset evidence
 - Deletion readiness gate
 - MCP tool visibility / registration evidence
 
 Purpose:
-- Read-only architecture, runtime, artifact and governance verification
+- Read-only architecture, runtime, artifact and governance audit
   for Rhythm Game Assistant (RGA).
 
-Verifier responsibilities:
-- repository reality verification
-- runtime reality verification
-- architecture governance verification
-- artifact backbone verification
-- flow contract verification
+Auditor responsibilities:
+- repository reality audit
+- runtime reality audit
+- architecture governance audit
+- artifact backbone audit
+- flow contract audit
 - deletion readiness governance
 
 Boundary:
-- Verification-only.
+- Audit-only.
 - Read-only.
 - Must not modify Completed Phases 1–7.
 - Must not write to databases.
@@ -58,11 +58,11 @@ Governance model:
 - GitHub Advanced Security:
     security validation
 
-- RGA Verifier:
+- RGA Auditor:
     architecture and runtime governance
 
 Recommended placement:
-- tools/runtime_verifier.py
+- tools/runtime_auditor.py
 
 Phase Boundary Policy
 ---------------------
@@ -83,14 +83,14 @@ Completed Phases are immutable:
     Phase 5–7
         production and recommendation layers
 
-Verifier extensions may:
+Auditor extensions may:
 
     inspect
     verify
     classify
     report
 
-Verifier extensions must not:
+Auditor extensions must not:
 
     mutate phase logic
     rewrite runtime outputs
@@ -784,7 +784,7 @@ def discover_files(search_root: Path) -> Dict[str, List[str]]:
         "app.py": "app.py",
         "runtime_meta.py": "runtime_meta.py",
         "mcp_server.py": "mcp_server.py",
-        "runtime_verifier.py": "runtime_verifier.py",
+        "runtime_auditor.py": "runtime_auditor.py",
     }
 
     discovered: Dict[str, List[str]] = {key: [] for key in patterns}
@@ -1083,8 +1083,8 @@ def classify_excluded_asset_reason(path_text: str) -> str:
 
     if (
         "/artifacts/" in normalized
-        or normalized.endswith("runtime_verifier_report.json")
-        or normalized.endswith("runtime_verifier_report.md")
+        or normalized.endswith("runtime_auditor_report.json")
+        or normalized.endswith("runtime_auditor_report.md")
     ):
         return "generated_artifact"
 
@@ -1399,10 +1399,10 @@ def classify_governance_failure_lineage(
     return root_failures, derived_failures
 
 # -----------------------------------------------------------------------------
-# Verifier
+# Auditor
 # -----------------------------------------------------------------------------
 
-class RuntimeVerifier:
+class RuntimeAuditor:
 
     def __init__(
         self,
@@ -1585,7 +1585,7 @@ class RuntimeVerifier:
         #       != governance blockers
         #
         # Completed phases remain immutable.
-        # Verifier remains read-only.
+        # Auditor remains read-only.
         # ----------------------------------------------------------
         #
 
@@ -1702,7 +1702,7 @@ class RuntimeVerifier:
                 "completed_phases":
                     "immutable",
 
-                "verifier_mode":
+                "auditor_mode":
                     "read_only",
 
                 "false_positive_isolation":
@@ -3658,11 +3658,11 @@ class RuntimeVerifier:
                 else "fail"
             ),
             summary=(
-                "SOFTR_API_TOKEN is available to the verifier process."
+                "SOFTR_API_TOKEN is available to the auditor process."
                 if token_present
                 else (
                     "SOFTR_API_TOKEN is missing. "
-                    "This blocks authenticated REST verification only "
+                    "This blocks authenticated REST auditing only "
                     "when --rest is enabled."
                 )
             ),
@@ -3699,7 +3699,7 @@ class RuntimeVerifier:
                 if token_present
                 else (
                     "Set SOFTR_API_TOKEN or pass --token when "
-                    "running REST verification."
+                    "running REST auditing."
                 )
             ),
         )
@@ -3777,7 +3777,7 @@ class RuntimeVerifier:
             status = "fail"
 
             summary = (
-                "No runtime candidate was discovered; verifier is "
+                "No runtime candidate was discovered; auditor is "
                 "falling back to repo root."
             )
 
@@ -3833,7 +3833,7 @@ class RuntimeVerifier:
                 "boundary_note": (
                     "Repository discovery identifies candidate roots only. "
                     "Import reality, dependency reality, and runtime wiring "
-                    "must be verified separately."
+                    "must be audited separately."
                 ),
             },
             suggested_fix=(
@@ -4861,7 +4861,7 @@ class RuntimeVerifier:
         # Runtime metadata is treated as an architecture contract
         # surface.
         #
-        # This verifier inspects runtime_meta.py but must never
+        # This auditor inspects runtime_meta.py but must never
         # rewrite or mutate it.
         # ----------------------------------------------------------
         #
@@ -4891,7 +4891,7 @@ class RuntimeVerifier:
             # v1.0 artifact/runtime-adjacent expectations.
             #
             # These are verification-only expectations. Missing keys
-            # are reported, but the verifier must not modify
+            # are reported, but the auditor must not modify
             # runtime_meta.py automatically.
             #
 
@@ -4980,7 +4980,7 @@ class RuntimeVerifier:
 
                     "boundary_note": (
                         "Runtime metadata is inspected as a contract surface. "
-                        "The verifier must not rewrite runtime_meta.py."
+                        "The auditor must not rewrite runtime_meta.py."
                     ),
 
                     "completed_phase_protection": {
@@ -6292,7 +6292,7 @@ class RuntimeVerifier:
                 },
 
                 "note": (
-                    "Asset inventory is summarized to keep the verifier "
+                    "Asset inventory is summarized to keep the auditor "
                     "report readable. Full repository inventory remains "
                     "available from workflow artifacts when needed."
                 ),
@@ -9989,7 +9989,7 @@ class RuntimeVerifier:
         # dependency/import readiness is incomplete.
         #
         # A skipped flow contract is not automatically a governance
-        # blocker. It becomes runtime_limited because the verifier
+        # blocker. It becomes runtime_limited because the auditor
         # could not complete flow checks due to runtime constraints.
         # ----------------------------------------------------------
         #
@@ -10403,7 +10403,7 @@ class RuntimeVerifier:
                     "completed_phases":
                         "immutable",
 
-                    "verifier_mode":
+                    "auditor_mode":
                         "read_only",
 
                     "dependency_failures_are_not_governance_failures":
@@ -10809,7 +10809,7 @@ class RuntimeVerifier:
 
         report: Dict[str, Any] = {
             "schema":
-                "rga.runtime_verifier.report.v1.0",
+                "rga.runtime_auditor.report.v1.0",
 
             "generated_at":
                 datetime.now(
@@ -10958,7 +10958,7 @@ def write_markdown(
     #
 
     lines.append(
-        "# RGA Runtime Verifier Report"
+        "# RGA Runtime Auditor Report"
     )
 
     lines.append("")
@@ -11165,9 +11165,9 @@ def write_markdown(
                 ),
             ),
             (
-                "Verifier error",
+                "Auditor error",
                 report_generation.get(
-                    "verifier_error"
+                    "auditor_error"
                 ),
             ),
         ]
@@ -12447,7 +12447,7 @@ def write_markdown(
 
         markdown_text = "\n".join(
             [
-                "# RGA Runtime Verifier Report",
+                "# RGA Runtime Auditor Report",
                 "",
                 "## Empty Markdown Guard",
                 "",
@@ -12486,7 +12486,7 @@ def write_markdown(
 def main() -> int:
 
     parser = argparse.ArgumentParser(
-        "RGA Runtime Verifier"
+        "RGA Runtime Auditor"
     )
 
     parser.add_argument(
@@ -12630,7 +12630,7 @@ def main() -> int:
 
     parser.add_argument(
         "--json-out",
-        default="artifacts/runtime_verifier_report.json",
+        default="artifacts/runtime_auditor_report.json",
         help=(
             "JSON report output path."
         ),
@@ -12638,7 +12638,7 @@ def main() -> int:
 
     parser.add_argument(
         "--md-out",
-        default="artifacts/runtime_verifier_report.md",
+        default="artifacts/runtime_auditor_report.md",
         help=(
             "Markdown report output path."
         ),
@@ -12735,7 +12735,7 @@ def main() -> int:
             args.json_out
         )
         or Path(
-            "artifacts/runtime_verifier_report.json"
+            "artifacts/runtime_auditor_report.json"
         )
     )
 
@@ -12744,7 +12744,7 @@ def main() -> int:
             args.md_out
         )
         or Path(
-            "artifacts/runtime_verifier_report.md"
+            "artifacts/runtime_auditor_report.md"
         )
     )
 
@@ -12773,23 +12773,23 @@ def main() -> int:
     #
 
     print(
-        f"[Verifier] audit_mode={args.audit_mode}"
+        f"[Auditor] audit_mode={args.audit_mode}"
     )
 
     print(
-        f"[Verifier] json_out={json_out}"
+        f"[Auditor] json_out={json_out}"
     )
 
     print(
-        f"[Verifier] md_out={md_out}"
+        f"[Auditor] md_out={md_out}"
     )
 
     print(
-        f"[Verifier] execution_plan={execution_plan_path}"
+        f"[Auditor] execution_plan={execution_plan_path}"
     )
 
     print(
-        f"[Verifier] pre_audit_report={pre_audit_report_path}"
+        f"[Auditor] pre_audit_report={pre_audit_report_path}"
     )
 
     #
@@ -13732,8 +13732,8 @@ def main() -> int:
     # ----------------------------------------------------------
     # Report generation state
     #
-    # This is initialized before verifier execution so fallback
-    # reports can still be generated if RuntimeVerifier or run_all
+    # This is initialized before auditor execution so fallback
+    # reports can still be generated if RuntimeAuditor or run_all
     # fails before normal report creation completes.
     # ----------------------------------------------------------
     #
@@ -13774,26 +13774,26 @@ def main() -> int:
         "markdown_error":
             None,
 
-        "verifier_error":
+        "auditor_error":
             None,
 
-        "verifier_exception_traceback":
+        "auditor_exception_traceback":
             None,
     }
 
-    verifier_execution_failed = False
+    auditor_execution_failed = False
 
     #
     # ----------------------------------------------------------
-    # Run verifier
+    # Run auditor
     #
-    # If verifier execution crashes, still generate a structured
+    # If auditor execution crashes, still generate a structured
     # fallback report so workflow artifacts are not missing.
     # ----------------------------------------------------------
     #
 
     try:
-        verifier = RuntimeVerifier(
+        auditor = RuntimeAuditor(
             repo_root=Path(
                 args.repo_root
             ),
@@ -13853,24 +13853,24 @@ def main() -> int:
             run_rest=args.rest,
         )
 
-        report: Dict[str, Any] = verifier.run_all()
+        report: Dict[str, Any] = auditor.run_all()
 
     except Exception as exc:
         import traceback
 
-        verifier_execution_failed = True
+        auditor_execution_failed = True
 
-        generated_reports["verifier_error"] = str(
+        generated_reports["auditor_error"] = str(
             exc
         )
 
-        generated_reports["verifier_exception_traceback"] = (
+        generated_reports["auditor_exception_traceback"] = (
             traceback.format_exc()
         )
 
         report = {
             "schema":
-                "rga.runtime_verifier.report.v1.0",
+                "rga.runtime_auditor.report.v1.0",
 
             "generated_at":
                 datetime.now(
@@ -13882,7 +13882,7 @@ def main() -> int:
                 .isoformat(),
 
             "execution_state":
-                "verifier_exception",
+                "auditor_exception",
 
             "repo_root":
                 str(
@@ -13926,7 +13926,7 @@ def main() -> int:
                     "blocked_by_exception",
 
                 "policy": {
-                    "verifier_mode":
+                    "auditor_mode":
                         "read_only",
 
                     "completed_phases":
@@ -13943,10 +13943,10 @@ def main() -> int:
             "results": [
                 {
                     "domain":
-                        "runtime_verifier",
+                        "runtime_auditor",
 
                     "check":
-                        "verifier_execution",
+                        "auditor_execution",
 
                     "status":
                         "fail",
@@ -13955,7 +13955,7 @@ def main() -> int:
                         "critical",
 
                     "summary": (
-                        "Runtime verifier raised an unhandled "
+                        "Runtime auditor raised an unhandled "
                         "exception before normal report generation "
                         "completed."
                     ),
@@ -13968,22 +13968,22 @@ def main() -> int:
 
                         "traceback":
                             generated_reports[
-                                "verifier_exception_traceback"
+                                "auditor_exception_traceback"
                             ],
                     },
 
                     "suggested_fix": (
-                        "Inspect runtime_verifier_stderr.txt and "
-                        "runtime_verifier_stdout.txt to locate the "
+                        "Inspect runtime_auditor_stderr.txt and "
+                        "runtime_auditor_stdout.txt to locate the "
                         "exception or early termination before normal "
                         "report generation."
                     ),
 
                     "governance_domain":
-                        "verifier_runtime",
+                        "auditor_runtime",
 
                     "contract_type":
-                        "verifier_execution",
+                        "auditor_execution",
                 }
             ],
         }
@@ -14177,10 +14177,10 @@ def main() -> int:
     ):
         report = {
             "schema":
-                "rga.runtime_verifier_report.v1.3",
+                "rga.runtime_auditor_report.v1.3",
 
             "report_error":
-                "Verifier generated a non-dictionary report.",
+                "Auditor generated a non-dictionary report.",
 
             "report_type":
                 str(
@@ -14269,7 +14269,7 @@ def main() -> int:
 
                 fallback_lines = [
 
-                    "# RGA Runtime Verifier Report",
+                    "# RGA Runtime Auditor Report",
 
                     "",
 
@@ -14319,7 +14319,7 @@ def main() -> int:
                     ),
 
                     (
-                        "- No verifier logic was modified."
+                        "- No auditor logic was modified."
                     ),
 
                     (
@@ -14422,7 +14422,7 @@ def main() -> int:
             )
 
             print(
-                "\n[Verifier] JSON artifact generation failed:\n"
+                "\n[Auditor] JSON artifact generation failed:\n"
             )
 
             print(
@@ -14443,7 +14443,7 @@ def main() -> int:
 
     #
     # ----------------------------------------------------------
-    # Emit final verifier report
+    # Emit final auditor report
     # ----------------------------------------------------------
     #
 
@@ -14532,14 +14532,14 @@ def main() -> int:
 
     #
     # ----------------------------------------------------------
-    # Verifier runtime failure
+    # Auditor runtime failure
     # ----------------------------------------------------------
     #
 
-    if verifier_execution_failed:
+    if auditor_execution_failed:
 
         print(
-            "[Verifier] execution completed with runtime failures."
+            "[Auditor] execution completed with runtime failures."
         )
 
         return 1

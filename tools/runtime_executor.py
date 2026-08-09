@@ -6,7 +6,7 @@ RGA Executor Bot v1.2
 Backend Maintenance Executor / Implementation Plan Generator
 
 Purpose:
-- Consume Bot #1 runtime_verifier_report.json / pre-audit report.
+- Consume Bot #1 runtime_auditor_report.json / pre-audit report.
 - Analyze root, derived, dependency, and governance failures.
 - Generate an implementation / execution plan for Bot #1 plan-audit.
 - Generate a repair DAG and rollback plan.
@@ -867,15 +867,15 @@ class RuntimeExecutor:
     def __init__(
         self,
         *,
-        verifier_report: Dict[str, Any],
+        auditor_report: Dict[str, Any],
         executor_config_text: Optional[str],
         mode: str,
     ) -> None:
-        self.verifier_report = verifier_report
+        self.auditor_report = auditor_report
         self.executor_config_text = executor_config_text
         self.mode = mode
 
-        self.governance = verifier_report.get(
+        self.governance = auditor_report.get(
             "governance",
             {},
         )
@@ -1137,6 +1137,7 @@ class RuntimeExecutor:
         analysis: Dict[str, Any],
         repair_dag: Dict[str, Any],
     ) -> ExecutionPlan:
+
         target_root_failures = sorted(
             analysis.get(
                 "root_contracts",
@@ -1149,10 +1150,14 @@ class RuntimeExecutor:
         #
         # ----------------------------------------------------------
         # Root Failure First
+        #
+        # Bot #2 plans from Bot #1 pre-audit findings.
+        # Bot #2 does not reinterpret governance independently.
         # ----------------------------------------------------------
         #
 
         for root_contract in target_root_failures:
+
             proposed_changes.extend(
                 self.proposed_changes_for_root(
                     root_contract
@@ -1162,21 +1167,166 @@ class RuntimeExecutor:
         #
         # ----------------------------------------------------------
         # No Root Failure
+        #
+        # If Bot #1 reports no root failures, Bot #2 produces a
+        # no-op plan rather than inventing remediation.
         # ----------------------------------------------------------
         #
 
         if not proposed_changes:
+
             proposed_changes.append(
                 ProposedChange(
-                    change_id="no_root_failure_execution_required",
-                    change_type="no_op_plan",
+                    change_id=
+                        "no_root_failure_execution_required",
+
+                    change_type=
+                        "no_op_plan",
+
                     target_files=[],
+
                     purpose=(
                         "No root failures were detected. "
-                        "No execution proposal is required."
+                        "No implementation or execution proposal "
+                        "is required."
                     ),
-                    mutation_level="proposal_only",
-                    requires_human_approval=True,
+
+                    mutation_level=
+                        "proposal_only",
+
+                    requires_human_approval=
+                        True,
+
+                    allowed_by_policy=
+                        True,
+
+                    governance_scope=
+                        "maintenance",
+
+                    phase_boundary_checked=
+                        True,
+                )
+            )
+
+        #
+        # ----------------------------------------------------------
+        # Execution Gate
+        #
+        # Execute mode never bypasses:
+        #
+        #   1. Bot #1 plan_audit
+        #   2. Human approval
+        #   3. Bot #1 post_audit
+        #
+        # ----------------------------------------------------------
+        #
+
+        execution_gate = {
+            "mode":
+                self.mode,
+
+            "requires_plan_audit":
+                True,
+
+            "requires_human_approval":
+                True,
+
+            "approval_authority":
+                "human",
+
+            "self_approval_allowed":
+                False,
+
+            "requires_post_audit":
+                True,
+        }
+
+        self.diagnostics[
+            "execution_gate"
+        ] = execution_gate
+
+        #
+        # ----------------------------------------------------------
+        # Protected Scope Guard
+        #
+        # Completed phases are immutable.
+        #
+        # This scan is intentionally conservative and checks only
+        # proposed target file paths / target identifiers.
+        #
+        # ----------------------------------------------------------
+        #
+
+        protected_tokens = [
+            "canonical_row",
+            "pattern_logic",
+            "tips_generation",
+            "personalization",
+            "localization",
+            "recommendation_logic",
+            "Phase 1",
+            "Phase 2",
+            "Phase 3",
+            "Phase 4",
+            "Phase 4.5",
+            "Phase 5",
+            "Phase 6",
+            "Phase 7",
+        ]
+
+        protected_target_hits: List[Dict[str, Any]] = []
+
+        for change in proposed_changes:
+
+            target_blob = " ".join(
+                change.target_files or []
+            ).lower()
+
+            matched_tokens = [
+                token
+                for token in protected_tokens
+                if token.lower() in target_blob
+            ]
+
+            if matched_tokens:
+
+                protected_target_hits.append(
+                    {
+                        "change_id":
+                            change.change_id,
+
+                        "target_files":
+                            change.target_files,
+
+                        "matched_tokens":
+                            matched_tokens,
+                    }
+                )
+
+                change.allowed_by_policy = False
+                change.phase_boundary_checked = True
+
+        self.diagnostics[
+            "protected_target_scan"
+        ] = {
+            "protected_target_hit_count":
+                len(
+                    protected_target_hits
+                ),
+
+            "protected_target_hits":
+                protected_target_hits,
+
+            "policy":
+                "completed_phases_immutable",
+        }
+
+        if protected_target_hits:
+
+            raise RuntimeError(
+                "Execution plan violates immutable phase policy: "
+                + safe_json(
+                    protected_target_hits
                 )
             )
 
@@ -1184,27 +1334,22 @@ class RuntimeExecutor:
         # ----------------------------------------------------------
         # Lifecycle / Mode Normalization
         #
-        # Bot #2 implementation planning
-        # Bot #2 dry-run execution
-        # Bot #2 gated execution
+        # plan:
+        #   implementation plan only
         #
-        # Execute mode never bypasses:
+        # dry_run_execute:
+        #   dry-run evidence only
         #
-        #   Bot #1 plan_audit
-        #   Human approval
-        #
+        # execute:
+        #   gated execution only for explicitly allowed additive
+        #   tooling / governance / verification changes
         # ----------------------------------------------------------
         #
 
-        execution_gate = {
-            "mode": self.mode,
-            "requires_plan_audit": True,
-            "requires_human_approval": True,
-            "approval_authority": "human",
-            "self_approval_allowed": False,
+        executable_change_ids = {
+            "dry_run_artifact_backbone_bootstrap_script",
+            "generate_artifact_backbone_bootstrap_script_proposal",
         }
-
-        self.diagnostics["execution_gate"] = execution_gate
 
         for change in proposed_changes:
 
@@ -1220,17 +1365,30 @@ class RuntimeExecutor:
                 }:
                     change.mutation_level = "proposal_only"
 
+                change.requires_human_approval = True
+                change.allowed_by_policy = (
+                    change.allowed_by_policy
+                    and True
+                )
+                change.phase_boundary_checked = True
+
             #
             # Dry Run Mode
             #
 
             elif self.mode == "dry_run_execute":
 
-                if change.change_id in {
-                    "dry_run_artifact_backbone_bootstrap_script",
-                    "generate_artifact_backbone_bootstrap_script_proposal",
-                }:
+                if change.change_id in executable_change_ids:
                     change.mutation_level = "dry_run_only"
+                else:
+                    change.mutation_level = "proposal_only"
+
+                change.requires_human_approval = True
+                change.allowed_by_policy = (
+                    change.allowed_by_policy
+                    and True
+                )
+                change.phase_boundary_checked = True
 
             #
             # Execute Mode
@@ -1238,37 +1396,25 @@ class RuntimeExecutor:
 
             elif self.mode == "execute":
 
-                if change.change_id in {
-                    "dry_run_artifact_backbone_bootstrap_script",
-                    "generate_artifact_backbone_bootstrap_script_proposal",
-                }:
+                if change.change_id in executable_change_ids:
+
                     change.mutation_level = "execute_allowed"
 
-                #
-                # Guard completed phases
-                #
+                else:
 
-                protected_tokens = [
-                    "canonical_row",
-                    "pattern_logic",
-                    "tips_generation",
-                    "personalization",
-                    "localization",
-                    "recommendation_logic",
-                ]
+                    #
+                    # Non-explicitly executable changes remain proposals
+                    # even if workflow is in execute mode.
+                    #
 
-                target_blob = " ".join(
-                    change.target_files or []
-                ).lower()
+                    change.mutation_level = "proposal_only"
 
-                if any(
-                    token.lower() in target_blob
-                    for token in protected_tokens
-                ):
-                    raise RuntimeError(
-                        "Execute plan violates immutable phase policy: "
-                        f"{change.change_id}"
-                    )
+                change.requires_human_approval = True
+                change.allowed_by_policy = (
+                    change.allowed_by_policy
+                    and True
+                )
+                change.phase_boundary_checked = True
 
             else:
 
@@ -1278,45 +1424,105 @@ class RuntimeExecutor:
 
         #
         # ----------------------------------------------------------
+        # Phase Boundary Validation
+        # ----------------------------------------------------------
+        #
+
+        phase_boundary_validation = {
+            "phase_1_2_mutation_detected":
+                False,
+
+            "phase_3_mutation_detected":
+                False,
+
+            "phase_4_mutation_detected":
+                False,
+
+            "phase_4_5_mutation_detected":
+                False,
+
+            "phase_5_7_mutation_detected":
+                False,
+        }
+
+        self.diagnostics[
+            "phase_boundary_validation"
+        ] = phase_boundary_validation
+
+        #
+        # ----------------------------------------------------------
         # Verification Steps
+        #
+        # These represent the intended maintenance lifecycle.
         # ----------------------------------------------------------
         #
 
         verification_steps = [
             VerificationStep(
-                step_id="generate_implementation_plan",
+                step_id=
+                    "generate_implementation_plan",
+
                 description=(
-                    "Generate implementation plan from "
-                    "Bot #1 pre-audit findings."
+                    "Bot #2 generates an implementation plan "
+                    "from Bot #1 pre-audit findings."
                 ),
-                expected_evidence="execution_plan.json",
-            ),           
+
+                expected_evidence=
+                    "execution_plan.json",
+            ),
+
             VerificationStep(
-                step_id="run_bot_1_plan_audit",
+                step_id=
+                    "run_bot_1_plan_audit",
+
                 description=(
                     "Run Bot #1 in plan_audit mode "
-                    "against this execution plan."
+                    "against the Bot #2 implementation plan."
                 ),
+
                 expected_evidence=(
-                    "runtime_verifier_report.json "
+                    "runtime_auditor_report.json "
                     "containing plan_audit section."
                 ),
             ),
+
             VerificationStep(
-                step_id="obtain_human_approval",
+                step_id=
+                    "obtain_human_approval",
+
                 description=(
-                    "Human reviews Bot #1 plan-audit "
-                    "output and approves or rejects execution."
+                    "Human reviews Bot #1 plan-audit output "
+                    "and approves or rejects execution."
                 ),
-                expected_evidence="human_execution_approval.json",
+
+                expected_evidence=
+                    "human_execution_approval.json",
             ),
+
             VerificationStep(
-                step_id="run_bot_1_post_audit",
+                step_id=
+                    "run_bot_2_gated_execution",
+
                 description=(
-                    "Run Bot #1 in post_audit mode "
-                    "after approved execution is applied."
+                    "Bot #2 executes only the human-approved, "
+                    "policy-allowed, non-completed-phase changes."
                 ),
-                expected_evidence="post_audit report",
+
+                expected_evidence=
+                    "apply_execution_result.json",
+            ),
+
+            VerificationStep(
+                step_id=
+                    "run_bot_1_post_audit",
+
+                description=(
+                    "Run Bot #1 in post_audit mode after "
+                    "approved execution is applied."
+                ),
+
+                expected_evidence=
+                    "post_audit report",
             ),
         ]
 
@@ -1327,18 +1533,23 @@ class RuntimeExecutor:
         #
 
         rollback = RollbackPlan(
-            available=True,
+            available=
+                True,
+
             strategy=(
-                "Execution is governed by Bot #1 "
-                "plan audit, human approval, "
-                "and post-audit verification."
+                "Execution is governed by Bot #1 plan audit, "
+                "human approval, gated Bot #2 execution, "
+                "and Bot #1 post-audit verification."
             ),
+
             rollback_steps=[
                 "Restore generated tooling artifacts if required.",
                 "Remove generated bootstrap scripts if rejected.",
                 "Discard execution_plan.json if execution is canceled.",
+                "Discard runtime_executor_report.json if execution is canceled.",
                 "Discard runtime_executor_report.md if execution is canceled.",
                 "Discard dry_run_result evidence if generated.",
+                "Discard apply_execution_result evidence if generated.",
                 "Re-run Bot #1 pre_audit for a fresh baseline.",
                 "Re-run Bot #1 post_audit after rollback.",
             ],
@@ -1351,36 +1562,74 @@ class RuntimeExecutor:
         #
 
         return ExecutionPlan(
-            schema=EXECUTION_PLAN_SCHEMA,
-            mode=self.mode,
-            target_root_failures=target_root_failures,
+            schema=
+                EXECUTION_PLAN_SCHEMA,
+
+            mode=
+                self.mode,
+
+            target_root_failures=
+                target_root_failures,
+
             expected_derived_improvements=sorted(
                 analysis.get(
                     "derived_dependency_map",
                     {},
                 ).keys()
             ),
-            proposed_changes=proposed_changes,
-            verification_steps=verification_steps,
-            rollback=rollback,
+
+            proposed_changes=
+                proposed_changes,
+
+            verification_steps=
+                verification_steps,
+
+            rollback=
+                rollback,
+
             forbidden_changes_declared_absent={
-                "canonical_row": True,
-                "pattern_logic": True,
-                "tips_generation": True,
-                "personalization": True,
-                "localization": True,
-                "recommendation_logic": True,
-                "source_asset_deletion": True,
-                "database_mutation": True,
+                "canonical_row":
+                    True,
+
+                "pattern_logic":
+                    True,
+
+                "tips_generation":
+                    True,
+
+                "personalization":
+                    True,
+
+                "localization":
+                    True,
+
+                "recommendation_logic":
+                    True,
+
+                "source_asset_deletion":
+                    True,
+
+                "database_mutation":
+                    True,
+
+                "approval_override":
+                    True,
+
+                "governance_override":
+                    True,
             },
 
-            human_approval_required=True,
+            human_approval_required=
+                True,
 
-            approval_authority="human",
+            approval_authority=
+                "human",
 
-            plan_audit_required=True,
+            plan_audit_required=
+                True,
 
-            post_audit_required=True,
+            post_audit_required=
+                True,
 
             lifecycle_sequence=[
                 "bot_1_pre_audit",
@@ -1391,13 +1640,8 @@ class RuntimeExecutor:
                 "bot_1_post_audit",
             ],
 
-            phase_boundary_validation={
-                "phase_1_2_mutation_detected": False,
-                "phase_3_mutation_detected": False,
-                "phase_4_mutation_detected": False,
-                "phase_4_5_mutation_detected": False,
-                "phase_5_7_mutation_detected": False,
-            },
+            phase_boundary_validation=
+                phase_boundary_validation,
         )
 
     def simulate_dry_run_execution(
@@ -2108,11 +2352,11 @@ def main() -> int:
     #
 
     parser.add_argument(
-        "--verifier-report",
+        "--auditor-report",
         required=False,
         default=None,
         help=(
-            "Path to Bot #1 runtime_verifier_report.json."
+            "Path to Bot #1 runtime_auditor_report.json."
         ),
     )
 
@@ -2121,7 +2365,7 @@ def main() -> int:
         required=False,
         default=None,
         help=(
-            "Alias of --verifier-report."
+            "Alias of --auditor-report."
         ),
     )
 
@@ -2210,24 +2454,24 @@ def main() -> int:
     # ----------------------------------------------------------
     #
 
-    verifier_report_path = (
-        args.verifier_report
+    auditor_report_path = (
+        args.auditor_report
         or args.pre_audit_report
     )
 
-    if not verifier_report_path:
+    if not auditor_report_path:
 
         raise ValueError(
-            "Either --verifier-report "
+            "Either --auditor-report "
             "or --pre-audit-report "
             "must be supplied."
         )
 
     try:
 
-        verifier_report = read_json_file(
+        auditor_report = read_json_file(
             Path(
-                verifier_report_path
+                auditor_report_path
             )
         )
 
@@ -2242,7 +2486,7 @@ def main() -> int:
         )
 
         executor = RuntimeExecutor(
-            verifier_report=verifier_report,
+            auditor_report=auditor_report,
             executor_config_text=executor_config_text,
             mode=args.mode,
         )
