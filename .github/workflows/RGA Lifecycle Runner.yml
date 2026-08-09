@@ -230,31 +230,31 @@ jobs:
                 echo "Lifecycle event found: $EVENT_FILE"
 
                 STAGE="$(
-                  python3 - "$EVENT_FILE" <<'PY'
-                  import json
-                  import sys
-                  from pathlib import Path
+                  python3 -c '
+                import json
+                import sys
+                from pathlib import Path
 
-                  event_file = Path(sys.argv[1])
+                event_file = Path(sys.argv[1])
 
-                  try:
-                      data = json.loads(
-                          event_file.read_text(
-                              encoding="utf-8",
-                              errors="ignore",
-                          )
-                      )
+                try:
+                    data = json.loads(
+                        event_file.read_text(
+                            encoding="utf-8",
+                            errors="ignore",
+                        )
+                    )
 
-                      print(
-                          data.get(
-                              "next_stage",
-                              "halted",
-                          )
-                      )
+                    print(
+                        data.get(
+                            "next_stage",
+                            "halted",
+                        )
+                    )
 
-                  except Exception:
-                      print("halted")
-                  PY
+                except Exception:
+                    print("halted")
+                ' "$EVENT_FILE"
                 )"
 
                 REASON="Lifecycle stage resolved from lifecycle_event.json."
