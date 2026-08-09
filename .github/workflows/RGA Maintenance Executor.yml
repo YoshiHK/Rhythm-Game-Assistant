@@ -576,18 +576,18 @@ jobs:
             from pathlib import Path
             content = """# RGA Runtime Executor Report
 
-## Fallback Report
+          ## Fallback Report
 
-`runtime_executor.py` did not emit a non-empty Markdown report.
+          `runtime_executor.py` did not emit a non-empty Markdown report.
 
-See:
+           See:
 
-- `runtime_executor_report.json`
-- `runtime_executor_stdout.txt`
-- `runtime_executor_stderr.txt`
-- `runtime_executor_stderr_summary.json`
-- `runtime_executor_exit_code.txt`
-"""
+          - `runtime_executor_report.json`
+          - `runtime_executor_stdout.txt`
+          - `runtime_executor_stderr.txt`
+          - `runtime_executor_stderr_summary.json`
+          - `runtime_executor_exit_code.txt`
+
             Path("artifacts/runtime_executor_report.md").write_text(content, encoding="utf-8")
             PY
 
