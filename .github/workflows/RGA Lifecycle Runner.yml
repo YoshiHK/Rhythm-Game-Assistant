@@ -82,10 +82,23 @@ jobs:
           TRIGGERING_RUN_ID: ${{ github.event.workflow_run.id }}
           TRIGGERING_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           DEFAULT_REF: ${{ github.ref_name }}
+
         run: |
           set -euo pipefail
+          mkdir -p \
+            artifacts \
+            lifecycle_trigger
 
-          mkdir -p artifacts lifecycle_trigger
+          #
+          # Lifecycle Stages
+          #
+          # pre_audit
+          # plan
+          # plan_audit
+          # human_approval
+          # execute
+          # post_audit
+          #
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             STAGE="$MANUAL_STAGE"
@@ -96,6 +109,7 @@ jobs:
             APPROVAL_ARTIFACT="${MANUAL_APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
             EXECUTION_APPROVAL="${MANUAL_EXECUTION_APPROVAL:-}"
             TRIGGER_SOURCE="manual"
+
           else
             STAGE="auto_detect"
             REF_INPUT="${DEFAULT_REF:-main}"
@@ -111,6 +125,24 @@ jobs:
             AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
           fi
 
+          export STAGE
+          export REF_INPUT
+          export AUDIT_SESSION_ID
+          export PRE_AUDIT_REPORT
+          export EXECUTION_PLAN
+          export APPROVAL_ARTIFACT
+          export EXECUTION_APPROVAL
+          export TRIGGER_SOURCE
+          export TRIGGERING_WORKFLOW
+          export TRIGGERING_RUN_ID
+          export TRIGGERING_CONCLUSION
+
+          #
+          # Canonical Lifecycle
+          #
+
+          export CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit"
+
           {
             echo "STAGE=$STAGE"
             echo "REF_INPUT=$REF_INPUT"
@@ -123,6 +155,7 @@ jobs:
             echo "TRIGGERING_WORKFLOW=$TRIGGERING_WORKFLOW"
             echo "TRIGGERING_RUN_ID=$TRIGGERING_RUN_ID"
             echo "TRIGGERING_CONCLUSION=$TRIGGERING_CONCLUSION"
+            echo "CANONICAL_LIFECYCLE=$CANONICAL_LIFECYCLE"
           } >> "$GITHUB_ENV"
 
       - name: Download triggering workflow artifacts
@@ -133,9 +166,7 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
-
           mkdir -p lifecycle_trigger
-
           gh run download "$RUN_ID" \
             --dir lifecycle_trigger \
             || true
@@ -260,39 +291,198 @@ jobs:
           python3 - <<'PY'
           import json
           import os
-          from datetime import datetime, timezone
+
           from pathlib import Path
 
-          path = Path("artifacts/lifecycle_state.json")
+          from datetime import (
+              datetime,
+              timezone,
+          )
+
+          path = Path(
+              "artifacts/lifecycle_state.json"
+          )
+
+          canonical_lifecycle = [
+
+              "pre_audit",
+
+              "plan",
+
+              "plan_audit",
+
+              "human_approval",
+
+              "execute",
+
+              "post_audit",
+          ]
+
+          current_stage = os.environ.get(
+              "RESOLVED_STAGE",
+              "",
+          )
+
+          next_stage = os.environ.get(
+              "NEXT_STAGE",
+              "",
+          )
+
+          completed_stages = []
+
+          if current_stage in canonical_lifecycle:
+
+              idx = canonical_lifecycle.index(
+                  current_stage
+              )
+
+              completed_stages = (
+                  canonical_lifecycle[: idx + 1]
+              )
 
           payload = {
-              "schema": "rga.lifecycle_state.v1.1",
-              "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-              "audit_session_id": os.environ.get("AUDIT_SESSION_ID", ""),
-              "trigger_source": os.environ.get("TRIGGER_SOURCE", ""),
-              "triggering_workflow": os.environ.get("TRIGGERING_WORKFLOW", ""),
-              "triggering_run_id": os.environ.get("TRIGGERING_RUN_ID", ""),
-              "triggering_conclusion": os.environ.get("TRIGGERING_CONCLUSION", ""),
-              "current_stage": os.environ.get("RESOLVED_STAGE", ""),
-              "next_stage": os.environ.get("NEXT_STAGE", ""),
-              "dispatch_required": os.environ.get("DISPATCH_REQUIRED", "false") == "true",
-              "workflow_file": os.environ.get("WORKFLOW_FILE") or None,
-              "dispatch_inputs": json.loads(os.environ.get("DISPATCH_INPUTS", "{}")),
-              "reason": os.environ.get("LIFECYCLE_REASON", ""),
-              "canonical_lifecycle": [
-                  "pre_audit",
-                  "plan",
-                  "plan_audit",
-                  "human_approval",
-                  "execute",
-                  "post_audit",
-              ],
+
+              "schema":
+                  "rga.lifecycle_state.v1.2",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "audit_session_id":
+                  os.environ.get(
+                      "AUDIT_SESSION_ID",
+                      "",
+                  ),
+
+              "trigger_source":
+                  os.environ.get(
+                      "TRIGGER_SOURCE",
+                      "",
+                  ),
+
+              "triggering_workflow":
+                  os.environ.get(
+                      "TRIGGERING_WORKFLOW",
+                      "",
+                  ),
+
+              "triggering_run_id":
+                  os.environ.get(
+                      "TRIGGERING_RUN_ID",
+                      "",
+                  ),
+
+              "triggering_conclusion":
+                  os.environ.get(
+                      "TRIGGERING_CONCLUSION",
+                      "",
+                  ),
+
+              "current_stage":
+                  current_stage,
+
+              "next_stage":
+                  next_stage,
+
+              "completed_stages":
+                  completed_stages,
+
+              "dispatch_required":
+                  (
+                      os.environ.get(
+                          "DISPATCH_REQUIRED",
+                          "false",
+                      )
+                      == "true"
+                  ),
+
+              "workflow_file":
+                  (
+                      os.environ.get(
+                          "WORKFLOW_FILE"
+                      )
+                      or None
+                  ),
+
+              "dispatch_inputs":
+                  json.loads(
+                      os.environ.get(
+                          "DISPATCH_INPUTS",
+                          "{}",
+                      )
+                  ),
+
+              "reason":
+                  os.environ.get(
+                      "LIFECYCLE_REASON",
+                      "",
+                  ),
+
+              "canonical_lifecycle":
+                  canonical_lifecycle,
+
+              "lifecycle_progress": {
+
+                  "stage_count":
+                      len(
+                          canonical_lifecycle
+                      ),
+
+                  "completed_count":
+                      len(
+                          completed_stages
+                      ),
+
+                  "progress_percent":
+                      round(
+                          (
+                              len(
+                                  completed_stages
+                              )
+                              / len(
+                                  canonical_lifecycle
+                              )
+                          )
+                          * 100,
+                          2,
+                      ),
+              },
+
+              "governance": {
+
+                  "human_approval_required_for_execute":
+                      True,
+
+                  "completed_phases_remain_immutable":
+                      True,
+
+                  "validation_is_not_verification":
+                      True,
+
+                  "bot_1_role":
+                      "auditor",
+
+                  "bot_2_role":
+                      "planner_executor",
+
+                  "approval_authority":
+                      "human",
+              },
+
               "policy": {
-                  "runner_does_not_audit": True,
-                  "runner_does_not_execute": True,
-                  "runner_does_not_approve": True,
-                  "human_approval_required_for_execute": True,
-                  "completed_phases_remain_immutable": True,
+
+                  "runner_does_not_audit":
+                      True,
+
+                  "runner_does_not_execute":
+                      True,
+
+                  "runner_does_not_approve":
+                      True,
               },
           }
 
