@@ -297,7 +297,7 @@ jobs:
                 echo "Lifecycle event found: $EVENT_FILE"
 
                 STAGE="$(
-                python3 -c '
+                  python3 -c '
                 import json
                 import pathlib
                 import sys
@@ -1146,10 +1146,10 @@ jobs:
           echo "Lifecycle Event Contract validation passed."          
 
       ############################################################
-      # Upload Lifecycle Summary
+      # Lifecycle Summary
       ############################################################          
 
-      - name: Upload Lifecycle summary
+      - name: Lifecycle summary
         if: always()
         shell: bash
         run: |
