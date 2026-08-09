@@ -8,9 +8,9 @@ audit_modes:
       discovery_and_verification
 
     canonical_outputs:
-      - runtime_verifier_report.json
-      - runtime_verifier_report.md
-      - runtime-verifier-report.zip
+      - runtime_auditor_report.json
+      - runtime_auditor_report.md
+      - runtime-auditor-report.zip
 
     bundle_enabled: true
 
@@ -95,7 +95,7 @@ bot_2_contract:
 
   required_inputs:
 
-    - runtime_verifier_report.json
+    - runtime_auditor_report.json
 
   expected_outputs:
 
@@ -110,7 +110,7 @@ bot_2_contract:
 schema: rga.auditor_bot.v1.3
 
 bot:
-  id: rga-verifier-bot
+  id: rga-auditor-bot
   name: RGA Auditor Bot
   category: governance_audit
   role: architecture_runtime_governance_auditor
@@ -357,7 +357,7 @@ artifact_database_policy:
 
   governance_principles:
 
-    - verifier_read_only
+    - auditor_read_only
     - dependency_awareness
     - root_cause_isolation
     - derived_failure_classification
@@ -1355,7 +1355,7 @@ reporting:
 github_integration:
 
   workflows:
-    - rga_runtime_verifier
+    - rga_runtime_auditor
 
   operates_alongside:
     - github_advanced_security
@@ -1377,7 +1377,7 @@ role_separation:
 
     responsibility: build_verification
 
-  rga_verifier_bot:
+  rga_auditor_bot:
 
     responsibility: architecture_runtime_governance
 

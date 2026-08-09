@@ -13,9 +13,9 @@ lifecycle:
 canonical_outputs:
 
   bot_1_pre_audit:
-    - runtime_verifier_report.json
-    - runtime_verifier_report.md
-    - runtime-verifier-report.zip
+    - runtime_auditor_report.json
+    - runtime_auditor_report.md
+    - runtime-auditor-report.zip
 
   bot_2_plan:
     - execution_plan.json
@@ -57,7 +57,7 @@ artifact_policy:
 relationship_model:
   bot_1:
     name: RGA Backend Bot #1
-    role: verifier
+    role: auditor
 
   bot_2:
     name: RGA Executor Bot
@@ -130,7 +130,7 @@ root_failure_policy:
   revalidate_after_root_resolution: true
 
 input_contracts:
-  runtime_verifier_report: required
+  runtime_auditor_report: required
   governance_failure_lineage: required
   artifact_failure_lineage: required
   execution_plan_contract: required
@@ -187,14 +187,14 @@ allowed_operations:
   dry_run_execution_phase:
     - simulate_tooling_updates
     - simulate_workflow_updates
-    - simulate_verifier_updates
+    - simulate_auditor_updates
     - simulate_evidence_generation
     - simulate_artifact_bootstrap_scripts
 
   restricted_execution_phase:
     - tooling_updates
     - workflow_updates
-    - verifier_updates
+    - auditor_updates
     - evidence_generation
     - artifact_bootstrap_scripts
     - create_new_non_intrusive_ingestion_paths
