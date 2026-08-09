@@ -1,249 +1,370 @@
-name: "RGA Lifecycle Runner"
+name: RGA Lifecycle Runner
 
-description: >
-  Session-aware RGA maintenance and operations lifecycle runner.
+on:
+  workflow_dispatch:
+    inputs:
+      lifecycle_stage:
+        description: >
+          Stage to start or resume.
+          One of: pre_audit, implementation_plan, plan_audit, human_approval, execute, post_audit.
+        required: true
+        default: pre_audit
+        type: choice
+        options:
+          - pre_audit
+          - implementation_plan
+          - plan_audit
+          - human_approval
+          - execute
+          - post_audit
 
-  This composite action does not audit, plan, execute, approve, or mutate
-  repository state directly. It orchestrates lifecycle stages by dispatching
-  the existing Bot #1 Runtime Auditor and Bot #2 Maintenance Executor
-  workflows through GitHub workflow_dispatch.
+      ref:
+        description: Git ref, branch, or SHA to dispatch downstream workflows on.
+        required: false
+        default: main
 
-  Canonical lifecycle:
+      audit_session_id:
+        description: Optional lifecycle session id. If empty, the runner creates one.
+        required: false
+        default: ""
 
-    pre_audit
-      -> Bot #1 Runtime Auditor
+      pre_audit_report:
+        description: Bot #1 Auditor pre-audit report path.
+        required: false
+        default: artifacts/runtime_auditor_report.json
 
-    implementation_plan
-      -> Bot #2 Maintenance Executor
-         executor_mode=plan
+      execution_plan:
+        description: Bot #2 execution plan path.
+        required: false
+        default: artifacts/execution_plan.json
 
-    plan_audit
-      -> Bot #1 Runtime Auditor
-         audit_mode=plan_audit
+      approval_artifact:
+        description: Human approval artifact path.
+        required: false
+        default: artifacts/human_execution_approval.json
 
-    human_approval
-      -> Human approval artifact checkpoint
-         no workflow dispatch
+      execution_approval:
+        description: Approval phrase for execute stage. Expected APPROVE_RGA_EXECUTION.
+        required: false
+        default: ""
 
-    execute
-      -> Bot #2 Maintenance Executor
-         executor_mode=execute
+  workflow_run:
+    workflows:
+      - RGA Runtime Auditor
+      - RGA Maintenance Executor
+    types:
+      - completed
 
-    post_audit
-      -> Bot #1 Runtime Auditor
-         audit_mode=post_audit
+permissions:
+  actions: write
+  contents: read
 
-inputs:
-  lifecycle_stage:
-    description: >
-      Lifecycle stage to orchestrate.
-      One of: pre_audit, implementation_plan, plan_audit,
-      human_approval, execute, post_audit.
-    required: true
-    default: "pre_audit"
+jobs:
+  lifecycle-runner:
+    runs-on: ubuntu-latest
 
-  ref:
-    description: Git ref, branch, or SHA to run on.
-    required: false
-    default: "main"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  github_token:
-    description: >
-      GitHub token used to call workflow_dispatch.
-      The caller workflow needs actions: write permission.
-    required: true
+      - name: Prepare lifecycle context
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_STAGE: ${{ github.event.inputs.lifecycle_stage }}
+          MANUAL_REF: ${{ github.event.inputs.ref }}
+          MANUAL_SESSION: ${{ github.event.inputs.audit_session_id }}
+          MANUAL_PRE_AUDIT_REPORT: ${{ github.event.inputs.pre_audit_report }}
+          MANUAL_EXECUTION_PLAN: ${{ github.event.inputs.execution_plan }}
+          MANUAL_APPROVAL_ARTIFACT: ${{ github.event.inputs.approval_artifact }}
+          MANUAL_EXECUTION_APPROVAL: ${{ github.event.inputs.execution_approval }}
+          TRIGGERING_WORKFLOW: ${{ github.event.workflow_run.name }}
+          TRIGGERING_RUN_ID: ${{ github.event.workflow_run.id }}
+          TRIGGERING_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          DEFAULT_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
 
-  audit_session_id:
-    description: >
-      Optional correlation id connecting the maintenance lifecycle artifacts.
-      If empty, this runner generates a deterministic timestamp-based session id.
-    required: false
-    default: ""
+          mkdir -p artifacts lifecycle_trigger
 
-  session_state_path:
-    description: Path to write lifecycle session state JSON.
-    required: false
-    default: "artifacts/lifecycle_state.json"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            STAGE="$MANUAL_STAGE"
+            REF_INPUT="${MANUAL_REF:-main}"
+            AUDIT_SESSION_ID="$MANUAL_SESSION"
+            PRE_AUDIT_REPORT="${MANUAL_PRE_AUDIT_REPORT:-artifacts/runtime_auditor_report.json}"
+            EXECUTION_PLAN="${MANUAL_EXECUTION_PLAN:-artifacts/execution_plan.json}"
+            APPROVAL_ARTIFACT="${MANUAL_APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
+            EXECUTION_APPROVAL="${MANUAL_EXECUTION_APPROVAL:-}"
+            TRIGGER_SOURCE="manual"
+          else
+            STAGE="auto_detect"
+            REF_INPUT="${DEFAULT_REF:-main}"
+            AUDIT_SESSION_ID=""
+            PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
+            EXECUTION_PLAN="artifacts/execution_plan.json"
+            APPROVAL_ARTIFACT="artifacts/human_execution_approval.json"
+            EXECUTION_APPROVAL=""
+            TRIGGER_SOURCE="workflow_run"
+          fi
 
-  auditor_workflow_file:
-    description: Runtime Auditor workflow filename.
-    required: false
-    default: "RGA Runtime Auditor.yml"
+          if [ -z "$AUDIT_SESSION_ID" ]; then
+            AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+          fi
 
-  executor_workflow_file:
-    description: Maintenance Executor workflow filename.
-    required: false
-    default: "RGA Maintenance Executor.yml"
+          {
+            echo "STAGE=$STAGE"
+            echo "REF_INPUT=$REF_INPUT"
+            echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
+            echo "PRE_AUDIT_REPORT=$PRE_AUDIT_REPORT"
+            echo "EXECUTION_PLAN=$EXECUTION_PLAN"
+            echo "APPROVAL_ARTIFACT=$APPROVAL_ARTIFACT"
+            echo "EXECUTION_APPROVAL=$EXECUTION_APPROVAL"
+            echo "TRIGGER_SOURCE=$TRIGGER_SOURCE"
+            echo "TRIGGERING_WORKFLOW=$TRIGGERING_WORKFLOW"
+            echo "TRIGGERING_RUN_ID=$TRIGGERING_RUN_ID"
+            echo "TRIGGERING_CONCLUSION=$TRIGGERING_CONCLUSION"
+          } >> "$GITHUB_ENV"
 
-  pre_audit_report:
-    description: Bot #1 pre-audit report artifact path.
-    required: false
-    default: "artifacts/runtime_auditor_report.json"
+      - name: Download triggering workflow artifacts
+        if: ${{ github.event_name == 'workflow_run' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
 
-  execution_plan:
-    description: Bot #2 execution plan artifact path.
-    required: false
-    default: "artifacts/execution_plan.json"
+          mkdir -p lifecycle_trigger
 
-  approval_artifact:
-    description: Human approval artifact path.
-    required: false
-    default: "artifacts/human_execution_approval.json"
+          gh run download "$RUN_ID" \
+            --dir lifecycle_trigger \
+            || true
 
-  execution_approval:
-    description: >
-      Approval phrase for execute stage.
-      Expected value: APPROVE_RGA_EXECUTION
-    required: false
-    default: ""
+          find lifecycle_trigger -type f | sort > artifacts/lifecycle_trigger_files.txt || true
 
-runs:
-  using: composite
+      - name: Determine next lifecycle stage
+        shell: bash
+        run: |
+          set -euo pipefail
 
-  steps:
-    - name: Dispatch lifecycle stage
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
-        REPO: ${{ github.repository }}
-        STAGE: ${{ inputs.lifecycle_stage }}
-        REF_INPUT: ${{ inputs.ref }}
-        AUDIT_SESSION_ID_INPUT: ${{ inputs.audit_session_id }}
-        SESSION_STATE_PATH: ${{ inputs.session_state_path }}
-        AUDITOR_WORKFLOW_FILE: ${{ inputs.auditor_workflow_file }}
-        EXECUTOR_WORKFLOW_FILE: ${{ inputs.executor_workflow_file }}
-        PRE_AUDIT_REPORT: ${{ inputs.pre_audit_report }}
-        EXECUTION_PLAN: ${{ inputs.execution_plan }}
-        APPROVAL_ARTIFACT: ${{ inputs.approval_artifact }}
-        EXECUTION_APPROVAL: ${{ inputs.execution_approval }}
-      run: |
-        set -euo pipefail
+          NEXT_STAGE=""
+          DISPATCH_REQUIRED="true"
+          WORKFLOW_FILE=""
+          DISPATCH_INPUTS="{}"
+          REASON=""
 
-        mkdir -p artifacts
+          if [ "$TRIGGER_SOURCE" = "workflow_run" ]; then
+            if [ "$TRIGGERING_CONCLUSION" != "success" ]; then
+              NEXT_STAGE="halted"
+              DISPATCH_REQUIRED="false"
+              REASON="Triggering workflow did not complete successfully."
+            else
+              if find lifecycle_trigger -type f -name 'runtime_auditor_report.json' | grep -q .; then
+                STAGE="implementation_plan"
+              elif find lifecycle_trigger -type f -name 'runtime_verifier_report.json' | grep -q .; then
+                STAGE="implementation_plan"
+                PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
+              elif find lifecycle_trigger -type f -name 'runtime_executor_report.json' | grep -q .; then
+                if find lifecycle_trigger -type f -name 'execution_plan.json' | grep -q .; then
+                  STAGE="plan_audit"
+                elif find lifecycle_trigger -type f -name 'apply_execution_result.json' | grep -q .; then
+                  STAGE="post_audit"
+                else
+                  STAGE="halted"
+                  DISPATCH_REQUIRED="false"
+                  REASON="Executor artifacts found, but no execution_plan.json or apply_execution_result.json was found."
+                fi
+              elif find lifecycle_trigger -type f -name 'plan_audit_evidence.json' | grep -q .; then
+                STAGE="human_approval"
+              elif find lifecycle_trigger -type f -name 'post_audit_contract.json' | grep -q .; then
+                STAGE="complete"
+                DISPATCH_REQUIRED="false"
+                REASON="Post-audit contract was produced; lifecycle is complete."
+              else
+                STAGE="halted"
+                DISPATCH_REQUIRED="false"
+                REASON="No recognized canonical artifact was found in triggering workflow artifacts."
+              fi
+            fi
+          fi
 
-        if [ -z "$AUDIT_SESSION_ID_INPUT" ]; then
-          AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
-        else
-          AUDIT_SESSION_ID="$AUDIT_SESSION_ID_INPUT"
-        fi
+          case "$STAGE" in
+            pre_audit)
+              WORKFLOW_FILE="RGA Runtime Auditor.yml"
+              NEXT_STAGE="implementation_plan"
+              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"pre_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"]}))')
+              ;;
 
-        case "$STAGE" in
-          pre_audit|implementation_plan|plan_audit|human_approval|execute|post_audit)
-            ;;
-          *)
-            echo "Unsupported lifecycle_stage: $STAGE" >&2
-            echo "Expected one of:" >&2
-            echo "  pre_audit" >&2
-            echo "  implementation_plan" >&2
-            echo "  plan_audit" >&2
-            echo "  human_approval" >&2
-            echo "  execute" >&2
-            echo "  post_audit" >&2
-            exit 1
-            ;;
-        esac
+            implementation_plan)
+              WORKFLOW_FILE="RGA Maintenance Executor.yml"
+              NEXT_STAGE="plan_audit"
+              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"executor_mode":"plan","audit_session_id":os.environ["AUDIT_SESSION_ID"],"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT","")}))')
+              ;;
 
-        if [ "$STAGE" = "execute" ]; then
-          if [ -z "$EXECUTION_APPROVAL" ]; then
-            echo "execution_approval missing" >&2
+            plan_audit)
+              WORKFLOW_FILE="RGA Runtime Auditor.yml"
+              NEXT_STAGE="human_approval"
+              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"plan_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN","")}))')
+              ;;
+
+            human_approval)
+              NEXT_STAGE="execute"
+              DISPATCH_REQUIRED="false"
+              REASON="Human approval checkpoint. Create or provide human_execution_approval.json before running execute."
+              ;;
+
+            execute)
+              if [ -z "$EXECUTION_APPROVAL" ]; then
+                echo "execution_approval missing" >&2
+                exit 1
+              fi
+              if [ "$EXECUTION_APPROVAL" != "APPROVE_RGA_EXECUTION" ]; then
+                echo "invalid execution_approval phrase" >&2
+                exit 1
+              fi
+              WORKFLOW_FILE="RGA Maintenance Executor.yml"
+              NEXT_STAGE="post_audit"
+              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"executor_mode":"execute","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN",""),"approval_artifact":os.environ.get("APPROVAL_ARTIFACT",""),"execution_approval":os.environ.get("EXECUTION_APPROVAL","")}))')
+              ;;
+
+            post_audit)
+              WORKFLOW_FILE="RGA Runtime Auditor.yml"
+              NEXT_STAGE="complete"
+              DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"post_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN",""),"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT","")}))')
+              ;;
+
+            complete|halted)
+              DISPATCH_REQUIRED="false"
+              ;;
+
+            *)
+              echo "Unsupported resolved stage: $STAGE" >&2
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "RESOLVED_STAGE=$STAGE"
+            echo "NEXT_STAGE=$NEXT_STAGE"
+            echo "DISPATCH_REQUIRED=$DISPATCH_REQUIRED"
+            echo "WORKFLOW_FILE=$WORKFLOW_FILE"
+            echo "DISPATCH_INPUTS=$DISPATCH_INPUTS"
+            echo "LIFECYCLE_REASON=$REASON"
+          } >> "$GITHUB_ENV"
+
+      - name: Write lifecycle state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path("artifacts/lifecycle_state.json")
+
+          payload = {
+              "schema": "rga.lifecycle_state.v1.1",
+              "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+              "audit_session_id": os.environ.get("AUDIT_SESSION_ID", ""),
+              "trigger_source": os.environ.get("TRIGGER_SOURCE", ""),
+              "triggering_workflow": os.environ.get("TRIGGERING_WORKFLOW", ""),
+              "triggering_run_id": os.environ.get("TRIGGERING_RUN_ID", ""),
+              "triggering_conclusion": os.environ.get("TRIGGERING_CONCLUSION", ""),
+              "current_stage": os.environ.get("RESOLVED_STAGE", ""),
+              "next_stage": os.environ.get("NEXT_STAGE", ""),
+              "dispatch_required": os.environ.get("DISPATCH_REQUIRED", "false") == "true",
+              "workflow_file": os.environ.get("WORKFLOW_FILE") or None,
+              "dispatch_inputs": json.loads(os.environ.get("DISPATCH_INPUTS", "{}")),
+              "reason": os.environ.get("LIFECYCLE_REASON", ""),
+              "canonical_lifecycle": [
+                  "pre_audit",
+                  "implementation_plan",
+                  "plan_audit",
+                  "human_approval",
+                  "execute",
+                  "post_audit",
+              ],
+              "policy": {
+                  "runner_does_not_audit": True,
+                  "runner_does_not_execute": True,
+                  "runner_does_not_approve": True,
+                  "human_approval_required_for_execute": True,
+                  "completed_phases_remain_immutable": True,
+              },
+          }
+
+          path.write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Dispatch next workflow
+        if: ${{ env.DISPATCH_REQUIRED == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          ENCODED_WORKFLOW=$(python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$WORKFLOW_FILE")
+
+          PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"ref": os.environ["REF_INPUT"], "inputs": json.loads(os.environ["DISPATCH_INPUTS"])}))')
+
+          API_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
+
+          HTTP_STATUS=$(curl -sS \
+            -o /tmp/rga_lifecycle_dispatch_response.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "$API_URL" \
+            -d "$PAYLOAD" || true)
+
+          if [ "$HTTP_STATUS" != "204" ]; then
+            echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
+            sed -n '1,200p' /tmp/rga_lifecycle_dispatch_response.json >&2 || true
+            echo "$PAYLOAD" >&2
             exit 1
           fi
 
-          if [ "$EXECUTION_APPROVAL" != "APPROVE_RGA_EXECUTION" ]; then
-            echo "invalid execution_approval phrase" >&2
-            exit 1
-          fi
-        fi
+          echo "Dispatched workflow '${WORKFLOW_FILE}' for lifecycle stage '${RESOLVED_STAGE}'."
 
-        WORKFLOW_FILE=""
-        DISPATCH_INPUTS="{}"
-        NEXT_STAGE=""
-        DISPATCH_REQUIRED="true"
+      - name: Upload lifecycle state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-lifecycle-state
+          path: artifacts/lifecycle_state.json
+          if-no-files-found: warn
 
-        case "$STAGE" in
-          pre_audit)
-            WORKFLOW_FILE="$AUDITOR_WORKFLOW_FILE"
-            NEXT_STAGE="implementation_plan"
-            DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"pre_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"]}))')
-            ;;
-
-          implementation_plan)
-            WORKFLOW_FILE="$EXECUTOR_WORKFLOW_FILE"
-            NEXT_STAGE="plan_audit"
-            DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"executor_mode":"plan","audit_session_id":os.environ["AUDIT_SESSION_ID"],"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT","")}))')
-            ;;
-
-          plan_audit)
-            WORKFLOW_FILE="$AUDITOR_WORKFLOW_FILE"
-            NEXT_STAGE="human_approval"
-            DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"plan_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN","")}))')
-            ;;
-
-          human_approval)
-            WORKFLOW_FILE=""
-            NEXT_STAGE="execute"
-            DISPATCH_REQUIRED="false"
-            ;;
-
-          execute)
-            WORKFLOW_FILE="$EXECUTOR_WORKFLOW_FILE"
-            NEXT_STAGE="post_audit"
-            DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"executor_mode":"execute","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN", ""),"approval_artifact":os.environ.get("APPROVAL_ARTIFACT", ""),"execution_approval":os.environ.get("EXECUTION_APPROVAL", "")}))')
-            ;;
-
-          post_audit)
-            WORKFLOW_FILE="$AUDITOR_WORKFLOW_FILE"
-            NEXT_STAGE="complete"
-            DISPATCH_INPUTS=$(python3 -c 'import json, os; print(json.dumps({"audit_mode":"post_audit","audit_session_id":os.environ["AUDIT_SESSION_ID"],"execution_plan":os.environ.get("EXECUTION_PLAN", ""),"pre_audit_report":os.environ.get("PRE_AUDIT_REPORT", "")}))')
-            ;;
-        esac
-
-        export AUDIT_SESSION_ID
-        export NEXT_STAGE
-        export DISPATCH_REQUIRED
-        export DISPATCH_INPUTS
-        export WORKFLOW_FILE
-
-        python3 -c 'import json, os, datetime; from pathlib import Path; path=Path(os.environ["SESSION_STATE_PATH"]); path.parent.mkdir(parents=True, exist_ok=True); payload={"schema":"rga.lifecycle_state.v1.0","generated_at":datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(),"audit_session_id":os.environ["AUDIT_SESSION_ID"],"current_stage":os.environ["STAGE"],"next_stage":os.environ["NEXT_STAGE"],"dispatch_required":os.environ["DISPATCH_REQUIRED"]=="true","workflow_file":os.environ.get("WORKFLOW_FILE") or None,"dispatch_inputs":json.loads(os.environ.get("DISPATCH_INPUTS","{}")),"canonical_lifecycle":["pre_audit","implementation_plan","plan_audit","human_approval","execute","post_audit"],"policy":{"runner_does_not_audit":True,"runner_does_not_execute":True,"runner_does_not_approve":True,"human_approval_required_for_execute":True,"completed_phases_remain_immutable":True}}; path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")'
-
-        if [ "$DISPATCH_REQUIRED" != "true" ]; then
-          echo "Lifecycle stage '${STAGE}' records a human approval checkpoint only."
-          echo "No workflow dispatch was performed."
-          echo "Session state written to ${SESSION_STATE_PATH}."
-          exit 0
-        fi
-
-        ENCODED_WORKFLOW=$(python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$WORKFLOW_FILE")
-
-        PAYLOAD=$(python3 -c 'import json, os; print(json.dumps({"ref": os.environ["REF_INPUT"], "inputs": json.loads(os.environ["DISPATCH_INPUTS"])}))')
-
-        API_URL="https://api.github.com/repos/${REPO}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
-
-        echo "RGA Lifecycle Runner"
-        echo "Session: ${AUDIT_SESSION_ID}"
-        echo "Current stage: ${STAGE}"
-        echo "Next stage: ${NEXT_STAGE}"
-        echo "Dispatch workflow: ${WORKFLOW_FILE}"
-        echo "Ref: ${REF_INPUT}"
-
-        HTTP_STATUS=$(curl -sS \
-          -o /tmp/rga_lifecycle_dispatch_response.json \
-          -w "%{http_code}" \
-          -X POST \
-          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-          -H "Accept: application/vnd.github+json" \
-          -H "Content-Type: application/json" \
-          "$API_URL" \
-          -d "$PAYLOAD" || true)
-
-        if [ "$HTTP_STATUS" != "204" ]; then
-          echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
-          echo "API response:" >&2
-          sed -n '1,200p' /tmp/rga_lifecycle_dispatch_response.json >&2 || true
-          echo "Payload sent:" >&2
-          echo "$PAYLOAD" >&2
-          exit 1
-        fi
-
-        echo "Dispatched workflow '${WORKFLOW_FILE}' for stage '${STAGE}' (ref: ${REF_INPUT})."
-        echo "Session state written to ${SESSION_STATE_PATH}."
+      - name: Lifecycle summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## RGA Lifecycle Runner"
+            echo ""
+            echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
+            echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
+            echo "- Current stage: \`${RESOLVED_STAGE:-}\`"
+            echo "- Next stage: \`${NEXT_STAGE:-}\`"
+            echo "- Dispatch required: \`${DISPATCH_REQUIRED:-}\`"
+            echo "- Workflow file: \`${WORKFLOW_FILE:-none}\`"
+            echo ""
+            if [ -n "${LIFECYCLE_REASON:-}" ]; then
+              echo "### Reason"
+              echo ""
+              echo "${LIFECYCLE_REASON}"
+              echo ""
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
