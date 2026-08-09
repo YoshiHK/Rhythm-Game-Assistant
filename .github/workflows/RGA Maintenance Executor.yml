@@ -274,143 +274,143 @@ jobs:
           ########################################################
 
           python <<'PY'
-import json
-from pathlib import Path
+          import json
+          from pathlib import Path
 
-stderr_path = Path(
-    "artifacts/runtime_executor_stderr.txt"
-)
+          stderr_path = Path(
+              "artifacts/runtime_executor_stderr.txt"
+          )
 
-stdout_path = Path(
-    "artifacts/runtime_executor_stdout.txt"
-)
+          stdout_path = Path(
+              "artifacts/runtime_executor_stdout.txt"
+          )
 
-exit_code_path = Path(
-    "artifacts/runtime_executor_exit_code.txt"
-)
+          exit_code_path = Path(
+              "artifacts/runtime_executor_exit_code.txt"
+          )
 
-stderr_text = (
-    stderr_path.read_text(
-        encoding="utf-8",
-        errors="ignore",
-    )
-    if stderr_path.exists()
-    else ""
-)
+          stderr_text = (
+              stderr_path.read_text(
+                  encoding="utf-8",
+                  errors="ignore",
+              )
+              if stderr_path.exists()
+              else ""
+          )
 
-stdout_text = (
-    stdout_path.read_text(
-        encoding="utf-8",
-        errors="ignore",
-    )
-    if stdout_path.exists()
-    else ""
-)
+          stdout_text = (
+              stdout_path.read_text(
+                  encoding="utf-8",
+                  errors="ignore",
+              )
+              if stdout_path.exists()
+              else ""
+          )
 
-try:
-    exit_code = int(
-        exit_code_path.read_text(
-            encoding="utf-8",
-            errors="ignore",
-        ).strip()
-        or "0"
-    )
-except Exception:
-    exit_code = None
+          try:
+              exit_code = int(
+                  exit_code_path.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  ).strip()
+                  or "0"
+              )
+          except Exception:
+              exit_code = None
 
-error_markers = [
-    "Traceback",
-    "Error",
-    "Exception",
-    "ModuleNotFoundError",
-    "RuntimeError",
-    "ValueError",
-]
+          error_markers = [
+              "Traceback",
+              "Error",
+              "Exception",
+              "ModuleNotFoundError",
+              "RuntimeError",
+              "ValueError",
+          ]
 
-warning_markers = [
-    "warning",
-    "Warning",
-    "WARN",
-]
+          warning_markers = [
+              "warning",
+              "Warning",
+              "WARN",
+          ]
 
-error_hits = [
-    marker
-    for marker in error_markers
-    if marker in stderr_text
-]
+          error_hits = [
+              marker
+              for marker in error_markers
+              if marker in stderr_text
+          ]
 
-warning_hits = [
-    marker
-    for marker in warning_markers
-    if marker in stderr_text
-]
+          warning_hits = [
+              marker
+              for marker in warning_markers
+              if marker in stderr_text
+          ]
 
-payload = {
-    "schema":
-        "rga.runtime_executor.stderr_summary.v1.0",
+          payload = {
+              "schema":
+                  "rga.runtime_executor.stderr_summary.v1.0",
 
-    "stderr_present":
-        stderr_path.exists(),
+              "stderr_present":
+                  stderr_path.exists(),
 
-    "stderr_empty":
-        len(
-            stderr_text.strip()
-        )
-        == 0,
+              "stderr_empty":
+                  len(
+                      stderr_text.strip()
+                  )
+                  == 0,
 
-    "stdout_present":
-        stdout_path.exists(),
+              "stdout_present":
+                  stdout_path.exists(),
 
-    "stdout_empty":
-        len(
-            stdout_text.strip()
-        )
-        == 0,
+              "stdout_empty":
+                  len(
+                      stdout_text.strip()
+                  )
+                  == 0,
 
-    "executor_exit_code":
-        exit_code,
+              "executor_exit_code":
+                  exit_code,
 
-    "execution_failed":
-        (
-            exit_code is not None
-            and exit_code != 0
-        ),
+              "execution_failed":
+                  (
+                      exit_code is not None
+                      and exit_code != 0
+                  ),
 
-    "error_marker_count":
-        len(
-            error_hits
-        ),
+              "error_marker_count":
+                  len(
+                      error_hits
+                  ),
 
-    "warning_marker_count":
-        len(
-            warning_hits
-        ),
+              "warning_marker_count":
+                  len(
+                      warning_hits
+                  ),
 
-    "error_markers":
-        error_hits,
+              "error_markers":
+                  error_hits,
 
-    "warning_markers":
-        warning_hits,
+              "warning_markers":
+                  warning_hits,
 
-    "interpretation":
-        (
-            "stderr_empty_no_error_output"
-            if len(stderr_text.strip()) == 0
-            else "stderr_contains_output"
-        ),
-}
+              "interpretation":
+                  (
+                      "stderr_empty_no_error_output"
+                      if len(stderr_text.strip()) == 0
+                      else "stderr_contains_output"
+                  ),
+          }
 
-Path(
-    "artifacts/runtime_executor_stderr_summary.json"
-).write_text(
-    json.dumps(
-        payload,
-        indent=2,
-        ensure_ascii=False,
-    ),
-    encoding="utf-8",
-)
-PY
+          Path(
+              "artifacts/runtime_executor_stderr_summary.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
 
           ########################################################
           # Fallback runtime_executor_report.json
@@ -422,139 +422,138 @@ PY
 
           if [ ! -s artifacts/runtime_executor_report.json ]; then
             python <<'PY'
-import json
-from datetime import datetime, timezone
-from pathlib import Path
+            import json
+            from datetime import datetime, timezone
+            from pathlib import Path
 
-exit_code_path = Path(
-    "artifacts/runtime_executor_exit_code.txt"
-)
-
-stderr_path = Path(
-    "artifacts/runtime_executor_stderr.txt"
-)
-
-stdout_path = Path(
-    "artifacts/runtime_executor_stdout.txt"
-)
-
-try:
-    exit_code = int(
-        exit_code_path.read_text(
-            encoding="utf-8",
-            errors="ignore",
-        ).strip()
-        or "0"
-    )
-except Exception:
-    exit_code = None
-
-stderr_text = (
-    stderr_path.read_text(
-        encoding="utf-8",
-        errors="ignore",
-    )
-    if stderr_path.exists()
-    else ""
-)
-
-stdout_text = (
-    stdout_path.read_text(
-        encoding="utf-8",
-        errors="ignore",
-    )
-    if stdout_path.exists()
-    else ""
-)
-
-payload = {
-    "schema":
-        "rga.runtime_executor.report.fallback.v1.0",
-
-    "generated_at":
-        datetime.now(
-            timezone.utc
-        )
-        .replace(
-            microsecond=0
-        )
-        .isoformat(),
-
-    "mode":
-        None,
-
-    "proposal_only":
-        None,
-
-    "dry_run":
-        None,
-
-    "execution_authority":
-        False,
-
-    "approval_authority":
-        False,
-
-    "plan":
-        {},
-
-    "dry_run_result":
-        {},
-
-    "apply_execution_result":
-        {},
-
-    "diagnostics": {
-        "fallback_report_generated":
-            True,
-
-        "executor_exit_code":
-            exit_code,
-
-        "stdout_present":
-            stdout_path.exists(),
-
-        "stderr_present":
-            stderr_path.exists(),
-
-        "stdout_empty":
-            len(
-                stdout_text.strip()
+            exit_code_path = Path(
+                "artifacts/runtime_executor_exit_code.txt"
             )
-            == 0,
 
-        "stderr_empty":
-            len(
-                stderr_text.strip()
+            stderr_path = Path(
+                "artifacts/runtime_executor_stderr.txt"
             )
-            == 0,
 
-        "policy_result": {
-            "policy_passed":
-                False,
+            stdout_path = Path(
+                "artifacts/runtime_executor_stdout.txt"
+            )
 
-            "violations": [
-                (
-                    "runtime_executor.py did not emit "
-                    "runtime_executor_report.json."
+            try:
+                exit_code = int(
+                    exit_code_path.read_text(
+                        encoding="utf-8",
+                        errors="ignore",
+                    ).strip()
+                    or "0"
                 )
-            ],
-        },
-    },
-}
+            except Exception:
+                exit_code = None
 
-Path(
-    "artifacts/runtime_executor_report.json"
-).write_text(
-    json.dumps(
-        payload,
-        indent=2,
-        ensure_ascii=False,
-    ),
-    encoding="utf-8",
-)
-PY
-          fi
+            stderr_text = (
+                stderr_path.read_text(
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+                if stderr_path.exists()
+                else ""
+            )
+
+            stdout_text = (
+                stdout_path.read_text(
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+                if stdout_path.exists()
+                else ""
+            )
+
+            payload = {
+                "schema":
+                    "rga.runtime_executor.report.fallback.v1.0",
+
+                "generated_at":
+                    datetime.now(
+                        timezone.utc
+                    )
+                    .replace(
+                        microsecond=0
+                    )
+                    .isoformat(),
+
+                "mode":
+                    None,
+
+                "proposal_only":
+                    None,
+
+                "dry_run":
+                    None,
+
+                "execution_authority":
+                    False,
+
+                "approval_authority":
+                    False,
+
+                "plan":
+                    {},
+
+                "dry_run_result":
+                    {},
+
+                "apply_execution_result":
+                    {},
+
+                "diagnostics": {
+                    "fallback_report_generated":
+                        True,
+
+                    "executor_exit_code":
+                        exit_code,
+
+                    "stdout_present":
+                        stdout_path.exists(),
+
+                    "stderr_present":
+                        stderr_path.exists(),
+
+                    "stdout_empty":
+                        len(
+                            stdout_text.strip()
+                        )
+                        == 0,
+
+                    "stderr_empty":
+                        len(
+                            stderr_text.strip()
+                        )
+                        == 0,
+
+                    "policy_result": {
+                        "policy_passed":
+                            False,
+
+                        "violations": [
+                            (
+                                "runtime_executor.py did not emit "
+                                "runtime_executor_report.json."
+                            )
+                        ],
+                    },
+                },
+            }
+
+            Path(
+                "artifacts/runtime_executor_report.json"
+            ).write_text(
+                json.dumps(
+                    payload,
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            PY
 
           ########################################################
           # Fallback runtime_executor_report.md
@@ -562,21 +561,20 @@ PY
 
           if [ ! -s artifacts/runtime_executor_report.md ]; then
             cat > artifacts/runtime_executor_report.md <<'MD'
-# RGA Runtime Executor Report
+            # RGA Runtime Executor Report
 
-## Fallback Report
+            ## Fallback Report
 
-`runtime_executor.py` did not emit a non-empty Markdown report.
+            `runtime_executor.py` did not emit a non-empty Markdown report.
 
-See:
+            See:
 
-- `runtime_executor_report.json`
-- `runtime_executor_stdout.txt`
-- `runtime_executor_stderr.txt`
-- `runtime_executor_stderr_summary.json`
-- `runtime_executor_exit_code.txt`
-MD
-          fi
+            - `runtime_executor_report.json`
+            - `runtime_executor_stdout.txt`
+            - `runtime_executor_stderr.txt`
+            - `runtime_executor_stderr_summary.json`
+            - `runtime_executor_exit_code.txt`
+            MD
 
           ########################################################
           # Step outcome
