@@ -1668,234 +1668,56 @@ jobs:
           PY
 
       ############################################################
-      # Execution Bundle Manifest
+      # Upload Plan Evidence
       ############################################################
 
-      - name: Execution Bundle Manifest
-        if: always()
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          artifact_candidates = [
-
-              "execution_plan.json",
-
-              "execution_plan.md",
-
-              "execution_plan_fingerprint.json",
-
-              "approval_verification.json",
-
-              "approval_artifact_matching.json",
-
-              "execution_scope_verification.json",
-
-              "execution_policy_verification.json",
-
-              "apply_execution_result.json",
-              
-              "repository_changes.json",
-
-              "execution_commit_manifest.json",
-
-              "execution_pull_request_candidate.json",
-              
-              "execution_git_commit_result.json",
-
-              "execution_pull_request_result.json",
-
-              "execution_pull_request_url.txt",
-
-              "execution_pull_request_stderr.txt",              
-
-              "execution_manifest.txt",
-
-              "execution_lineage.json",
-
-              "post_audit_trigger.json",
-
-              "rollback_evidence.json",
-
-              "execution_gate.json",
-
-              "runtime_executor_stdout.txt",
-
-              "runtime_executor_stderr.txt",
-          ]
-
-          existing = []
-
-          for item in artifact_candidates:
-
-              path = Path(
-                  "artifacts"
-              ) / item
-
-              if path.exists():
-                  existing.append(
-                      item
-                  )
-
-          payload = {
-
-              "schema":
-                  "rga.execution_bundle_manifest.v1.1",
-
-              "bundle":
-                  "rga_maintenance_executor_bundle.zip",
-
-              "artifact_count":
-                  len(existing),
-
-              "bundle_contents":
-                  existing,
-
-              "execution_lifecycle": [
-
-                  "execution_gate",
-
-                  "execution_plan",
-
-                  "approval_verification",
-
-                  "approval_artifact_matching",
-
-                  "execution_scope_verification",
-
-                  "execution_policy_verification",
-
-                  "apply_execution_result",
-                  
-                  "repository_changes",
-
-                  "execution_commit_manifest",
-
-                  "execution_pull_request_candidate",    
-
-                  "execution_git_commit_result",
-
-                  "execution_pull_request_result",                  
-
-                  "execution_lineage",
-
-                  "post_audit_trigger",
-
-                  "rollback_evidence"
-              ]
-          }
-
-          Path(
-              "artifacts/execution_bundle_manifest.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          PY
-
-      ############################################################
-      # Bundle Integrity Manifest
-      ############################################################
-
-      - name: Bundle Integrity Manifest
-        if: always()
-        run: |
-          python - <<'PY'
-          import json
-          import hashlib
-          from pathlib import Path
-
-          hashes = {}
-
-          artifacts = Path(
-              "artifacts"
-          )
-
-          if artifacts.exists():
-
-              for path in sorted(
-                  artifacts.rglob("*")
-              ):
-
-                  if (
-                      path.is_file()
-                      and path.name
-                      != "bundle_integrity_manifest.json"
-                  ):
-
-                      hashes[
-                          str(
-                              path.relative_to(
-                                  artifacts
-                              )
-                          )
-                      ] = hashlib.sha256(
-                          path.read_bytes()
-                      ).hexdigest()
-
-          payload = {
-
-              "schema":
-                  "rga.bundle_integrity_manifest.v1.0",
-
-              "artifact_hash_count":
-                  len(hashes),
-
-              "sha256":
-                  hashes,
-          }
-
-          Path(
-              "artifacts/bundle_integrity_manifest.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          PY
-
-      ############################################################
-      # Create Downloadable Zip Bundle
-      ############################################################
-
-      - name: Create Downloadable Zip Bundle
-        if: always()
-        run: |
-          rm -f artifacts/rga_maintenance_executor_bundle.zip
-
-          zip -r \
-            artifacts/rga_maintenance_executor_bundle.zip \
-            artifacts
-
-      ############################################################
-      # Upload Maintenance Executor Bundle
-      ############################################################
-
-      - name: Upload Maintenance Executor Bundle
-        if: always()
+      - name: Upload Plan Evidence
+        if: ${{ always() && github.event.inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
         with:
-          name: rga-maintenance-executor-bundle
-          path: artifacts/rga_maintenance_executor_bundle.zip
-
-      ############################################################
-      # Upload Maintenance Executor Evidence
-      ############################################################
-
-      - name: Upload Maintenance Executor Evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rga-maintenance-executor-evidence
+          name: rga-execution-plan
           path: |
-            artifacts/*.json
-            artifacts/*.md
-            artifacts/*.txt
+            artifacts/execution_plan.json
+            artifacts/runtime_executor_report.json
+            artifacts/runtime_executor_report.md
+          if-no-files-found: warn
+
+      ############################################################
+      # Upload Dry Run Evidence
+      ############################################################
+
+      - name: Upload Dry Run Evidence
+        if: ${{ always() && github.event.inputs.executor_mode == 'dry_run_execute' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-dry-run-evidence
+          path: |
+            artifacts/execution_plan.json
+            artifacts/runtime_executor_report.json
+            artifacts/runtime_executor_report.md
+            artifacts/runtime_executor_stdout.txt
+            artifacts/runtime_executor_stderr.txt
+            artifacts/runtime_executor_stderr_summary.json
+            artifacts/runtime_executor_exit_code.txt
+          if-no-files-found: warn
+
+      ############################################################
+      # Upload Execute Evidence
+      ############################################################
+
+      - name: Upload Execute Evidence
+        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-execute-evidence
+          path: |
+            artifacts/apply_execution_result.json
+            artifacts/runtime_executor_report.json
+            artifacts/runtime_executor_report.md
+            artifacts/repository_changes.json
+            artifacts/execution_commit_manifest.json
+            artifacts/execution_pull_request_candidate.json
+            artifacts/execution_git_commit_result.json
+            artifacts/execution_pull_request_result.json
+            artifacts/execution_pull_request_url.txt
+          if-no-files-found: warn

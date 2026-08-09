@@ -2922,7 +2922,7 @@ jobs:
       ############################################################
 
       - name: Plan Audit Report
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'plan_audit' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3240,6 +3240,8 @@ jobs:
           PY
 
           python artifacts/plan_audit_generator.py
+          
+          rm -f artifacts/plan_audit_generator.py
 
       ############################################################
       # Post Audit Verification Contract
@@ -3257,7 +3259,7 @@ jobs:
       ############################################################
 
       - name: Post Audit Verification Contract
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'post_audit' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3416,15 +3418,26 @@ jobs:
           PY
 
           python artifacts/post_audit_contract_generator.py
+          
+          rm -f artifacts/post_audit_contract_generator.py
 
       ############################################################
-      # Artifact Bundle Manifest
+      # Pre-Audit Bundle
+      #
+      # Only pre_audit generates:
+      #
+      #   runtime_verifier_report.json
+      #   runtime_verifier_report.md
+      #   bundle
+      #
       ############################################################
 
       - name: Artifact Bundle Manifest
-      
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
+        shell: bash
         run: |
+          set -euo pipefail
+
           {
             echo "RGA Runtime Verifier Artifact Bundle"
             echo ""
@@ -3446,7 +3459,7 @@ jobs:
 
           } > artifacts/artifact_bundle_manifest.txt
 
-          python - <<'PY'
+          cat > artifacts/artifact_bundle_manifest_generator.py <<'PY'
           import json
           from pathlib import Path
 
@@ -3458,7 +3471,7 @@ jobs:
 
           payload = {
               "schema":
-                  "rga.artifact_bundle_manifest.v1.2",
+                  "rga.artifact_bundle_manifest.v1.3",
 
               "artifact_count":
                   len(files),
@@ -3466,11 +3479,8 @@ jobs:
               "bundle_role":
                   "verification_evidence",
 
-              "verifier_mode":
-                  "read_only",
-
-              "maintenance_mode":
-                  "advisor_only",
+              "audit_mode":
+                  "pre_audit",
 
               "generated_files":
                   files,
@@ -3487,25 +3497,28 @@ jobs:
               encoding="utf-8",
           )
           PY
-          
+
+          python artifacts/artifact_bundle_manifest_generator.py
+
       ############################################################
       # Verify Generated Reports
       ############################################################
 
       - name: Verify Generated Reports
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
 
           report_ok=true
 
           if [ ! -s artifacts/runtime_verifier_report.json ]; then
-            echo "Missing or empty JSON report"
             report_ok=false
           fi
 
           if [ ! -s artifacts/runtime_verifier_report.md ]; then
-            echo "Missing or empty Markdown report"
             report_ok=false
           fi
 
@@ -3515,179 +3528,54 @@ jobs:
             echo "incomplete" > artifacts/report_generation_status.txt
           fi
 
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          status_file = Path(
-              "artifacts/report_generation_status.txt"
-          )
-
-          json_report = Path(
-              "artifacts/runtime_verifier_report.json"
-          )
-
-          markdown_report = Path(
-              "artifacts/runtime_verifier_report.md"
-          )
-
-          stdout_file = Path(
-              "artifacts/runtime_verifier_stdout.txt"
-          )
-
-          stderr_file = Path(
-              "artifacts/runtime_verifier_stderr.txt"
-          )
-
-          exit_code_file = Path(
-              "artifacts/runtime_verifier_exit_code.txt"
-          )
-
-          if status_file.exists():
-              status = status_file.read_text(
-                  encoding="utf-8",
-                  errors="ignore",
-              ).strip()
-          else:
-              status = "unknown"
-
-          payload = {
-              "schema":
-                  "rga.report_generation_status.v1.2",
-
-              "json_report_present":
-                  json_report.is_file(),
-
-              "json_report_nonempty":
-                  json_report.is_file()
-                  and json_report.stat().st_size > 0,
-
-              "markdown_report_present":
-                  markdown_report.is_file(),
-
-              "markdown_report_nonempty":
-                  markdown_report.is_file()
-                  and markdown_report.stat().st_size > 0,
-
-              "stdout_present":
-                  stdout_file.is_file(),
-
-              "stderr_present":
-                  stderr_file.is_file(),
-
-              "exit_code_present":
-                  exit_code_file.is_file(),
-
-              "status":
-                  status,
-
-              "verification_principles": {
-                  "report_generation_is_not_governance_pass":
-                      True,
-
-                  "artifact_presence_is_not_contract_verification":
-                      True,
-              },
-
-              "diagnostic_note": (
-                  "If JSON or Markdown reports are missing, inspect "
-                  "runtime_verifier_stdout.txt, runtime_verifier_stderr.txt, "
-                  "and runtime_verifier_exit_code.txt."
-              ),
-          }
-
-          Path(
-              "artifacts/report_generation_status.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          PY
-
       ############################################################
       # Runtime Verifier Job Summary
       ############################################################
 
       - name: Runtime Verifier Job Summary
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
+        shell: bash
         run: |
           {
             echo "## RGA Runtime Verifier"
             echo ""
 
-            echo "### Verification Model"
+            echo "### Mode"
             echo ""
-            echo "- Validation != Verification"
-            echo "- Repository Reality != Import Reality"
-            echo "- Import Reality != Runtime Reality"
-            echo "- Dependency Reality != Governance Reality"
-            echo "- Runtime Limited != Governance Blocked"
+            echo "- pre_audit"
             echo ""
 
-            echo "### Reports"
+            echo "### Canonical Outputs"
             echo ""
-            echo "- JSON Report: \`artifacts/runtime_verifier_report.json\`"
-            echo "- Markdown Report: \`artifacts/runtime_verifier_report.md\`"
-            echo "- Evidence Bundle: \`artifacts/\`"
-            echo "- Downloadable Zip: \`runtime-verifier-report.zip\`"
+            echo "- runtime_verifier_report.json"
+            echo "- runtime_verifier_report.md"
+            echo "- runtime-verifier-report.zip"
             echo ""
-
-            if [ -f artifacts/report_generation_status.txt ]; then
-              echo "- Report Generation Status: \`$(cat artifacts/report_generation_status.txt)\`"
-              echo ""
-            fi
-
-            if [ -f artifacts/runtime_verifier_exit_code.txt ]; then
-              echo "- Verifier Exit Code: \`$(cat artifacts/runtime_verifier_exit_code.txt)\`"
-              echo ""
-            fi
-
-            if [ -f artifacts/runtime_verifier_report.md ]; then
-              echo "### Markdown Report Preview"
-              echo ""
-              head -n 120 artifacts/runtime_verifier_report.md
-              echo ""
-            fi
-
-            if [ -f artifacts/runtime_verifier_stderr.txt ]; then
-              echo "### stderr Preview"
-              echo ""
-              echo '```text'
-              head -n 80 artifacts/runtime_verifier_stderr.txt || true
-              echo '```'
-              echo ""
-            fi
 
           } >> "$GITHUB_STEP_SUMMARY"
-          
+
       ############################################################
       # Create Downloadable Zip Bundle
       ############################################################
 
       - name: Create Downloadable Zip Bundle
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
+        shell: bash
         run: |
+          set -euo pipefail
+
           cd artifacts
 
           zip -r ../runtime-verifier-report.zip . || true
 
           cd ..
 
-          if [ -f runtime-verifier-report.zip ]; then
-            cp runtime-verifier-report.zip \
-              artifacts/runtime-verifier-report.zip
-          fi          
-
       ############################################################
       # Upload Runtime Verifier Bundle
       ############################################################
 
       - name: Upload Runtime Verifier Bundle
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
         uses: actions/upload-artifact@v4
         with:
           name: runtime-verifier-report-zip
@@ -3699,10 +3587,34 @@ jobs:
       ############################################################
 
       - name: Upload Runtime Verifier Evidence
-        if: always()
+        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
         uses: actions/upload-artifact@v4
         with:
           name: runtime-verifier-evidence
           path: artifacts/
+          if-no-files-found: warn
+
+      ############################################################
+      # Upload Plan Audit Evidence
+      ############################################################
+
+      - name: Upload Plan Audit Evidence
+        if: ${{ always() && github.event.inputs.audit_mode == 'plan_audit' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-audit-evidence
+          path: artifacts/plan_audit_evidence.json
+          if-no-files-found: warn
+
+      ############################################################
+      # Upload Post Audit Contract
+      ############################################################
+
+      - name: Upload Post Audit Contract
+        if: ${{ always() && github.event.inputs.audit_mode == 'post_audit' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-audit-contract
+          path: artifacts/post_audit_contract.json
           if-no-files-found: warn
 
