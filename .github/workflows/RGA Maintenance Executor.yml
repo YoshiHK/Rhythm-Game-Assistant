@@ -43,7 +43,7 @@ on:
           This is the source material for Bot #2 implementation planning.
           Used when executor_mode=plan.
         required: false
-        default: "artifacts/runtime_verifier_report.json"
+        default: "artifacts/runtime_auditor_report.json"
 
       execution_plan:
         description: >-
@@ -240,7 +240,7 @@ jobs:
           fi
 
           if [ -z "$PRE_AUDIT_REPORT" ]; then
-            PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
+            PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
           fi
 
           if [ -z "$EXECUTION_PLAN" ]; then
@@ -1727,7 +1727,7 @@ jobs:
           payload = {
               "schema": "rga.execution_lineage.v1.0",
               "flow": [
-                  "runtime_verifier_report",
+                  "runtime_auditor_report",
                   "execution_plan",
                   "apply_execution_result",
                   "post_audit",
@@ -1802,7 +1802,7 @@ jobs:
                   "Bot #2 execution",
 
               "recommended_workflow":
-                  "RGA Runtime Verifier",
+                  "RGA Runtime Auditor",
 
               "governance_note": (
                   "Post-audit should be run by Bot #1 after any "

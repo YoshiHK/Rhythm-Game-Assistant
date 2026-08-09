@@ -33,7 +33,7 @@ on:
       pre_audit_report:
         description: >
           Optional Bot #1 pre-audit report JSON path.
-          Used by post_audit for comparison against current verifier state.
+          Used by post_audit for comparison against current auditor state.
         required: false
         default: ""
 
@@ -294,7 +294,7 @@ jobs:
 
             "governance_principles": {
               "completed_phases": "immutable",
-              "verifier_mode": "read_only",
+              "auditor_mode": "read_only",
               "maintenance_mode": "advisor_only",
 
               "dependency_failures_are_not_governance_failures": true,
@@ -690,8 +690,8 @@ jobs:
           find . -type f -name "mcp_server.py" \
             | sort > artifacts/mcp_server_candidates.txt || true
 
-          find . -type f -name "runtime_verifier.py" \
-            | sort > artifacts/runtime_verifier_candidates.txt || true
+          find . -type f -name "runtime_auditor.py" \
+            | sort > artifacts/runtime_auditor_candidates.txt || true
 
           find . -type f \
             \( \
@@ -2760,7 +2760,7 @@ jobs:
               "schema":
                   "rga.governance_context.v1.2",
 
-              "verifier_mode":
+              "auditor_mode":
                   "read_only",
 
               "completed_phases":
@@ -2849,11 +2849,11 @@ jobs:
           JSON
           
       ############################################################
-      # Run RGA Runtime Verifier
+      # Run RGA Runtime Auditor
       ############################################################
 
-      - name: Run RGA Runtime Verifier
-        id: run_verifier
+      - name: Run RGA Runtime Auditor
+        id: run_auditor
         continue-on-error: true
         run: |
           set +e
@@ -2868,40 +2868,40 @@ jobs:
             audit_mode="pre_audit"
           fi
 
-          verifier_args=(
-            "tools/runtime_verifier.py"
+          auditor_args=(
+            "tools/runtime_auditor.py"
             "--repo-root" "."
             "--mcp-config" ".vscode/mcp.json"
             "--audit-mode" "${audit_mode}"
-            "--json-out" "artifacts/runtime_verifier_report.json"
-            "--md-out" "artifacts/runtime_verifier_report.md"
+            "--json-out" "artifacts/runtime_auditor_report.json"
+            "--md-out" "artifacts/runtime_auditor_report.md"
           )
 
           if [ -n "${execution_plan}" ]; then
-            verifier_args+=(
+            auditor_args+=(
               "--execution-plan" "${execution_plan}"
             )
           fi
 
           if [ -n "${pre_audit_report}" ]; then
-            verifier_args+=(
+            auditor_args+=(
               "--pre-audit-report" "${pre_audit_report}"
             )
           fi
 
-          python "${verifier_args[@]}" \
-            > artifacts/runtime_verifier_stdout.txt \
-            2> artifacts/runtime_verifier_stderr.txt
+          python "${auditor_args[@]}" \
+            > artifacts/runtime_auditor_stdout.txt \
+            2> artifacts/runtime_auditor_stderr.txt
 
-          verifier_exit_code=$?
+          auditor_exit_code=$?
 
-          echo "${verifier_exit_code}" \
-            > artifacts/runtime_verifier_exit_code.txt
+          echo "${auditor_exit_code}" \
+            > artifacts/runtime_auditor_exit_code.txt
 
-          echo "verifier_exit_code=${verifier_exit_code}" \
+          echo "auditor_exit_code=${auditor_exit_code}" \
             >> "$GITHUB_OUTPUT"
 
-          echo "RGA Runtime Verifier exited with code: ${verifier_exit_code}"
+          echo "RGA Runtime Auditor exited with code: ${auditor_exit_code}"
 
           exit 0
           
@@ -3271,15 +3271,15 @@ jobs:
           from pathlib import Path
 
           pre_audit_report = Path(
-              "artifacts/runtime_verifier_report.json"
+              "artifacts/runtime_auditor_report.json"
           )
 
           execution_plan = Path(
               "artifacts/execution_plan.json"
           )
 
-          current_runtime_verifier_report = Path(
-              "artifacts/runtime_verifier_report.json"
+          current_runtime_auditor_report = Path(
+              "artifacts/runtime_auditor_report.json"
           )
 
           payload = {
@@ -3292,7 +3292,7 @@ jobs:
               "comparison_model": [
                   "pre_audit_report",
                   "execution_plan",
-                  "current_runtime_verifier_report",
+                  "current_runtime_auditor_report",
               ],
 
               "comparison_inputs": {
@@ -3320,16 +3320,16 @@ jobs:
                           and execution_plan.stat().st_size > 0,
                   },
 
-                  "current_runtime_verifier_report": {
+                  "current_runtime_auditor_report": {
                       "path":
                           str(
-                              current_runtime_verifier_report
+                              current_runtime_auditor_report
                           ),
 
                       "available":
-                          current_runtime_verifier_report.exists()
-                          and current_runtime_verifier_report.is_file()
-                          and current_runtime_verifier_report.stat().st_size > 0,
+                          current_runtime_auditor_report.exists()
+                          and current_runtime_auditor_report.is_file()
+                          and current_runtime_auditor_report.stat().st_size > 0,
                   },
               },
 
@@ -3426,8 +3426,8 @@ jobs:
       #
       # Only pre_audit generates:
       #
-      #   runtime_verifier_report.json
-      #   runtime_verifier_report.md
+      #   runtime_auditor_report.json
+      #   runtime_auditor_report.md
       #   bundle
       #
       ############################################################
@@ -3439,15 +3439,15 @@ jobs:
           set -euo pipefail
 
           {
-            echo "RGA Runtime Verifier Artifact Bundle"
+            echo "RGA Runtime Auditor Artifact Bundle"
             echo ""
 
             echo "Generated at:"
             date -u +"%Y-%m-%dT%H:%M:%SZ"
 
             echo ""
-            echo "Verifier Exit Code:"
-            cat artifacts/runtime_verifier_exit_code.txt || true
+            echo "Auditor Exit Code:"
+            cat artifacts/runtime_auditor_exit_code.txt || true
 
             echo ""
             echo "Artifact Count:"
@@ -3514,11 +3514,11 @@ jobs:
 
           report_ok=true
 
-          if [ ! -s artifacts/runtime_verifier_report.json ]; then
+          if [ ! -s artifacts/runtime_auditor_report.json ]; then
             report_ok=false
           fi
 
-          if [ ! -s artifacts/runtime_verifier_report.md ]; then
+          if [ ! -s artifacts/runtime_auditor_report.md ]; then
             report_ok=false
           fi
 
@@ -3529,15 +3529,15 @@ jobs:
           fi
 
       ############################################################
-      # Runtime Verifier Job Summary
+      # Runtime Auditor Job Summary
       ############################################################
 
-      - name: Runtime Verifier Job Summary
+      - name: Runtime Auditor Job Summary
         if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
         shell: bash
         run: |
           {
-            echo "## RGA Runtime Verifier"
+            echo "## RGA Runtime Auditor"
             echo ""
 
             echo "### Mode"
@@ -3547,9 +3547,9 @@ jobs:
 
             echo "### Canonical Outputs"
             echo ""
-            echo "- runtime_verifier_report.json"
-            echo "- runtime_verifier_report.md"
-            echo "- runtime-verifier-report.zip"
+            echo "- runtime_auditor_report.json"
+            echo "- runtime_auditor_report.md"
+            echo "- runtime-auditor-report.zip"
             echo ""
 
           } >> "$GITHUB_STEP_SUMMARY"
@@ -3566,31 +3566,31 @@ jobs:
 
           cd artifacts
 
-          zip -r ../runtime-verifier-report.zip . || true
+          zip -r ../runtime-auditor-report.zip . || true
 
           cd ..
 
       ############################################################
-      # Upload Runtime Verifier Bundle
+      # Upload Runtime Auditor Bundle
       ############################################################
 
-      - name: Upload Runtime Verifier Bundle
+      - name: Upload Runtime Auditor Bundle
         if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
         uses: actions/upload-artifact@v4
         with:
-          name: runtime-verifier-report-zip
-          path: runtime-verifier-report.zip
+          name: runtime-auditor-report-zip
+          path: runtime-auditor-report.zip
           if-no-files-found: warn
 
       ############################################################
-      # Upload Runtime Verifier Evidence
+      # Upload Runtime Auditor Evidence
       ############################################################
 
-      - name: Upload Runtime Verifier Evidence
+      - name: Upload Runtime Auditor Evidence
         if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
         uses: actions/upload-artifact@v4
         with:
-          name: runtime-verifier-evidence
+          name: runtime-auditor-evidence
           path: artifacts/
           if-no-files-found: warn
 
