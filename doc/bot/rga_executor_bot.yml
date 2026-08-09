@@ -1,4 +1,4 @@
-schema: rga.executor_bot.v1.2
+schema: rga.executor_bot.v1.3
 
 bot_identity:
   name: RGA Executor Bot
@@ -6,9 +6,53 @@ bot_identity:
   description: Backend maintenance executor and execution-plan generator for RGA.
 
 lifecycle:
-  version: 1.2
+  version: 1.3
   status: gated_execution_phase
   proposal_only: false
+
+canonical_outputs:
+
+  bot_1_pre_audit:
+    - runtime_verifier_report.json
+    - runtime_verifier_report.md
+    - runtime-verifier-report.zip
+
+  bot_2_plan:
+    - execution_plan.json
+    - runtime_executor_report.json
+
+  bot_1_plan_audit:
+    - plan_audit_evidence.json
+
+  human_approval:
+    - human_execution_approval.json
+
+  bot_2_execute:
+    - apply_execution_result.json
+    - runtime_executor_report.json
+
+  bot_1_post_audit:
+    - post_audit_contract.json  
+
+artifact_policy:
+
+  pre_audit:
+    bundle_enabled: true
+
+  plan_audit:
+    bundle_enabled: false
+
+  post_audit:
+    bundle_enabled: false
+
+  plan:
+    bundle_enabled: false
+
+  dry_run_execute:
+    bundle_enabled: false
+
+  execute:
+    bundle_enabled: false    
 
 relationship_model:
   bot_1:
@@ -24,11 +68,10 @@ relationship_model:
 
 execution_flow:
   - bot_1_pre_audit
-  - bot_2_propose_execution_plan
-  - bot_2_dry_run_execution
+  - bot_2_plan
   - bot_1_plan_audit
   - human_approval
-  - bot_2_apply_execution
+  - bot_2_execute
   - bot_1_post_audit
 
 role:
