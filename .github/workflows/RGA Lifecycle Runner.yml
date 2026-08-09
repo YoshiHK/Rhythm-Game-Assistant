@@ -427,24 +427,24 @@ jobs:
 
               DISPATCH_INPUTS="$(
                 python3 -c '
-                import json
-                import os
+import json
+import os
 
-                payload = {
-                    "audit_mode":
-                        "pre_audit",
+payload = {
+    "audit_mode":
+        "pre_audit",
 
-                    "audit_session_id":
-                        os.environ["AUDIT_SESSION_ID"],
-                }
+    "audit_session_id":
+        os.environ["AUDIT_SESSION_ID"],
+}
 
-                print(
-                    json.dumps(
-                        payload,
-                        separators=(",", ":"),
-                    )
-                )
-                '
+print(
+    json.dumps(
+        payload,
+        separators=(",", ":"),
+    )
+)
+'
               )"
 
               ;;
@@ -456,30 +456,30 @@ jobs:
 
               DISPATCH_INPUTS="$(
                 python3 -c '
-                import json
-                import os
+import json
+import os
 
-                payload = {
-                    "executor_mode":
-                        "plan",
+payload = {
+    "executor_mode":
+        "plan",
 
-                    "audit_session_id":
-                        os.environ["AUDIT_SESSION_ID"],
+    "audit_session_id":
+        os.environ["AUDIT_SESSION_ID"],
 
-                    "pre_audit_report":
-                        os.environ.get(
-                            "PRE_AUDIT_REPORT",
-                            "",
-                        ),
-                }
+    "pre_audit_report":
+        os.environ.get(
+            "PRE_AUDIT_REPORT",
+            "",
+        ),
+}
 
-                print(
-                    json.dumps(
-                        payload,
-                        separators=(",", ":"),
-                    )
-                )
-                '
+print(
+    json.dumps(
+        payload,
+        separators=(",", ":"),
+    )
+)
+'
               )"
 
               ;;
@@ -491,30 +491,30 @@ jobs:
 
               DISPATCH_INPUTS="$(
                 python3 -c '
-                import json
-                import os
+import json
+import os
 
-                payload = {
-                    "audit_mode":
-                        "plan_audit",
+payload = {
+    "audit_mode":
+        "plan_audit",
 
-                    "audit_session_id":
-                        os.environ["AUDIT_SESSION_ID"],
+    "audit_session_id":
+        os.environ["AUDIT_SESSION_ID"],
 
-                    "execution_plan":
-                        os.environ.get(
-                            "EXECUTION_PLAN",
-                            "",
-                        ),
-                }
+    "execution_plan":
+        os.environ.get(
+            "EXECUTION_PLAN",
+            "",
+        ),
+}
 
-                print(
-                    json.dumps(
-                        payload,
-                        separators=(",", ":"),
-                    )
-                )
-                '
+print(
+    json.dumps(
+        payload,
+        separators=(",", ":"),
+    )
+)
+'
               )"
 
               ;;
@@ -544,42 +544,42 @@ jobs:
 
               DISPATCH_INPUTS="$(
                 python3 -c '
-                import json
-                import os
+import json
+import os
 
-                payload = {
-                    "executor_mode":
-                        "execute",
+payload = {
+    "executor_mode":
+        "execute",
 
-                    "audit_session_id":
-                        os.environ["AUDIT_SESSION_ID"],
+    "audit_session_id":
+        os.environ["AUDIT_SESSION_ID"],
 
-                    "execution_plan":
-                        os.environ.get(
-                            "EXECUTION_PLAN",
-                            "",
-                        ),
+    "execution_plan":
+        os.environ.get(
+            "EXECUTION_PLAN",
+            "",
+        ),
 
-                    "approval_artifact":
-                        os.environ.get(
-                            "APPROVAL_ARTIFACT",
-                            "",
-                        ),
+    "approval_artifact":
+        os.environ.get(
+            "APPROVAL_ARTIFACT",
+            "",
+        ),
 
-                    "execution_approval":
-                        os.environ.get(
-                            "EXECUTION_APPROVAL",
-                            "",
-                        ),
-                }
+    "execution_approval":
+        os.environ.get(
+            "EXECUTION_APPROVAL",
+            "",
+        ),
+}
 
-                print(
-                    json.dumps(
-                        payload,
-                        separators=(",", ":"),
-                    )
-                )
-                '
+print(
+    json.dumps(
+        payload,
+        separators=(",", ":"),
+    )
+)
+'
               )"
 
               ;;
@@ -591,36 +591,36 @@ jobs:
 
               DISPATCH_INPUTS="$(
                 python3 -c '
-                import json
-                import os
+import json
+import os
 
-                payload = {
-                    "audit_mode":
-                        "post_audit",
+payload = {
+    "audit_mode":
+        "post_audit",
 
-                    "audit_session_id":
-                        os.environ["AUDIT_SESSION_ID"],
+    "audit_session_id":
+        os.environ["AUDIT_SESSION_ID"],
 
-                    "execution_plan":
-                        os.environ.get(
-                            "EXECUTION_PLAN",
-                            "",
-                        ),
+    "execution_plan":
+        os.environ.get(
+            "EXECUTION_PLAN",
+            "",
+        ),
 
-                    "pre_audit_report":
-                        os.environ.get(
-                            "PRE_AUDIT_REPORT",
-                            "",
-                        ),
-                }
+    "pre_audit_report":
+        os.environ.get(
+            "PRE_AUDIT_REPORT",
+            "",
+        ),
+}
 
-                print(
-                    json.dumps(
-                        payload,
-                        separators=(",", ":"),
-                    )
-                )
-                '
+print(
+    json.dumps(
+        payload,
+        separators=(",", ":"),
+    )
+)
+'
               )"
 
               ;;
@@ -915,117 +915,117 @@ jobs:
           set -euo pipefail
 
           python3 -c '
-          import json
-          import os
+import json
+import os
 
-          from pathlib import Path
-          from datetime import (
-              datetime,
-              timezone,
+from pathlib import Path
+from datetime import (
+  datetime,
+  timezone,
+)
+
+current_stage = os.environ.get(
+  "RESOLVED_STAGE",
+  "",
+)
+
+next_stage = os.environ.get(
+  "NEXT_STAGE",
+  "",
+)
+
+payload = {
+
+  "schema":
+      "rga.lifecycle_event.v1.0",
+
+  "generated_at":
+      datetime.now(
+          timezone.utc
+      ).replace(
+          microsecond=0
+      ).isoformat(),
+
+  "audit_session_id":
+      os.environ.get(
+          "AUDIT_SESSION_ID",
+          "",
+      ),
+
+  "trigger_source":
+      os.environ.get(
+          "TRIGGER_SOURCE",
+          "",
+      ),
+
+  "completed_stage":
+      current_stage,
+
+  "next_stage":
+      next_stage,
+
+  "dispatch_required":
+      (
+          os.environ.get(
+              "DISPATCH_REQUIRED",
+              "false",
           )
+          == "true"
+      ),
 
-          current_stage = os.environ.get(
-              "RESOLVED_STAGE",
-              "",
+  "workflow_file":
+      (
+          os.environ.get(
+              "WORKFLOW_FILE"
           )
+          or None
+      ),
 
-          next_stage = os.environ.get(
-              "NEXT_STAGE",
-              "",
-          )
+  "event_contract": {
 
-          payload = {
+      "completed_stage_declared":
+          True,
 
-              "schema":
-                  "rga.lifecycle_event.v1.0",
+      "next_stage_declared":
+          True,
 
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
+      "artifact_guessing_required":
+          False,
 
-              "audit_session_id":
-                  os.environ.get(
-                      "AUDIT_SESSION_ID",
-                      "",
-                  ),
+      "runner_must_infer_stage":
+          False,
+  },
 
-              "trigger_source":
-                  os.environ.get(
-                      "TRIGGER_SOURCE",
-                      "",
-                  ),
+  "governance": {
 
-              "completed_stage":
-                  current_stage,
+      "bot_1_role":
+          "auditor",
 
-              "next_stage":
-                  next_stage,
+      "bot_2_role":
+          "planner_executor",
 
-              "dispatch_required":
-                  (
-                      os.environ.get(
-                          "DISPATCH_REQUIRED",
-                          "false",
-                      )
-                      == "true"
-                  ),
+      "approval_authority":
+          "human",
 
-              "workflow_file":
-                  (
-                      os.environ.get(
-                          "WORKFLOW_FILE"
-                      )
-                      or None
-                  ),
+      "human_approval_required":
+          True,
 
-              "event_contract": {
+      "completed_phases_remain_immutable":
+          True,
+  },
+}
 
-                  "completed_stage_declared":
-                      True,
-
-                  "next_stage_declared":
-                      True,
-
-                  "artifact_guessing_required":
-                      False,
-
-                  "runner_must_infer_stage":
-                      False,
-              },
-
-              "governance": {
-
-                  "bot_1_role":
-                      "auditor",
-
-                  "bot_2_role":
-                      "planner_executor",
-
-                  "approval_authority":
-                      "human",
-
-                  "human_approval_required":
-                      True,
-
-                  "completed_phases_remain_immutable":
-                      True,
-              },
-          }
-
-          Path(
-              "artifacts/lifecycle_event.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          '    
+Path(
+  "artifacts/lifecycle_event.json"
+).write_text(
+  json.dumps(
+      payload,
+      indent=2,
+      ensure_ascii=False,
+  ),
+  encoding="utf-8",
+)
+'    
           
       ############################################################
       # Validate Lifecycle Event Contract
@@ -1067,65 +1067,65 @@ jobs:
 
           VALIDATION_RESULT="$(
             python3 -c '
-            import json
-            import pathlib
-            import sys
+import json
+import pathlib
+import sys
 
-            event_file = pathlib.Path(sys.argv[1])
+event_file = pathlib.Path(sys.argv[1])
 
-            data = json.loads(
-                event_file.read_text(
-                    encoding="utf-8"
-                )
-            )
+data = json.loads(
+    event_file.read_text(
+        encoding="utf-8"
+    )
+)
 
-            completed_stage = data.get(
-                "completed_stage",
-                "",
-            )
+completed_stage = data.get(
+    "completed_stage",
+    "",
+)
 
-            next_stage = data.get(
-                "next_stage",
-                "",
-            )
+next_stage = data.get(
+    "next_stage",
+    "",
+)
 
-            allowed = {
+allowed = {
 
-                "pre_audit":
-                    ["plan"],
+    "pre_audit":
+        ["plan"],
 
-                "plan":
-                    ["plan_audit"],
+    "plan":
+        ["plan_audit"],
 
-                "plan_audit":
-                    ["human_approval"],
+    "plan_audit":
+        ["human_approval"],
 
-                "human_approval":
-                    ["execute"],
+    "human_approval":
+        ["execute"],
 
-                "execute":
-                    ["post_audit"],
+    "execute":
+        ["post_audit"],
 
-                "post_audit":
-                    ["complete"],
+    "post_audit":
+        ["complete"],
 
-                "complete":
-                    [],
+    "complete":
+        [],
 
-                "halted":
-                    [],
-            }
+    "halted":
+        [],
+}
 
-            if completed_stage not in allowed:
-                print("INVALID")
-                sys.exit(0)
+if completed_stage not in allowed:
+    print("INVALID")
+    sys.exit(0)
 
-            if next_stage not in allowedprint("INVALID")
-                sys.exit(0)
+if next_stage not in allowedprint("INVALID")
+    sys.exit(0)
 
-            print("VALID")
-            ' "$EVENT_FILE"
-                      )"
+print("VALID")
+' "$EVENT_FILE"
+          )"
 
           if [ "$VALIDATION_RESULT" != "VALID" ]; then
 
@@ -1143,7 +1143,7 @@ jobs:
 
           fi
 
-          echo "Lifecycle Event Contract validation passed."          
+          echo "Lifecycle Event Contract validation passed."        
 
       ############################################################
       # Lifecycle Summary
