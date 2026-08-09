@@ -3575,23 +3575,32 @@ jobs:
       #
       # Bot #1 Runtime Auditor
       #
-      # Supported stages:
+      # Supported audit modes:
       #
       #   pre_audit
       #   plan_audit
       #   post_audit
       #
+      # Canonical output:
+      #
+      #   artifacts/lifecycle_event.json
       ############################################################
 
       - name: Write Lifecycle Event Contract
         shell: bash
+        env:
+          AUDIT_MODE: ${{ inputs.audit_mode }}
+          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
         run: |
           set -euo pipefail
 
+          mkdir -p artifacts
+
           EVENT_STAGE=""
           NEXT_STAGE=""
+          DISPATCH_REQUIRED="true"
 
-          case "${AUDIT_MODE}" in
+          case "$AUDIT_MODE" in
 
             pre_audit)
 
@@ -3611,23 +3620,28 @@ jobs:
 
               EVENT_STAGE="post_audit"
               NEXT_STAGE="complete"
+              DISPATCH_REQUIRED="false"
 
               ;;
 
             *)
 
-              echo "Unsupported audit mode: ${AUDIT_MODE}" >&2
+              echo "Unsupported AUDIT_MODE: $AUDIT_MODE" >&2
               exit 1
 
               ;;
 
           esac
 
+          export EVENT_STAGE
+          export NEXT_STAGE
+          export DISPATCH_REQUIRED
+
           python3 -c '
 import json
 import os
-from datetime import datetime, timezone
 from pathlib import Path
+from datetime import datetime, timezone
 
 payload = {
 
@@ -3641,31 +3655,47 @@ payload = {
             microsecond=0
         ).isoformat(),
 
+    "producer":
+        "runtime_auditor",
+
     "audit_session_id":
         os.environ.get(
             "AUDIT_SESSION_ID",
             "",
         ),
 
-    "producer":
-        "runtime_auditor",
+    "audit_mode":
+        os.environ.get(
+            "AUDIT_MODE",
+            "",
+        ),
 
     "completed_stage":
-        os.environ[
-            "EVENT_STAGE"
-        ],
+        os.environ["EVENT_STAGE"],
 
     "next_stage":
-        os.environ[
-            "NEXT_STAGE"
-        ],
+        os.environ["NEXT_STAGE"],
 
     "dispatch_required":
         (
-            os.environ[
-                "NEXT_STAGE"
-            ] != "complete"
+            os.environ["DISPATCH_REQUIRED"]
+            == "true"
         ),
+
+    "event_contract": {
+
+        "completed_stage_declared":
+            True,
+
+        "next_stage_declared":
+            True,
+
+        "artifact_guessing_required":
+            False,
+
+        "runner_must_infer_stage":
+            False,
+    },
 }
 
 Path(
@@ -3678,9 +3708,7 @@ Path(
     ),
     encoding="utf-8",
 )
-' \
-          EVENT_STAGE="$EVENT_STAGE" \
-          NEXT_STAGE="$NEXT_STAGE"          
+'     
           
       ############################################################
       # Upload Lifecycle Event

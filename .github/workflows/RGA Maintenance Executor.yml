@@ -1848,22 +1848,32 @@ jobs:
       #
       # Bot #2 Maintenance Executor
       #
-      # Supported modes:
+      # Supported executor modes:
       #
       #   plan
       #   execute
+      #   dry_run_execute
       #
+      # Canonical output:
+      #
+      #   artifacts/lifecycle_event.json
       ############################################################
 
       - name: Write Lifecycle Event Contract
         shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
         run: |
           set -euo pipefail
 
+          mkdir -p artifacts
+
           EVENT_STAGE=""
           NEXT_STAGE=""
+          DISPATCH_REQUIRED="true"
 
-          case "${EXECUTOR_MODE}" in
+          case "$EXECUTOR_MODE" in
 
             plan)
 
@@ -1888,66 +1898,89 @@ jobs:
 
             *)
 
-              echo "Unsupported*executor mode: ${EXECUTOR_MODE}" >*2
+              echo "Unsupported EXECUTOR_MODE: $EXECUTOR_MODE" >&2
               exit 1
 
-          *   ;;
+              ;;
 
           esac
 
-          p*thon3 -c '
+          export EVENT_STAGE
+          export NEXT_STAGE
+          export DISPATCH_REQUIRED
+
+          python3 -c '
 import json
 import os
-f*om datetime import datetime, timez*ne
 from pathlib import Path
+from datetime import datetime, timezone
 
-paylo*d = {
+payload = {
 
     "schema":
-        "rga.*ifecycle_event.v1.0",
+        "rga.lifecycle_event.v1.0",
 
-    "genera*ed_at":
+    "generated_at":
         datetime.now(
-    *       timezone.utc
-        ).repl*ce(
+            timezone.utc
+        ).replace(
             microsecond=0
-    *   ).isoformat(),
+        ).isoformat(),
 
-    "audit_sess*on_id":
+    "producer":
+        "maintenance_executor",
+
+    "audit_session_id":
         os.environ.get(
-  *         "AUDIT_SESSION_ID",
-     *      "",
+            "AUDIT_SESSION_ID",
+            "",
         ),
 
-    "produce*":
-        "maintenance_executor",*
+    "executor_mode":
+        os.environ.get(
+            "EXECUTOR_MODE",
+            "",
+        ),
+
     "completed_stage":
-        os*environ[
-            "EVENT_STAGE"
-        ],
+        os.environ["EVENT_STAGE"],
 
     "next_stage":
-    *   os.environ[
-            "NEXT_STAGE"
-        ],
+        os.environ["NEXT_STAGE"],
 
-    "dispatch_req*ired":
-        True,
+    "dispatch_required":
+        (
+            os.environ["DISPATCH_REQUIRED"]
+            == "true"
+        ),
+
+    "event_contract": {
+
+        "completed_stage_declared":
+            True,
+
+        "next_stage_declared":
+            True,
+
+        "artifact_guessing_required":
+            False,
+
+        "runner_must_infer_stage":
+            False,
+    },
 }
 
 Path(
-    *artifacts/lifecycle_event.json"
-).*rite_text(
+    "artifacts/lifecycle_event.json"
+).write_text(
     json.dumps(
-       *payload,
+        payload,
         indent=2,
-       *ensure_ascii=False,
+        ensure_ascii=False,
     ),
-    enc*ding="utf-8",
+    encoding="utf-8",
 )
-' \
-          EVEN*_STAGE="$EVENT_STAGE" \
-          *EXT_STAGE="$NEXT_STAGE"          
+'   
           
       ############################################################
       # Upload Lifecycle Event
