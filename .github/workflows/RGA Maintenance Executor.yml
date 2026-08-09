@@ -97,38 +97,44 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          cat > artifacts/maintenance_lifecycle_context.json <<'JSON'
-          {
-            "schema": "rga.maintenance_lifecycle_context.v1.0",
-            "workflow": "RGA Maintenance Executor",
-            "bot": "rga_executor_bot",
-            "bot_role": "planner_executor",
-            "lifecycle_model": [
-              "bot_1_pre_audit",
-              "bot_2_implementation_plan",
-              "bot_1_plan_audit",
-              "human_approval",
-              "bot_2_execute",
-              "bot_1_post_audit"
-            ],
-            "authority": {
-              "bot_2_may_plan": true,
-              "bot_2_may_execute": true,
-              "bot_2_may_approve": false,
-              "bot_2_may_self_approve": false,
-              "human_approval_required": true
-            },
-            "phase_boundary_policy": {
-              "completed_phases_immutable": true,
-              "canonical_row_modification_allowed": false,
-              "pattern_logic_modification_allowed": false,
-              "tips_generation_modification_allowed": false,
-              "personalization_modification_allowed": false,
-              "localization_modification_allowed": false,
-              "recommendation_logic_modification_allowed": false
-            }
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.maintenance_lifecycle_context.v1.0",
+              "workflow": "RGA Maintenance Executor",
+              "bot": "rga_executor_bot",
+              "bot_role": "planner_executor",
+              "lifecycle_model": [
+                  "bot_1_pre_audit",
+                  "bot_2_implementation_plan",
+                  "bot_1_plan_audit",
+                  "human_approval",
+                  "bot_2_execute",
+                  "bot_1_post_audit",
+              ],
+              "authority": {
+                  "bot_2_may_plan": True,
+                  "bot_2_may_execute": True,
+                  "bot_2_may_approve": False,
+                  "bot_2_may_self_approve": False,
+                  "human_approval_required": True,
+              },
+              "phase_boundary_policy": {
+                  "completed_phases_immutable": True,
+                  "canonical_row_modification_allowed": False,
+                  "pattern_logic_modification_allowed": False,
+                  "tips_generation_modification_allowed": False,
+                  "personalization_modification_allowed": False,
+                  "localization_modification_allowed": False,
+                  "recommendation_logic_modification_allowed": False,
+              },
           }
-          JSON
+          Path("artifacts/maintenance_lifecycle_context.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Execution Gate
@@ -148,14 +154,20 @@ jobs:
             REASON="Approval artifact missing"
           fi
 
-          cat > artifacts/execution_gate.json <<JSON
-          {
-            "schema": "rga.execution_gate.v1.0",
-            "requested_mode": "$MODE",
-            "status": "$STATUS",
-            "reason": "$REASON"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_gate.v1.0",
+              "requested_mode": "$MODE",
+              "status": "$STATUS",
+              "reason": "$REASON",
           }
-          JSON
+          Path("artifacts/execution_gate.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Human Approval Artifact Verification
@@ -560,21 +572,24 @@ jobs:
           ########################################################
 
           if [ ! -s artifacts/runtime_executor_report.md ]; then
-            cat > artifacts/runtime_executor_report.md <<'MD'
-            # RGA Runtime Executor Report
+            python - <<'PY'
+            from pathlib import Path
+            content = """# RGA Runtime Executor Report
 
-            ## Fallback Report
+## Fallback Report
 
-            `runtime_executor.py` did not emit a non-empty Markdown report.
+`runtime_executor.py` did not emit a non-empty Markdown report.
 
-            See:
+See:
 
-            - `runtime_executor_report.json`
-            - `runtime_executor_stdout.txt`
-            - `runtime_executor_stderr.txt`
-            - `runtime_executor_stderr_summary.json`
-            - `runtime_executor_exit_code.txt`
-            MD
+- `runtime_executor_report.json`
+- `runtime_executor_stdout.txt`
+- `runtime_executor_stderr.txt`
+- `runtime_executor_stderr_summary.json`
+- `runtime_executor_exit_code.txt`
+"""
+            Path("artifacts/runtime_executor_report.md").write_text(content, encoding="utf-8")
+            PY
 
           ########################################################
           # Step outcome
@@ -713,30 +728,26 @@ jobs:
       - name: Execution Scope Verification
         if: always()
         run: |
-          cat > artifacts/execution_scope_verification.json <<'JSON'
-          {
-            "schema":
-              "rga.execution_scope_verification.v1.0",
-
-            "protected_scopes": [
-
-              "canonical_row",
-
-              "pattern_logic",
-
-              "tips_generation",
-
-              "personalization",
-
-              "localization",
-
-              "recommendation_logic"
-            ],
-
-            "completed_phases_immutable":
-              true
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_scope_verification.v1.0",
+              "protected_scopes": [
+                  "canonical_row",
+                  "pattern_logic",
+                  "tips_generation",
+                  "personalization",
+                  "localization",
+                  "recommendation_logic",
+              ],
+              "completed_phases_immutable": True,
           }
-          JSON
+          Path("artifacts/execution_scope_verification.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Execution Policy Verification
@@ -745,30 +756,23 @@ jobs:
       - name: Execution Policy Verification
         if: always()
         run: |
-          cat > artifacts/execution_policy_verification.json <<'JSON'
-          {
-            "schema":
-              "rga.execution_policy_verification.v1.0",
-
-            "execution_authority":
-              true,
-
-            "approval_authority":
-              false,
-
-            "self_approval":
-              false,
-
-            "human_approval_required":
-              true,
-
-            "plan_audit_required":
-              true,
-
-            "post_audit_required":
-              true
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_policy_verification.v1.0",
+              "execution_authority": True,
+              "approval_authority": False,
+              "self_approval": False,
+              "human_approval_required": True,
+              "plan_audit_required": True,
+              "post_audit_required": True,
           }
-          JSON
+          Path("artifacts/execution_policy_verification.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
           
 
       ############################################################
@@ -1428,14 +1432,20 @@ jobs:
 
           if [ "$pr_required" != "true" ]; then
             echo "Pull request not required."
-            cat > artifacts/execution_pull_request_result.json <<'JSON'
-          {
-            "schema": "rga.execution_pull_request_result.v1.0",
-            "pull_request_attempted": false,
-            "pull_request_created": false,
-            "reason": "Pull request not required."
-          }
-          JSON
+            python - <<'PY'
+            import json
+            from pathlib import Path
+            payload = {
+                "schema": "rga.execution_pull_request_result.v1.0",
+                "pull_request_attempted": False,
+                "pull_request_created": False,
+                "reason": "Pull request not required.",
+            }
+            Path("artifacts/execution_pull_request_result.json").write_text(
+                json.dumps(payload, indent=2),
+                encoding="utf-8",
+            )
+            PY
             exit 0
           fi
 
@@ -1549,17 +1559,23 @@ jobs:
       - name: Execution Lineage
         if: always()
         run: |
-          cat > artifacts/execution_lineage.json <<'JSON'
-          {
-            "schema": "rga.execution_lineage.v1.0",
-            "flow": [
-              "runtime_verifier_report",
-              "execution_plan",
-              "apply_execution_result",
-              "post_audit"
-            ]
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_lineage.v1.0",
+              "flow": [
+                  "runtime_verifier_report",
+                  "execution_plan",
+                  "apply_execution_result",
+                  "post_audit",
+              ],
           }
-          JSON
+          Path("artifacts/execution_lineage.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Automatic Post-Audit Trigger
@@ -1651,13 +1667,19 @@ jobs:
       - name: Rollback Evidence
         if: always()
         run: |
-          cat > artifacts/rollback_evidence.json <<'JSON'
-          {
-            "schema": "rga.rollback_evidence.v1.0",
-            "rollback_available": true,
-            "strategy": "restore generated executor artifacts"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.rollback_evidence.v1.0",
+              "rollback_available": True,
+              "strategy": "restore generated executor artifacts",
           }
-          JSON
+          Path("artifacts/rollback_evidence.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
 
       ############################################################
       # Execution Bundle Manifest
