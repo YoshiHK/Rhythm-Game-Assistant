@@ -3569,6 +3569,152 @@ jobs:
           zip -r ../runtime-auditor-report.zip . || true
 
           cd ..
+          
+      ############################################################
+      # Write Lifecycle Event Contract
+      #
+      # Bot #1 Runtime Auditor
+      #
+      # Supported stages:
+      #
+      #   pre_audit
+      #   plan_audit
+      #   post_audit
+      #
+      ############################################################
+
+      - name: Write Lifecycle Event Contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EVENT_STAGE=""
+          NEXT_STAGE=""
+
+          case "${AUDIT_MODE}" in
+
+            pre_audit)
+
+              EVENT_STAGE="pre_audit"
+              NEXT_STAGE="plan"
+
+              ;;
+
+            plan_audit)
+
+              EVENT_STAGE="plan_audit"
+              NEXT_STAGE="human_approval"
+
+              ;;
+
+            post_audit)
+
+              EVENT_STAGE="post_audit"
+              NEXT_STAGE="complete"
+
+              ;;
+
+            *)
+
+              echo "Unsupported audit mode: ${AUDIT_MODE}" >&2
+              exit 1
+
+              ;;
+
+          esac
+
+          python3 -c '
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+payload = {
+
+    "schema":
+        "rga.lifecycle_event.v1.0",
+
+    "generated_at":
+        datetime.now(
+            timezone.utc
+        ).replace(
+            microsecond=0
+        ).isoformat(),
+
+    "audit_session_id":
+        os.environ.get(
+            "AUDIT_SESSION_ID",
+            "",
+        ),
+
+    "producer":
+        "runtime_auditor",
+
+    "completed_stage":
+        os.environ[
+            "EVENT_STAGE"
+        ],
+
+    "next_stage":
+        os.environ[
+            "NEXT_STAGE"
+        ],
+
+    "dispatch_required":
+        (
+            os.environ[
+                "NEXT_STAGE"
+            ] != "complete"
+        ),
+}
+
+Path(
+    "artifacts/lifecycle_event.json"
+).write_text(
+    json.dumps(
+        payload,
+        indent=2,
+        ensure_ascii=False,
+    ),
+    encoding="utf-8",
+)
+' \
+          EVENT_STAGE="$EVENT_STAGE" \
+          NEXT_STAGE="$NEXT_STAGE"          
+          
+      ############################################################
+      # Upload Lifecycle Event
+      #
+      # Purpose:
+      #
+      #   Publishes lifecycle_event.json as the canonical
+      #   stage-transition contract for the RGA Lifecycle Runner.
+      #
+      # Produced by:
+      #
+      #   Bot #2 Maintenance Executor
+      #
+      # Expected completed_stage values:
+      #
+      #   plan
+      #   execute
+      #
+      # Optional testing mode:
+      #
+      #   dry_run_execute
+      #
+      # Canonical output:
+      #
+      #   artifacts/lifecycle_event.json
+      ############################################################
+
+      - name: Upload Lifecycle Event
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-lifecycle-event
+          path: artifacts/lifecycle_event.json
+          if-no-files-found: warn          
 
       ############################################################
       # Upload Runtime Auditor Bundle

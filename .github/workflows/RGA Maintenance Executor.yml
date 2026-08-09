@@ -1842,6 +1842,146 @@ jobs:
               encoding="utf-8",
           )
           PY
+          
+      ############################################################
+      # Write Lifecycle Event Contract
+      #
+      # Bot #2 Maintenance Executor
+      #
+      # Supported modes:
+      #
+      #   plan
+      #   execute
+      #
+      ############################################################
+
+      - name: Write Lifecycle Event Contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EVENT_STAGE=""
+          NEXT_STAGE=""
+
+          case "${EXECUTOR_MODE}" in
+
+            plan)
+
+              EVENT_STAGE="plan"
+              NEXT_STAGE="plan_audit"
+
+              ;;
+
+            execute)
+
+              EVENT_STAGE="execute"
+              NEXT_STAGE="post_audit"
+
+              ;;
+
+            dry_run_execute)
+
+              EVENT_STAGE="execute"
+              NEXT_STAGE="post_audit"
+
+              ;;
+
+            *)
+
+              echo "Unsupported*executor mode: ${EXECUTOR_MODE}" >*2
+              exit 1
+
+          *   ;;
+
+          esac
+
+          p*thon3 -c '
+import json
+import os
+f*om datetime import datetime, timez*ne
+from pathlib import Path
+
+paylo*d = {
+
+    "schema":
+        "rga.*ifecycle_event.v1.0",
+
+    "genera*ed_at":
+        datetime.now(
+    *       timezone.utc
+        ).repl*ce(
+            microsecond=0
+    *   ).isoformat(),
+
+    "audit_sess*on_id":
+        os.environ.get(
+  *         "AUDIT_SESSION_ID",
+     *      "",
+        ),
+
+    "produce*":
+        "maintenance_executor",*
+    "completed_stage":
+        os*environ[
+            "EVENT_STAGE"
+        ],
+
+    "next_stage":
+    *   os.environ[
+            "NEXT_STAGE"
+        ],
+
+    "dispatch_req*ired":
+        True,
+}
+
+Path(
+    *artifacts/lifecycle_event.json"
+).*rite_text(
+    json.dumps(
+       *payload,
+        indent=2,
+       *ensure_ascii=False,
+    ),
+    enc*ding="utf-8",
+)
+' \
+          EVEN*_STAGE="$EVENT_STAGE" \
+          *EXT_STAGE="$NEXT_STAGE"          
+          
+      ############################################################
+      # Upload Lifecycle Event
+      #
+      # Purpose:
+      #
+      #   Publishes lifecycle_event.json as the canonical
+      #   stage-transition contract for the RGA Lifecycle Runner.
+      #
+      # Produced by:
+      #
+      #   Bot #2 Maintenance Executor
+      #
+      # Expected completed_stage values:
+      #
+      #   plan
+      #   execute
+      #
+      # Optional testing mode:
+      #
+      #   dry_run_execute
+      #
+      # Canonical output:
+      #
+      #   artifacts/lifecycle_event.json
+      ############################################################
+
+      - name: Upload Lifecycle Event
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-lifecycle-event
+          path: artifacts/lifecycle_event.json
+          if-no-files-found: warn          
 
       ############################################################
       # Upload Plan Evidence
