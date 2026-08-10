@@ -875,7 +875,12 @@ jobs:
             echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
             echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
             echo "- Current stage: \`${RESOLVED_STAGE:-}\`"
-            echo "- Next stage: \`${NEXT_STAGE:-}\`"
+            if [ -n "${NEXT_STAGE:-}" ]; then
+              echo "- Next stage: ${NEXT_STAGE}"
+            fi
+            if [ -n "${LIFECYCLE_STATUS:-}" ]; then
+              echo "- Lifecycle status: ${LIFECYCLE_STATUS}"
+            fi
             echo "- Dispatch required: \`${DISPATCH_REQUIRED:-}\`"
             echo "- Workflow file: \`${WORKFLOW_FILE:-none}\`"
             echo ""
@@ -929,7 +934,15 @@ jobs:
 
             echo "Dispatch not required."
             echo "Resolved stage: ${RESOLVED_STAGE:-unknown}"
-            echo "Next stage: ${NEXT_STAGE:-unknown}"
+            
+            if [ -n "${NEXT_STAGE:-}" ]; then
+              echo "Next stage: ${NEXT_STAGE}"
+
+            else
+              echo "Next stage: (none)"
+
+            fi
+            
             echo "Reason: ${LIFECYCLE_REASON:-none}"
 
             exit 0
