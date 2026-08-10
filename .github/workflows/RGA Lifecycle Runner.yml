@@ -88,6 +88,7 @@ jobs:
           MANUAL_APPROVAL_ARTIFACT: ${{ github.event.inputs.approval_artifact }}
           MANUAL_EXECUTION_APPROVAL: ${{ github.event.inputs.execution_approval }}
           TRIGGERING_WORKFLOW: ${{ github.event.workflow_run.name }}
+          TRIGGERING_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
           TRIGGERING_RUN_ID: ${{ github.event.workflow_run.id }}
           TRIGGERING_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           TRIGGERING_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
@@ -115,22 +116,30 @@ jobs:
             EXECUTION_APPROVAL="${MANUAL_EXECUTION_APPROVAL:-}"
             TRIGGER_SOURCE="manual"
 
+            # Fresh timestamp session for manual dispatches if not explicitly supplied
+            if [ -z "$AUDIT_SESSION_ID" ]; then
+              AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+            fi
+
           else
 
             STAGE="auto_detect"
             # Fallback priority: Upstream event head branch -> GitHub default ref -> main
             REF_INPUT="${TRIGGERING_HEAD_BRANCH:-${DEFAULT_REF:-main}}"
-            AUDIT_SESSION_ID=""
+            
+            # Deterministic fallback anchored to upstream run ID to prevent session ID drift
+            if [ -n "${TRIGGERING_RUN_ID:-}" ]; then
+              AUDIT_SESSION_ID="rga-session-${TRIGGERING_RUN_ID}"
+            else
+              AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+            fi
+
             PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
             EXECUTION_PLAN="artifacts/execution_plan.json"
             APPROVAL_ARTIFACT="artifacts/human_execution_approval.json"
             EXECUTION_APPROVAL=""
             TRIGGER_SOURCE="workflow_run"
 
-          fi
-
-          if [ -z "$AUDIT_SESSION_ID" ]; then
-            AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
           fi
 
           CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit"
@@ -149,10 +158,12 @@ jobs:
             echo "EXECUTION_APPROVAL=$EXECUTION_APPROVAL"
             echo "TRIGGER_SOURCE=$TRIGGER_SOURCE"
             echo "TRIGGERING_WORKFLOW=$TRIGGERING_WORKFLOW"
+            echo "TRIGGERING_WORKFLOW_ID=$TRIGGERING_WORKFLOW_ID"
             echo "TRIGGERING_RUN_ID=$TRIGGERING_RUN_ID"
             echo "TRIGGERING_CONCLUSION=$TRIGGERING_CONCLUSION"
             echo "CANONICAL_LIFECYCLE=$CANONICAL_LIFECYCLE"
           } >> "$GITHUB_ENV"
+
 
 
       ############################################################
