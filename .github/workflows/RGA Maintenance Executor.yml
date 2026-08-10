@@ -16,8 +16,8 @@ on:
 
           execute:
           Apply gated execution after Bot #1 plan-audit and human approval.
-        required: true
-        default: "dry_run_execute"
+        required: false
+        default: "plan"
         type: choice
         options:
           - plan
@@ -135,7 +135,6 @@ Path("artifacts/maintenance_lifecycle_context.json").write_text(
     encoding="utf-8",
 )
 PY
-
       ############################################################
       # Execution Gate
       ############################################################
