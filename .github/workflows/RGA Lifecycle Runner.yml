@@ -47,9 +47,6 @@ on:
         description: Approval phrase for execute stage. Required only when lifecycle_stage=execute.
         required: false
         default: ""
-        # Expected value: APPROVE_RGA_EXECUTION
-
-        
 
   workflow_run:
     workflows:
