@@ -203,29 +203,6 @@ on:
     types:
       - completed
 
-  ##############################################################
-  # Contract Driven Lifecycle Continuation
-  #
-  # Consumes lifecycle_event.json and lifecycle_backhaul.json
-  # produced by:
-  #
-  #   Bot #1 Runtime Auditor
-  #   Bot #2 Maintenance Executor
-  #
-  # Chronology owner:
-  #
-  #   RGA Lifecycle Runner
-  #
-  # Bot workflows must NOT dispatch the Runner directly.
-  ##############################################################
-
-  workflow_run:
-    workflows:
-      - RGA Runtime Auditor
-      - RGA Maintenance Executor
-    types:
-      - completed
-
 permissions:
   actions: write
   contents: read
