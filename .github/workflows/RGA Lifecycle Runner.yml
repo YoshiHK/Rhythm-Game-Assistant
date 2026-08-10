@@ -540,7 +540,7 @@ jobs:
           COMPLETED_STAGES='[]'
           COMPLETED_COUNT=0
           PROGRESS_PERCENT=0
-          
+
           LIFECYCLE_STATUS="running"
 
           case "${RESOLVED_STAGE}" in
@@ -580,12 +580,11 @@ jobs:
               COMPLETED_COUNT=6
               PROGRESS_PERCENT=100.00
               ;;
-              
-            complete)  
+
+            complete)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
               COMPLETED_COUNT=6
-              PROGRESS_PERCENT=100.00     
-              
+              PROGRESS_PERCENT=100.00
               LIFECYCLE_STATUS="complete"
               ;;
 
@@ -599,33 +598,71 @@ jobs:
             --arg trigger_conc "${TRIGGERING_CONCLUSION}" \
             --arg current "${RESOLVED_STAGE}" \
             --arg next "${NEXT_STAGE}" \
+            --arg status "${LIFECYCLE_STATUS}" \
             --argjson completed "${COMPLETED_STAGES}" \
             --argjson dispatch ${DISPATCH_REQUIRED:-false} \
             --arg wf "${WORKFLOW_FILE}" \
-            --arg status "${LIFECYCLE_STATUS}"
             --arg reason "${LIFECYCLE_REASON}" \
             --argjson count ${COMPLETED_COUNT} \
             --argjson progress ${PROGRESS_PERCENT} \
             '{
-              schema: "rga.lifecycle_state.v1.2",
+              schema: "rga.lifecycle_state.v1.3",
+
               audit_session_id: $session,
+
               trigger_source: $trigger_src,
+
               triggering_workflow: $trigger_wf,
+
               triggering_run_id: $trigger_run,
+
               triggering_conclusion: $trigger_conc,
+
               current_stage: $current,
-              next_stage: $next,
-              completed_stages: $completed,
-              dispatch_required: $dispatch,
-              workflow_file: $wf,
-              lifecycle_status: $status,
-              reason: $reason,
-              canonical_lifecycle: ["pre_audit", "plan", "plan_audit", "human_approval", "execute", "post_audit"],
+
+              next_stage:
+                (
+                  if $next == ""
+                  then null
+                  else $next
+                  end
+                ),
+
+              lifecycle_status:
+                $status,
+
+              completed_stages:
+                $completed,
+
+              dispatch_required:
+                $dispatch,
+
+              workflow_file:
+                (
+                  if $wf == ""
+                  then null
+                  else $wf
+                  end
+                ),
+
+              reason:
+                $reason,
+
+              canonical_lifecycle: [
+                "pre_audit",
+                "plan",
+                "plan_audit",
+                "human_approval",
+                "execute",
+                "post_audit"
+              ],
+
               lifecycle_progress: {
                 stage_count: 6,
                 completed_count: $count,
                 progress_percent: $progress
               },
+
               governance: {
                 human_approval_required_for_execute: true,
                 completed_phases_remain_immutable: true,
@@ -634,6 +671,7 @@ jobs:
                 bot_2_role: "planner_executor",
                 approval_authority: "human"
               },
+
               policy: {
                 runner_does_not_audit: true,
                 runner_does_not_execute: true,
@@ -837,15 +875,40 @@ jobs:
           set -euo pipefail
 
           ########################################################
+          # Terminal lifecycle states
+          ########################################################
+
+          if [ "${RESOLVED_STAGE:-}" = "complete" ]; then
+
+            echo "Lifecycle complete."
+            echo "No dispatch required."
+
+            exit 0
+
+          fi
+
+          if [ "${RESOLVED_STAGE:-}" = "halted" ]; then
+
+            echo "Lifecycle halted."
+            echo "No dispatch required."
+
+            exit 0
+
+          fi
+
+          ########################################################
           # Dispatch gate
           ########################################################
 
           if [ "${DISPATCH_REQUIRED:-false}" != "true" ]; then
+
             echo "Dispatch not required."
             echo "Resolved stage: ${RESOLVED_STAGE:-unknown}"
             echo "Next stage: ${NEXT_STAGE:-unknown}"
             echo "Reason: ${LIFECYCLE_REASON:-none}"
+
             exit 0
+
           fi
 
           ########################################################
@@ -857,7 +920,7 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${DISPATCH_INPUTS_VAR:-}" ]; then
+          if [ -z "${DISPATCH_INPUTS:-}" ] || [ "${DISPATCH_INPUTS:-}" = "{}" ]; then
             echo "DISPATCH_INPUTS is empty but dispatch was required." >&2
             exit 1
           fi
@@ -872,7 +935,7 @@ jobs:
           ########################################################
 
           if ! command -v jq >/dev/null 2>&1; then
-            echo "jq is required for payload construction and URL encoding." >&2
+            echo "jq is required." >&2
             exit 1
           fi
 
@@ -881,19 +944,18 @@ jobs:
           ########################################################
 
           ENCODED_WORKFLOW="$(
-            printf '%s' "$WORKFLOW_FILE" \
-              | jq -sRr @uri
+            printf '%s' "$WORKFLOW_FILE" | jq -sRr @uri
           )"
 
           ########################################################
-          # Build dispatch payload
+          # Validate DISPATCH_INPUTS JSON
           ########################################################
 
-          echo "$DISPATCH_INPUTS_VAR" | jq empty
+          echo "$DISPATCH_INPUTS" | jq empty
 
           jq -n \
             --arg ref "$REF_INPUT" \
-            --argjson inputs "$DISPATCH_INPUTS_VAR" \
+            --argjson inputs "$DISPATCH_INPUTS" \
             '{
               ref: $ref,
               inputs: $inputs
@@ -902,21 +964,11 @@ jobs:
 
           API_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
 
-          ########################################################
-          # Dispatch diagnostics
-          ########################################################
-
           echo "Dispatching workflow: ${WORKFLOW_FILE}"
           echo "Encoded workflow: ${ENCODED_WORKFLOW}"
           echo "Resolved lifecycle stage: ${RESOLVED_STAGE:-unknown}"
           echo "Next lifecycle stage: ${NEXT_STAGE:-unknown}"
           echo "Ref: ${REF_INPUT}"
-          echo "Payload:"
-          cat /tmp/rga_lifecycle_dispatch_payload.json
-
-          ########################################################
-          # GitHub workflow_dispatch API
-          ########################################################
 
           HTTP_STATUS="$(
             curl -sS \
@@ -936,14 +988,10 @@ jobs:
             echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
 
             if [ "$HTTP_STATUS" = "422" ]; then
-              echo "::error::Target workflow '${WORKFLOW_FILE}' does not have 'on: workflow_dispatch' configured on branch '${REF_INPUT}', or the workflow file name is mismatched." >&2
+              echo "::error::workflow_dispatch missing or workflow name mismatch." >&2
             fi
 
-            echo "API response:" >&2
             sed -n '1,200p' /tmp/rga_lifecycle_dispatch_response.json >&2 || true
-
-            echo "Payload sent:" >&2
-            sed -n '1,200p' /tmp/rga_lifecycle_dispatch_payload.json >&2 || true
 
             exit 1
 
