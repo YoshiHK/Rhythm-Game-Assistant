@@ -779,7 +779,7 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"          
 
-                  ############################################################
+                        ############################################################
       # Dispatch Next Workflow
       ############################################################
 
@@ -906,6 +906,7 @@ jobs:
           fi
 
           echo "Dispatched workflow '${WORKFLOW_FILE}' for lifecycle stage '${RESOLVED_STAGE}'."
+
 
       ############################################################
       # Upload Lifecycle Event
