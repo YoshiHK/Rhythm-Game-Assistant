@@ -885,11 +885,16 @@ jobs:
             exit 1
           fi
 
-          COMPLETED_STAGE=$(jq -r '.completed_stage // empty' "$EVENT_FILE")
-          NEXT_STAGE=$(jq -r '.next_stage // empty' "$EVENT_FILE")
-          LIFECYCLE_STATUS=$(jq -r '.lifecycle_status // empty' "$EVENT_FILE")
+          COMPLETED_STAGE="$(jq -r '.completed_stage // empty' "$EVENT_FILE")"
+          NEXT_STAGE="$(jq -r '.next_stage // empty' "$EVENT_FILE")"
+          LIFECYCLE_STATUS="$(jq -r '.lifecycle_status // "running"' "$EVENT_FILE")"
+          DISPATCH_REQUIRED="$(jq -r '.dispatch_required // false' "$EVENT_FILE")"
 
           VALID="false"
+
+          ########################################################
+          # Canonical stage transitions
+          ########################################################
 
           case "${COMPLETED_STAGE}:${NEXT_STAGE}" in
 
@@ -913,22 +918,31 @@ jobs:
               VALID="true"
               ;;
 
-            *)
-              VALID="false"
-              ;;
-
           esac
 
-          #
-          # Terminal lifecycle state
-          #
+          ########################################################
+          # Terminal lifecycle states
+          ########################################################
 
           if [ "$COMPLETED_STAGE" = "post_audit" ] \
              && [ -z "$NEXT_STAGE" ] \
-             && [ "$LIFECYCLE_STATUS" = "complete" ]
+             && [ "$LIFECYCLE_STATUS" = "complete" ] \
+             && [ "$DISPATCH_REQUIRED" = "false" ]
           then
             VALID="true"
           fi
+
+          if [ "$COMPLETED_STAGE" = "halted" ] \
+             && [ -z "$NEXT_STAGE" ] \
+             && [ "$LIFECYCLE_STATUS" = "halted" ] \
+             && [ "$DISPATCH_REQUIRED" = "false" ]
+          then
+            VALID="true"
+          fi
+
+          ########################################################
+          # Result
+          ########################################################
 
           if [ "$VALID" != "true" ]; then
 
@@ -936,17 +950,17 @@ jobs:
             echo "Completed stage: ${COMPLETED_STAGE}" >&2
             echo "Next stage: ${NEXT_STAGE}" >&2
             echo "Lifecycle status: ${LIFECYCLE_STATUS}" >&2
+            echo "Dispatch required: ${DISPATCH_REQUIRED}" >&2
 
             exit 1
 
           fi
 
           echo "Lifecycle Event Contract validation passed."
-   
 
       ############################################################
       # Lifecycle Summary
-      ############################################################          
+      ############################################################
 
       - name: Lifecycle summary
         if: always()
@@ -955,25 +969,38 @@ jobs:
           {
             echo "## RGA Lifecycle Runner"
             echo ""
+
             echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
             echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
-            echo "- Current stage: \`${RESOLVED_STAGE:-}\`"
-            if [ -n "${NEXT_STAGE:-}" ]; then
-              echo "- Next stage: ${NEXT_STAGE}"
-            fi
+
+            echo "- Current stage: \`${RESOLVED_STAGE:-unknown}\`"
+
             if [ -n "${LIFECYCLE_STATUS:-}" ]; then
-              echo "- Lifecycle status: ${LIFECYCLE_STATUS}"
+              echo "- Lifecycle status: \`${LIFECYCLE_STATUS}\`"
             fi
-            echo "- Dispatch required: \`${DISPATCH_REQUIRED:-}\`"
-            echo "- Workflow file: \`${WORKFLOW_FILE:-none}\`"
+
+            if [ -n "${NEXT_STAGE:-}" ]; then
+              echo "- Next stage: \`${NEXT_STAGE}\`"
+            fi
+
+            echo "- Dispatch required: \`${DISPATCH_REQUIRED:-false}\`"
+
+            if [ -n "${WORKFLOW_FILE:-}" ]; then
+              echo "- Workflow file: \`${WORKFLOW_FILE}\`"
+            else
+              echo "- Workflow file: \`(none)\`"
+            fi
+
             echo ""
+
             if [ -n "${LIFECYCLE_REASON:-}" ]; then
               echo "### Reason"
               echo ""
               echo "${LIFECYCLE_REASON}"
               echo ""
             fi
-          } >> "$GITHUB_STEP_SUMMARY"          
+
+          } >> "$GITHUB_STEP_SUMMARY"       
 
       ############################################################
       # Dispatch Next Workflow
