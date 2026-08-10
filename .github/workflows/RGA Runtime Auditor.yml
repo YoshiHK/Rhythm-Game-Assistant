@@ -42,7 +42,7 @@ jobs:
     permissions:
       contents: read
       security-events: read
-      actions: read
+      actions: write
 
     steps:
       - name: Checkout
