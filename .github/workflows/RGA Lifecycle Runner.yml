@@ -69,7 +69,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
-      ########################################################
+            ########################################################
       # Prepare Lifecycle Context
       ########################################################        
 
@@ -87,29 +87,25 @@ jobs:
           TRIGGERING_WORKFLOW: ${{ github.event.workflow_run.name }}
           TRIGGERING_RUN_ID: ${{ github.event.workflow_run.id }}
           TRIGGERING_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          TRIGGERING_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           DEFAULT_REF: ${{ github.ref_name }}
 
         run: |
           set -euo pipefail
+
           mkdir -p \
             artifacts \
             lifecycle_trigger
 
-          #
-          # Lifecycle Stages
-          #
-          # pre_audit
-          # plan
-          # plan_audit
-          # human_approval
-          # execute
-          # post_audit
-          #
+          ########################################################
+          # Context Resolution
+          ########################################################
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            STAGE="$MANUAL_STAGE"
+
+            STAGE="${MANUAL_STAGE:-pre_audit}"
             REF_INPUT="${MANUAL_REF:-main}"
-            AUDIT_SESSION_ID="$MANUAL_SESSION"
+            AUDIT_SESSION_ID="${MANUAL_SESSION:-}"
             PRE_AUDIT_REPORT="${MANUAL_PRE_AUDIT_REPORT:-artifacts/runtime_auditor_report.json}"
             EXECUTION_PLAN="${MANUAL_EXECUTION_PLAN:-artifacts/execution_plan.json}"
             APPROVAL_ARTIFACT="${MANUAL_APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
@@ -117,37 +113,28 @@ jobs:
             TRIGGER_SOURCE="manual"
 
           else
+
             STAGE="auto_detect"
-            REF_INPUT="${DEFAULT_REF:-main}"
+            # Fallback priority: Upstream event head branch -> GitHub default ref -> main
+            REF_INPUT="${TRIGGERING_HEAD_BRANCH:-${DEFAULT_REF:-main}}"
             AUDIT_SESSION_ID=""
             PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
             EXECUTION_PLAN="artifacts/execution_plan.json"
             APPROVAL_ARTIFACT="artifacts/human_execution_approval.json"
             EXECUTION_APPROVAL=""
             TRIGGER_SOURCE="workflow_run"
+
           fi
 
           if [ -z "$AUDIT_SESSION_ID" ]; then
             AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
           fi
 
-          export STAGE
-          export REF_INPUT
-          export AUDIT_SESSION_ID
-          export PRE_AUDIT_REPORT
-          export EXECUTION_PLAN
-          export APPROVAL_ARTIFACT
-          export EXECUTION_APPROVAL
-          export TRIGGER_SOURCE
-          export TRIGGERING_WORKFLOW
-          export TRIGGERING_RUN_ID
-          export TRIGGERING_CONCLUSION
+          CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit"
 
-          #
-          # Canonical Lifecycle
-          #
-
-          export CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit"
+          ########################################################
+          # Export Environment
+          ########################################################
 
           {
             echo "STAGE=$STAGE"
@@ -163,6 +150,7 @@ jobs:
             echo "TRIGGERING_CONCLUSION=$TRIGGERING_CONCLUSION"
             echo "CANONICAL_LIFECYCLE=$CANONICAL_LIFECYCLE"
           } >> "$GITHUB_ENV"
+
 
       ############################################################
       # Download Triggering Workflow Artifacts
