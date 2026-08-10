@@ -1,12 +1,44 @@
 name: RGA Lifecycle Runner
 
 on:
+
+  ##############################################################
+  # Primary Lifecycle Entry Point
+  #
+  # New model:
+  #
+  #   push
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Old model:
+  #
+  #   push
+  #     ↓
+  #   Runtime Auditor
+  #
+  # Lifecycle Runner now owns orchestration.
+  ##############################################################
+
+  push:
+    branches:
+      - main
+
   workflow_dispatch:
     inputs:
+
       lifecycle_stage:
         description: >
           Stage to start or resume.
-          One of: pre_audit, plan, plan_audit, human_approval, execute, post_audit.
+
+          One of:
+            pre_audit
+            plan
+            plan_audit
+            human_approval
+            execute
+            post_audit
+            
         required: true
         default: pre_audit
         type: choice
@@ -24,7 +56,7 @@ on:
         default: main
 
       audit_session_id:
-        description: Optional lifecycle session id. If empty, the runner creates one.
+        description: Optional lifecycle session id.
         required: false
         default: ""
 
@@ -44,12 +76,25 @@ on:
         default: artifacts/human_execution_approval.json
 
       execution_approval:
-        description: >-
+        description: >
           Safety approval phrase for gated execution.
-          Required when executor_mode=execute (expected: APPROVE_RGA_EXECUTION).
+
+          Required when lifecycle_stage=execute.
+
+          Expected value:
+
+          APPROVE_RGA_EXECUTION
         required: false
         default: ""
 
+  ##############################################################
+  # Contract Driven Lifecycle Continuation
+  #
+  # Consumes lifecycle_event.json produced by:
+  #
+  #   Bot #1 Runtime Auditor
+  #   Bot #2 Maintenance Executor
+  ##############################################################
 
   workflow_run:
     workflows:
@@ -65,12 +110,16 @@ permissions:
   pull-requests: read
 
 jobs:
+
   lifecycle-runner:
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
+
         
       ########################################################
       # Prepare Lifecycle Context

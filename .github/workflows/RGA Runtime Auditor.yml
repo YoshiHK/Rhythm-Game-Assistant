@@ -1,8 +1,6 @@
 name: RGA Runtime Auditor
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
     inputs:
       audit_mode:
