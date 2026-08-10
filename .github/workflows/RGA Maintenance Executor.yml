@@ -147,8 +147,17 @@ jobs:
           EXECUTOR_MODE: ${{ inputs.executor_mode }}
           APPROVAL_ARTIFACT: ${{ inputs.approval_artifact }}
         run: |
-          MODE="${EXECUTOR_MODE:-dry_run_execute}"
+          set -euo pipefail
+
+          MODE="${EXECUTOR_MODE:-plan}"
+          if [ -z "$MODE" ]; then
+            MODE="plan"
+          fi
+
           APPROVAL="${APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
+          if [ -z "$APPROVAL" ]; then
+            APPROVAL="artifacts/human_execution_approval.json"
+          fi
 
           STATUS="allowed"
           REASON="Mode accepted"
@@ -160,7 +169,7 @@ jobs:
 
           export MODE STATUS REASON
 
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -176,6 +185,7 @@ jobs:
               encoding="utf-8",
           )
           PY
+
 
       ############################################################
       # Human Approval Artifact audit
