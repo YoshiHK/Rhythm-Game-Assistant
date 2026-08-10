@@ -5,43 +5,115 @@ on:
   ##############################################################
   # Primary Lifecycle Entry Point
   #
-  # New model:
+  # Governance Model
   #
-  #   push
+  #   Lifecycle Runner
+  #     → owns chronology
+  #
+  #   Runtime Auditor (Bot #1)
+  #     → performs verification
+  #
+  #   Maintenance Executor (Bot #2)
+  #     → performs planning / execution
+  #
+  #   Human
+  #     → owns approval authority
+  #
+  ##############################################################
+  #
+  # Lifecycle Model
+  #
+  #   Push
+  #
   #     ↓
+  #
   #   Lifecycle Runner
   #
-  # Old model:
-  #
-  #   push
   #     ↓
-  #   Runtime Auditor
   #
-  # Lifecycle Runner now owns orchestration.
+  #   pre_audit
+  #
+  #     ↓
+  #
+  #   plan
+  #
+  #     ↓
+  #
+  #   plan_audit
+  #
+  #     ↓
+  #
+  #   human_approval
+  #
+  #     ↓
+  #
+  #   execute
+  #
+  #     ↓
+  #
+  #   post_audit
+  #
+  #     ↓
+  #
+  #   complete
+  #
+  ##############################################################
+  #
+  # Continuation Model
+  #
+  #   Bot workflows publish:
+  #
+  #     lifecycle_event.json
+  #     lifecycle_backhaul.json
+  #
+  #   Lifecycle Runner resumes through:
+  #
+  #     workflow_run
+  #
+  #   Bot workflows MUST NOT:
+  #
+  #     dispatch Lifecycle Runner
+  #
   ##############################################################
 
   push:
     branches:
       - main
 
+  ##############################################################
+  # Manual Lifecycle Entry
+  #
+  # Used for:
+  #
+  #   - human approval
+  #   - execute stage
+  #   - recovery
+  #   - manual stage starts
+  #
+  ##############################################################
+
   workflow_dispatch:
     inputs:
 
       lifecycle_stage:
-        description: >
-          Stage to start or resume.
+        description: >-
+          Lifecycle stage to start or resume.
 
-          One of:
+          Allowed values:
+
             pre_audit
             plan
             plan_audit
             human_approval
             execute
             post_audit
-            
+
         required: true
+
         default: pre_audit
+
         type: choice
+
         options:
           - pre_audit
           - plan
@@ -51,47 +123,100 @@ on:
           - post_audit
 
       ref:
-        description: Git ref, branch, or SHA to dispatch downstream workflows on.
+        description: Git ref, branch, or SHA for downstream dispatch.
+
         required: false
+
         default: main
 
       audit_session_id:
-        description: Optional lifecycle session id.
+        description: >-
+          Optional lifecycle session identifier.
+
+          If omitted a new session ID will be generated.
+
         required: false
+
         default: ""
 
       pre_audit_report:
-        description: Bot #1 Auditor pre-audit report path.
+        description: >-
+          Bot #1 pre-audit report path.
+
+        required: false
+
+        default: artifacts/runtime_auditor_report.json
 
       execution_plan:
-        description: Bot #2 execution plan path.
+        description: >-
+          Bot #2 execution plan path.
+
         required: false
+
         default: artifacts/execution_plan.json
 
       approval_artifact:
-        description: Human approval artifact path.
+        description: >-
+          Human approval artifact path.
+
         required: false
+
         default: artifacts/human_execution_approval.json
 
       execution_approval:
-        description: >
-          Safety approval phrase for gated execution.
-
-          Required when lifecycle_stage=execute.
+        description: >-
+          Safety approval phrase required
+          for lifecycle_stage=execute.
 
           Expected value:
 
           APPROVE_RGA_EXECUTION
+
         required: false
+
         default: ""
+
+  ##############################################################
+  # Contract-Driven Lifecycle Continuation
+  #
+  # Trigger Source:
+  #
+  #   workflow_run
+  #
+  # Produced By:
+  #
+  #   RGA Runtime Auditor
+  #   RGA Maintenance Executor
+  #
+  # Consumed Contracts:
+  #
+  #   lifecycle_event.json
+  #   lifecycle_backhaul.json
+  #
+  ##############################################################
+
+  workflow_run:
+    workflows:
+      - RGA Runtime Auditor
+      - RGA Maintenance Executor
+
+    types:
+      - completed
 
   ##############################################################
   # Contract Driven Lifecycle Continuation
   #
-  # Consumes lifecycle_event.json produced by:
+  # Consumes lifecycle_event.json and lifecycle_backhaul.json
+  # produced by:
   #
   #   Bot #1 Runtime Auditor
   #   Bot #2 Maintenance Executor
+  #
+  # Chronology owner:
+  #
+  #   RGA Lifecycle Runner
+  #
+  # Bot workflows must NOT dispatch the Runner directly.
   ##############################################################
 
   workflow_run:
@@ -118,7 +243,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-        
       ########################################################
       # Prepare Lifecycle Context
       ########################################################
@@ -156,40 +280,55 @@ jobs:
           ######################################################
 
           STAGE="auto_detect"
+
           REF_INPUT="${DEFAULT_REF:-main}"
+
           AUDIT_SESSION_ID=""
 
-          ######################################################
-          # Resume Contract
-          ######################################################
-
-          RESUME_FROM_EVENT="false"
-
-          ######################################################
-          # Lifecycle Artifacts
-          ######################################################
-
           PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
+
           EXECUTION_PLAN="artifacts/execution_plan.json"
+
           APPROVAL_ARTIFACT="artifacts/human_execution_approval.json"
+
           EXECUTION_APPROVAL=""
+
           TRIGGER_SOURCE="unknown"
 
           ######################################################
           # workflow_dispatch
+          #
+          # Manual lifecycle operation.
+          #
+          # Used for:
+          #
+          #   - manual stage starts
+          #   - human-approved execute
+          #   - manual recovery / resume
+          #
+          # This is NOT used by Bot #1 / Bot #2 to resume Runner.
           ######################################################
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+
             STAGE="${MANUAL_STAGE:-pre_audit}"
+
             REF_INPUT="${MANUAL_REF:-main}"
+
             AUDIT_SESSION_ID="${MANUAL_SESSION:-}"
+
             PRE_AUDIT_REPORT="${MANUAL_PRE_AUDIT_REPORT:-artifacts/runtime_auditor_report.json}"
+
             EXECUTION_PLAN="${MANUAL_EXECUTION_PLAN:-artifacts/execution_plan.json}"
+
             APPROVAL_ARTIFACT="${MANUAL_APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
+
             EXECUTION_APPROVAL="${MANUAL_EXECUTION_APPROVAL:-}"
+
             TRIGGER_SOURCE="workflow_dispatch"
 
             if [ -z "$AUDIT_SESSION_ID" ]; then
+
               AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
 
             fi
@@ -200,42 +339,90 @@ jobs:
 
           ######################################################
           # workflow_run
+          #
+          # Contract-driven continuation.
+          #
+          # Expected source:
+          #
+          #   RGA Runtime Auditor
+          #   RGA Maintenance Executor
+          #
+          # Expected artifacts:
+          #
+          #   lifecycle_event.json
+          #   lifecycle_backhaul.json
+          #
+          # Stage remains auto_detect here.
+          # The Determine Next Lifecycle Stage step will read
+          # downloaded upstream artifacts and resolve the stage.
           ######################################################
 
           elif [ "$EVENT_NAME" = "workflow_run" ]; then
 
             STAGE="auto_detect"
+
             REF_INPUT="${TRIGGERING_HEAD_BRANCH:-${DEFAULT_REF:-main}}"
 
             if [ -n "${TRIGGERING_RUN_ID:-}" ]; then
+
               AUDIT_SESSION_ID="rga-session-${TRIGGERING_RUN_ID}"
 
             else
+
               AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
 
             fi
 
             TRIGGER_SOURCE="workflow_run"
 
+            echo "workflow_run detected."
+            echo "triggering_workflow=${TRIGGERING_WORKFLOW}"
+            echo "triggering_run_id=${TRIGGERING_RUN_ID}"
+            echo "triggering_conclusion=${TRIGGERING_CONCLUSION}"
+            echo "selected_stage=${STAGE}"
+            echo "audit_session_id=${AUDIT_SESSION_ID}"
+
           ######################################################
           # push
+          #
+          # Primary lifecycle entry point.
+          #
+          # Push starts a new governed lifecycle at pre_audit.
           ######################################################
 
           elif [ "$EVENT_NAME" = "push" ]; then
+
             STAGE="pre_audit"
+
             REF_INPUT="${DEFAULT_REF:-main}"
+
             AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+
             TRIGGER_SOURCE="push"
 
+            echo "push detected."
+            echo "selected_stage=${STAGE}"
+            echo "audit_session_id=${AUDIT_SESSION_ID}"
+
           ######################################################
-          # Fallback
+          # fallback
           ######################################################
 
           else
+
             STAGE="pre_audit"
+
             REF_INPUT="${DEFAULT_REF:-main}"
+
             AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+
             TRIGGER_SOURCE="$EVENT_NAME"
+
+            echo "unknown trigger detected."
+            echo "event_name=${EVENT_NAME}"
+            echo "selected_stage=${STAGE}"
+            echo "audit_session_id=${AUDIT_SESSION_ID}"
+
           fi
 
           ######################################################
@@ -262,15 +449,19 @@ jobs:
             echo "STAGE=$STAGE"
             echo "REF_INPUT=$REF_INPUT"
             echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
+
             echo "PRE_AUDIT_REPORT=$PRE_AUDIT_REPORT"
             echo "EXECUTION_PLAN=$EXECUTION_PLAN"
             echo "APPROVAL_ARTIFACT=$APPROVAL_ARTIFACT"
             echo "EXECUTION_APPROVAL=$EXECUTION_APPROVAL"
+
             echo "TRIGGER_SOURCE=$TRIGGER_SOURCE"
+
             echo "TRIGGERING_WORKFLOW=$TRIGGERING_WORKFLOW"
             echo "TRIGGERING_WORKFLOW_ID=$TRIGGERING_WORKFLOW_ID"
             echo "TRIGGERING_RUN_ID=$TRIGGERING_RUN_ID"
             echo "TRIGGERING_CONCLUSION=$TRIGGERING_CONCLUSION"
+
             echo "CANONICAL_LIFECYCLE=$CANONICAL_LIFECYCLE"
           } >> "$GITHUB_ENV"
 
