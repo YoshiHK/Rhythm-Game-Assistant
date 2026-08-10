@@ -142,9 +142,12 @@ PY
 
       - name: Execution Gate
         id: execution_gate
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+          APPROVAL_ARTIFACT: ${{ inputs.approval_artifact }}
         run: |
-          MODE="${{ github.event.inputs.executor_mode }}"
-          APPROVAL="${{ github.event.inputs.approval_artifact }}"
+          MODE="${EXECUTOR_MODE:-dry_run_execute}"
+          APPROVAL="${APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
 
           STATUS="allowed"
           REASON="Mode accepted"
@@ -154,14 +157,18 @@ PY
             REASON="Approval artifact missing"
           fi
 
+          export MODE STATUS REASON
+
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
+
           payload = {
               "schema": "rga.execution_gate.v1.0",
-              "requested_mode": "$MODE",
-              "status": "$STATUS",
-              "reason": "$REASON",
+              "requested_mode": os.environ.get("MODE", ""),
+              "status": os.environ.get("STATUS", ""),
+              "reason": os.environ.get("REASON", ""),
           }
           Path("artifacts/execution_gate.json").write_text(
               json.dumps(payload, indent=2),
@@ -1099,7 +1106,7 @@ MD
       ############################################################
 
       - name: Create Execution Branch and Commit
-        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        if: ${{ always() && inputs.executor_mode == 'execute' }}
         run: |
           set +e
 
@@ -1264,7 +1271,7 @@ MD
       ############################################################
 
       - name: Create Pull Request Candidate
-        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        if: ${{ always() && inputs.executor_mode == 'execute' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1558,8 +1565,7 @@ MD
           echo "Create Pull Request Candidate completed."
           echo "Result artifact: artifacts/execution_pull_request_result.json"
 
-          exit 0 
-          
+          exit 0
       ############################################################
       # Execution Manifest
       ############################################################
@@ -1714,9 +1720,9 @@ MD
 
           EVENT_STAGE=""
           NEXT_STAGE=""
-          DISPATCH_REQUIRED="true"
+          MODE="${EXECUTOR_MODE:-dry_run_execute}"
 
-          case "$EXECUTOR_MODE" in
+          case "$MODE" in
 
             plan)
               EVENT_STAGE="plan"
@@ -1734,28 +1740,31 @@ MD
               ;;
 
             *)
-              echo "Unsupported EXECUTOR_MODE: $EXECUTOR_MODE" >&2
+              echo "Unsupported EXECUTOR_MODE: $MODE" >&2
               exit 1
               ;;
           esac
 
-          cat > artifacts/lifecycle_event.json <<EOF
-{
-  "schema": "rga.lifecycle_event.v1.0",
-  "producer": "maintenance_executor",
-  "audit_session_id": "${AUDIT_SESSION_ID}",
-  "executor_mode": "${EXECUTOR_MODE}",
-  "completed_stage": "${EVENT_STAGE}",
-  "next_stage": "${NEXT_STAGE}",
-  "dispatch_required": true,
-  "event_contract": {
-    "completed_stage_declared": true,
-    "next_stage_declared": true,
-    "artifact_guessing_required": false,
-    "runner_must_infer_stage": false
-  }
-}
-EOF
+          jq -n \
+            --arg session "${AUDIT_SESSION_ID}" \
+            --arg mode "${MODE}" \
+            --arg completed "${EVENT_STAGE}" \
+            --arg next "${NEXT_STAGE}" \
+            '{
+              schema: "rga.lifecycle_event.v1.0",
+              producer: "maintenance_executor",
+              audit_session_id: $session,
+              executor_mode: $mode,
+              completed_stage: $completed,
+              next_stage: $next,
+              dispatch_required: true,
+              event_contract: {
+                completed_stage_declared: true,
+                next_stage_declared: true,
+                artifact_guessing_required: false,
+                runner_must_infer_stage: false
+              }
+            }' > artifacts/lifecycle_event.json
 
           echo "Lifecycle event contract written:"
           cat artifacts/lifecycle_event.json
@@ -1800,7 +1809,7 @@ EOF
       ############################################################
 
       - name: Upload Plan Evidence
-        if: ${{ always() && github.event.inputs.executor_mode == 'plan' }}
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
         with:
           name: rga-execution-plan
@@ -1809,13 +1818,12 @@ EOF
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
           if-no-files-found: warn
-
       ############################################################
       # Upload Dry Run Evidence
       ############################################################
 
       - name: Upload Dry Run Evidence
-        if: ${{ always() && github.event.inputs.executor_mode == 'dry_run_execute' }}
+        if: ${{ always() && inputs.executor_mode == 'dry_run_execute' }}
         uses: actions/upload-artifact@v4
         with:
           name: rga-dry-run-evidence
@@ -1828,13 +1836,12 @@ EOF
             artifacts/runtime_executor_stderr_summary.json
             artifacts/runtime_executor_exit_code.txt
           if-no-files-found: warn
-
       ############################################################
       # Upload Execute Evidence
       ############################################################
 
       - name: Upload Execute Evidence
-        if: ${{ always() && github.event.inputs.executor_mode == 'execute' }}
+        if: ${{ always() && inputs.executor_mode == 'execute' }}
         uses: actions/upload-artifact@v4
         with:
           name: rga-execute-evidence
