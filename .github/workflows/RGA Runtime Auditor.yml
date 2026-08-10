@@ -3570,7 +3570,7 @@ jobs:
       - name: Write Lifecycle Event Contract
         shell: bash
         env:
-          AUDIT_MODE: ${{ inputs.audit_mode }}
+          AUDIT_MODE: ${{ inputs.audit_mode || 'pre_audit' }}
           AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
         run: |
           set -euo pipefail
@@ -3582,23 +3582,19 @@ jobs:
           DISPATCH_REQUIRED="true"
 
           case "$AUDIT_MODE" in
-
             pre_audit)
               EVENT_STAGE="pre_audit"
               NEXT_STAGE="plan"
               ;;
-
             plan_audit)
               EVENT_STAGE="plan_audit"
               NEXT_STAGE="human_approval"
               ;;
-
             post_audit)
               EVENT_STAGE="post_audit"
               NEXT_STAGE="complete"
               DISPATCH_REQUIRED="false"
               ;;
-
             *)
               echo "Unsupported AUDIT_MODE: $AUDIT_MODE" >&2
               exit 1
@@ -3606,22 +3602,22 @@ jobs:
           esac
 
           cat > artifacts/lifecycle_event.json <<EOF
-{
-  "schema": "rga.lifecycle_event.v1.0",
-  "producer": "runtime_auditor",
-  "audit_session_id": "${AUDIT_SESSION_ID}",
-  "audit_mode": "${AUDIT_MODE}",
-  "completed_stage": "${EVENT_STAGE}",
-  "next_stage": "${NEXT_STAGE}",
-  "dispatch_required": ${DISPATCH_REQUIRED},
-  "event_contract": {
-    "completed_stage_declared": true,
-    "next_stage_declared": true,
-    "artifact_guessing_required": false,
-    "runner_must_infer_stage": false
-  }
-}
-EOF
+          {
+            "schema": "rga.lifecycle_event.v1.0",
+            "producer": "runtime_auditor",
+            "audit_session_id": "${AUDIT_SESSION_ID}",
+            "audit_mode": "${AUDIT_MODE}",
+            "completed_stage": "${EVENT_STAGE}",
+            "next_stage": "${NEXT_STAGE}",
+            "dispatch_required": ${DISPATCH_REQUIRED},
+            "event_contract": {
+              "completed_stage_declared": true,
+              "next_stage_declared": true,
+              "artifact_guessing_required": false,
+              "runner_must_infer_stage": false
+            }
+          }
+          EOF
 
           echo "Lifecycle event contract written:"
           cat artifacts/lifecycle_event.json
