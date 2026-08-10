@@ -237,9 +237,9 @@ jobs:
           echo "Artifact API response preview:"
           sed -n '1,120p' artifacts/lifecycle_trigger_artifacts.json || true
 
-########################################################
-      # Determine next lifecycle stage
-          ########################################################
+      ########################################################
+      # Determine Next Lifecycle Stage
+      ########################################################
 
       - name: Determine next lifecycle stage
         shell: bash
@@ -254,20 +254,6 @@ jobs:
 
           ##########################################################
           # Workflow Run Lifecycle Resolution
-          #
-          # Priority:
-          #
-          #   1. lifecycle_event.json
-          #   2. legacy canonical artifact fallback
-          #
-          # Canonical lifecycle stages:
-          #
-          #   pre_audit
-          #   plan
-          #   plan_audit
-          #   human_approval
-          #   execute
-          #   post_audit
           ##########################################################
 
           if [ "$TRIGGER_SOURCE" = "workflow_run" ]; then
@@ -297,13 +283,17 @@ jobs:
 
                 echo "Lifecycle event found: $EVENT_FILE"
 
-                STAGE=$(jq -r '.next_stage // empty' "$EVENT_FILE")
+                STAGE=$(
+                  grep -oE '"next_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
+                    "$EVENT_FILE" \
+                    | head -n1 \
+                    | sed -E 's/.*"([^"]+)"/\1/'
+                )
 
                 if [ -z "$STAGE" ]; then
 
                   STAGE="halted"
                   DISPATCH_REQUIRED="false"
-
                   REASON="Lifecycle event contract exists but next_stage could not be resolved."
 
                 else
@@ -316,8 +306,6 @@ jobs:
 
                 ####################################################
                 # Legacy Artifact Fallback
-                #
-                # This is retained only for backward compatibility.
                 ####################################################
 
                 echo "No lifecycle_event.json found."
@@ -414,10 +402,10 @@ jobs:
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="plan"
 
-              DISPATCH_INPUTS="$(jq -n \
+              DISPATCH_INPUTS=$(jq -c -n \
                 --arg mode "pre_audit" \
                 --arg session "${AUDIT_SESSION_ID}" \
-                '{audit_mode: $mode, audit_session_id: $session}')"
+                '{audit_mode: $mode, audit_session_id: $session}')
 
               ;;
 
@@ -426,11 +414,11 @@ jobs:
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="plan_audit"
 
-              DISPATCH_INPUTS="$(jq -n \
+              DISPATCH_INPUTS=$(jq -c -n \
                 --arg mode "plan" \
                 --arg session "${AUDIT_SESSION_ID}" \
                 --arg report "${PRE_AUDIT_REPORT}" \
-                '{executor_mode: $mode, audit_session_id: $session, pre_audit_report: $report}')"
+                '{executor_mode: $mode, audit_session_id: $session, pre_audit_report: $report}')
 
               ;;
 
@@ -439,11 +427,11 @@ jobs:
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="human_approval"
 
-              DISPATCH_INPUTS="$(jq -n \
+              DISPATCH_INPUTS=$(jq -c -n \
                 --arg mode "plan_audit" \
                 --arg session "${AUDIT_SESSION_ID}" \
                 --arg plan "${EXECUTION_PLAN}" \
-                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan}')"
+                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan}')
 
               ;;
 
@@ -470,13 +458,13 @@ jobs:
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="post_audit"
 
-              DISPATCH_INPUTS="$(jq -n \
+              DISPATCH_INPUTS=$(jq -c -n \
                 --arg mode "execute" \
                 --arg session "${AUDIT_SESSION_ID}" \
                 --arg plan "${EXECUTION_PLAN}" \
-                --arg artifact "${APPROVAL_ARTIFACT}" \
-                --arg approval "${EXECUTION_APPROVAL}" \
-                '{executor_mode: $mode, audit_session_id: $session, execution_plan: $plan, approval_artifact: $artifact, execution_approval: $approval}')"
+                --arg approval "${APPROVAL_ARTIFACT}" \
+                --arg phrase "${EXECUTION_APPROVAL}" \
+                '{executor_mode: $mode, audit_session_id: $session, execution_plan: $plan, approval_artifact: $approval, execution_approval: $phrase}')
 
               ;;
 
@@ -485,12 +473,12 @@ jobs:
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="complete"
 
-              DISPATCH_INPUTS="$(jq -n \
+              DISPATCH_INPUTS=$(jq -c -n \
                 --arg mode "post_audit" \
                 --arg session "${AUDIT_SESSION_ID}" \
                 --arg plan "${EXECUTION_PLAN}" \
                 --arg report "${PRE_AUDIT_REPORT}" \
-                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan, pre_audit_report: $report}')"
+                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan, pre_audit_report: $report}')
 
               ;;
 
@@ -532,9 +520,12 @@ jobs:
             echo "NEXT_STAGE=$NEXT_STAGE"
             echo "DISPATCH_REQUIRED=$DISPATCH_REQUIRED"
             echo "WORKFLOW_FILE=$WORKFLOW_FILE"
-            echo "DISPATCH_INPUTS=$DISPATCH_INPUTS"
             echo "LIFECYCLE_REASON=$REASON"
+            echo "DISPATCH_INPUTS<<EOF_INPUTS"
+            echo "$DISPATCH_INPUTS"
+            echo "EOF_INPUTS"
           } >> "$GITHUB_ENV"
+
 
       ##########################################################
       # Write Lifecycle State
@@ -788,26 +779,8 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"          
 
-      ############################################################
+            ############################################################
       # Dispatch Next Workflow
-      #
-      # Purpose:
-      #
-      #   - Dispatches the next governed workflow when required.
-      #
-      #   - Uses the already-computed lifecycle routing values:
-      #
-      #       RESOLVED_STAGE
-      #       NEXT_STAGE
-      #       DISPATCH_REQUIRED
-      #       WORKFLOW_FILE
-      #       DISPATCH_INPUTS
-      #
-      #   - Does not audit.
-      #   - Does not execute.
-      #   - Does not approve.
-      #
-      #   - Only routes the next lifecycle stage.
       ############################################################
 
       - name: Dispatch next workflow
@@ -815,6 +788,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          DISPATCH_INPUTS_VAR: ${{ env.DISPATCH_INPUTS }}
         run: |
           set -euo pipefail
 
@@ -839,7 +813,7 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${DISPATCH_INPUTS:-}" ]; then
+          if [ -z "${DISPATCH_INPUTS_VAR:-}" ]; then
             echo "DISPATCH_INPUTS is empty but dispatch was required." >&2
             exit 1
           fi
@@ -860,14 +834,6 @@ jobs:
 
           ########################################################
           # Encode workflow filename
-          #
-          # Example:
-          #
-          #   RGA Runtime Auditor.yml
-          #
-          # becomes URL-safe for:
-          #
-          #   /actions/workflows/{workflow_id_or_file}/dispatches
           ########################################################
 
           ENCODED_WORKFLOW="$(
@@ -877,29 +843,18 @@ jobs:
 
           ########################################################
           # Build dispatch payload
-          #
-          # DISPATCH_INPUTS must already be valid JSON.
-          #
-          # Example:
-          #
-          #   {"audit_mode":"pre_audit","audit_session_id":"..."}
           ########################################################
 
-          echo "$DISPATCH_INPUTS" \
-            | jq empty
+          echo "$DISPATCH_INPUTS_VAR" | jq empty
 
           jq -n \
             --arg ref "$REF_INPUT" \
-            --argjson inputs "$DISPATCH_INPUTS" \
+            --argjson inputs "$DISPATCH_INPUTS_VAR" \
             '{
               ref: $ref,
               inputs: $inputs
             }' \
             > /tmp/rga_lifecycle_dispatch_payload.json
-
-          PAYLOAD="$(
-            cat /tmp/rga_lifecycle_dispatch_payload.json
-          )"
 
           API_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
 
@@ -917,10 +872,6 @@ jobs:
 
           ########################################################
           # GitHub workflow_dispatch API
-          #
-          # Expected success status:
-          #
-          #   204 No Content
           ########################################################
 
           HTTP_STATUS="$(
