@@ -47,7 +47,8 @@ on:
         description: Approval phrase for execute stage. Required only when lifecycle_stage=execute.
         required: false
         default: ""
-        Expected value: APPROVE_RGA_EXECUTION
+        # Expected value: APPROVE_RGA_EXECUTION
+
         
 
   workflow_run:
@@ -236,9 +237,9 @@ jobs:
           echo "Artifact API response preview:"
           sed -n '1,120p' artifacts/lifecycle_trigger_artifacts.json || true
 
-      ########################################################
-      # Determine Next Lifecycle Stage
-      ########################################################
+########################################################
+      # Determine next lifecycle stage
+          ########################################################
 
       - name: Determine next lifecycle stage
         shell: bash
@@ -296,12 +297,7 @@ jobs:
 
                 echo "Lifecycle event found: $EVENT_FILE"
 
-                STAGE=$(
-                  grep -oE '"next_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
-                    "$EVENT_FILE" \
-                    | head -n1 \
-                    | sed -E 's/.*"([^"]+)"/\1/'
-                )
+                STAGE=$(jq -r '.next_stage // empty' "$EVENT_FILE")
 
                 if [ -z "$STAGE" ]; then
 
@@ -418,14 +414,10 @@ jobs:
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="plan"
 
-              cat > /tmp/dispatch_inputs.json <<EOF
-              {
-                "audit_mode": "pre_audit",
-                "audit_session_id": "${AUDIT_SESSION_ID}"
-              }
-              EOF
-
-              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
+              DISPATCH_INPUTS="$(jq -n \
+                --arg mode "pre_audit" \
+                --arg session "${AUDIT_SESSION_ID}" \
+                '{audit_mode: $mode, audit_session_id: $session}')"
 
               ;;
 
@@ -434,15 +426,11 @@ jobs:
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="plan_audit"
 
-              cat > /tmp/dispatch_inputs.json <<EOF
-              {
-                "executor_mode": "plan",
-                "audit_session_id": "${AUDIT_SESSION_ID}",
-                "pre_audit_report": "${PRE_AUDIT_REPORT}"
-              }
-              EOF
-
-              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
+              DISPATCH_INPUTS="$(jq -n \
+                --arg mode "plan" \
+                --arg session "${AUDIT_SESSION_ID}" \
+                --arg report "${PRE_AUDIT_REPORT}" \
+                '{executor_mode: $mode, audit_session_id: $session, pre_audit_report: $report}')"
 
               ;;
 
@@ -451,15 +439,11 @@ jobs:
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="human_approval"
 
-              cat > /tmp/dispatch_inputs.json <<EOF
-              {
-                "audit_mode": "plan_audit",
-                "audit_session_id": "${AUDIT_SESSION_ID}",
-                "execution_plan": "${EXECUTION_PLAN}"
-              }
-              EOF
-
-              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
+              DISPATCH_INPUTS="$(jq -n \
+                --arg mode "plan_audit" \
+                --arg session "${AUDIT_SESSION_ID}" \
+                --arg plan "${EXECUTION_PLAN}" \
+                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan}')"
 
               ;;
 
@@ -486,17 +470,13 @@ jobs:
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="post_audit"
 
-              cat > /tmp/dispatch_inputs.json <<EOF
-              {
-                "executor_mode": "execute",
-                "audit_session_id": "${AUDIT_SESSION_ID}",
-                "execution_plan": "${EXECUTION_PLAN}",
-                "approval_artifact": "${APPROVAL_ARTIFACT}",
-                "execution_approval": "${EXECUTION_APPROVAL}"
-              }
-              EOF
-
-              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
+              DISPATCH_INPUTS="$(jq -n \
+                --arg mode "execute" \
+                --arg session "${AUDIT_SESSION_ID}" \
+                --arg plan "${EXECUTION_PLAN}" \
+                --arg artifact "${APPROVAL_ARTIFACT}" \
+                --arg approval "${EXECUTION_APPROVAL}" \
+                '{executor_mode: $mode, audit_session_id: $session, execution_plan: $plan, approval_artifact: $artifact, execution_approval: $approval}')"
 
               ;;
 
@@ -505,16 +485,12 @@ jobs:
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="complete"
 
-              cat > /tmp/dispatch_inputs.json <<EOF
-              {
-                "audit_mode": "post_audit",
-                "audit_session_id": "${AUDIT_SESSION_ID}",
-                "execution_plan": "${EXECUTION_PLAN}",
-                "pre_audit_report": "${PRE_AUDIT_REPORT}"
-              }
-              EOF
-
-              DISPATCH_INPUTS="$(cat /tmp/dispatch_inputs.json)"
+              DISPATCH_INPUTS="$(jq -n \
+                --arg mode "post_audit" \
+                --arg session "${AUDIT_SESSION_ID}" \
+                --arg plan "${EXECUTION_PLAN}" \
+                --arg report "${PRE_AUDIT_REPORT}" \
+                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan, pre_audit_report: $report}')"
 
               ;;
 
@@ -571,146 +547,101 @@ jobs:
 
           mkdir -p artifacts
 
-          COMPLETED_STAGES="[]"
-          COMPLETED_COUNT="0"
-          PROGRESS_PERCENT="0"
+          COMPLETED_STAGES='[]'
+          COMPLETED_COUNT=0
+          PROGRESS_PERCENT=0
 
           case "${RESOLVED_STAGE}" in
 
             pre_audit)
-
               COMPLETED_STAGES='["pre_audit"]'
-              COMPLETED_COUNT="1"
-              PROGRESS_PERCENT="16.67"
-
+              COMPLETED_COUNT=1
+              PROGRESS_PERCENT=16.67
               ;;
 
             plan)
-
               COMPLETED_STAGES='["pre_audit","plan"]'
-              COMPLETED_COUNT="2"
-              PROGRESS_PERCENT="33.33"
-
+              COMPLETED_COUNT=2
+              PROGRESS_PERCENT=33.33
               ;;
 
             plan_audit)
-
               COMPLETED_STAGES='["pre_audit","plan","plan_audit"]'
-              COMPLETED_COUNT="3"
-              PROGRESS_PERCENT="50.00"
-
+              COMPLETED_COUNT=3
+              PROGRESS_PERCENT=50.00
               ;;
 
             human_approval)
-
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval"]'
-              COMPLETED_COUNT="4"
-              PROGRESS_PERCENT="66.67"
-
+              COMPLETED_COUNT=4
+              PROGRESS_PERCENT=66.67
               ;;
 
             execute)
-
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute"]'
-              COMPLETED_COUNT="5"
-              PROGRESS_PERCENT="83.33"
-
+              COMPLETED_COUNT=5
+              PROGRESS_PERCENT=83.33
               ;;
 
             post_audit)
-
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
-              COMPLETED_COUNT="6"
-              PROGRESS_PERCENT="100.00"
-
-              ;;
-
-            *)
-
-              COMPLETED_STAGES='[]'
-              COMPLETED_COUNT="0"
-              PROGRESS_PERCENT="0"
-
+              COMPLETED_COUNT=6
+              PROGRESS_PERCENT=100.00
               ;;
 
           esac
 
-          cat > artifacts/lifecycle_state.json <<EOF
-{
-  "schema": "rga.lifecycle_state.v1.2",
-
-  "audit_session_id": "${AUDIT_SESSION_ID}",
-
-  "trigger_source": "${TRIGGER_SOURCE}",
-
-  "triggering_workflow": "${TRIGGERING_WORKFLOW}",
-
-  "triggering_run_id": "${TRIGGERING_RUN_ID}",
-
-  "triggering_conclusion": "${TRIGGERING_CONCLUSION}",
-
-  "current_stage": "${RESOLVED_STAGE}",
-
-  "next_stage": "${NEXT_STAGE}",
-
-  "completed_stages": ${COMPLETED_STAGES},
-
-  "dispatch_required": ${DISPATCH_REQUIRED},
-
-  "workflow_file": "${WORKFLOW_FILE}",
-
-  "reason": "${LIFECYCLE_REASON}",
-
-  "canonical_lifecycle": [
-    "pre_audit",
-    "plan",
-    "plan_audit",
-    "human_approval",
-    "execute",
-    "post_audit"
-  ],
-
-  "lifecycle_progress": {
-
-    "stage_count": 6,
-
-    "completed_count": ${COMPLETED_COUNT},
-
-    "progress_percent": ${PROGRESS_PERCENT}
-
-  },
-
-  "governance": {
-
-    "human_approval_required_for_execute": true,
-
-    "completed_phases_remain_immutable": true,
-
-    "validation_is_not_verification": true,
-
-    "bot_1_role": "auditor",
-
-    "bot_2_role": "planner_executor",
-
-    "approval_authority": "human"
-
-  },
-
-  "policy": {
-
-    "runner_does_not_audit": true,
-
-    "runner_does_not_execute": true,
-
-    "runner_does_not_approve": true
-
-  }
-
-}
-EOF
+          jq -n \
+            --arg session "${AUDIT_SESSION_ID}" \
+            --arg trigger_src "${TRIGGER_SOURCE}" \
+            --arg trigger_wf "${TRIGGERING_WORKFLOW}" \
+            --arg trigger_run "${TRIGGERING_RUN_ID}" \
+            --arg trigger_conc "${TRIGGERING_CONCLUSION}" \
+            --arg current "${RESOLVED_STAGE}" \
+            --arg next "${NEXT_STAGE}" \
+            --argjson completed "${COMPLETED_STAGES}" \
+            --argjson dispatch ${DISPATCH_REQUIRED:-false} \
+            --arg wf "${WORKFLOW_FILE}" \
+            --arg reason "${LIFECYCLE_REASON}" \
+            --argjson count ${COMPLETED_COUNT} \
+            --argjson progress ${PROGRESS_PERCENT} \
+            '{
+              schema: "rga.lifecycle_state.v1.2",
+              audit_session_id: $session,
+              trigger_source: $trigger_src,
+              triggering_workflow: $trigger_wf,
+              triggering_run_id: $trigger_run,
+              triggering_conclusion: $trigger_conc,
+              current_stage: $current,
+              next_stage: $next,
+              completed_stages: $completed,
+              dispatch_required: $dispatch,
+              workflow_file: $wf,
+              reason: $reason,
+              canonical_lifecycle: ["pre_audit", "plan", "plan_audit", "human_approval", "execute", "post_audit"],
+              lifecycle_progress: {
+                stage_count: 6,
+                completed_count: $count,
+                progress_percent: $progress
+              },
+              governance: {
+                human_approval_required_for_execute: true,
+                completed_phases_remain_immutable: true,
+                validation_is_not_verification: true,
+                bot_1_role: "auditor",
+                bot_2_role: "planner_executor",
+                approval_authority: "human"
+              },
+              policy: {
+                runner_does_not_audit: true,
+                runner_does_not_execute: true,
+                runner_does_not_approve: true
+              }
+            }' > artifacts/lifecycle_state.json
 
           echo "Lifecycle state written:"
           cat artifacts/lifecycle_state.json
+
           
       ############################################################
       # Write Lifecycle Event Contract
@@ -723,33 +654,39 @@ EOF
 
           mkdir -p artifacts
 
-          cat > artifacts/lifecycle_event.json <<EOF
-{
-  "schema": "rga.lifecycle_event.v1.0",
-  "audit_session_id": "${AUDIT_SESSION_ID}",
-  "trigger_source": "${TRIGGER_SOURCE}",
-  "completed_stage": "${RESOLVED_STAGE}",
-  "next_stage": "${NEXT_STAGE}",
-  "dispatch_required": ${DISPATCH_REQUIRED},
-  "workflow_file": "${WORKFLOW_FILE}",
-  "event_contract": {
-    "completed_stage_declared": true,
-    "next_stage_declared": true,
-    "artifact_guessing_required": false,
-    "runner_must_infer_stage": false
-  },
-  "governance": {
-    "bot_1_role": "auditor",
-    "bot_2_role": "planner_executor",
-    "approval_authority": "human",
-    "human_approval_required": true,
-    "completed_phases_remain_immutable": true
-  }
-}
-EOF
+          jq -n \
+            --arg session "${AUDIT_SESSION_ID}" \
+            --arg trigger_src "${TRIGGER_SOURCE}" \
+            --arg completed "${RESOLVED_STAGE}" \
+            --arg next "${NEXT_STAGE}" \
+            --argjson dispatch ${DISPATCH_REQUIRED:-false} \
+            --arg wf "${WORKFLOW_FILE}" \
+            '{
+              schema: "rga.lifecycle_event.v1.0",
+              audit_session_id: $session,
+              trigger_source: $trigger_src,
+              completed_stage: $completed,
+              next_stage: $next,
+              dispatch_required: $dispatch,
+              workflow_file: $wf,
+              event_contract: {
+                completed_stage_declared: true,
+                next_stage_declared: true,
+                artifact_guessing_required: false,
+                runner_must_infer_stage: false
+              },
+              governance: {
+                bot_1_role: "auditor",
+                bot_2_role: "planner_executor",
+                approval_authority: "human",
+                human_approval_required: true,
+                completed_phases_remain_immutable: true
+              }
+            }' > artifacts/lifecycle_event.json
 
           echo "Lifecycle event contract written:"
           cat artifacts/lifecycle_event.json
+
           
       ############################################################
       # Validate Lifecycle Event Contract
@@ -767,19 +704,8 @@ EOF
             exit 1
           fi
 
-          COMPLETED_STAGE=$(
-            grep -oE '"completed_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
-              "$EVENT_FILE" \
-              | head -n1 \
-              | sed -E 's/.*"([^"]+)"/\1/'
-          )
-
-          NEXT_STAGE=$(
-            grep -oE '"next_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
-              "$EVENT_FILE" \
-              | head -n1 \
-              | sed -E 's/.*"([^"]+)"/\1/'
-          )
+          COMPLETED_STAGE=$(jq -r '.completed_stage // empty' "$EVENT_FILE")
+          NEXT_STAGE=$(jq -r '.next_stage // empty' "$EVENT_FILE")
 
           VALID="false"
 
@@ -833,7 +759,8 @@ EOF
 
           fi
 
-          echo "Lifecycle Event Contract validation passed."    
+          echo "Lifecycle Event Contract validation passed."
+   
 
       ############################################################
       # Lifecycle Summary
