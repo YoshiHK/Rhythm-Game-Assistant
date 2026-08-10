@@ -729,6 +729,7 @@ jobs:
 
           COMPLETED_STAGE=$(jq -r '.completed_stage // empty' "$EVENT_FILE")
           NEXT_STAGE=$(jq -r '.next_stage // empty' "$EVENT_FILE")
+          LIFECYCLE_STATUS=$(jq -r '.lifecycle_status // empty' "$EVENT_FILE")
 
           VALID="false"
 
@@ -754,29 +755,29 @@ jobs:
               VALID="true"
               ;;
 
-            post_audit:complete)
-              VALID="true"
-              ;;
-
             *)
               VALID="false"
               ;;
 
           esac
 
+          #
+          # Terminal lifecycle state
+          #
+
+          if [ "$COMPLETED_STAGE" = "post_audit" ] \
+             && [ -z "$NEXT_STAGE" ] \
+             && [ "$LIFECYCLE_STATUS" = "complete" ]
+          then
+            VALID="true"
+          fi
+
           if [ "$VALID" != "true" ]; then
 
             echo "Invalid lifecycle event contract." >&2
             echo "Completed stage: ${COMPLETED_STAGE}" >&2
             echo "Next stage: ${NEXT_STAGE}" >&2
-
-            echo "Expected transitions:" >&2
-            echo "  pre_audit -> plan" >&2
-            echo "  plan -> plan_audit" >&2
-            echo "  plan_audit -> human_approval" >&2
-            echo "  human_approval -> execute" >&2
-            echo "  execute -> post_audit" >&2
-            echo "  post_audit -> complete" >&2
+            echo "Lifecycle status: ${LIFECYCLE_STATUS}" >&2
 
             exit 1
 
@@ -820,7 +821,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          DISPATCH_INPUTS_VAR: ${{ env.DISPATCH_INPUTS }}
         run: |
           set -euo pipefail
 
