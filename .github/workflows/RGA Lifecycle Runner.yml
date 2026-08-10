@@ -644,27 +644,60 @@ jobs:
 
           mkdir -p artifacts
 
+          EVENT_NEXT_STAGE="${NEXT_STAGE}"
+          EVENT_DISPATCH_REQUIRED="${DISPATCH_REQUIRED}"
+          LIFECYCLE_STATUS="running"
+
+          if [ "${RESOLVED_STAGE}" = "post_audit" ]; then
+            EVENT_NEXT_STAGE=""
+            EVENT_DISPATCH_REQUIRED="false"
+            LIFECYCLE_STATUS="complete"
+          fi
+
           jq -n \
             --arg session "${AUDIT_SESSION_ID}" \
             --arg trigger_src "${TRIGGER_SOURCE}" \
             --arg completed "${RESOLVED_STAGE}" \
-            --arg next "${NEXT_STAGE}" \
-            --argjson dispatch ${DISPATCH_REQUIRED:-false} \
+            --arg next "${EVENT_NEXT_STAGE}" \
+            --arg lifecycle_status "${LIFECYCLE_STATUS}" \
             --arg wf "${WORKFLOW_FILE}" \
-            '{
+            --argjson dispatch ${EVENT_DISPATCH_REQUIRED} \
+            '
+            {
               schema: "rga.lifecycle_event.v1.0",
               audit_session_id: $session,
               trigger_source: $trigger_src,
               completed_stage: $completed,
-              next_stage: $next,
-              dispatch_required: $dispatch,
-              workflow_file: $wf,
+              
+              next_stage:
+                (
+                  if $next == ""
+                  then null
+                  else $next
+                  end
+                ),
+
+              lifecycle_status:
+                $lifecycle_status,
+
+              dispatch_required:
+                $dispatch,
+
+              workflow_file:
+                (
+                  if $wf == ""
+                  then null
+                  else $wf
+                  end
+                ),
+
               event_contract: {
                 completed_stage_declared: true,
                 next_stage_declared: true,
                 artifact_guessing_required: false,
                 runner_must_infer_stage: false
               },
+
               governance: {
                 bot_1_role: "auditor",
                 bot_2_role: "planner_executor",
@@ -778,7 +811,7 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"          
 
-                        ############################################################
+      ############################################################
       # Dispatch Next Workflow
       ############################################################
 
