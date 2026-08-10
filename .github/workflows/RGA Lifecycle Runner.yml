@@ -615,6 +615,10 @@ jobs:
           COMPLETED_COUNT=0
           PROGRESS_PERCENT=0
 
+          ########################################################
+          # Lifecycle Status
+          ########################################################
+
           LIFECYCLE_STATUS="running"
 
           case "${RESOLVED_STAGE}" in
@@ -662,7 +666,22 @@ jobs:
               LIFECYCLE_STATUS="complete"
               ;;
 
+            halted)
+              LIFECYCLE_STATUS="halted"
+              ;;
+
           esac
+
+          ########################################################
+          # Terminal lifecycle override
+          ########################################################
+
+          if [ "${DISPATCH_REQUIRED:-false}" = "false" ] \
+             && [ -z "${NEXT_STAGE:-}" ] \
+             && [ "${RESOLVED_STAGE}" = "post_audit" ]
+          then
+            LIFECYCLE_STATUS="complete"
+          fi
 
           jq -n \
             --arg session "${AUDIT_SESSION_ID}" \
@@ -680,7 +699,7 @@ jobs:
             --argjson count ${COMPLETED_COUNT} \
             --argjson progress ${PROGRESS_PERCENT} \
             '{
-              schema: "rga.lifecycle_state.v1.3",
+              schema: "rga.lifecycle_state.v1.4",
 
               audit_session_id: $session,
 
@@ -735,27 +754,12 @@ jobs:
                 stage_count: 6,
                 completed_count: $count,
                 progress_percent: $progress
-              },
-
-              governance: {
-                human_approval_required_for_execute: true,
-                completed_phases_remain_immutable: true,
-                validation_is_not_verification: true,
-                bot_1_role: "auditor",
-                bot_2_role: "planner_executor",
-                approval_authority: "human"
-              },
-
-              policy: {
-                runner_does_not_audit: true,
-                runner_does_not_execute: true,
-                runner_does_not_approve: true
               }
-            }' > artifacts/lifecycle_state.json
+            }' \
+            > artifacts/lifecycle_state.json
 
           echo "Lifecycle state written:"
           cat artifacts/lifecycle_state.json
-
           
       ############################################################
       # Write Lifecycle Event Contract
@@ -768,15 +772,42 @@ jobs:
 
           mkdir -p artifacts
 
-          EVENT_NEXT_STAGE="${NEXT_STAGE}"
-          EVENT_DISPATCH_REQUIRED="${DISPATCH_REQUIRED}"
+          EVENT_NEXT_STAGE="${NEXT_STAGE:-}"
+          EVENT_DISPATCH_REQUIRED="${DISPATCH_REQUIRED:-false}"
+
           LIFECYCLE_STATUS="running"
 
-          if [ "${RESOLVED_STAGE}" = "post_audit" ]; then
-            EVENT_NEXT_STAGE=""
-            EVENT_DISPATCH_REQUIRED="false"
-            LIFECYCLE_STATUS="complete"
-          fi
+          case "${RESOLVED_STAGE}" in
+
+            complete)
+
+              EVENT_NEXT_STAGE=""
+              EVENT_DISPATCH_REQUIRED="false"
+              LIFECYCLE_STATUS="complete"
+
+              ;;
+
+            halted)
+
+              EVENT_NEXT_STAGE=""
+              EVENT_DISPATCH_REQUIRED="false"
+              LIFECYCLE_STATUS="halted"
+
+              ;;
+
+            post_audit)
+
+              if [ "${DISPATCH_REQUIRED:-false}" = "false" ] \
+                 && [ -z "${NEXT_STAGE:-}" ]
+              then
+
+                LIFECYCLE_STATUS="complete"
+
+              fi
+
+              ;;
+
+          esac
 
           jq -n \
             --arg session "${AUDIT_SESSION_ID}" \
@@ -788,11 +819,14 @@ jobs:
             --argjson dispatch ${EVENT_DISPATCH_REQUIRED} \
             '
             {
-              schema: "rga.lifecycle_event.v1.0",
+              schema: "rga.lifecycle_event.v1.1",
+
               audit_session_id: $session,
+
               trigger_source: $trigger_src,
+
               completed_stage: $completed,
-              
+
               next_stage:
                 (
                   if $next == ""
@@ -829,11 +863,11 @@ jobs:
                 human_approval_required: true,
                 completed_phases_remain_immutable: true
               }
-            }' > artifacts/lifecycle_event.json
+            }' \
+            > artifacts/lifecycle_event.json
 
           echo "Lifecycle event contract written:"
           cat artifacts/lifecycle_event.json
-
           
       ############################################################
       # Validate Lifecycle Event Contract
