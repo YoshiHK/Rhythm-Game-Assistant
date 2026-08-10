@@ -779,7 +779,7 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"          
 
-            ############################################################
+                  ############################################################
       # Dispatch Next Workflow
       ############################################################
 
@@ -890,6 +890,10 @@ jobs:
           if [ "$HTTP_STATUS" != "204" ]; then
 
             echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
+
+            if [ "$HTTP_STATUS" = "422" ]; then
+              echo "::error::Target workflow '${WORKFLOW_FILE}' does not have 'on: workflow_dispatch' configured on branch '${REF_INPUT}', or the workflow file name is mismatched." >&2
+            fi
 
             echo "API response:" >&2
             sed -n '1,200p' /tmp/rga_lifecycle_dispatch_response.json >&2 || true
