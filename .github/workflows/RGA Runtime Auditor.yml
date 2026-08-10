@@ -54,7 +54,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          
+
       ############################################################
       # Prepare Artifact Directory
       ############################################################
@@ -134,11 +134,11 @@ jobs:
       ############################################################
 
       - name: Evidence Taxonomy
-      
+
         run: |
           cat > artifacts/evidence_taxonomy.json <<'JSON'
-{
-  "schema": "rga.evidence.taxonomy.v1.2",
+          {
+            "schema": "rga.evidence.taxonomy.v1.2",
 
             "mode": "read_only",
 
@@ -360,17 +360,17 @@ jobs:
             }
           }
           JSON
-          
+
       ############################################################
       # Governance Lineage Taxonomy
       ############################################################
 
       - name: Governance Lineage Taxonomy
-      
+
         run: |
           cat > artifacts/governance_lineage_taxonomy.json <<'JSON'
-{
-  "schema": "rga.governance.lineage.v1.1",
+          {
+            "schema": "rga.governance.lineage.v1.1",
 
             "purpose":
               "Root and derived governance failure rendering.",
@@ -426,7 +426,7 @@ jobs:
               "Lineage classification does not imply remediation."
             ]
           }
-          JSON                    
+          JSON
 
       ############################################################
       # Flow Contract Taxonomy
@@ -435,8 +435,8 @@ jobs:
       - name: Flow Contract Taxonomy
         run: |
           cat > artifacts/flow_contract_taxonomy.json <<'JSON'
-{
-  "schema": "rga.flow_contract_taxonomy.v1.1",
+          {
+            "schema": "rga.flow_contract_taxonomy.v1.1",
 
             "contracts": {
 
@@ -706,7 +706,7 @@ jobs:
                   ensure_ascii=False,
               )
           PY
-          
+
       ############################################################
       # Runtime Discovery Evidence
       ############################################################
@@ -792,29 +792,29 @@ jobs:
           } > artifacts/runtime_discovery_summary.txt
 
           python - <<'PY'
-import json
-from pathlib import Path
+          import json
+          from pathlib import Path
 
-payload = {
-    "schema": "rga.runtime_discovery_evidence.v1.1",
-    "repository_driven": True,
-    "runtime_surfaces": {
-        "main": "main_candidates.txt",
-        "recommend": "recommend_candidates.txt",
-        "runtime_meta": "runtime_meta_candidates.txt",
-        "mcp": "mcp_server_candidates.txt",
-    },
-    "discovery_strategy": "repository_driven",
-    "audit_note": (
-        "Runtime discovery identifies candidate "
-        "runtime surfaces but does not imply "
-        "runtime readiness."
-    ),
-}
+          payload = {
+              "schema": "rga.runtime_discovery_evidence.v1.1",
+              "repository_driven": True,
+              "runtime_surfaces": {
+                  "main": "main_candidates.txt",
+                  "recommend": "recommend_candidates.txt",
+                  "runtime_meta": "runtime_meta_candidates.txt",
+                  "mcp": "mcp_server_candidates.txt",
+              },
+              "discovery_strategy": "repository_driven",
+              "audit_note": (
+                  "Runtime discovery identifies candidate "
+                  "runtime surfaces but does not imply "
+                  "runtime readiness."
+              ),
+          }
 
-with open("artifacts/runtime_discovery_summary.json", "w", encoding="utf-8") as f:
-    json.dump(payload, f, indent=2, ensure_ascii=False)
-PY
+          with open("artifacts/runtime_discovery_summary.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, indent=2, ensure_ascii=False)
+          PY
 
       ############################################################
       # Package Reality Evidence
@@ -848,23 +848,23 @@ PY
           } > artifacts/package_reality_summary.txt
 
           python - <<'PY'
-import json
+          import json
 
-payload = {
-    "schema": "rga.package_reality_evidence.v1.1",
-    "canonical_package": "rhythm_ingestion",
-    "repository_driven": True,
-    "package_reality": "independent",
-    "audit_note": (
-        "Package reality should be evaluated "
-        "before import reality."
-    ),
-}
+          payload = {
+              "schema": "rga.package_reality_evidence.v1.1",
+              "canonical_package": "rhythm_ingestion",
+              "repository_driven": True,
+              "package_reality": "independent",
+              "audit_note": (
+                  "Package reality should be evaluated "
+                  "before import reality."
+              ),
+          }
 
-with open("artifacts/package_reality_summary.json", "w", encoding="utf-8") as f:
-    json.dump(payload, f, indent=2, ensure_ascii=False)
-PY
-         
+          with open("artifacts/package_reality_summary.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, indent=2, ensure_ascii=False)
+          PY
+
       ############################################################
       # Artifact Backbone Discovery
       ############################################################
@@ -978,7 +978,7 @@ PY
                   ensure_ascii=False,
               )
           PY
-          
+
       ############################################################
       # Dependency Reality Evidence
       ############################################################
@@ -1072,7 +1072,7 @@ PY
               "governance_effect": {
                   "required_missing":
                       "runtime_limited",
-                      
+
                   "api_runtime_missing":
                       "runtime_limited",
 
@@ -1153,7 +1153,7 @@ PY
 
               "repository_driven":
                   True,
-                  
+
               "lineage_interpretation": {
                   "package_reality":
                       "must_be_verified_first",
@@ -1171,7 +1171,7 @@ PY
               "audit_note": (
                   "Import failures should be interpreted "
                   "against dependency reality before being "
-                  "treated as package-layout defects."   
+                  "treated as package-layout defects."
               ),
           }
 
@@ -1218,7 +1218,7 @@ PY
             echo "chart_patterns.db candidates:"
             cat artifacts/chart_patterns_db.txt || true
           } > artifacts/artifact_database_discovery_summary.txt
-          
+
       ############################################################
       # Runtime Reader Discovery Evidence
       ############################################################
@@ -1639,7 +1639,7 @@ PY
                       if repository_count > 0
                       else "insufficient_evidence"
                   ),
-                  
+
               "inventory_role":
                   "repository_discovery",
 
@@ -1665,7 +1665,6 @@ PY
                   ensure_ascii=False,
               )
           PY
-
 
       ############################################################
       # Asset Classification Evidence
@@ -1796,7 +1795,6 @@ PY
               )
           PY
 
-
       ############################################################
       # Asset Scope Evidence
       ############################################################
@@ -1882,7 +1880,7 @@ PY
                       "coverage accounting but does not "
                       "modify repository state."
                   ),
-                  
+
               "type_model": {
                   "type_A":
                       "deterministic",
@@ -1915,7 +1913,6 @@ PY
                   ensure_ascii=False,
               )
           PY
-
 
       ############################################################
       # Artifact Relationship Evidence
@@ -1954,110 +1951,111 @@ PY
           } > artifacts/artifact_chain_discovery.txt
 
           cat > artifacts/artifact_failure_lineage.json <<'JSON'
-            {
-              "schema": "rga.artifact_failure_lineage.v1.2",
+          {
+            "schema": "rga.artifact_failure_lineage.v1.2",
 
-              "artifact_backbone_chain": [
-                "file_scan_inventory.db",
-                "chart_assets.db",
-                "chart_patterns.db"
-              ],
+            "artifact_backbone_chain": [
+              "file_scan_inventory.db",
+              "chart_assets.db",
+              "chart_patterns.db"
+            ],
 
-              "root_contract":
-                "artifact_database_policy",
+            "root_contract":
+              "artifact_database_policy",
 
-              "root_failure_classification": {
-                "artifact_database_policy": {
-                  "failure_class":
-                    "root_failure",
+            "root_failure_classification": {
+              "artifact_database_policy": {
+                "failure_class":
+                  "root_failure",
 
-                  "governance_blocking":
-                    true,
-
-                  "resolution_priority":
-                    1
-                }
-              },
-
-              "derived_contracts": [
-                "artifact_relationships",
-                "artifact_backbone_contract",
-                "asset_coverage",
-                "hash_integrity",
-                "type_A_usability",
-                "runtime_artifact_readiness"
-              ],
-
-              "direct_impact_scope": [
-                "artifact_relationships",
-                "artifact_backbone_contract",
-                "asset_coverage",
-                "hash_integrity",
-                "type_A_usability",
-                "runtime_artifact_readiness"
-              ],
-
-              "relationship_principles": {
-
-                "presence_is_not_relationship_audit":
+                "governance_blocking":
                   true,
 
-                "readability_is_not_relationship_audit":
-                  true,
+                "resolution_priority":
+                  1
+              }
+            },
 
-                "relationship_audit_precedes_asset_coverage":
-                  true,
+            "derived_contracts": [
+              "artifact_relationships",
+              "artifact_backbone_contract",
+              "asset_coverage",
+              "hash_integrity",
+              "type_A_usability",
+              "runtime_artifact_readiness"
+            ],
 
-                "asset_coverage_precedes_deletion_readiness":
-                  true,
+            "direct_impact_scope": [
+              "artifact_relationships",
+              "artifact_backbone_contract",
+              "asset_coverage",
+              "hash_integrity",
+              "type_A_usability",
+              "runtime_artifact_readiness"
+            ],
 
-                "hash_consistency_precedes_deletion_readiness":
-                  true,
+            "relationship_principles": {
 
-                "runtime_artifact_readiness_precedes_deletion_readiness":
-                  true
-              },
+              "presence_is_not_relationship_audit":
+                true,
 
-              "backbone_interpretation": {
+              "readability_is_not_relationship_audit":
+                true,
 
-                "database_presence":
-                  "discovery",
+              "relationship_audit_precedes_asset_coverage":
+                true,
 
-                "database_readability":
-                  "validation",
+              "asset_coverage_precedes_deletion_readiness":
+                true,
 
-                "relationship_audit":
-                  "audit",
+              "hash_consistency_precedes_deletion_readiness":
+                true,
 
-                "deletion_readiness":
-                  "governance_gate"
-              },
+              "runtime_artifact_readiness_precedes_deletion_readiness":
+                true
+            },
 
-              "policy": {
+            "backbone_interpretation": {
 
-                "resolve_root_failures_first":
-                  true,
+              "database_presence":
+                "discovery",
 
-                "revalidate_derived_after_root_resolution":
-                  true,
+              "database_readability":
+                "validation",
 
-                "impact_scope_is_advisory_only":
-                  true,
+              "relationship_audit":
+                "audit",
 
-                "lineage_does_not_imply_remediation":
-                  true,
+              "deletion_readiness":
+                "governance_gate"
+            },
 
-                "derived_failures_should_not_be_prioritized_ahead_of_root_failures":
-                  true
-              },
+            "policy": {
 
-              "governance_notes": [
-                "Artifact database policy is the canonical artifact-backbone root contract.",
-                "Derived contracts should be revalidated after root contract restoration.",
-                "Relationship audit requires more than database discovery.",
-                "Deletion readiness must not be inferred from discovery evidence."
-              ]
-            }
+              "resolve_root_failures_first":
+                true,
+
+              "revalidate_derived_after_root_resolution":
+                true,
+
+              "impact_scope_is_advisory_only":
+                true,
+
+              "lineage_does_not_imply_remediation":
+                true,
+
+              "derived_failures_should_not_be_prioritized_ahead_of_root_failures":
+                true
+            },
+
+            "governance_notes": [
+              "Artifact database policy is the canonical artifact-backbone root contract.",
+              "Derived contracts should be revalidated after root contract restoration.",
+              "Relationship audit requires more than database discovery.",
+              "Deletion readiness must not be inferred from discovery evidence."
+            ]
+          }
+          JSON
 
       ############################################################
       # Hash Inventory Evidence
@@ -2122,12 +2120,12 @@ PY
                       "Hash consistency requires comparison against "
                       "persisted artifact records."
                   ),
-                  
+
               "future_audit_dependencies": [
                   "hash_integrity",
                   "asset_coverage",
                   "deletion_readiness",
-              ],                  
+              ],
           }
 
           with open(
@@ -2247,7 +2245,7 @@ PY
                   "runtime_limited_is_not_automatic_governance_failure":
                       True,
               },
-                      
+
               "flow_entry_artifacts": {
                   "chart_first":
                       "chart",
@@ -2286,7 +2284,7 @@ PY
                   ensure_ascii=False,
               )
           PY
-          
+
       ############################################################
       # Layer Separation Evidence
       ############################################################
@@ -2843,7 +2841,7 @@ PY
             }
           }
           JSON
-          
+
       ############################################################
       # Run RGA Runtime Auditor
       ############################################################
@@ -2900,7 +2898,6 @@ PY
           echo "RGA Runtime Auditor exited with code: ${auditor_exit_code}"
 
           exit 0
-          
 
       ############################################################
       # Plan Audit Report
@@ -3098,7 +3095,7 @@ PY
           payload = {
               "schema":
                   "rga.plan_audit_evidence.v1.2",
- 
+
               "canonical_output":
                   "artifacts/plan_audit_evidence.json",
 
@@ -3136,7 +3133,7 @@ PY
               "bot_1_authority": {
                   "approve_execution":
                       False,
-  
+
                   "apply_execution":
                       False,
 
@@ -3236,7 +3233,7 @@ PY
           PY
 
           python artifacts/plan_audit_generator.py
-          
+
           rm -f artifacts/plan_audit_generator.py
 
       ############################################################
@@ -3281,7 +3278,7 @@ PY
           payload = {
               "schema":
                   "rga.post_audit_contract.v1.2",
-  
+
               "canonical_output":
                   "artifacts/post_audit_contract.json",
 
@@ -3414,7 +3411,7 @@ PY
           PY
 
           python artifacts/post_audit_contract_generator.py
-          
+
           rm -f artifacts/post_audit_contract_generator.py
 
       ############################################################
@@ -3565,7 +3562,7 @@ PY
           zip -r ../runtime-auditor-report.zip . || true
 
           cd ..
-          
+
       ############################################################
       # Write Lifecycle Event Contract
       ############################################################
@@ -3627,8 +3624,8 @@ PY
 EOF
 
           echo "Lifecycle event contract written:"
-          cat artifacts/lifecycle_event.json   
-          
+          cat artifacts/lifecycle_event.json
+
       ############################################################
       # Upload Lifecycle Event
       #
@@ -3661,7 +3658,7 @@ EOF
         with:
           name: rga-lifecycle-event
           path: artifacts/lifecycle_event.json
-          if-no-files-found: warn          
+          if-no-files-found: warn
 
       ############################################################
       # Upload Runtime Auditor Bundle
@@ -3710,4 +3707,3 @@ EOF
           name: post-audit-contract
           path: artifacts/post_audit_contract.json
           if-no-files-found: warn
-
