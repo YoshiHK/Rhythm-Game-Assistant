@@ -404,28 +404,27 @@ jobs:
           ########################################################
           # Fallback runtime_executor_report.md
           ########################################################
-
           if [ ! -s artifacts/runtime_executor_report.md ]; then
             cat > artifacts/runtime_executor_report.md <<'MD'
-# RGA Runtime Executor Report
+          # RGA Runtime Executor Report
 
-## Fallback Report
+          ## Fallback Report
 
-`runtime_executor.py` did not emit a non-empty Markdown report.
+          `runtime_executor.py` did not emit a non-empty Markdown report.
 
-See:
+          See:
 
-- `runtime_executor_report.json`
-- `runtime_executor_stdout.txt`
-- `runtime_executor_stderr.txt`
-- `runtime_executor_stderr_summary.json`
-- `runtime_executor_exit_code.txt`
-MD
+          - `runtime_executor_report.json`
+          - `runtime_executor_stdout.txt`
+          - `runtime_executor_stderr.txt`
+          - `runtime_executor_stderr_summary.json`
+          - `runtime_executor_exit_code.txt`
+          MD
           fi
 
           echo "Runtime executor exit code: ${EXECUTOR_EXIT_CODE}"
           echo "Runtime executor evidence artifacts generated."
-          
+
       ############################################################
       # Execution Plan Fingerprint
       ############################################################
