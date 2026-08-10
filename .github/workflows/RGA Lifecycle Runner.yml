@@ -171,6 +171,17 @@ jobs:
           STAGE="auto_detect"
           REF_INPUT="${DEFAULT_REF:-main}"
           AUDIT_SESSION_ID=""
+
+          ######################################################
+          # Resume Contract
+          ######################################################
+
+          RESUME_FROM_EVENT="false"
+
+          ######################################################
+          # Lifecycle Artifacts
+          ######################################################
+
           PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
           EXECUTION_PLAN="artifacts/execution_plan.json"
           APPROVAL_ARTIFACT="artifacts/human_execution_approval.json"
@@ -194,7 +205,7 @@ jobs:
             #
             ####################################################
 
-            RESUME_FROM_EVENT="${MANUAL_RESUME_FROM_EVENT:-false}"
+            RESUME_FROM_EVENT="${MANUAL_RESUME_FROM_EVENT:-${RESUME_FROM_EVENT}}"
 
             if [ "$RESUME_FROM_EVENT" = "true" ]; then
 
@@ -302,7 +313,7 @@ jobs:
             echo "STAGE=$STAGE"
             echo "REF_INPUT=$REF_INPUT"
             echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
-            echo "RESUME_FROM_EVENT=$RESUME_FROM_EVENT"
+            echo "RESUME_FROM_EVENT=${RESUME_FROM_EVENT:-false}"
             echo "PRE_AUDIT_REPORT=$PRE_AUDIT_REPORT"
             echo "EXECUTION_PLAN=$EXECUTION_PLAN"
             echo "APPROVAL_ARTIFACT=$APPROVAL_ARTIFACT"
