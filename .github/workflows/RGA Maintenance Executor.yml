@@ -96,45 +96,47 @@ jobs:
       - name: Prepare Artifact Directory
         run: |
           mkdir -p artifacts
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
 
-          python - <<'PY'
-import json
-from pathlib import Path
-payload = {
-    "schema": "rga.maintenance_lifecycle_context.v1.0",
-    "workflow": "RGA Maintenance Executor",
-    "bot": "rga_executor_bot",
-    "bot_role": "planner_executor",
-    "lifecycle_model": [
-        "bot_1_pre_audit",
-        "bot_2_implementation_plan",
-        "bot_1_plan_audit",
-        "human_approval",
-        "bot_2_execute",
-        "bot_1_post_audit",
-    ],
-    "authority": {
-        "bot_2_may_plan": True,
-        "bot_2_may_execute": True,
-        "bot_2_may_approve": False,
-        "bot_2_may_self_approve": False,
-        "human_approval_required": True,
-    },
-    "phase_boundary_policy": {
-        "completed_phases_immutable": True,
-        "canonical_row_modification_allowed": False,
-        "pattern_logic_modification_allowed": False,
-        "tips_generation_modification_allowed": False,
-        "personalization_modification_allowed": False,
-        "localization_modification_allowed": False,
-        "recommendation_logic_modification_allowed": False,
-    },
-}
-Path("artifacts/maintenance_lifecycle_context.json").write_text(
-    json.dumps(payload, indent=2),
-    encoding="utf-8",
-)
-PY
+          payload = {
+              "schema": "rga.maintenance_lifecycle_context.v1.0",
+              "workflow": "RGA Maintenance Executor",
+              "bot": "rga_executor_bot",
+              "bot_role": "planner_executor",
+              "lifecycle_model": [
+                  "bot_1_pre_audit",
+                  "bot_2_implementation_plan",
+                  "bot_1_plan_audit",
+                  "human_approval",
+                  "bot_2_execute",
+                  "bot_1_post_audit",
+              ],
+              "authority": {
+                  "bot_2_may_plan": True,
+                  "bot_2_may_execute": True,
+                  "bot_2_may_approve": False,
+                  "bot_2_may_self_approve": False,
+                  "human_approval_required": True,
+              },
+              "phase_boundary_policy": {
+                  "completed_phases_immutable": True,
+                  "canonical_row_modification_allowed": False,
+                  "pattern_logic_modification_allowed": False,
+                  "tips_generation_modification_allowed": False,
+                  "personalization_modification_allowed": False,
+                  "localization_modification_allowed": False,
+                  "recommendation_logic_modification_allowed": False,
+              },
+          }
+
+          Path("artifacts/maintenance_lifecycle_context.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
+          
       ############################################################
       # Execution Gate
       ############################################################
