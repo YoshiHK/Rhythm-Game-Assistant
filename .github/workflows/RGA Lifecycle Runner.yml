@@ -60,10 +60,20 @@ on:
         required: false
         default: ""
 
+      resume_from_event:
+        description: >-
+          Resume lifecycle from lifecycle_event.json
+          produced by Bot #1 or Bot #2.
+
+          When true, Lifecycle Runner ignores
+          lifecycle_stage and resolves the next stage
+          from the canonical lifecycle event contract.
+
+        required: false
+        default: "false"
+
       pre_audit_report:
         description: Bot #1 Auditor pre-audit report path.
-        required: false
-        default: artifacts/runtime_auditor_report.json
 
       execution_plan:
         description: Bot #2 execution plan path.
@@ -133,6 +143,7 @@ jobs:
           MANUAL_STAGE: ${{ github.event.inputs.lifecycle_stage }}
           MANUAL_REF: ${{ github.event.inputs.ref }}
           MANUAL_SESSION: ${{ github.event.inputs.audit_session_id }}
+          MANUAL_RESUME_FROM_EVENT: ${{ github.event.inputs.resume_from_event }}
           MANUAL_PRE_AUDIT_REPORT: ${{ github.event.inputs.pre_audit_report }}
           MANUAL_EXECUTION_PLAN: ${{ github.event.inputs.execution_plan }}
           MANUAL_APPROVAL_ARTIFACT: ${{ github.event.inputs.approval_artifact }}
@@ -171,19 +182,61 @@ jobs:
           ######################################################
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            STAGE="${MANUAL_STAGE:-pre_audit}"
+
+            ####################################################
+            # Resume Contract Mode
+            #
+            # Bot #1 / Bot #2
+            #
+            #   lifecycle_event.json
+            #          ↓
+            #   explicit Runner Resume
+            #
+            ####################################################
+
+            RESUME_FROM_EVENT="${MANUAL_RESUME_FROM_EVENT:-false}"
+
+            if [ "$RESUME_FROM_EVENT" = "true" ]; then
+
+              STAGE="auto_detect"
+
+            else
+
+              STAGE="${MANUAL_STAGE:-pre_audit}"
+
+            fi
+
             REF_INPUT="${MANUAL_REF:-main}"
+
             AUDIT_SESSION_ID="${MANUAL_SESSION:-}"
+
             PRE_AUDIT_REPORT="${MANUAL_PRE_AUDIT_REPORT:-artifacts/runtime_auditor_report.json}"
+
             EXECUTION_PLAN="${MANUAL_EXECUTION_PLAN:-artifacts/execution_plan.json}"
+
             APPROVAL_ARTIFACT="${MANUAL_APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
+
             EXECUTION_APPROVAL="${MANUAL_EXECUTION_APPROVAL:-}"
+
             TRIGGER_SOURCE="workflow_dispatch"
 
             if [ -z "$AUDIT_SESSION_ID" ]; then
+
               AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
 
             fi
+
+            ####################################################
+            # Resume Diagnostics
+            ####################################################
+
+            echo "workflow_dispatch detected."
+
+            echo "resume_from_event=${RESUME_FROM_EVENT}"
+
+            echo "selected_stage=${STAGE}"
+
+            echo "audit_session_id=${AUDIT_SESSION_ID}"
 
           ######################################################
           # workflow_run
@@ -249,6 +302,7 @@ jobs:
             echo "STAGE=$STAGE"
             echo "REF_INPUT=$REF_INPUT"
             echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
+            echo "RESUME_FROM_EVENT=$RESUME_FROM_EVENT"
             echo "PRE_AUDIT_REPORT=$PRE_AUDIT_REPORT"
             echo "EXECUTION_PLAN=$EXECUTION_PLAN"
             echo "APPROVAL_ARTIFACT=$APPROVAL_ARTIFACT"
@@ -1244,6 +1298,22 @@ jobs:
 
       ############################################################
       # Dispatch Next Workflow
+      #
+      # Runner-side contract:
+      #
+      #   - Dispatches the next executable Bot workflow.
+      #
+      #   - Does not rely on workflow_run continuation as the
+      #     only lifecycle continuation path.
+      #
+      #   - Records that downstream Bot completion is expected
+      #     to explicitly resume:
+      #
+      #       RGA Lifecycle Runner.yml
+      #
+      #   - Does not audit.
+      #   - Does not execute.
+      #   - Does not approve.
       ############################################################
 
       - name: Dispatch next workflow
@@ -1251,8 +1321,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RUNNER_WORKFLOW_FILE: RGA Lifecycle Runner.yml
         run: |
           set -euo pipefail
+
+          mkdir -p artifacts
 
           ########################################################
           # Terminal lifecycle statuses
@@ -1266,6 +1339,20 @@ jobs:
               echo "Current stage: ${RESOLVED_STAGE:-unknown}"
               echo "Lifecycle status: complete"
               echo "Dispatch required: false"
+
+              jq -n \
+                --arg current "${RESOLVED_STAGE:-unknown}" \
+                --arg status "complete" \
+                --arg reason "${LIFECYCLE_REASON:-Lifecycle complete.}" \
+                '{
+                  schema: "rga.lifecycle_dispatch_result.v1.0",
+                  dispatch_performed: false,
+                  current_stage: $current,
+                  lifecycle_status: $status,
+                  reason: $reason,
+                  terminal: true
+                }' \
+                > artifacts/lifecycle_dispatch_result.json
 
               exit 0
 
@@ -1282,6 +1369,20 @@ jobs:
                 echo "Reason: ${LIFECYCLE_REASON}"
               fi
 
+              jq -n \
+                --arg current "${RESOLVED_STAGE:-unknown}" \
+                --arg status "halted" \
+                --arg reason "${LIFECYCLE_REASON:-Lifecycle halted.}" \
+                '{
+                  schema: "rga.lifecycle_dispatch_result.v1.0",
+                  dispatch_performed: false,
+                  current_stage: $current,
+                  lifecycle_status: $status,
+                  reason: $reason,
+                  terminal: true
+                }' \
+                > artifacts/lifecycle_dispatch_result.json
+
               exit 0
 
               ;;
@@ -1295,9 +1396,7 @@ jobs:
           if [ "${DISPATCH_REQUIRED:-false}" != "true" ]; then
 
             echo "Dispatch not required."
-
             echo "Current stage: ${RESOLVED_STAGE:-unknown}"
-
             echo "Lifecycle status: ${LIFECYCLE_STATUS:-running}"
 
             if [ -n "${NEXT_STAGE:-}" ]; then
@@ -1311,6 +1410,27 @@ jobs:
             if [ -n "${LIFECYCLE_REASON:-}" ]; then
               echo "Reason: ${LIFECYCLE_REASON}"
             fi
+
+            jq -n \
+              --arg current "${RESOLVED_STAGE:-unknown}" \
+              --arg next "${NEXT_STAGE:-}" \
+              --arg status "${LIFECYCLE_STATUS:-running}" \
+              --arg reason "${LIFECYCLE_REASON:-Dispatch not required.}" \
+              '{
+                schema: "rga.lifecycle_dispatch_result.v1.0",
+                dispatch_performed: false,
+                current_stage: $current,
+                next_stage: (
+                  if $next == ""
+                  then null
+                  else $next
+                  end
+                ),
+                lifecycle_status: $status,
+                reason: $reason,
+                terminal: false
+              }' \
+              > artifacts/lifecycle_dispatch_result.json
 
             exit 0
 
@@ -1344,7 +1464,16 @@ jobs:
           # Tooling guard
           ########################################################
 
-          command -v jq >/dev/null 2>&1
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq is required for lifecycle dispatch." >&2
+            exit 1
+          fi
+
+          ########################################################
+          # Validate dispatch inputs
+          ########################################################
+
+          echo "${DISPATCH_INPUTS}" | jq empty
 
           ########################################################
           # Encode workflow filename
@@ -1352,14 +1481,12 @@ jobs:
 
           ENCODED_WORKFLOW="$(
             printf '%s' "${WORKFLOW_FILE}" \
-            | jq -sRr @uri
+              | jq -sRr @uri
           )"
 
           ########################################################
-          # Build dispatch payload
+          # Build workflow_dispatch payload
           ########################################################
-
-          echo "${DISPATCH_INPUTS}" | jq empty
 
           jq -n \
             --arg ref "${REF_INPUT}" \
@@ -1377,14 +1504,22 @@ jobs:
           ########################################################
 
           echo "Dispatching workflow: ${WORKFLOW_FILE}"
-
+          echo "Encoded workflow: ${ENCODED_WORKFLOW}"
           echo "Current stage: ${RESOLVED_STAGE:-unknown}"
-
           echo "Lifecycle status: ${LIFECYCLE_STATUS:-running}"
 
-          echo "Next stage: ${NEXT_STAGE:-unknown}"
+          if [ -n "${NEXT_STAGE:-}" ]; then
+            echo "Next stage: ${NEXT_STAGE}"
+          else
+            echo "Next stage: (none)"
+          fi
 
           echo "Ref: ${REF_INPUT}"
+          echo "Downstream resume expectation: explicit Runner resume dispatch"
+          echo "Runner workflow expected: ${RUNNER_WORKFLOW_FILE}"
+
+          echo "Dispatch payload:"
+          cat /tmp/rga_lifecycle_dispatch_payload.json
 
           ########################################################
           # GitHub workflow_dispatch
@@ -1403,6 +1538,10 @@ jobs:
               || true
           )"
 
+          ########################################################
+          # Dispatch failure
+          ########################################################
+
           if [ "${HTTP_STATUS}" != "204" ]; then
 
             echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
@@ -1420,11 +1559,74 @@ jobs:
               >&2 \
               || true
 
+            jq -n \
+              --arg current "${RESOLVED_STAGE:-unknown}" \
+              --arg next "${NEXT_STAGE:-}" \
+              --arg status "${LIFECYCLE_STATUS:-running}" \
+              --arg workflow "${WORKFLOW_FILE}" \
+              --arg ref "${REF_INPUT}" \
+              --arg runner "${RUNNER_WORKFLOW_FILE}" \
+              --arg http_status "${HTTP_STATUS}" \
+              '{
+                schema: "rga.lifecycle_dispatch_result.v1.0",
+                dispatch_performed: false,
+                dispatch_created: false,
+                current_stage: $current,
+                next_stage: (
+                  if $next == ""
+                  then null
+                  else $next
+                  end
+                ),
+                lifecycle_status: $status,
+                target_workflow: $workflow,
+                ref: $ref,
+                http_status: $http_status,
+                explicit_runner_resume_expected: true,
+                runner_workflow_file: $runner,
+                reason: "workflow_dispatch failed"
+              }' \
+              > artifacts/lifecycle_dispatch_result.json
+
             exit 1
 
           fi
 
+          ########################################################
+          # Dispatch success
+          ########################################################
+
+          jq -n \
+            --arg current "${RESOLVED_STAGE:-unknown}" \
+            --arg next "${NEXT_STAGE:-}" \
+            --arg status "${LIFECYCLE_STATUS:-running}" \
+            --arg workflow "${WORKFLOW_FILE}" \
+            --arg ref "${REF_INPUT}" \
+            --arg runner "${RUNNER_WORKFLOW_FILE}" \
+            '{
+              schema: "rga.lifecycle_dispatch_result.v1.0",
+              dispatch_performed: true,
+              dispatch_created: true,
+              current_stage: $current,
+              next_stage: (
+                if $next == ""
+                then null
+                else $next
+                end
+              ),
+              lifecycle_status: $status,
+              target_workflow: $workflow,
+              ref: $ref,
+              explicit_runner_resume_expected: true,
+              runner_workflow_file: $runner,
+              downstream_contract_expected: "artifacts/lifecycle_event.json",
+              downstream_resume_model: "bot_completion_explicit_runner_dispatch"
+            }' \
+            > artifacts/lifecycle_dispatch_result.json
+
           echo "Dispatched workflow '${WORKFLOW_FILE}' successfully."
+          echo "Lifecycle dispatch result written:"
+          cat artifacts/lifecycle_dispatch_result.json
 
       ############################################################
       # Upload Lifecycle Event

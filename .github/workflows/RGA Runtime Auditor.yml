@@ -3653,6 +3653,111 @@ jobs:
           name: rga-lifecycle-event
           path: artifacts/lifecycle_event.json
           if-no-files-found: warn
+          
+      ############################################################
+      # Runner Resume Dispatch
+      #
+      # Purpose:
+      #
+      #   Explicitly resumes:
+      #
+      #     RGA Lifecycle Runner.yml
+      #
+      #   This avoids relying solely on:
+      #
+      #     workflow_run
+      #
+      #   and establishes:
+      #
+      #     Bot completion
+      #       →
+      #     Runner resume
+      #
+      ############################################################
+
+      - name: Runner Resume Dispatch
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          EVENT_FILE="artifacts/lifecycle_event.json"
+
+          if [ ! -f "$EVENT_FILE" ]; then
+
+            echo "Lifecycle event contract missing."
+            echo "Runner resume skipped."
+
+            exit 0
+
+          fi
+
+          ########################################################
+          # Resolve Session
+          ########################################################
+
+          AUDIT_SESSION_ID="$(
+            jq -r \
+              '.audit_session_id // empty' \
+              "$EVENT_FILE"
+          )"
+
+          if [ -z "$AUDIT_SESSION_ID" ]; then
+
+            echo "audit_session_id missing from lifecycle_event.json" >&2
+            exit 1
+
+          fi
+
+          ########################################################
+          # Build Resume Payload
+          ########################################################
+
+          jq -n \
+            --arg audit_session_id "${AUDIT_SESSION_ID}" \
+            '{
+              ref: "main",
+
+              inputs: {
+                resume_from_event: "true",
+                audit_session_id: $audit_session_id
+              }
+            }' \
+            > /tmp/rga_runner_resume.json
+
+          ########################################################
+          # Dispatch Runner
+          ########################################################
+
+          HTTP_STATUS="$(
+            curl -sS \
+              -o /tmp/rga_runner_resume_response.json \
+              -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/RGA%20Lifecycle%20Runner.yml/dispatches" \
+              -d @/tmp/rga_runner_resume.json \
+              || true
+          )"
+
+          if [ "$HTTP_STATUS" != "204" ]; then
+
+            echo "Runner resume dispatch failed (HTTP ${HTTP_STATUS})"
+
+            sed -n '1,200p' \
+              /tmp/rga_runner_resume_response.json \
+              || true
+
+            exit 1
+
+          fi
+
+          echo "Runner resume dispatched."
+          echo "Session: ${AUDIT_SESSION_ID}"          
 
       ############################################################
       # Upload Runtime Auditor Bundle
