@@ -123,12 +123,13 @@ jobs:
         
       ########################################################
       # Prepare Lifecycle Context
-      ########################################################        
+      ########################################################
 
       - name: Prepare lifecycle context
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+
           MANUAL_STAGE: ${{ github.event.inputs.lifecycle_stage }}
           MANUAL_REF: ${{ github.event.inputs.ref }}
           MANUAL_SESSION: ${{ github.event.inputs.audit_session_id }}
@@ -136,11 +137,13 @@ jobs:
           MANUAL_EXECUTION_PLAN: ${{ github.event.inputs.execution_plan }}
           MANUAL_APPROVAL_ARTIFACT: ${{ github.event.inputs.approval_artifact }}
           MANUAL_EXECUTION_APPROVAL: ${{ github.event.inputs.execution_approval }}
+
           TRIGGERING_WORKFLOW: ${{ github.event.workflow_run.name }}
           TRIGGERING_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
           TRIGGERING_RUN_ID: ${{ github.event.workflow_run.id }}
           TRIGGERING_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           TRIGGERING_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+
           DEFAULT_REF: ${{ github.ref_name }}
 
         run: |
@@ -150,12 +153,24 @@ jobs:
             artifacts \
             lifecycle_trigger
 
-          ########################################################
-          # Context Resolution
-          ########################################################
+          ######################################################
+          # Defaults
+          ######################################################
+
+          STAGE="auto_detect"
+          REF_INPUT="${DEFAULT_REF:-main}"
+          AUDIT_SESSION_ID=""
+          PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
+          EXECUTION_PLAN="artifacts/execution_plan.json"
+          APPROVAL_ARTIFACT="artifacts/human_execution_approval.json"
+          EXECUTION_APPROVAL=""
+          TRIGGER_SOURCE="unknown"
+
+          ######################################################
+          # workflow_dispatch
+          ######################################################
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-
             STAGE="${MANUAL_STAGE:-pre_audit}"
             REF_INPUT="${MANUAL_REF:-main}"
             AUDIT_SESSION_ID="${MANUAL_SESSION:-}"
@@ -163,39 +178,72 @@ jobs:
             EXECUTION_PLAN="${MANUAL_EXECUTION_PLAN:-artifacts/execution_plan.json}"
             APPROVAL_ARTIFACT="${MANUAL_APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
             EXECUTION_APPROVAL="${MANUAL_EXECUTION_APPROVAL:-}"
-            TRIGGER_SOURCE="manual"
+            TRIGGER_SOURCE="workflow_dispatch"
 
-            # Fresh timestamp session for manual dispatches if not explicitly supplied
             if [ -z "$AUDIT_SESSION_ID" ]; then
               AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+
             fi
 
-          else
+          ######################################################
+          # workflow_run
+          ######################################################
+
+          elif [ "$EVENT_NAME" = "workflow_run" ]; then
 
             STAGE="auto_detect"
-            # Fallback priority: Upstream event head branch -> GitHub default ref -> main
             REF_INPUT="${TRIGGERING_HEAD_BRANCH:-${DEFAULT_REF:-main}}"
-            
-            # Deterministic fallback anchored to upstream run ID to prevent session ID drift
+
             if [ -n "${TRIGGERING_RUN_ID:-}" ]; then
               AUDIT_SESSION_ID="rga-session-${TRIGGERING_RUN_ID}"
+
             else
               AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+
             fi
 
-            PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
-            EXECUTION_PLAN="artifacts/execution_plan.json"
-            APPROVAL_ARTIFACT="artifacts/human_execution_approval.json"
-            EXECUTION_APPROVAL=""
             TRIGGER_SOURCE="workflow_run"
 
+          ######################################################
+          # push
+          ######################################################
+
+          elif [ "$EVENT_NAME" = "push" ]; then
+            STAGE="pre_audit"
+            REF_INPUT="${DEFAULT_REF:-main}"
+            AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+            TRIGGER_SOURCE="push"
+
+          ######################################################
+          # Fallback
+          ######################################################
+
+          else
+            STAGE="pre_audit"
+            REF_INPUT="${DEFAULT_REF:-main}"
+            AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+            TRIGGER_SOURCE="$EVENT_NAME"
           fi
+
+          ######################################################
+          # Canonical Lifecycle
+          ######################################################
 
           CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit"
 
-          ########################################################
+          ######################################################
+          # Diagnostics
+          ######################################################
+
+          echo "EVENT_NAME=${EVENT_NAME}"
+          echo "TRIGGER_SOURCE=${TRIGGER_SOURCE}"
+          echo "STAGE=${STAGE}"
+          echo "REF_INPUT=${REF_INPUT}"
+          echo "AUDIT_SESSION_ID=${AUDIT_SESSION_ID}"
+
+          ######################################################
           # Export Environment
-          ########################################################
+          ######################################################
 
           {
             echo "STAGE=$STAGE"
@@ -213,20 +261,21 @@ jobs:
             echo "CANONICAL_LIFECYCLE=$CANONICAL_LIFECYCLE"
           } >> "$GITHUB_ENV"
 
-
-
       ############################################################
       # Download Triggering Workflow Artifacts
       #
       # Purpose:
       #
-      #   - Runs only for workflow_run triggers.
-      #   - Downloads artifacts from the workflow that triggered
-      #     the lifecycle runner.
-      #   - Records artifact discovery diagnostics.
-      #   - Enables lifecycle_event.json based routing.
+      #   workflow_run
+      #     → download triggering artifacts
       #
-      # Canonical diagnostic outputs:
+      #   push
+      #     → no upstream artifacts
+      #
+      #   workflow_dispatch
+      #     → no upstream artifacts
+      #
+      # Canonical outputs:
       #
       #   artifacts/lifecycle_trigger_artifacts.json
       #   artifacts/lifecycle_trigger_files.txt
@@ -238,6 +287,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
         run: |
           set -euo pipefail
 
@@ -245,10 +296,32 @@ jobs:
             artifacts \
             lifecycle_trigger
 
-          echo "Triggering workflow run id: ${RUN_ID}"
+          ########################################################
+          # Diagnostics
+          ########################################################
+
+          echo "Triggering workflow:"
+          echo "  Name: ${WORKFLOW_NAME}"
+          echo "  Run ID: ${RUN_ID}"
+          echo "  Conclusion: ${WORKFLOW_CONCLUSION}"
 
           ########################################################
-          # List artifacts first
+          # Store workflow metadata
+          ########################################################
+
+          jq -n \
+            --arg workflow "${WORKFLOW_NAME}" \
+            --arg run_id "${RUN_ID}" \
+            --arg conclusion "${WORKFLOW_CONCLUSION}" \
+            '{
+              workflow_name: $workflow,
+              run_id: $run_id,
+              conclusion: $conclusion
+            }' \
+            > artifacts/lifecycle_trigger_workflow.json
+
+          ########################################################
+          # List artifacts
           ########################################################
 
           gh api \
@@ -275,15 +348,33 @@ jobs:
             || true
 
           ########################################################
-          # Human-readable diagnostics
+          # Diagnostics
           ########################################################
 
-          echo "Downloaded trigger files:"
-          cat artifacts/lifecycle_trigger_files.txt || true
+          FILE_COUNT="$(
+            wc -l < artifacts/lifecycle_trigger_files.txt 2>/dev/null \
+            || echo 0
+          )"
+
+          echo ""
+          echo "Downloaded trigger files: ${FILE_COUNT}"
+
+          if [ -s artifacts/lifecycle_trigger_files.txt ]; then
+
+            cat artifacts/lifecycle_trigger_files.txt
+
+          else
+
+            echo "(none)"
+
+          fi
 
           echo ""
           echo "Artifact API response preview:"
-          sed -n '1,120p' artifacts/lifecycle_trigger_artifacts.json || true
+
+          sed -n '1,120p' \
+            artifacts/lifecycle_trigger_artifacts.json \
+            || true
 
       ########################################################
       # Determine Next Lifecycle Stage
@@ -300,171 +391,268 @@ jobs:
           DISPATCH_INPUTS="{}"
           REASON=""
 
-          ##########################################################
-          # Workflow Run Lifecycle Resolution
-          ##########################################################
+          ########################################################
+          # Tooling guard
+          ########################################################
 
-          if [ "$TRIGGER_SOURCE" = "workflow_run" ]; then
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq is required for lifecycle routing." >&2
+            exit 1
+          fi
 
-            if [ "$TRIGGERING_CONCLUSION" != "success" ]; then
+          ########################################################
+          # Trigger Source Normalization
+          #
+          # push:
+          #   Starts a new lifecycle from pre_audit.
+          #
+          # workflow_dispatch:
+          #   Uses the manually selected STAGE.
+          #
+          # workflow_run:
+          #   Consumes lifecycle_event.json from the triggering
+          #   Auditor / Executor workflow.
+          ########################################################
 
-              STAGE="halted"
-              DISPATCH_REQUIRED="false"
-              REASON="Triggering workflow did not complete successfully."
+          case "${TRIGGER_SOURCE:-}" in
 
-            else
+            push)
 
-              ######################################################
-              # Lifecycle Event Contract First
-              ######################################################
+              STAGE="pre_audit"
+              REASON="Lifecycle initiated from push."
 
-              EVENT_FILE="$(
-                find lifecycle_trigger \
-                  -type f \
-                  -name 'lifecycle_event.json' \
-                  -print \
-                  -quit \
-                  || true
-              )"
+              ;;
 
-              if [ -n "$EVENT_FILE" ]; then
+            manual|workflow_dispatch)
 
-                echo "Lifecycle event found: $EVENT_FILE"
+              if [ -z "${STAGE:-}" ] || [ "${STAGE:-}" = "auto_detect" ]; then
+                STAGE="pre_audit"
+              fi
 
-                LIFECYCLE_STATUS="$(
-                  jq -r '.lifecycle_status // empty' "$EVENT_FILE"
-                )"
+              REASON="Lifecycle stage selected manually."
 
-                if [ "$LIFECYCLE_STATUS" = "complete" ]; then
+              ;;
 
-                  STAGE="complete"
-                  NEXT_STAGE=""
-                  DISPATCH_REQUIRED="false"
-                  WORKFLOW_FILE=""
-                  DISPATCH_INPUTS="{}"
-                  REASON="Lifecycle complete."
+            workflow_run)
 
-                elif [ "$LIFECYCLE_STATUS" = "halted" ]; then
+              ####################################################
+              # Workflow Run Lifecycle Resolution
+              ####################################################
 
-                  STAGE="halted"
-                  NEXT_STAGE=""
-                  DISPATCH_REQUIRED="false"
-                  WORKFLOW_FILE=""
-                  DISPATCH_INPUTS="{}"
-                  REASON="Lifecycle halted."
+              if [ "${TRIGGERING_CONCLUSION:-}" != "success" ]; then
 
-                else
-
-                  STAGE="$(
-                    jq -r '.next_stage // empty' "$EVENT_FILE"
-                  )"
-
-                  if [ -z "$STAGE" ]; then
-
-                    STAGE="halted"
-                    DISPATCH_REQUIRED="false"
-                    REASON="Lifecycle event contract exists but next_stage could not be resolved."
-
-                  else
-
-                    REASON="Lifecycle stage resolved from lifecycle_event.json."
-
-                  fi
-
-                fi
+                STAGE="halted"
+                NEXT_STAGE=""
+                DISPATCH_REQUIRED="false"
+                WORKFLOW_FILE=""
+                DISPATCH_INPUTS="{}"
+                REASON="Triggering workflow did not complete successfully."
 
               else
 
+                ##################################################
+                # Lifecycle Event Contract First
+                ##################################################
 
-                ####################################################
-                # Legacy Artifact Fallback
-                ####################################################
-
-                echo "No lifecycle_event.json found."
-                echo "Falling back to legacy artifact detection."
-
-                if find lifecycle_trigger \
-                  -type f \
-                  -name 'runtime_auditor_report.json' \
-                  | grep -q .
-                then
-
-                  STAGE="plan"
-
-                elif find lifecycle_trigger \
-                  -type f \
-                  -name 'runtime_verifier_report.json' \
-                  | grep -q .
-                then
-
-                  STAGE="plan"
-                  PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
-                  export PRE_AUDIT_REPORT
-
-                elif find lifecycle_trigger \
-                  -type f \
-                  -name 'runtime_executor_report.json' \
-                  | grep -q .
-                then
-
-                  if find lifecycle_trigger \
+                EVENT_FILE="$(
+                  find lifecycle_trigger \
                     -type f \
-                    -name 'execution_plan.json' \
-                    | grep -q .
-                  then
+                    -name 'lifecycle_event.json' \
+                    -print \
+                    -quit \
+                    || true
+                )"
 
-                    STAGE="plan_audit"
+                if [ -n "$EVENT_FILE" ]; then
 
-                  elif find lifecycle_trigger \
-                    -type f \
-                    -name 'apply_execution_result.json' \
-                    | grep -q .
-                  then
+                  echo "Lifecycle event found: $EVENT_FILE"
 
-                    STAGE="post_audit"
+                  EVENT_STATUS="$(
+                    jq -r '.lifecycle_status // "running"' "$EVENT_FILE"
+                  )"
+
+                  EVENT_NEXT_STAGE="$(
+                    jq -r '.next_stage // empty' "$EVENT_FILE"
+                  )"
+
+                  EVENT_DISPATCH_REQUIRED="$(
+                    jq -r '.dispatch_required // false' "$EVENT_FILE"
+                  )"
+
+                  if [ "$EVENT_STATUS" = "complete" ]; then
+
+                    STAGE="complete"
+                    NEXT_STAGE=""
+                    DISPATCH_REQUIRED="false"
+                    WORKFLOW_FILE=""
+                    DISPATCH_INPUTS="{}"
+                    REASON="Lifecycle complete."
+
+                  elif [ "$EVENT_STATUS" = "halted" ]; then
+
+                    STAGE="halted"
+                    NEXT_STAGE=""
+                    DISPATCH_REQUIRED="false"
+                    WORKFLOW_FILE=""
+                    DISPATCH_INPUTS="{}"
+                    REASON="Lifecycle halted."
+
+                  elif [ -n "$EVENT_NEXT_STAGE" ]; then
+
+                    STAGE="$EVENT_NEXT_STAGE"
+                    REASON="Lifecycle stage resolved from lifecycle_event.json."
 
                   else
 
                     STAGE="halted"
+                    NEXT_STAGE=""
                     DISPATCH_REQUIRED="false"
-                    REASON="Executor artifacts found, but no execution_plan.json or apply_execution_result.json was found."
+                    WORKFLOW_FILE=""
+                    DISPATCH_INPUTS="{}"
+                    REASON="Lifecycle event contract exists but next_stage could not be resolved."
 
                   fi
 
-                elif find lifecycle_trigger \
-                  -type f \
-                  -name 'plan_audit_evidence.json' \
-                  | grep -q .
-                then
-
-                  STAGE="human_approval"
-
-                elif find lifecycle_trigger \
-                  -type f \
-                  -name 'post_audit_contract.json' \
-                  | grep -q .
-                then
-
-                  STAGE="complete"
-                  DISPATCH_REQUIRED="false"
-                  REASON="Post-audit contract was produced; lifecycle is complete."
-
                 else
 
-                  STAGE="halted"
-                  DISPATCH_REQUIRED="false"
-                  REASON="No lifecycle_event.json or recognized legacy canonical artifact was found in triggering workflow artifacts."
+                  ################################################
+                  # Legacy Artifact Fallback
+                  #
+                  # Retained only for backward compatibility.
+                  ################################################
+
+                  echo "No lifecycle_event.json found."
+                  echo "Falling back to legacy artifact detection."
+
+                  if find lifecycle_trigger \
+                    -type f \
+                    -name 'runtime_auditor_report.json' \
+                    | grep -q .
+                  then
+
+                    STAGE="plan"
+                    REASON="Legacy runtime_auditor_report.json detected."
+
+                  elif find lifecycle_trigger \
+                    -type f \
+                    -name 'runtime_verifier_report.json' \
+                    | grep -q .
+                  then
+
+                    STAGE="plan"
+                    PRE_AUDIT_REPORT="artifacts/runtime_verifier_report.json"
+                    export PRE_AUDIT_REPORT
+                    REASON="Legacy runtime_verifier_report.json detected."
+
+                  elif find lifecycle_trigger \
+                    -type f \
+                    -name 'runtime_executor_report.json' \
+                    | grep -q .
+                  then
+
+                    if find lifecycle_trigger \
+                      -type f \
+                      -name 'execution_plan.json' \
+                      | grep -q .
+                    then
+
+                      STAGE="plan_audit"
+                      REASON="Legacy executor plan artifacts detected."
+
+                    elif find lifecycle_trigger \
+                      -type f \
+                      -name 'apply_execution_result.json' \
+                      | grep -q .
+                    then
+
+                      STAGE="post_audit"
+                      REASON="Legacy executor apply artifacts detected."
+
+                    else
+
+                      STAGE="halted"
+                      NEXT_STAGE=""
+                      DISPATCH_REQUIRED="false"
+                      WORKFLOW_FILE=""
+                      DISPATCH_INPUTS="{}"
+                      REASON="Executor artifacts found, but no execution_plan.json or apply_execution_result.json was found."
+
+                    fi
+
+                  elif find lifecycle_trigger \
+                    -type f \
+                    -name 'plan_audit_evidence.json' \
+                    | grep -q .
+                  then
+
+                    STAGE="human_approval"
+                    REASON="Legacy plan_audit_evidence.json detected."
+
+                  elif find lifecycle_trigger \
+                    -type f \
+                    -name 'post_audit_contract.json' \
+                    | grep -q .
+                  then
+
+                    STAGE="complete"
+                    NEXT_STAGE=""
+                    DISPATCH_REQUIRED="false"
+                    WORKFLOW_FILE=""
+                    DISPATCH_INPUTS="{}"
+                    REASON="Post-audit contract was produced; lifecycle is complete."
+
+                  else
+
+                    STAGE="halted"
+                    NEXT_STAGE=""
+                    DISPATCH_REQUIRED="false"
+                    WORKFLOW_FILE=""
+                    DISPATCH_INPUTS="{}"
+                    REASON="No lifecycle_event.json or recognized legacy canonical artifact was found in triggering workflow artifacts."
+
+                  fi
 
                 fi
 
               fi
 
-            fi
+              ;;
 
-          fi
+            *)
+
+              #
+              # Defensive fallback.
+              # If TRIGGER_SOURCE is missing but STAGE is already present,
+              # keep STAGE. Otherwise begin at pre_audit.
+              #
+
+              if [ -z "${STAGE:-}" ] || [ "${STAGE:-}" = "auto_detect" ]; then
+                STAGE="pre_audit"
+                REASON="Lifecycle trigger source was not set; defaulting to pre_audit."
+              else
+                REASON="Lifecycle trigger source was not set; using existing STAGE."
+              fi
+
+              ;;
+
+          esac
 
           ##########################################################
           # Canonical Lifecycle Routing
+          #
+          # Executable stages:
+          #
+          #   pre_audit
+          #   plan
+          #   plan_audit
+          #   human_approval
+          #   execute
+          #   post_audit
+          #
+          # Terminal statuses:
+          #
+          #   complete
+          #   halted
           ##########################################################
 
           case "$STAGE" in
@@ -473,11 +661,17 @@ jobs:
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="plan"
+              DISPATCH_REQUIRED="true"
 
-              DISPATCH_INPUTS=$(jq -c -n \
-                --arg mode "pre_audit" \
-                --arg session "${AUDIT_SESSION_ID}" \
-                '{audit_mode: $mode, audit_session_id: $session}')
+              DISPATCH_INPUTS="$(
+                jq -c -n \
+                  --arg mode "pre_audit" \
+                  --arg session "${AUDIT_SESSION_ID}" \
+                  '{
+                    audit_mode: $mode,
+                    audit_session_id: $session
+                  }'
+              )"
 
               ;;
 
@@ -485,12 +679,19 @@ jobs:
 
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
               NEXT_STAGE="plan_audit"
+              DISPATCH_REQUIRED="true"
 
-              DISPATCH_INPUTS=$(jq -c -n \
-                --arg mode "plan" \
-                --arg session "${AUDIT_SESSION_ID}" \
-                --arg report "${PRE_AUDIT_REPORT}" \
-                '{executor_mode: $mode, audit_session_id: $session, pre_audit_report: $report}')
+              DISPATCH_INPUTS="$(
+                jq -c -n \
+                  --arg mode "plan" \
+                  --arg session "${AUDIT_SESSION_ID}" \
+                  --arg report "${PRE_AUDIT_REPORT}" \
+                  '{
+                    executor_mode: $mode,
+                    audit_session_id: $session,
+                    pre_audit_report: $report
+                  }'
+              )"
 
               ;;
 
@@ -498,12 +699,19 @@ jobs:
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="human_approval"
+              DISPATCH_REQUIRED="true"
 
-              DISPATCH_INPUTS=$(jq -c -n \
-                --arg mode "plan_audit" \
-                --arg session "${AUDIT_SESSION_ID}" \
-                --arg plan "${EXECUTION_PLAN}" \
-                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan}')
+              DISPATCH_INPUTS="$(
+                jq -c -n \
+                  --arg mode "plan_audit" \
+                  --arg session "${AUDIT_SESSION_ID}" \
+                  --arg plan "${EXECUTION_PLAN}" \
+                  '{
+                    audit_mode: $mode,
+                    audit_session_id: $session,
+                    execution_plan: $plan
+                  }'
+              )"
 
               ;;
 
@@ -511,32 +719,55 @@ jobs:
 
               NEXT_STAGE="execute"
               DISPATCH_REQUIRED="false"
+              WORKFLOW_FILE=""
+              DISPATCH_INPUTS="{}"
               REASON="Human approval checkpoint reached. Create or provide human_execution_approval.json before running execute."
 
               ;;
 
             execute)
 
-              if [ -z "$EXECUTION_APPROVAL" ]; then
-                echo "execution_approval missing" >&2
-                exit 1
+              if [ -z "${EXECUTION_APPROVAL:-}" ]; then
+
+                STAGE="halted"
+                NEXT_STAGE=""
+                DISPATCH_REQUIRED="false"
+                WORKFLOW_FILE=""
+                DISPATCH_INPUTS="{}"
+                REASON="execution_approval missing."
+
+              elif [ "$EXECUTION_APPROVAL" != "APPROVE_RGA_EXECUTION" ]; then
+
+                STAGE="halted"
+                NEXT_STAGE=""
+                DISPATCH_REQUIRED="false"
+                WORKFLOW_FILE=""
+                DISPATCH_INPUTS="{}"
+                REASON="invalid execution_approval phrase."
+
+              else
+
+                WORKFLOW_FILE="RGA Maintenance Executor.yml"
+                NEXT_STAGE="post_audit"
+                DISPATCH_REQUIRED="true"
+
+                DISPATCH_INPUTS="$(
+                  jq -c -n \
+                    --arg mode "execute" \
+                    --arg session "${AUDIT_SESSION_ID}" \
+                    --arg plan "${EXECUTION_PLAN}" \
+                    --arg approval "${APPROVAL_ARTIFACT}" \
+                    --arg phrase "${EXECUTION_APPROVAL}" \
+                    '{
+                      executor_mode: $mode,
+                      audit_session_id: $session,
+                      execution_plan: $plan,
+                      approval_artifact: $approval,
+                      execution_approval: $phrase
+                    }'
+                )"
+
               fi
-
-              if [ "$EXECUTION_APPROVAL" != "APPROVE_RGA_EXECUTION" ]; then
-                echo "invalid execution_approval phrase" >&2
-                exit 1
-              fi
-
-              WORKFLOW_FILE="RGA Maintenance Executor.yml"
-              NEXT_STAGE="post_audit"
-
-              DISPATCH_INPUTS=$(jq -c -n \
-                --arg mode "execute" \
-                --arg session "${AUDIT_SESSION_ID}" \
-                --arg plan "${EXECUTION_PLAN}" \
-                --arg approval "${APPROVAL_ARTIFACT}" \
-                --arg phrase "${EXECUTION_APPROVAL}" \
-                '{executor_mode: $mode, audit_session_id: $session, execution_plan: $plan, approval_artifact: $approval, execution_approval: $phrase}')
 
               ;;
 
@@ -544,14 +775,21 @@ jobs:
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE=""
-              DISPATCH_REQUIRED="false"
-              REASON="Lifecycle complete."
-              DISPATCH_INPUTS=$(jq -c -n \
-                --arg mode "post_audit" \
-                --arg session "${AUDIT_SESSION_ID}" \
-                --arg plan "${EXECUTION_PLAN}" \
-                --arg report "${PRE_AUDIT_REPORT}" \
-                '{audit_mode: $mode, audit_session_id: $session, execution_plan: $plan, pre_audit_report: $report}')
+              DISPATCH_REQUIRED="true"
+
+              DISPATCH_INPUTS="$(
+                jq -c -n \
+                  --arg mode "post_audit" \
+                  --arg session "${AUDIT_SESSION_ID}" \
+                  --arg plan "${EXECUTION_PLAN}" \
+                  --arg report "${PRE_AUDIT_REPORT}" \
+                  '{
+                    audit_mode: $mode,
+                    audit_session_id: $session,
+                    execution_plan: $plan,
+                    pre_audit_report: $report
+                  }'
+              )"
 
               ;;
 
@@ -567,7 +805,10 @@ jobs:
 
             halted)
 
+              NEXT_STAGE=""
               DISPATCH_REQUIRED="false"
+              WORKFLOW_FILE=""
+              DISPATCH_INPUTS="{}"
 
               if [ -z "$REASON" ]; then
                 REASON="Lifecycle halted."
@@ -598,7 +839,6 @@ jobs:
             echo "$DISPATCH_INPUTS"
             echo "EOF_INPUTS"
           } >> "$GITHUB_ENV"
-
 
       ##########################################################
       # Write Lifecycle State
@@ -1015,26 +1255,38 @@ jobs:
           set -euo pipefail
 
           ########################################################
-          # Terminal lifecycle states
+          # Terminal lifecycle statuses
           ########################################################
 
-          if [ "${RESOLVED_STAGE:-}" = "complete" ]; then
+          case "${LIFECYCLE_STATUS:-running}" in
 
-            echo "Lifecycle complete."
-            echo "No dispatch required."
+            complete)
 
-            exit 0
+              echo "Lifecycle complete."
+              echo "Current stage: ${RESOLVED_STAGE:-unknown}"
+              echo "Lifecycle status: complete"
+              echo "Dispatch required: false"
 
-          fi
+              exit 0
 
-          if [ "${RESOLVED_STAGE:-}" = "halted" ]; then
+              ;;
 
-            echo "Lifecycle halted."
-            echo "No dispatch required."
+            halted)
 
-            exit 0
+              echo "Lifecycle halted."
+              echo "Current stage: ${RESOLVED_STAGE:-unknown}"
+              echo "Lifecycle status: halted"
+              echo "Dispatch required: false"
 
-          fi
+              if [ -n "${LIFECYCLE_REASON:-}" ]; then
+                echo "Reason: ${LIFECYCLE_REASON}"
+              fi
+
+              exit 0
+
+              ;;
+
+          esac
 
           ########################################################
           # Dispatch gate
@@ -1043,17 +1295,22 @@ jobs:
           if [ "${DISPATCH_REQUIRED:-false}" != "true" ]; then
 
             echo "Dispatch not required."
-            echo "Resolved stage: ${RESOLVED_STAGE:-unknown}"
-            
+
+            echo "Current stage: ${RESOLVED_STAGE:-unknown}"
+
+            echo "Lifecycle status: ${LIFECYCLE_STATUS:-running}"
+
             if [ -n "${NEXT_STAGE:-}" ]; then
               echo "Next stage: ${NEXT_STAGE}"
-
             else
               echo "Next stage: (none)"
-
             fi
-            
-            echo "Reason: ${LIFECYCLE_REASON:-none}"
+
+            echo "Dispatch required: false"
+
+            if [ -n "${LIFECYCLE_REASON:-}" ]; then
+              echo "Reason: ${LIFECYCLE_REASON}"
+            fi
 
             exit 0
 
@@ -1068,8 +1325,13 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${DISPATCH_INPUTS:-}" ] || [ "${DISPATCH_INPUTS:-}" = "{}" ]; then
+          if [ -z "${DISPATCH_INPUTS:-}" ]; then
             echo "DISPATCH_INPUTS is empty but dispatch was required." >&2
+            exit 1
+          fi
+
+          if [ "${DISPATCH_INPUTS:-}" = "{}" ]; then
+            echo "DISPATCH_INPUTS cannot be empty JSON when dispatch is required." >&2
             exit 1
           fi
 
@@ -1082,28 +1344,26 @@ jobs:
           # Tooling guard
           ########################################################
 
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "jq is required." >&2
-            exit 1
-          fi
+          command -v jq >/dev/null 2>&1
 
           ########################################################
           # Encode workflow filename
           ########################################################
 
           ENCODED_WORKFLOW="$(
-            printf '%s' "$WORKFLOW_FILE" | jq -sRr @uri
+            printf '%s' "${WORKFLOW_FILE}" \
+            | jq -sRr @uri
           )"
 
           ########################################################
-          # Validate DISPATCH_INPUTS JSON
+          # Build dispatch payload
           ########################################################
 
-          echo "$DISPATCH_INPUTS" | jq empty
+          echo "${DISPATCH_INPUTS}" | jq empty
 
           jq -n \
-            --arg ref "$REF_INPUT" \
-            --argjson inputs "$DISPATCH_INPUTS" \
+            --arg ref "${REF_INPUT}" \
+            --argjson inputs "${DISPATCH_INPUTS}" \
             '{
               ref: $ref,
               inputs: $inputs
@@ -1112,11 +1372,23 @@ jobs:
 
           API_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
 
+          ########################################################
+          # Dispatch diagnostics
+          ########################################################
+
           echo "Dispatching workflow: ${WORKFLOW_FILE}"
-          echo "Encoded workflow: ${ENCODED_WORKFLOW}"
-          echo "Resolved lifecycle stage: ${RESOLVED_STAGE:-unknown}"
-          echo "Next lifecycle stage: ${NEXT_STAGE:-unknown}"
+
+          echo "Current stage: ${RESOLVED_STAGE:-unknown}"
+
+          echo "Lifecycle status: ${LIFECYCLE_STATUS:-running}"
+
+          echo "Next stage: ${NEXT_STAGE:-unknown}"
+
           echo "Ref: ${REF_INPUT}"
+
+          ########################################################
+          # GitHub workflow_dispatch
+          ########################################################
 
           HTTP_STATUS="$(
             curl -sS \
@@ -1131,37 +1403,31 @@ jobs:
               || true
           )"
 
-          if [ "$HTTP_STATUS" != "204" ]; then
+          if [ "${HTTP_STATUS}" != "204" ]; then
 
             echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
 
-            if [ "$HTTP_STATUS" = "422" ]; then
-              echo "::error::workflow_dispatch missing or workflow name mismatch." >&2
+            if [ "${HTTP_STATUS}" = "422" ]; then
+
+              echo "::error::workflow_dispatch is not available or workflow file name is incorrect." >&2
+
             fi
 
-            sed -n '1,200p' /tmp/rga_lifecycle_dispatch_response.json >&2 || true
+            echo "API response:" >&2
+
+            sed -n '1,200p' \
+              /tmp/rga_lifecycle_dispatch_response.json \
+              >&2 \
+              || true
 
             exit 1
 
           fi
 
-          echo "Dispatched workflow '${WORKFLOW_FILE}' for lifecycle stage '${RESOLVED_STAGE}'."
-
+          echo "Dispatched workflow '${WORKFLOW_FILE}' successfully."
 
       ############################################################
       # Upload Lifecycle Event
-      #
-      # Purpose:
-      #
-      #   - Publishes lifecycle_event.json as the canonical
-      #     stage-transition contract.
-      #
-      #   - Allows the next workflow_run-triggered Lifecycle Runner
-      #     to resolve the next stage without guessing from file names.
-      #
-      # Canonical output:
-      #
-      #   artifacts/lifecycle_event.json
       ############################################################
 
       - name: Upload Lifecycle Event
@@ -1171,6 +1437,7 @@ jobs:
           name: rga-lifecycle-event
           path: artifacts/lifecycle_event.json
           if-no-files-found: warn
+          retention-days: 30
           
       ############################################################
       # Upload Lifecycle State
@@ -1183,5 +1450,5 @@ jobs:
           name: rga-lifecycle-state
           path: artifacts/lifecycle_state.json
           if-no-files-found: warn
-          
+          retention-days: 30
 
