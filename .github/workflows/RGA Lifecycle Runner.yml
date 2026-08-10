@@ -282,26 +282,50 @@ jobs:
 
                 echo "Lifecycle event found: $EVENT_FILE"
 
-                STAGE=$(
-                  grep -oE '"next_stage"[[:space:]]*:[[:space:]]*"[^"]+"' \
-                    "$EVENT_FILE" \
-                    | head -n1 \
-                    | sed -E 's/.*"([^"]+)"/\1/'
-                )
+                LIFECYCLE_STATUS="$(
+                  jq -r '.lifecycle_status // empty' "$EVENT_FILE"
+                )"
 
-                if [ -z "$STAGE" ]; then
+                if [ "$LIFECYCLE_STATUS" = "complete" ]; then
+
+                  STAGE="complete"
+                  NEXT_STAGE=""
+                  DISPATCH_REQUIRED="false"
+                  WORKFLOW_FILE=""
+                  DISPATCH_INPUTS="{}"
+                  REASON="Lifecycle complete."
+
+                elif [ "$LIFECYCLE_STATUS" = "halted" ]; then
 
                   STAGE="halted"
+                  NEXT_STAGE=""
                   DISPATCH_REQUIRED="false"
-                  REASON="Lifecycle event contract exists but next_stage could not be resolved."
+                  WORKFLOW_FILE=""
+                  DISPATCH_INPUTS="{}"
+                  REASON="Lifecycle halted."
 
                 else
 
-                  REASON="Lifecycle stage resolved from lifecycle_event.json."
+                  STAGE="$(
+                    jq -r '.next_stage // empty' "$EVENT_FILE"
+                  )"
+
+                  if [ -z "$STAGE" ]; then
+
+                    STAGE="halted"
+                    DISPATCH_REQUIRED="false"
+                    REASON="Lifecycle event contract exists but next_stage could not be resolved."
+
+                  else
+
+                    REASON="Lifecycle stage resolved from lifecycle_event.json."
+
+                  fi
 
                 fi
 
               else
+
 
                 ####################################################
                 # Legacy Artifact Fallback
@@ -470,8 +494,9 @@ jobs:
             post_audit)
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
-              NEXT_STAGE="complete"
-
+              NEXT_STAGE=""
+              DISPATCH_REQUIRED="false"
+              REASON="Lifecycle complete."
               DISPATCH_INPUTS=$(jq -c -n \
                 --arg mode "post_audit" \
                 --arg session "${AUDIT_SESSION_ID}" \
