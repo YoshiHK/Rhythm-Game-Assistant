@@ -264,9 +264,9 @@ jobs:
             --mode "${MODE}" \
             --execution-plan "${EXECUTION_PLAN}" \
             --pre-audit-report "${PRE_AUDIT_REPORT}" \
+            --json-out "artifacts/execution_plan.json" \
             --report-json-out "artifacts/runtime_executor_report.json" \
             --md-out "artifacts/runtime_executor_report.md" \
-            --json-out "artifacts/runtime_executor_report.json" \
             > "artifacts/runtime_executor_stdout.txt" \
             2> "artifacts/runtime_executor_stderr.txt"
 
@@ -318,19 +318,25 @@ jobs:
           fi
 
           ERROR_MARKER_COUNT="$(
-            grep -E \
-              'Traceback|Error|Exception|ModuleNotFoundError|RuntimeError|ValueError' \
-              artifacts/runtime_executor_stderr.txt \
-              2>/dev/null \
+            {
+              grep -E \
+                'Traceback|Error|Exception|ModuleNotFoundError|RuntimeError|ValueError' \
+                artifacts/runtime_executor_stderr.txt \
+                2>/dev/null \
+                || true
+            } \
               | wc -l \
               | tr -d ' '
           )"
 
           WARNING_MARKER_COUNT="$(
-            grep -E \
-              'warning|Warning|WARN' \
-              artifacts/runtime_executor_stderr.txt \
-              2>/dev/null \
+            {
+              grep -E \
+                'warning|Warning|WARN' \
+                artifacts/runtime_executor_stderr.txt \
+                2>/dev/null \
+                || true
+            } \
               | wc -l \
               | tr -d ' '
           )"
@@ -424,6 +430,8 @@ jobs:
 
           echo "Runtime executor exit code: ${EXECUTOR_EXIT_CODE}"
           echo "Runtime executor evidence artifacts generated."
+          
+          exit 0
 
       ############################################################
       # Execution Plan Fingerprint
