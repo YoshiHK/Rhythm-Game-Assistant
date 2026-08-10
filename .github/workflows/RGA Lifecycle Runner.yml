@@ -483,11 +483,11 @@ jobs:
 
             complete)
 
+              NEXT_STAGE=""
               DISPATCH_REQUIRED="false"
-
-              if [ -z "$REASON" ]; then
-                REASON="Lifecycle complete."
-              fi
+              WORKFLOW_FILE=""
+              DISPATCH_INPUTS="{}"
+              REASON="Lifecycle complete."
 
               ;;
 
@@ -540,6 +540,8 @@ jobs:
           COMPLETED_STAGES='[]'
           COMPLETED_COUNT=0
           PROGRESS_PERCENT=0
+          
+          LIFECYCLE_STATUS="running"
 
           case "${RESOLVED_STAGE}" in
 
@@ -578,6 +580,14 @@ jobs:
               COMPLETED_COUNT=6
               PROGRESS_PERCENT=100.00
               ;;
+              
+            complete)  
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
+              COMPLETED_COUNT=6
+              PROGRESS_PERCENT=100.00     
+              
+              LIFECYCLE_STATUS="complete"
+              ;;
 
           esac
 
@@ -592,6 +602,7 @@ jobs:
             --argjson completed "${COMPLETED_STAGES}" \
             --argjson dispatch ${DISPATCH_REQUIRED:-false} \
             --arg wf "${WORKFLOW_FILE}" \
+            --arg status "${LIFECYCLE_STATUS}"
             --arg reason "${LIFECYCLE_REASON}" \
             --argjson count ${COMPLETED_COUNT} \
             --argjson progress ${PROGRESS_PERCENT} \
@@ -607,6 +618,7 @@ jobs:
               completed_stages: $completed,
               dispatch_required: $dispatch,
               workflow_file: $wf,
+              lifecycle_status: $status,
               reason: $reason,
               canonical_lifecycle: ["pre_audit", "plan", "plan_audit", "human_approval", "execute", "post_audit"],
               lifecycle_progress: {
