@@ -44,9 +44,12 @@ on:
         default: artifacts/human_execution_approval.json
 
       execution_approval:
-        description: Approval phrase for execute stage. Required only when lifecycle_stage=execute.
+        description: >-
+          Safety approval phrase for gated execution.
+          Required when executor_mode=execute (expected: APPROVE_RGA_EXECUTION).
         required: false
         default: ""
+
 
   workflow_run:
     workflows:
