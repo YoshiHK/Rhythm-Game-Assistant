@@ -231,42 +231,31 @@ PY
       ############################################################
 
       - name: Run Runtime Executor
+        id: run_runtime_executor
         continue-on-error: true
         shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+          EXECUTION_PLAN_IN: ${{ inputs.execution_plan }}
+          PRE_AUDIT_REPORT_IN: ${{ inputs.pre_audit_report }}
         run: |
           set -uo pipefail
 
           mkdir -p artifacts
 
-          EXECUTOR_MODE="${{ github.event.inputs.executor_mode }}"
-          PRE_AUDIT_REPORT="${{ github.event.inputs.pre_audit_report }}"
-          EXECUTION_PLAN="${{ github.event.inputs.execution_plan }}"
-
-          if [ -z "$EXECUTOR_MODE" ]; then
-            EXECUTOR_MODE="dry_run_execute"
-          fi
-
-          if [ -z "$PRE_AUDIT_REPORT" ]; then
-            PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
-          fi
-
-          if [ -z "$EXECUTION_PLAN" ]; then
-            EXECUTION_PLAN="artifacts/execution_plan.json"
-          fi
-
-          echo "RGA Runtime Executor"
-          echo "Mode: ${EXECUTOR_MODE}"
-          echo "Pre-audit report: ${PRE_AUDIT_REPORT}"
-          echo "Execution plan output: ${EXECUTION_PLAN}"
+          MODE="${EXECUTOR_MODE:-dry_run_execute}"
+          EXECUTION_PLAN="${EXECUTION_PLAN_IN:-artifacts/execution_plan.json}"
+          PRE_AUDIT_REPORT="${PRE_AUDIT_REPORT_IN:-artifacts/runtime_auditor_report.json}"
 
           set +e
 
-          python -u tools/runtime_executor.py \
-            --mode "${EXECUTOR_MODE}" \
+          python tools/runtime_executor.py \
+            --mode "${MODE}" \
+            --execution-plan "${EXECUTION_PLAN}" \
             --pre-audit-report "${PRE_AUDIT_REPORT}" \
-            --json-out "${EXECUTION_PLAN}" \
             --report-json-out "artifacts/runtime_executor_report.json" \
             --md-out "artifacts/runtime_executor_report.md" \
+            --json-out "artifacts/runtime_executor_report.json" \
             > "artifacts/runtime_executor_stdout.txt" \
             2> "artifacts/runtime_executor_stderr.txt"
 
@@ -292,136 +281,113 @@ PY
           # Structured stderr summary
           ########################################################
 
-          cat > artifacts/runtime_executor_stderr_summary_script.py <<'PY'
-import json
-from pathlib import Path
+          STDERR_PRESENT="false"
+          STDERR_EMPTY="true"
 
-stderr_path = Path("artifacts/runtime_executor_stderr.txt")
-stdout_path = Path("artifacts/runtime_executor_stdout.txt")
-exit_code_path = Path("artifacts/runtime_executor_exit_code.txt")
+          STDOUT_PRESENT="false"
+          STDOUT_EMPTY="true"
 
-stderr_text = (
-    stderr_path.read_text(encoding="utf-8", errors="ignore")
-    if stderr_path.exists()
-    else ""
-)
-stdout_text = (
-    stdout_path.read_text(encoding="utf-8", errors="ignore")
-    if stdout_path.exists()
-    else ""
-)
+          ERROR_MARKER_COUNT="0"
+          WARNING_MARKER_COUNT="0"
 
-try:
-    exit_code = int(exit_code_path.read_text(encoding="utf-8", errors="ignore").strip() or "0")
-except Exception:
-    exit_code = None
+          if [ -f artifacts/runtime_executor_stderr.txt ]; then
+            STDERR_PRESENT="true"
 
-error_markers = [
-    "Traceback",
-    "Error",
-    "Exception",
-    "ModuleNotFoundError",
-    "RuntimeError",
-    "ValueError",
-]
-warning_markers = [
-    "warning",
-    "Warning",
-    "WARN",
-]
+            if [ -s artifacts/runtime_executor_stderr.txt ]; then
+              STDERR_EMPTY="false"
+            fi
+          fi
 
-error_hits = [marker for marker in error_markers if marker in stderr_text]
-warning_hits = [marker for marker in warning_markers if marker in stderr_text]
+          if [ -f artifacts/runtime_executor_stdout.txt ]; then
+            STDOUT_PRESENT="true"
 
-payload = {
-    "schema": "rga.runtime_executor.stderr_summary.v1.0",
-    "stderr_present": stderr_path.exists(),
-    "stderr_empty": len(stderr_text.strip()) == 0,
-    "stdout_present": stdout_path.exists(),
-    "stdout_empty": len(stdout_text.strip()) == 0,
-    "executor_exit_code": exit_code,
-    "execution_failed": (exit_code is not None and exit_code != 0),
-    "error_marker_count": len(error_hits),
-    "warning_marker_count": len(warning_hits),
-    "error_markers": error_hits,
-    "warning_markers": warning_hits,
-    "interpretation": (
-        "stderr_empty_no_error_output"
-        if len(stderr_text.strip()) == 0
-        else "stderr_contains_output"
-    ),
-}
+            if [ -s artifacts/runtime_executor_stdout.txt ]; then
+              STDOUT_EMPTY="false"
+            fi
+          fi
 
-Path("artifacts/runtime_executor_stderr_summary.json").write_text(
-    json.dumps(payload, indent=2, ensure_ascii=False),
-    encoding="utf-8",
-)
-PY
+          ERROR_MARKER_COUNT="$(
+            grep -E \
+              'Traceback|Error|Exception|ModuleNotFoundError|RuntimeError|ValueError' \
+              artifacts/runtime_executor_stderr.txt \
+              2>/dev/null \
+              | wc -l \
+              | tr -d ' '
+          )"
 
-          python artifacts/runtime_executor_stderr_summary_script.py
+          WARNING_MARKER_COUNT="$(
+            grep -E \
+              'warning|Warning|WARN' \
+              artifacts/runtime_executor_stderr.txt \
+              2>/dev/null \
+              | wc -l \
+              | tr -d ' '
+          )"
+
+          EXEC_FAILED="false"
+          if [ "${EXECUTOR_EXIT_CODE}" != "0" ]; then
+            EXEC_FAILED="true"
+          fi
+
+          jq -n \
+            --argjson stderr_present ${STDERR_PRESENT} \
+            --argjson stderr_empty ${STDERR_EMPTY} \
+            --argjson stdout_present ${STDOUT_PRESENT} \
+            --argjson stdout_empty ${STDOUT_EMPTY} \
+            --argjson exit_code ${EXECUTOR_EXIT_CODE} \
+            --argjson failed ${EXEC_FAILED} \
+            --argjson err_count ${ERROR_MARKER_COUNT} \
+            --argjson warn_count ${WARNING_MARKER_COUNT} \
+            '{
+              schema: "rga.runtime_executor.stderr_summary.v1.0",
+              stderr_present: $stderr_present,
+              stderr_empty: $stderr_empty,
+              stdout_present: $stdout_present,
+              stdout_empty: $stdout_empty,
+              executor_exit_code: $exit_code,
+              execution_failed: $failed,
+              error_marker_count: $err_count,
+              warning_marker_count: $warn_count
+            }' > artifacts/runtime_executor_stderr_summary.json
 
           ########################################################
           # Fallback runtime_executor_report.json
           ########################################################
 
           if [ ! -s artifacts/runtime_executor_report.json ]; then
-            cat > artifacts/runtime_executor_report_fallback_script.py <<'PY'
-import json
-from datetime import datetime, timezone
-from pathlib import Path
 
-exit_code_path = Path("artifacts/runtime_executor_exit_code.txt")
-stderr_path = Path("artifacts/runtime_executor_stderr.txt")
-stdout_path = Path("artifacts/runtime_executor_stdout.txt")
+            jq -n \
+              --argjson exit_code ${EXECUTOR_EXIT_CODE} \
+              --argjson stdout_present ${STDOUT_PRESENT} \
+              --argjson stderr_present ${STDERR_PRESENT} \
+              --argjson stdout_empty ${STDOUT_EMPTY} \
+              --argjson stderr_empty ${STDERR_EMPTY} \
+              '{
+                schema: "rga.runtime_executor.report.fallback.v1.0",
+                mode: null,
+                proposal_only: null,
+                dry_run: null,
+                execution_authority: false,
+                approval_authority: false,
+                plan: {},
+                dry_run_result: {},
+                apply_execution_result: {},
+                diagnostics: {
+                  fallback_report_generated: true,
+                  executor_exit_code: $exit_code,
+                  stdout_present: $stdout_present,
+                  stderr_present: $stderr_present,
+                  stdout_empty: $stdout_empty,
+                  stderr_empty: $stderr_empty,
+                  policy_result: {
+                    policy_passed: false,
+                    violations: [
+                      "runtime_executor.py did not emit runtime_executor_report.json."
+                    ]
+                  }
+                }
+              }' > artifacts/runtime_executor_report.json
 
-try:
-    exit_code = int(exit_code_path.read_text(encoding="utf-8", errors="ignore").strip() or "0")
-except Exception:
-    exit_code = None
-
-stderr_text = (
-    stderr_path.read_text(encoding="utf-8", errors="ignore")
-    if stderr_path.exists()
-    else ""
-)
-stdout_text = (
-    stdout_path.read_text(encoding="utf-8", errors="ignore")
-    if stdout_path.exists()
-    else ""
-)
-
-payload = {
-    "schema": "rga.runtime_executor.report.fallback.v1.0",
-    "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-    "mode": None,
-    "proposal_only": None,
-    "dry_run": None,
-    "execution_authority": False,
-    "approval_authority": False,
-    "plan": {},
-    "dry_run_result": {},
-    "apply_execution_result": {},
-    "diagnostics": {
-        "fallback_report_generated": True,
-        "executor_exit_code": exit_code,
-        "stdout_present": stdout_path.exists(),
-        "stderr_present": stderr_path.exists(),
-        "stdout_empty": len(stdout_text.strip()) == 0,
-        "stderr_empty": len(stderr_text.strip()) == 0,
-        "policy_result": {
-            "policy_passed": False,
-            "violations": ["runtime_executor.py did not emit runtime_executor_report.json."],
-        },
-    },
-}
-
-Path("artifacts/runtime_executor_report.json").write_text(
-    json.dumps(payload, indent=2, ensure_ascii=False),
-    encoding="utf-8",
-)
-PY
-
-            python artifacts/runtime_executor_report_fallback_script.py
           fi
 
           ########################################################
@@ -719,15 +685,18 @@ MD
 
       - name: Apply Repository Changes
         if: always()
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
           set +e
 
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
           import subprocess
 
-          mode = "${{ github.event.inputs.executor_mode }}"
+          mode = os.environ.get("EXECUTOR_MODE", "")
 
           apply_result_file = Path(
               "artifacts/apply_execution_result.json"
@@ -894,6 +863,7 @@ MD
               encoding="utf-8",
           )
           PY
+
 
       ############################################################
       # Execution Commit Manifest
