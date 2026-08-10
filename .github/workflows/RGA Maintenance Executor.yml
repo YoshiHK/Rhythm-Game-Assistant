@@ -1793,109 +1793,124 @@ jobs:
           if-no-files-found: warn 
 
       ############################################################
-      # Runner Resume Dispatch
+      # Write Lifecycle Event Backhaul
+      #
+      # Bot #2 Maintenance Executor
       #
       # Purpose:
       #
-      #   Explicitly resumes:
+      #   - Publishes lifecycle continuation evidence.
+      #   - Does NOT dispatch the Lifecycle Runner.
+      #   - Allows Lifecycle Runner to consume chronological state
+      #     via workflow_run artifact download.
       #
-      #     RGA Lifecycle Runner.yml
+      # Canonical output:
       #
-      #   This avoids relying solely on:
-      #
-      #     workflow_run
-      #
-      #   and establishes:
-      #
-      #     Bot completion
-      #       →
-      #     Runner resume
-      #
+      #   artifacts/lifecycle_backhaul.json
       ############################################################
 
-      - name: Runner Resume Dispatch
-        if: success()
+      - name: Write Lifecycle Event Backhaul
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
         run: |
           set -euo pipefail
 
-          EVENT_FILE="artifacts/lifecycle_event.json"
+          mkdir -p artifacts
 
-          if [ ! -f "$EVENT_FILE" ]; then
+          EVENT_STAGE=""
+          NEXT_STAGE=""
+          DISPATCH_REQUIRED="true"
+          LIFECYCLE_STATUS="running"
 
-            echo "Lifecycle event contract missing."
-            echo "Runner resume skipped."
+          case "${EXECUTOR_MODE}" in
 
-            exit 0
+            plan)
+              EVENT_STAGE="plan"
+              NEXT_STAGE="plan_audit"
+              ;;
 
-          fi
+            execute)
+              EVENT_STAGE="execute"
+              NEXT_STAGE="post_audit"
+              ;;
 
-          ########################################################
-          # Resolve Session
-          ########################################################
+            dry_run_execute)
+              EVENT_STAGE="execute"
+              NEXT_STAGE="post_audit"
+              ;;
 
-          AUDIT_SESSION_ID="$(
-            jq -r \
-              '.audit_session_id // empty' \
-              "$EVENT_FILE"
-          )"
+            *)
+              echo "Unsupported EXECUTOR_MODE: ${EXECUTOR_MODE}" >&2
+              exit 1
+              ;;
 
-          if [ -z "$AUDIT_SESSION_ID" ]; then
-
-            echo "audit_session_id missing from lifecycle_event.json" >&2
-            exit 1
-
-          fi
-
-          ########################################################
-          # Build Resume Payload
-          ########################################################
+          esac
 
           jq -n \
-            --arg audit_session_id "${AUDIT_SESSION_ID}" \
+            --arg schema "rga.lifecycle_backhaul.v1.0" \
+            --arg producer "maintenance_executor" \
+            --arg executor_mode "${EXECUTOR_MODE}" \
+            --arg session "${AUDIT_SESSION_ID}" \
+            --arg completed "${EVENT_STAGE}" \
+            --arg next "${NEXT_STAGE}" \
+            --arg status "${LIFECYCLE_STATUS}" \
+            --argjson dispatch "${DISPATCH_REQUIRED}" \
             '{
-              ref: "main",
+              schema: $schema,
 
-              inputs: {
-                resume_from_event: "true",
-                audit_session_id: $audit_session_id
+              producer: $producer,
+
+              audit_session_id: $session,
+
+              executor_mode: $executor_mode,
+
+              completed_stage: $completed,
+
+              next_stage:
+                (
+                  if $next == ""
+                  then null
+                  else $next
+                  end
+                ),
+
+              lifecycle_status: $status,
+
+              dispatch_required: $dispatch,
+
+              backhaul_contract: {
+                bot_dispatches_runner: false,
+                runner_must_resume_from_workflow_run: true,
+                artifact_guessing_required: false,
+                chronological_order_required: true
+              },
+
+              governance: {
+                bot_role: "planner_executor",
+                orchestrator_role: "lifecycle_runner",
+                approval_authority: "human",
+                completed_phases_remain_immutable: true
               }
             }' \
-            > /tmp/rga_runner_resume.json
+            > artifacts/lifecycle_backhaul.json
 
-          ########################################################
-          # Dispatch Runner
-          ########################################################
+          echo "Lifecycle backhaul written:"
+          cat artifacts/lifecycle_backhaul.json  
 
-          HTTP_STATUS="$(
-            curl -sS \
-              -o /tmp/rga_runner_resume_response.json \
-              -w "%{http_code}" \
-              -X POST \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "Content-Type: application/json" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/RGA%20Lifecycle%20Runner.yml/dispatches" \
-              -d @/tmp/rga_runner_resume.json \
-              || true
-          )"
+      ############################################################
+      # Upload Lifecycle Event Backhaul
+      ############################################################
 
-          if [ "$HTTP_STATUS" != "204" ]; then
-
-            echo "Runner resume dispatch failed (HTTP ${HTTP_STATUS})"
-
-            sed -n '1,200p' \
-              /tmp/rga_runner_resume_response.json \
-              || true
-
-            exit 1
-
-          fi
-
-          echo "Runner resume dispatched."
-          echo "Session: ${AUDIT_SESSION_ID}"          
+      - name: Upload Lifecycle Event Backhaul
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-lifecycle-backhaul
+          path: artifacts/lifecycle_backhaul.json
+          if-no-files-found: warn
+          retention-days: 30          
 
       ############################################################
       # Upload Plan Evidence
