@@ -493,8 +493,9 @@ jobs:
 
       - name: Write Persistence Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
+        shell: python
+ 
         run: |
-          python - <<'PY'
           import json
           from pathlib import Path
 
@@ -519,51 +520,29 @@ jobs:
                   str(mutation_plan),
 
               "ownership": {
-                  "planner":
-                      "bot_2",
-
-                  "executor":
-                      "persistence_layer",
-
-                  "approver":
-                      "human",
-
-                  "policy_validator":
-                      "deployment_gate",
+                  "planner": "bot_2",
+                  "executor": "persistence_layer",
+                  "approver": "human",
+                  "policy_validator": "deployment_gate",
               },
 
               "permissions": {
-                  "executor_may_write_db":
-                      False,
-
-                  "persistence_layer_owns_db_writes":
-                      True,
-
-                  "human_approval_required":
-                      True,
-
-                  "deployment_gate_required":
-                      True,
+                  "executor_may_write_db": False,
+                  "persistence_layer_owns_db_writes": True,
+                  "human_approval_required": True,
+                  "deployment_gate_required": True,
               },
 
               "runtime_requirements": {
-                  "runtime_baseline_required":
-                      True,
-
-                  "mutation_validation_required":
-                      True,
+                  "runtime_baseline_required": True,
+                  "mutation_validation_required": True,
               },
 
               "status": {
-                  "approved":
-                      False,
-
-                  "validated":
-                      False,
-
-                  "executed":
-                      False,
-              }
+                  "approved": False,
+                  "validated": False,
+                  "executed": False,
+              },
           }
 
           Path(
@@ -579,8 +558,7 @@ jobs:
 
           print(
               "[RGA] persistence_contract.json generated"
-          )
-          PY          
+          )        
 
       ############################################################
       # Execution Plan Fingerprint
