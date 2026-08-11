@@ -23,7 +23,7 @@ class GateOptions:
     require_runtime_stage_completion: bool = True
     allow_zero_failed_cases_only: bool = True
     require_governed_policy: bool = True  # <--- Local storage policy check flag
-
+    require_database_mutation_policy: bool = True
 
 REQUIRED_RUNTIME_STAGES: Tuple[str, ...] = (
     "scan",
@@ -177,6 +177,89 @@ def evaluate_governed_policy(policy_path: Optional[Path], results: List[Dict[str
     except Exception as e:
         _fail(results, "governed_policy", "policy_parse_error", {"error": str(e)})
 
+# --------------------------------------------------
+# Database Mutation Policy Validation
+# --------------------------------------------------
+def evaluate_database_mutation_policy(
+    mutation_plan_path: Optional[Path],
+    results: List[Dict[str, Any]],
+) -> None:
+
+    if not mutation_plan_path or not mutation_plan_path.exists():
+        _fail(
+            results,
+            "database_mutation_policy",
+            "database_mutation_plan_missing",
+        )
+        return
+
+    try:
+        plan = _load_json(mutation_plan_path)
+
+        schema = plan.get("schema")
+
+        if schema != "rga.database_mutation_plan.v1.0":
+            _fail(
+                results,
+                "database_mutation_policy",
+                "unsupported_mutation_plan_schema",
+                {
+                    "schema": schema,
+                },
+            )
+            return
+
+        runtime_baseline = plan.get(
+            "runtime_baseline"
+        )
+
+        if not runtime_baseline:
+            _fail(
+                results,
+                "database_mutation_policy",
+                "runtime_baseline_missing",
+            )
+            return
+
+        approval = plan.get(
+            "approval"
+        ) or {}
+
+        policy = plan.get(
+            "policy"
+        ) or {}
+
+        _ok(
+            results,
+            "database_mutation_policy",
+            {
+                "schema": schema,
+                "runtime_baseline": runtime_baseline,
+                "approval_required":
+                    approval.get("required"),
+                "policy_validation_required":
+                    policy.get(
+                        "validation_required"
+                    ),
+                "mutation_count":
+                    len(
+                        plan.get(
+                            "proposed_mutations"
+                        )
+                        or []
+                    ),
+            },
+        )
+
+    except Exception as e:
+        _fail(
+            results,
+            "database_mutation_policy",
+            "database_mutation_plan_parse_error",
+            {
+                "error": str(e),
+            },
+        )
 
 def evaluate_runtime_index(index: Dict[str, Any], results: List[Dict[str, Any]], opts: GateOptions) -> None:
     schema_version = index.get("schema_version")
@@ -222,6 +305,7 @@ def evaluate_gate(
     offline_validation_path: Optional[Path],
     runtime_index_path: Optional[Path],
     policy_config_path: Optional[Path] = None,
+    mutation_plan_path: Optional[Path] = None,
     options: GateOptions,
 ) -> Dict[str, Any]:
     results: List[Dict[str, Any]] = []
@@ -278,6 +362,16 @@ def evaluate_gate(
     # --------------------------------------------------
     if options.require_governed_policy:
         evaluate_governed_policy(policy_config_path, results)
+        
+    # --------------------------------------------------
+    # Database mutation policy
+    # --------------------------------------------------
+    if options.require_database_mutation_policy:
+
+        evaluate_database_mutation_policy(
+            mutation_plan_path,
+            results,
+        )        
 
     # --------------------------------------------------
     # Runtime index
@@ -319,6 +413,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--offline-validation-report", default="", help="Path to offline_validation_report.json")
     p.add_argument("--runtime-index", default="", help="Path to runtime_index.json")
     p.add_argument("--policy-config", default="", help="Path to policy.yml or policy.yaml")
+    p.add_argument("--database-mutation-plan", default="", help="Path to database_mutation_plan.json")
     p.add_argument("--require-runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
     p.add_argument("--output", default="deployment_gate_report.json", help="Output JSON report path")
     return p
@@ -331,6 +426,7 @@ def main() -> int:
     phase5_summary_path = _read_if_exists(args.phase5_summary) or _latest_json(["test_case_summary.json"])
     offline_validation_path = _read_if_exists(args.offline_validation_report) or _latest_json(["offline_validation_report.json"])
     runtime_index_path = _read_if_exists(args.runtime_index) or _latest_json(["runtime_index.json"])
+    mutation_plan_path = _read_if_exists(args.database_mutation_plan) or _latest_json(["database_mutation_plan.json"])
     
     # Resolve policy path (checks config/policy.yml and config/policy.yaml automatically)
     policy_config_path = (
@@ -345,6 +441,7 @@ def main() -> int:
         offline_validation_path=offline_validation_path,
         runtime_index_path=runtime_index_path,
         policy_config_path=policy_config_path,
+        mutation_plan_path=mutation_plan_path,
         options=GateOptions(require_runtime_index=bool(args.require_runtime_index)),
     )
 
