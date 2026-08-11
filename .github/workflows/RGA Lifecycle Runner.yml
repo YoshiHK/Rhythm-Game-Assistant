@@ -224,7 +224,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-    background: 
       - name: Fetch Contract from Previous Session
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
