@@ -1,0 +1,14 @@
+# policy.yaml / validator_config.yaml
+allowed_artifact_phases:
+  - "phase_1_extraction"
+  - "phase_2_features"
+  - "offline_local_storage" # Explicitly safe for offline local DBs & assets
+
+allowed_database_paths:
+  - "local_storage/db/*.db"
+  - "local_storage/charts/**"
+  - ".local_cache/**/*.db"
+
+rules:
+  allow_untracked_local_storage: true
+  strict_phase_matching: false # Disables erroring out on local-only unphased DBs
