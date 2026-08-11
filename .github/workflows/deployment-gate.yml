@@ -116,9 +116,9 @@ jobs:
           }
 
       # --------------------------------------------------
-      # 8.5 Write Database Mutation Contract
+      # 8.5 Download Mutation Contract
       # --------------------------------------------------
-      - name: Write Database Mutation Contract
+      - name: Download Mutation Contract
         shell: pwsh
         run: |
           New-Item `
