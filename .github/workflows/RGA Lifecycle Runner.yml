@@ -226,7 +226,7 @@ jobs:
 
       - name: Fetch Contract from Previous Session
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           # 1. Fetch the latest successful run ID using the exact workflow file name
           PREV_RUN_ID=$(gh run list -R "${{ github.repository }}" --workflow="RGA Lifecycle Runner.yml" --status=success --limit 1 --json databaseId -q '.[0].databaseId')
