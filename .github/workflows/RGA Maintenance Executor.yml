@@ -439,30 +439,24 @@ jobs:
       - name: Write Database Mutation Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
           import json
-          from pathlib import Path     
-      
-          p = Path('artifacts/database_mutation_plan.json')
+          from pathlib import Path
 
           runtime_baseline = Path(
               "artifacts/runtime_baseline.json"
           )
 
           payload = {
-              "schema":
-                  "rga.database_mutation_plan.v1.0",
-              "workflow":
-                  "RGA Maintenance Executor",
+              "schema": "rga.database_mutation_plan.v1.0",
 
-              "bot":
-                  "rga_executor_bot",
+              "workflow": "RGA Maintenance Executor",
 
-              "lifecycle_stage":
-                  "bot_2_plan",
+              "bot": "rga_executor_bot",
 
-              "runtime_baseline":
-                  str(runtime_baseline),
+              "lifecycle_stage": "bot_2_plan",
+
+              "runtime_baseline": str(runtime_baseline),
 
               "approval": {
                   "required": True,
@@ -491,7 +485,7 @@ jobs:
           print(
               "[RGA] database_mutation_plan.json generated"
           )
-          PY          
+          PY
 
       ############################################################
       # Execution Plan Fingerprint
