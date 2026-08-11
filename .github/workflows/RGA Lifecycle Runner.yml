@@ -1753,16 +1753,27 @@ jobs:
           # Terminal lifecycle states
           ########################################################
 
+          # 1. Post-audit completed & lifecycle complete
           if [ "$COMPLETED_STAGE" = "post_audit" ] \
-             && [ -z "$NEXT_STAGE" ] \
+             && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
              && [ "$LIFECYCLE_STATUS" = "complete" ] \
              && [ "$DISPATCH_REQUIRED" = "false" ]
           then
             VALID="true"
           fi
 
+          # 2. General terminal completion (catches stage="complete")
+          if [ "$COMPLETED_STAGE" = "complete" ] \
+             && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
+             && [ "$LIFECYCLE_STATUS" = "complete" ] \
+             && [ "$DISPATCH_REQUIRED" = "false" ]
+          then
+            VALID="true"
+          fi
+
+          # 3. Halted lifecycle state
           if [ "$COMPLETED_STAGE" = "halted" ] \
-             && [ -z "$NEXT_STAGE" ] \
+             && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
              && [ "$LIFECYCLE_STATUS" = "halted" ] \
              && [ "$DISPATCH_REQUIRED" = "false" ]
           then
