@@ -443,6 +443,8 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
+          
+          p = Path('artifacts/database_mutation_plan.json')
 
           runtime_baseline = Path(
               "artifacts/runtime_baseline.json"
