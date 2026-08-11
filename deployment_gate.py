@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import argparse
@@ -7,6 +6,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+try:
+    import yaml  # Used for parsing config/policy.yml
+except ImportError:
+    yaml = None  # Fallback handled safely in evaluation logic
 
 
 @dataclass(frozen=True)
@@ -18,6 +22,7 @@ class GateOptions:
     require_runtime_integrity_pass: bool = True
     require_runtime_stage_completion: bool = True
     allow_zero_failed_cases_only: bool = True
+    require_governed_policy: bool = True  # <--- Local storage policy check flag
 
 
 REQUIRED_RUNTIME_STAGES: Tuple[str, ...] = (
@@ -71,6 +76,7 @@ def _offline_validation_path_from_runtime_index(index: Dict[str, Any]) -> Option
                 return p
 
     return None
+
 
 def evaluate_repo_smoke(summary: Dict[str, Any], results: List[Dict[str, Any]]) -> None:
     failed = int(summary.get("failed", 0))
@@ -132,6 +138,46 @@ def evaluate_offline_validation(report: Dict[str, Any], results: List[Dict[str, 
         },
     )
 
+
+# --------------------------------------------------
+# Governed Local Storage Policy Evaluation Check
+# --------------------------------------------------
+def evaluate_governed_policy(policy_path: Optional[Path], results: List[Dict[str, Any]]) -> None:
+    if not policy_path or not policy_path.exists():
+        _fail(results, "governed_policy", "policy_config_missing", {"expected_path": "config/policy.yml"})
+        return
+
+    try:
+        content = policy_path.read_text(encoding="utf-8")
+        if yaml:
+            policy = yaml.safe_load(content)
+        else:
+            # Simple fallback string parser if PyYAML isn't installed in the environment
+            policy = {"allowed_artifact_phases": [line.strip().replace("- ", "").replace('"', "") for line in content.splitlines() if "-" in line]}
+
+        allowed_phases = policy.get("allowed_artifact_phases") or []
+        if "offline_local_storage" not in allowed_phases:
+            _fail(
+                results,
+                "governed_policy",
+                "offline_local_storage_not_whitelisted",
+                {"allowed_phases": allowed_phases},
+            )
+            return
+
+        _ok(
+            results,
+            "governed_policy",
+            {
+                "policy_file": str(policy_path),
+                "whitelisted_offline_phase": True,
+                "allowed_database_paths": policy.get("allowed_database_paths", []),
+            },
+        )
+    except Exception as e:
+        _fail(results, "governed_policy", "policy_parse_error", {"error": str(e)})
+
+
 def evaluate_runtime_index(index: Dict[str, Any], results: List[Dict[str, Any]], opts: GateOptions) -> None:
     schema_version = index.get("schema_version")
     last_run = index.get("last_run") or {}
@@ -175,6 +221,7 @@ def evaluate_gate(
     phase5_summary_path: Optional[Path],
     offline_validation_path: Optional[Path],
     runtime_index_path: Optional[Path],
+    policy_config_path: Optional[Path] = None,
     options: GateOptions,
 ) -> Dict[str, Any]:
     results: List[Dict[str, Any]] = []
@@ -227,6 +274,12 @@ def evaluate_gate(
             evaluate_offline_validation(_load_json(resolved_offline_validation), results)
 
     # --------------------------------------------------
+    # Governed local storage policy check
+    # --------------------------------------------------
+    if options.require_governed_policy:
+        evaluate_governed_policy(policy_config_path, results)
+
+    # --------------------------------------------------
     # Runtime index
     # --------------------------------------------------
     if options.require_runtime_index:
@@ -248,7 +301,6 @@ def evaluate_gate(
     }
 
 
-
 def _latest_json(patterns: Iterable[str]) -> Optional[Path]:
     candidates: List[Path] = []
     root = Path(".")
@@ -266,6 +318,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--phase5-summary", default="", help="Path to test_case_summary.json")
     p.add_argument("--offline-validation-report", default="", help="Path to offline_validation_report.json")
     p.add_argument("--runtime-index", default="", help="Path to runtime_index.json")
+    p.add_argument("--policy-config", default="", help="Path to policy.yml or policy.yaml")
     p.add_argument("--require-runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
     p.add_argument("--output", default="deployment_gate_report.json", help="Output JSON report path")
     return p
@@ -278,12 +331,20 @@ def main() -> int:
     phase5_summary_path = _read_if_exists(args.phase5_summary) or _latest_json(["test_case_summary.json"])
     offline_validation_path = _read_if_exists(args.offline_validation_report) or _latest_json(["offline_validation_report.json"])
     runtime_index_path = _read_if_exists(args.runtime_index) or _latest_json(["runtime_index.json"])
+    
+    # Resolve policy path (checks config/policy.yml and config/policy.yaml automatically)
+    policy_config_path = (
+        _read_if_exists(args.policy_config)
+        or _read_if_exists("config/policy.yml")
+        or _read_if_exists("config/policy.yaml")
+    )
 
     result = evaluate_gate(
         repo_smoke_path=repo_smoke_path,
         phase5_summary_path=phase5_summary_path,
         offline_validation_path=offline_validation_path,
         runtime_index_path=runtime_index_path,
+        policy_config_path=policy_config_path,
         options=GateOptions(require_runtime_index=bool(args.require_runtime_index)),
     )
 
@@ -305,3 +366,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
