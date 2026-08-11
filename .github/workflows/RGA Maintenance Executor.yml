@@ -1309,6 +1309,9 @@ jobs:
               "pull_request_created":
                   False,
 
+               "reason": 
+                  "Draft PR candidate prepared."   
+
               "pull_request_url":
                   None,
 
