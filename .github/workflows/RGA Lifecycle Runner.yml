@@ -1845,7 +1845,7 @@ jobs:
         if: always()
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.RGA_Access }}
         run: |
           set -euo pipefail
 
