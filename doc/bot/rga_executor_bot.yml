@@ -1,7 +1,7 @@
-schema: rga.executor_bot.v1.3
+schema: rga.executor_bot.v1.4
 
 bot_identity:
-  name: RGA Executor Bot
+  name: RGA Maintenance Executor
   id: rga_executor_bot
   description: Backend maintenance executor and execution-plan generator for RGA.
 
@@ -19,6 +19,7 @@ canonical_outputs:
 
   bot_2_plan:
     - execution_plan.json
+    - database_mutation_plan.json
     - runtime_executor_report.json
 
   bot_1_plan_audit:
@@ -130,6 +131,7 @@ root_failure_policy:
   revalidate_after_root_resolution: true
 
 input_contracts:
+  runtime_baseline: required
   runtime_auditor_report: required
   governance_failure_lineage: required
   artifact_failure_lineage: required
@@ -137,6 +139,34 @@ input_contracts:
   execution_plan: required_for_execute
   plan_audit_report: required_for_execute
   human_execution_approval: required_for_execute
+  
+mutation_contracts:
+  database_mutation_plan:
+    schema:
+      rga.database_mutation_plan.v1.0
+
+    ownership:
+      planner: bot_2
+      executor: persistence_layer
+      approver: human
+      policy_validator: deployment_gate
+
+    approval_required: true
+    policy_validation_required: true
+    execution_artifact_required: true
+    runtime_baseline_required: true
+    
+    allowed_operations:
+      - rebuild
+      - create
+      - upsert
+      - update_metadata
+
+    prohibited_operations:
+      - delete_runtime_database
+      - force_schema_rewrite
+      - bypass_policy
+      - bypass_human_approval
 
 planner_subsystems:
   failure_analyzer:
