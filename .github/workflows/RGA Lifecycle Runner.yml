@@ -199,9 +199,13 @@ on:
     workflows:
       - RGA Runtime Auditor
       - RGA Maintenance Executor
-
     types:
       - completed
+    branches:
+      - main
+concurrency:
+  group: rga-lifecycle-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   actions: write
@@ -1266,7 +1270,6 @@ jobs:
               ;;
 
             plan_audit)
-
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
               NEXT_STAGE="human_approval"
               DISPATCH_REQUIRED="true"
@@ -1275,15 +1278,15 @@ jobs:
                 jq -c -n \
                   --arg mode "plan_audit" \
                   --arg session "${AUDIT_SESSION_ID}" \
-                  --arg plan "${EXECUTION_PLAN}" \
+                  --arg plan "${EXECUTION_PLAN:-artifacts/execution_plan.json}" \
                   '{
                     audit_mode: $mode,
                     audit_session_id: $session,
                     execution_plan: $plan
                   }'
-              )"
-
+                )"
               ;;
+
 
             human_approval)
 
