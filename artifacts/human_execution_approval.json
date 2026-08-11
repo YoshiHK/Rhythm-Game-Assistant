@@ -3,6 +3,9 @@
   "approval_phrase": "APPROVE_RGA_EXECUTION",
   "approved_execution_plan": {
     "schema": "rga.execution_plan.v1.2",
-    "target_root_failures": []
+    "target_root_failures": [],
+    "policy_config": "config/policy.yml",
+    "target_scope": "local_storage_governed_execution",
+    "allow_untracked_local_storage": true
   }
 }
