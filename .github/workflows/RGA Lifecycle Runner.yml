@@ -224,6 +224,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fetch Contract from Previous Session
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          # Find the run ID of the latest workflow run that generated the approval contract
+          PREV_RUN_ID=$(gh run list --workflow="RGA Lifecycle Runner.yml" --status=success --limit 1 --json databaseId -q '.[0].databaseId')
+          
+          # Download artifact from that run specifically
+          gh run download $PREV_RUN_ID -n lifecycle_event
+
       ########################################################
       # Prepare Lifecycle Context
       ########################################################
