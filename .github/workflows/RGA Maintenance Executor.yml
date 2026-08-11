@@ -197,14 +197,13 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
+     
           p = Path('artifacts/human_execution_approval.json')
 
           payload = {
               'schema':'rga.approval_audit.v1.0',
               'artifact_present': p.exists()
           }
-
           Path('artifacts/approval_audit.json').write_text(
               json.dumps(payload, indent=2),
               encoding='utf-8'
@@ -442,8 +441,8 @@ jobs:
         run: |
           python3 - <<'PY'
           import json
-          from pathlib import Path
-          
+          from pathlib import Path     
+      
           p = Path('artifacts/database_mutation_plan.json')
 
           runtime_baseline = Path(
@@ -453,7 +452,6 @@ jobs:
           payload = {
               "schema":
                   "rga.database_mutation_plan.v1.0",
-
               "workflow":
                   "RGA Maintenance Executor",
 
