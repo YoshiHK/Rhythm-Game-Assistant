@@ -224,15 +224,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+    background: 
       - name: Fetch Contract from Previous Session
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          # Find the run ID of the latest workflow run that generated the approval contract
-          PREV_RUN_ID=$(gh run list --workflow="RGA Lifecycle Runner.yml" --status=success --limit 1 --json databaseId -q '.[0].databaseId')
-          
-          # Download artifact from that run specifically
-          gh run download $PREV_RUN_ID -n lifecycle_event
+          # 1. Fetch the latest successful run ID using the exact workflow file name
+          PREV_RUN_ID=$(gh run list -R "${{ github.repository }}" --workflow="RGA Lifecycle Runner.yml" --status=success --limit 1 --json databaseId -q '.[0].databaseId')
+
+          # 2. Check if a run ID was actually found before attempting to download
+          if [ -z "$PREV_RUN_ID" ] || [ "$PREV_RUN_ID" = "null" ]; then
+             echo "::warning::No previous successful run found. Skipping contract download."
+          else
+             echo "Downloading lifecycle_event artifact from run ID: $PREV_RUN_ID"
+             gh run download $PREV_RUN_ID -R "${{ github.repository }}" -n lifecycle_event || echo "::warning::Artifact download failed."
+          fi
 
       ########################################################
       # Prepare Lifecycle Context
