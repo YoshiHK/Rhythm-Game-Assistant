@@ -116,65 +116,144 @@ jobs:
           }
 
       # --------------------------------------------------
-      # 8.5 Download Mutation Contract
+      # 8.5 Resolve runtime baseline contract
+      #
+      # Stage 1 input for:
+      #
+      #   rga.database_mutation_plan.v1.0
+      #
+      # If the CI run did not produce a runtime_baseline.json,
+      # create a bootstrap baseline contract so Stage 3 policy
+      # validation can still operate in non-mutating mode.
+      # --------------------------------------------------
+      - name: Resolve runtime baseline contract
+        id: runtime_baseline
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
+
+          $baseline = Get-ChildItem `
+            ".\artifacts" `
+            -Recurse `
+            -Filter "runtime_baseline.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if (-not $baseline) {
+            $payload = @{
+              schema = "rga.runtime_baseline.v1.0"
+              generated_by = "deployment-gate"
+              baseline_ready = $false
+              bootstrap_only = $true
+              databases = @{}
+              summary = @{
+                required_database_count = 3
+                existing_database_count = 0
+                readable_database_count = 0
+                total_records = 0
+              }
+              contract = @{
+                stage = "runtime_baseline"
+                verification_required = $true
+                deployment_gate_required = $true
+                deletion_allowed = $false
+                baseline_is_not_full_verification = $true
+              }
+              governance = @{
+                completed_phases_remain_immutable = $true
+                phase_1_to_7_modified = $false
+                persistence_layer_owns_db_writes = $true
+                validation_is_not_verification = $true
+              }
+            }
+
+            $payload |
+              ConvertTo-Json -Depth 20 |
+              Set-Content .\artifacts\runtime_baseline.json -Encoding UTF8
+
+            $baseline = Get-Item .\artifacts\runtime_baseline.json
+
+            Write-Host "[DEPLOYMENT-GATE] bootstrap runtime_baseline.json generated"
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE] runtime_baseline.json found: $($baseline.FullName)"
+          }
+
+          "runtime_baseline_path=$($baseline.FullName)" >> $env:GITHUB_OUTPUT          
+
+      # --------------------------------------------------
+      # 8.6 Download Mutation Contract
+      #
+      # Stage 2 artifact consumed by Deployment Gate Stage 3.
+      #
+      # This does NOT perform DB mutation.
+      # It only declares the mutation policy surface.
       # --------------------------------------------------
       - name: Download Mutation Contract
         shell: pwsh
         run: |
-          New-Item `
-            -ItemType Directory `
-            -Force `
-            -Path .\artifacts | Out-Null
+          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
 
-          @'
-          {
-            "schema": "rga.database_mutation_plan.v1.0",
-            "workflow": "Deployment Gate",
-            "lifecycle_stage": "stage_3_policy_validation",
+          $runtimeBaselinePath = "${{ steps.runtime_baseline.outputs.runtime_baseline_path }}"
 
-            "approval": {
-              "required": true,
-              "approved": false
-            },
-
-            "policy": {
-              "validation_required": true,
-              "validated": false
-            },
-
-            "proposed_mutations": []
+          if ([System.String]::IsNullOrWhiteSpace($runtimeBaselinePath)) {
+            throw "runtime_baseline_path output is empty."
           }
-          '@ | Set-Content `
-                .\artifacts\database_mutation_plan.json `
-                -Encoding UTF8
 
-          Write-Host `
-            "[DEPLOYMENT-GATE] database_mutation_plan.json generated"
+          $payload = @{
+            schema = "rga.database_mutation_plan.v1.0"
+            workflow = "Deployment Gate"
+            bot = "deployment_gate"
+            lifecycle_stage = "stage_3_policy_validation"
+            runtime_baseline = $runtimeBaselinePath
+
+            approval = @{
+              required = $true
+              approved = $false
+            }
+
+            policy = @{
+              validation_required = $true
+              validated = $false
+            }
+
+            proposed_mutations = @()
+          }
+
+          $payload |
+            ConvertTo-Json -Depth 20 |
+            Set-Content .\artifacts\database_mutation_plan.json -Encoding UTF8
+
+          Write-Host "[DEPLOYMENT-GATE] database_mutation_plan.json generated"
+          Write-Host "[DEPLOYMENT-GATE] runtime_baseline=$runtimeBaselinePath"
 
       # --------------------------------------------------
-      # 9. Run deployment gate (online-only artifacts + governed policy)
+      # 9. Run deployment gate
+      #
+      # Includes:
+      #
+      #   offline_validation_report.json
+      #   config/policy.yml
+      #   runtime_index.json, if generated
+      #   database_mutation_plan.json
       # --------------------------------------------------
       - name: Run deployment gate
         shell: pwsh
         run: |
           $args = @(
             ".\deployment_gate.py",
-
-            "--offline-validation-report",
-            "${{ steps.offline.outputs.report_path }}",
-
-            "--database-mutation-plan",
-            ".\artifacts\database_mutation_plan.json",
-
-            "--output",
-            ".\deployment_gate_report.json"
+            "--offline-validation-report", "${{ steps.offline.outputs.report_path }}",
+            "--database-mutation-plan", ".\artifacts\database_mutation_plan.json",
+            "--output", ".\deployment_gate_report.json"
           )
- 
+
           # Pass governed policy configuration if present
           if (Test-Path ".\config\policy.yml") {
             $args += "--policy-config"
             $args += ".\config\policy.yml"
-          } elseif (Test-Path ".\config\policy.yaml") {
+          }
+          elseif (Test-Path ".\config\policy.yaml") {
             $args += "--policy-config"
             $args += ".\config\policy.yaml"
           }
@@ -186,13 +265,23 @@ jobs:
             $args += "--require-runtime-index"
           }
 
+          Write-Host "[DEPLOYMENT-GATE] args:"
+          $args | ForEach-Object {
+            Write-Host "  $_"
+          }
+
           .\.venv\Scripts\python.exe @args
 
       # --------------------------------------------------
-      # ✅ 10. Upload deployment report artifact
+      # 10. Upload deployment report artifact
       # --------------------------------------------------
       - name: Upload deployment gate report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: deployment-gate-report
-          path: deployment_gate_report.json
+          path: |
+            deployment_gate_report.json
+            artifacts/runtime_baseline.json
+            artifacts/database_mutation_plan.json
+          if-no-files-found: warn
