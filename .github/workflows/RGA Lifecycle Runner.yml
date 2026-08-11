@@ -906,6 +906,21 @@ jobs:
 
             manual|workflow_dispatch)
 
+            ########################################################
+            # Stage Resolution: Manual Workflow Dispatch
+            ########################################################
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              # Read input stage from manual dispatch UI
+              TARGET_STAGE="${{ github.event.inputs.stage }}"
+
+              # Fallback to pre_audit if stage input is empty or omitted
+              if [ -z "$TARGET_STAGE" ]; then
+                TARGET_STAGE="pre_audit"
+              fi
+
+              REASON="Lifecycle stage selected manually."
+            fi            
+
               if [ -z "${STAGE:-}" ] || [ "${STAGE:-}" = "auto_detect" ]; then
                 STAGE="pre_audit"
               fi
