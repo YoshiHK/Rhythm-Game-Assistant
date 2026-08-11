@@ -1,4 +1,4 @@
-# policy.yaml / validator_config.yaml
+# policy.yml / validator_config.yml
 allowed_artifact_phases:
   - "phase_1_extraction"
   - "phase_2_features"
