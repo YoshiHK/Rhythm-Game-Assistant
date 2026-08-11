@@ -116,6 +116,42 @@ jobs:
           }
 
       # --------------------------------------------------
+      # 8.5 Write Database Mutation Contract
+      # --------------------------------------------------
+      - name: Write Database Mutation Contract
+        shell: pwsh
+        run: |
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path .\artifacts | Out-Null
+
+          @'
+          {
+            "schema": "rga.database_mutation_plan.v1.0",
+            "workflow": "Deployment Gate",
+            "lifecycle_stage": "stage_3_policy_validation",
+
+            "approval": {
+              "required": true,
+              "approved": false
+            },
+
+            "policy": {
+              "validation_required": true,
+              "validated": false
+            },
+
+            "proposed_mutations": []
+          }
+          '@ | Set-Content `
+                .\artifacts\database_mutation_plan.json `
+                -Encoding UTF8
+
+          Write-Host `
+            "[DEPLOYMENT-GATE] database_mutation_plan.json generated"
+
+      # --------------------------------------------------
       # 9. Run deployment gate (online-only artifacts + governed policy)
       # --------------------------------------------------
       - name: Run deployment gate
