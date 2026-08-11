@@ -39,16 +39,35 @@ keys/
 *.pfx
 
 # -------------------------------------------------
-# Generated data (MUST NOT be committed)
+# Local Storage & Offline Database Isolation (CRITICAL)
 # -------------------------------------------------
+# Dedicated offline phase storage & local databases
+local_storage/
+.local_cache/
 
-# Tips / local database outputs
+# Local databases & indexes
+*.sqlite
+*.db
+*.sqlite3
+
+# Local Spreadsheets (Song DBs, tips, exports)
 *.xlsx
 *.xls
 *.csv
-*.sqlite
-*.db
 
+# Original Character (Mascot) & Local Media Assets
+mascot/
+mascot_assets/
+assets/mascot/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.webp
+
+# -------------------------------------------------
+# Generated Data & Reports (MUST NOT be committed)
+# -------------------------------------------------
 # Batch summaries / reports
 reports/
 output/
@@ -68,7 +87,7 @@ runtime_index.json
 !requirements.txt
 
 # -------------------------------------------------
-# Chart ingestion inputs (authoritative but local)
+# Chart Ingestion Inputs (Authoritative but Local)
 # -------------------------------------------------
 
 # Raw chart files
@@ -86,28 +105,26 @@ chart_assets.sqlite
 Tips Output Meta/
 
 # -------------------------------------------------
-# User data (never commit)
+# User Data & Uploads (Never Commit)
 # -------------------------------------------------
 screenshots/
 uploads/
 user_data/
 
-# -------------------------------------------------
 # Softr / API uploads
-# -------------------------------------------------
 uploads_temp/
 downloads_temp/
 tmp_uploads/
 
 # -------------------------------------------------
-# Runtime caches
+# Runtime Caches
 # -------------------------------------------------
 .cache/
 cache/
 *.cache
 
 # -------------------------------------------------
-# OS / Editor noise
+# OS / Editor Noise
 # -------------------------------------------------
 .DS_Store
 Thumbs.db
@@ -121,14 +138,14 @@ desktop.ini
 .idea/
 
 # -------------------------------------------------
-# Build / deployment artifacts
+# Build / Deployment Artifacts
 # -------------------------------------------------
 dist/
 build/
 *.egg-info/
 
 # -------------------------------------------------
-# CI runtime outputs (logs and observability artifacts)
+# CI Runtime Outputs (Logs and observability artifacts)
 # -------------------------------------------------
 CI/**/logs/*
 CI/**/artifacts/*
@@ -138,13 +155,13 @@ CI/**/artifacts/*
 !CI/**/artifacts/.gitkeep
 
 # -------------------------------------------------
-# Ngrok (local machine only)
+# Ngrok (Local Machine Only)
 # -------------------------------------------------
 .ngrok2/
 ngrok.yml
 
 # -------------------------------------------------
-# Temporary / scratch
+# Temporary / Scratch
 # -------------------------------------------------
 tmp/
 temp/
