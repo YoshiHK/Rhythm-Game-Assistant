@@ -1750,6 +1750,27 @@ jobs:
           esac
 
           ########################################################
+          # Intermediate transition states (Audit / Execute)
+          ########################################################
+
+          # 1. Transitioning to Runtime Auditor from post_audit
+          if [ "$COMPLETED_STAGE" = "post_audit" ] \
+             && [ "$DISPATCH_REQUIRED" = "true" ] \
+             && [ "$LIFECYCLE_STATUS" = "running" ]
+          then
+            VALID="true"
+          fi
+
+          # 2. General non-terminal running state with dispatch
+          if [ -n "$NEXT_STAGE" ] \
+             && [ "$NEXT_STAGE" != "none" ] \
+             && [ "$DISPATCH_REQUIRED" = "true" ] \
+             && [ "$LIFECYCLE_STATUS" = "running" ]
+          then
+            VALID="true"
+          fi
+
+          ########################################################
           # Terminal lifecycle states
           ########################################################
 
@@ -1779,6 +1800,7 @@ jobs:
           then
             VALID="true"
           fi
+
 
           ########################################################
           # Result
