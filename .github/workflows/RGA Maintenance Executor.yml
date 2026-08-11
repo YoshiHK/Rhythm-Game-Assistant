@@ -486,6 +486,101 @@ jobs:
               "[RGA] database_mutation_plan.json generated"
           )
           PY
+          
+      ############################################################
+      # Write Persistence Contract
+      ############################################################
+
+      - name: Write Persistence Contract
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          mutation_plan = Path(
+              "artifacts/database_mutation_plan.json"
+          )
+
+          payload = {
+              "schema":
+                  "rga.persistence_contract.v1.0",
+
+              "workflow":
+                  "RGA Maintenance Executor",
+
+              "bot":
+                  "rga_executor_bot",
+
+              "lifecycle_stage":
+                  "stage_4_persistence_contract",
+
+              "source_contract":
+                  str(mutation_plan),
+
+              "ownership": {
+                  "planner":
+                      "bot_2",
+
+                  "executor":
+                      "persistence_layer",
+
+                  "approver":
+                      "human",
+
+                  "policy_validator":
+                      "deployment_gate",
+              },
+
+              "permissions": {
+                  "executor_may_write_db":
+                      False,
+
+                  "persistence_layer_owns_db_writes":
+                      True,
+
+                  "human_approval_required":
+                      True,
+
+                  "deployment_gate_required":
+                      True,
+              },
+
+              "runtime_requirements": {
+                  "runtime_baseline_required":
+                      True,
+
+                  "mutation_validation_required":
+                      True,
+              },
+
+              "status": {
+                  "approved":
+                      False,
+
+                  "validated":
+                      False,
+
+                  "executed":
+                      False,
+              }
+          }
+
+          Path(
+              "artifacts/persistence_contract.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA] persistence_contract.json generated"
+          )
+          PY          
 
       ############################################################
       # Execution Plan Fingerprint
@@ -1976,13 +2071,17 @@ jobs:
       - name: Upload Plan Evidence
         if: ${{ always() && inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
+
         with:
           name: rga-execution-plan
+
           path: |
             artifacts/execution_plan.json
             artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
+
           if-no-files-found: warn
           
       ############################################################
