@@ -35,11 +35,12 @@ jobs:
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
 
       # --------------------------------------------------
-      # 4. Install requirements (if exists)
+      # 4. Install requirements & YAML parser
       # --------------------------------------------------
       - name: Install requirements
         shell: pwsh
         run: |
+          .\.venv\Scripts\python.exe -m pip install pyyaml
           if (Test-Path .\requirements.txt) {
             .\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
           }
@@ -115,7 +116,7 @@ jobs:
           }
 
       # --------------------------------------------------
-      # 9. Run deployment gate (online-only artifacts)
+      # 9. Run deployment gate (online-only artifacts + governed policy)
       # --------------------------------------------------
       - name: Run deployment gate
         shell: pwsh
@@ -125,6 +126,15 @@ jobs:
             "--offline-validation-report", "${{ steps.offline.outputs.report_path }}",
             "--output", ".\deployment_gate_report.json"
           )
+
+          # Pass governed policy configuration if present
+          if (Test-Path ".\config\policy.yml") {
+            $args += "--policy-config"
+            $args += ".\config\policy.yml"
+          } elseif (Test-Path ".\config\policy.yaml") {
+            $args += "--policy-config"
+            $args += ".\config\policy.yaml"
+          }
 
           # Only require runtime_index if this run actually generated one inside CI-local workspace.
           if ("${{ steps.runtime.outputs.runtime_index_path }}" -ne "") {
