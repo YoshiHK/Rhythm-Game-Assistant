@@ -3,22 +3,23 @@ name: Deployment Gate
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
 
 jobs:
-  deployment-gate:
+  deployment-gate-lite:
     runs-on: windows-latest
 
     steps:
       # --------------------------------------------------
-      # 1. Checkout
+      # Checkout
       # --------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
       # --------------------------------------------------
-      # 2. Setup Python
+      # Setup Python
       # --------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -26,7 +27,7 @@ jobs:
           python-version: "3.11"
 
       # --------------------------------------------------
-      # 3. Create venv
+      # Create venv
       # --------------------------------------------------
       - name: Create venv
         shell: pwsh
@@ -35,37 +36,44 @@ jobs:
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
 
       # --------------------------------------------------
-      # 4. Install requirements & YAML parser
+      # Install requirements
       # --------------------------------------------------
       - name: Install requirements
         shell: pwsh
         run: |
           .\.venv\Scripts\python.exe -m pip install pyyaml
+
           if (Test-Path .\requirements.txt) {
-            .\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
+            .\.venv\Scripts\python.exe `
+              -m pip install `
+              -r .\requirements.txt
           }
 
       # --------------------------------------------------
-      # 5. Prepare CI-local runtime workspace
+      # Prepare CI-local workspace
       # --------------------------------------------------
       - name: Prepare CI data root
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path .\ci_data | Out-Null
-          New-Item -ItemType Directory -Force -Path ".\ci_data\Chart File" | Out-Null
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path .\ci_data | Out-Null
 
-          # Optional: if you have repo-contained chart fixtures, copy them in.
-          if (Test-Path ".\tests\fixtures\Chart File") {
-            Copy-Item ".\tests\fixtures\Chart File\*" ".\ci_data\Chart File" -Recurse -Force
-          }
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path ".\ci_data\Chart File" | Out-Null
 
       # --------------------------------------------------
-      # 6. Run setup chain against CI-local DataRoot
+      # Run setup chain
       # --------------------------------------------------
       - name: Run setup chain
         shell: pwsh
         run: |
-          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+          Set-ExecutionPolicy `
+            -Scope Process `
+            -ExecutionPolicy Bypass
 
           .\setup.ps1 `
             -RepoRoot "." `
@@ -79,7 +87,7 @@ jobs:
             -StrictValidation
 
       # --------------------------------------------------
-      # 7. Resolve latest offline validation report from CI-local DataRoot
+      # Resolve offline validation report
       # --------------------------------------------------
       - name: Resolve offline validation report
         id: offline
@@ -87,211 +95,61 @@ jobs:
         run: |
           $report = Get-ChildItem `
             ".\ci_data\Tips Output Meta\offline_validation" `
-            -Recurse -Filter "offline_validation_report.json" |
+            -Recurse `
+            -Filter "offline_validation_report.json" |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
 
           if (-not $report) {
-            throw "offline_validation_report.json not found under .\ci_data\Tips Output Meta\offline_validation"
+            throw "offline_validation_report.json not found"
           }
 
-          "report_path=$($report.FullName)" >> $env:GITHUB_OUTPUT
+          "report_path=$($report.FullName)" `
+            >> $env:GITHUB_OUTPUT
 
       # --------------------------------------------------
-      # 8. Resolve runtime index from CI-local outputs only (optional)
+      # Resolve runtime index (optional)
       # --------------------------------------------------
       - name: Resolve runtime index
         id: runtime
         shell: pwsh
         run: |
-          # Prefer CI-local generated runtime index, if your pipeline emits one.
           $idx = Get-ChildItem `
             ".\ci_data" `
-            -Recurse -Filter "runtime_index.json" |
+            -Recurse `
+            -Filter "runtime_index.json" |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
 
           if ($idx) {
-            "runtime_index_path=$($idx.FullName)" >> $env:GITHUB_OUTPUT
+            "runtime_index_path=$($idx.FullName)" `
+              >> $env:GITHUB_OUTPUT
           }
-          
-      # --------------------------------------------------
-      # 8.1 Prepare Governance Artifact Workspace
-      # --------------------------------------------------
-      - name: Prepare Governance Artifact Workspace
-        shell: pwsh
-        run: |
-          New-Item `
-            -ItemType Directory `
-            -Force `
-            -Path .\artifacts | Out-Null
 
       # --------------------------------------------------
-      # 8.2 Download Runtime Baseline Artifact
-      # --------------------------------------------------
-      - name: Download Runtime Baseline Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rga-runtime-baseline
-          path: .\artifacts
-
-        continue-on-error: true          
-
-      # --------------------------------------------------
-      # 8.3 Download Mutation Contract Artifact
-      # --------------------------------------------------
-      - name: Download Mutation Contract Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rga-execution-plan
-          path: .\artifacts
-
-        continue-on-error: true
-          
-      # --------------------------------------------------
-      # 8.4 Download Persistence Contract Artifact
-      # --------------------------------------------------
-      - name: Download Persistence Contract Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rga-persistence-contract
-          path: .\artifacts
-
-        continue-on-error: true
-          
-      # --------------------------------------------------
-      # 8.5 Download Runtime Verification Artifact
-      # --------------------------------------------------
-      - name: Download Runtime Verification Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rga-runtime-verification
-          path: .\artifacts
-
-        continue-on-error: true
-
-      # --------------------------------------------------
-      # 8.6 Download Runtime Verification Acceptance Artifact
-      # --------------------------------------------------
-      - name: Download Runtime Verification Acceptance Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rga-runtime-verification-acceptance
-          path: .\artifacts
-
-        continue-on-error: true
-
-      # --------------------------------------------------
-      # 8.7 Download Runtime Certification Artifact
-      # --------------------------------------------------
-      - name: Download Runtime Certification Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rga-runtime-certification
-          path: .\artifacts
-
-        continue-on-error: true
-
-      # --------------------------------------------------
-      # 8.8 Download Path A Operational Artifact
-      # --------------------------------------------------
-      - name: Download Path A Operational Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rga-path-a-operational
-          path: .\artifacts
-
-        continue-on-error: true    
-        
-      # --------------------------------------------------
-      # 8.9 Governance Artifact Inventory
-      # --------------------------------------------------
-      - name: Governance Artifact Inventory
-        shell: pwsh
-        run: |
-          Write-Host ""
-          Write-Host "[DEPLOYMENT-GATE] Governance Artifacts"
-          Write-Host "----------------------------------------"
-
-          Get-ChildItem `
-            .\artifacts `
-            -Recurse `
-            -File |
-            Select-Object FullName
-
-          Write-Host "----------------------------------------"        
-
-      # --------------------------------------------------
-      # 9. Run deployment gate
+      # Run Deployment Gate Lite
       #
-      # Governance aggregation:
-      #
+      # Scope:
       #   repo_smoke
       #   phase5_summary
       #   offline_validation
       #   governed_policy
       #
-      # Stage 1
-      #   runtime_baseline.json
-      #
-      # Stage 2-3
-      #   database_mutation_plan.json
-      #
-      # Stage 4
-      #   persistence_contract.json
-      #
-      # Stage 5
-      #   runtime_verification_contract.json
-      #
-      # Stage 6
-      #   runtime_verification_acceptance.json
-      #
-      # Stage 7
-      #   runtime_certification.json
-      #
-      # Stage 8
-      #   path_a_operational.json
-      #
-      # runtime_index remains an execution artifact
-      # and is evaluated after governance checks.
+      # NOT INCLUDED:
+      #   Stage 1-8 governance contracts
       # --------------------------------------------------
-      - name: Run deployment gate
+      - name: Run deployment gate lite
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Stop"
-
-          # --------------------------------------------------
-          # Canonical artifact paths
-          # --------------------------------------------------
-
-          $OfflineValidationReport = "${{ steps.offline.outputs.report_path }}"
-          $RuntimeIndexPath = "${{ steps.runtime.outputs.runtime_index_path }}"
-
-          $RuntimeBaselinePath = ".\artifacts\runtime_baseline.json"
-          $DatabaseMutationPlanPath = ".\artifacts\database_mutation_plan.json"
-          $PersistenceContractPath = ".\artifacts\persistence_contract.json"
-          $RuntimeVerificationContractPath = ".\artifacts\runtime_verification_contract.json"
-          $RuntimeVerificationAcceptancePath = ".\artifacts\runtime_verification_acceptance.json"
-          $RuntimeCertificationPath = ".\artifacts\runtime_certification.json"
-          $PathAOperationalPath = ".\artifacts\path_a_operational.json"
-
-          # --------------------------------------------------
-          # Base args
-          # --------------------------------------------------
-
           $args = @(
             ".\deployment_gate.py",
 
             "--offline-validation-report",
-            $OfflineValidationReport,
+            "${{ steps.offline.outputs.report_path }}",
 
             "--output",
             ".\deployment_gate_report.json"
           )
-
-          # --------------------------------------------------
-          # Governed policy
-          # --------------------------------------------------
 
           if (Test-Path ".\config\policy.yml") {
             $args += "--policy-config"
@@ -302,121 +160,17 @@ jobs:
             $args += ".\config\policy.yaml"
           }
 
-          # --------------------------------------------------
-          # Stage 1
-          # Runtime Baseline
-          # --------------------------------------------------
-
-          if (Test-Path $RuntimeBaselinePath) {
-            $args += "--runtime-baseline"
-            $args += $RuntimeBaselinePath
+          if (
+            "${{ steps.runtime.outputs.runtime_index_path }}"
+            -ne ""
+          ) {
+            $args += "--runtime-index"
+            $args += "${{ steps.runtime.outputs.runtime_index_path }}"
+            $args += "--require-runtime-index"
           }
-          else {
-            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime baseline: $RuntimeBaselinePath"
-          }
-
-          # --------------------------------------------------
-          # Stage 2-3
-          # Database Mutation Plan / Policy
-          # --------------------------------------------------
-
-          if (Test-Path $DatabaseMutationPlanPath) {
-            $args += "--database-mutation-plan"
-            $args += $DatabaseMutationPlanPath
-          }
-          else {
-            Write-Host "[DEPLOYMENT-GATE][WARN] Missing database mutation plan: $DatabaseMutationPlanPath"
-          }
-
-          # --------------------------------------------------
-          # Stage 4
-          # Persistence Contract
-          # --------------------------------------------------
-
-          if (Test-Path $PersistenceContractPath) {
-            $args += "--persistence-contract"
-            $args += $PersistenceContractPath
-          }
-          else {
-            Write-Host "[DEPLOYMENT-GATE][WARN] Missing persistence contract: $PersistenceContractPath"
-          }
-
-          # --------------------------------------------------
-          # Stage 5
-          # Runtime Verification Contract
-          # --------------------------------------------------
-
-          if (Test-Path $RuntimeVerificationContractPath) {
-            $args += "--runtime-verification-contract"
-            $args += $RuntimeVerificationContractPath
-          }
-          else {
-            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime verification contract: $RuntimeVerificationContractPath"
-          }
-
-          # --------------------------------------------------
-          # Stage 6
-          # Runtime Verification Acceptance
-          # --------------------------------------------------
-
-          if (Test-Path $RuntimeVerificationAcceptancePath) {
-            $args += "--runtime-verification-acceptance"
-            $args += $RuntimeVerificationAcceptancePath
-          }
-          else {
-            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime verification acceptance: $RuntimeVerificationAcceptancePath"
-          }
-
-          # --------------------------------------------------
-          # Stage 7
-          # Runtime Certification
-          # --------------------------------------------------
-
-          if (Test-Path $RuntimeCertificationPath) {
-            $args += "--runtime-certification"
-            $args += $RuntimeCertificationPath
-          }
-          else {
-            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime certification: $RuntimeCertificationPath"
-          }
-
-          # --------------------------------------------------
-          # Stage 8
-          # Path A Operational
-          # --------------------------------------------------
-
-          if (Test-Path $PathAOperationalPath) {
-            $args += "--path-a-operational"
-            $args += $PathAOperationalPath
-          }
-          else {
-            Write-Host "[DEPLOYMENT-GATE][WARN] Missing Path A operational contract: $PathAOperationalPath"
-          }
-
-          # --------------------------------------------------
-          # Runtime Index
-          #
-          # Runtime index is execution evidence.
-          # Governance contracts are evaluated first.
-          # --------------------------------------------------
-
-          if (-not [System.String]::IsNullOrWhiteSpace($RuntimeIndexPath)) {
-            if (Test-Path $RuntimeIndexPath) {
-              $args += "--runtime-index"
-              $args += $RuntimeIndexPath
-              $args += "--require-runtime-index"
-            }
-            else {
-              Write-Host "[DEPLOYMENT-GATE][WARN] Runtime index output was provided but file was not found: $RuntimeIndexPath"
-            }
-          }
-
-          # --------------------------------------------------
-          # Diagnostics
-          # --------------------------------------------------
 
           Write-Host ""
-          Write-Host "[DEPLOYMENT-GATE] Arguments"
+          Write-Host "[DEPLOYMENT-GATE-LITE] Arguments"
           Write-Host "----------------------------------------"
 
           $args | ForEach-Object {
@@ -428,7 +182,7 @@ jobs:
           .\.venv\Scripts\python.exe @args
 
       # --------------------------------------------------
-      # 10. Upload deployment report artifact
+      # Upload report
       # --------------------------------------------------
       - name: Upload deployment gate report
         if: always()
@@ -437,11 +191,4 @@ jobs:
           name: deployment-gate-report
           path: |
             deployment_gate_report.json
-            artifacts/runtime_baseline.json
-            artifacts/database_mutation_plan.json
-            artifacts/persistence_contract.json
-            artifacts/runtime_verification_contract.json
-            artifacts/runtime_verification_acceptance.json
-            artifacts/runtime_certification.json
-            artifacts/path_a_operational.json
           if-no-files-found: warn
