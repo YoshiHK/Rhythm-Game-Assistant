@@ -196,7 +196,7 @@ jobs:
           }          
 
       - name: Run Deployment Governance Gate
-        if: if: ${{ steps.governance_preconditions.outputs.governance_enabled == 'true' }}
+        if: ${{ steps.governance_preconditions.outputs.governance_enabled == 'true' }}
         shell: pwsh
         run: |
           $args = @(
