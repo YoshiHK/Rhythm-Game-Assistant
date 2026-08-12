@@ -114,214 +114,112 @@ jobs:
           if ($idx) {
             "runtime_index_path=$($idx.FullName)" >> $env:GITHUB_OUTPUT
           }
-
-      # --------------------------------------------------
-      # 8.5 Resolve runtime baseline contract
-      #
-      # Stage 1 input for:
-      #
-      #   rga.database_mutation_plan.v1.0
-      #
-      # If the CI run did not produce a runtime_baseline.json,
-      # create a bootstrap baseline contract so Stage 3 policy
-      # validation can still operate in non-mutating mode.
-      # --------------------------------------------------
-      - name: Resolve runtime baseline contract
-        id: runtime_baseline
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
-
-          $baseline = Get-ChildItem `
-            ".\artifacts" `
-            -Recurse `
-            -Filter "runtime_baseline.json" `
-            -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime |
-            Select-Object -Last 1
-
-          if (-not $baseline) {
-            $payload = @{
-              schema = "rga.runtime_baseline.v1.0"
-              generated_by = "deployment-gate"
-              baseline_ready = $false
-              bootstrap_only = $true
-              databases = @{}
-              summary = @{
-                required_database_count = 3
-                existing_database_count = 0
-                readable_database_count = 0
-                total_records = 0
-              }
-              contract = @{
-                stage = "runtime_baseline"
-                verification_required = $true
-                deployment_gate_required = $true
-                deletion_allowed = $false
-                baseline_is_not_full_verification = $true
-              }
-              governance = @{
-                completed_phases_remain_immutable = $true
-                phase_1_to_7_modified = $false
-                persistence_layer_owns_db_writes = $true
-                validation_is_not_verification = $true
-              }
-            }
-
-            $payload |
-              ConvertTo-Json -Depth 20 |
-              Set-Content .\artifacts\runtime_baseline.json -Encoding UTF8
-
-            $baseline = Get-Item .\artifacts\runtime_baseline.json
-
-            Write-Host "[DEPLOYMENT-GATE] bootstrap runtime_baseline.json generated"
-          }
-          else {
-            Write-Host "[DEPLOYMENT-GATE] runtime_baseline.json found: $($baseline.FullName)"
-          }
-
-          "runtime_baseline_path=$($baseline.FullName)" >> $env:GITHUB_OUTPUT          
-
-      # --------------------------------------------------
-      # 8.6 Download Mutation Contract
-      #
-      # Stage 2 artifact consumed by Deployment Gate Stage 3.
-      #
-      # This does NOT perform DB mutation.
-      # It only declares the mutation policy surface.
-      # --------------------------------------------------
-      - name: Download Mutation Contract
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
-
-          $runtimeBaselinePath = "${{ steps.runtime_baseline.outputs.runtime_baseline_path }}"
-
-          if ([System.String]::IsNullOrWhiteSpace($runtimeBaselinePath)) {
-            throw "runtime_baseline_path output is empty."
-          }
-
-          $payload = @{
-            schema = "rga.database_mutation_plan.v1.0"
-            workflow = "Deployment Gate"
-            bot = "deployment_gate"
-            lifecycle_stage = "stage_3_policy_validation"
-            runtime_baseline = $runtimeBaselinePath
-
-            approval = @{
-              required = $true
-              approved = $false
-            }
-
-            policy = @{
-              validation_required = $true
-              validated = $false
-            }
-
-            proposed_mutations = @()
-          }
-
-          $payload |
-            ConvertTo-Json -Depth 20 |
-            Set-Content .\artifacts\database_mutation_plan.json -Encoding UTF8
-
-          Write-Host "[DEPLOYMENT-GATE] database_mutation_plan.json generated"
-          Write-Host "[DEPLOYMENT-GATE] runtime_baseline=$runtimeBaselinePath"
           
       # --------------------------------------------------
-      # 8.7 Resolve Persistence Contract
+      # 8.1 Prepare Governance Artifact Workspace
       # --------------------------------------------------
-      - name: Resolve Persistence Contract
-        id: persistence_contract
+      - name: Prepare Governance Artifact Workspace
         shell: pwsh
         run: |
-          $contract = Get-ChildItem `
-            ".\artifacts" `
-            -Recurse `
-            -Filter "persistence_contract.json" `
-            -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime |
-            Select-Object -Last 1
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path .\artifacts | Out-Null
 
-          if ($contract) {
-            "persistence_contract_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
-          }
+      # --------------------------------------------------
+      # 8.2 Download Runtime Baseline Artifact
+      # --------------------------------------------------
+      - name: Download Runtime Baseline Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rga-runtime-baseline
+          path: .\artifacts
+
+        continue-on-error: true          
+
+      # --------------------------------------------------
+      # 8.3 Download Mutation Contract Artifact
+      # --------------------------------------------------
+      - name: Download Mutation Contract Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rga-execution-plan
+          path: .\artifacts
+
+        continue-on-error: true
           
       # --------------------------------------------------
-      # 8.8 Resolve Runtime Verification Contract
+      # 8.4 Download Persistence Contract Artifact
       # --------------------------------------------------
-      - name: Resolve Runtime Verification Contract
-        id: runtime_verification
+      - name: Download Persistence Contract Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rga-persistence-contract
+          path: .\artifacts
+
+        continue-on-error: true
+          
+      # --------------------------------------------------
+      # 8.5 Download Runtime Verification Artifact
+      # --------------------------------------------------
+      - name: Download Runtime Verification Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rga-runtime-verification
+          path: .\artifacts
+
+        continue-on-error: true
+
+      # --------------------------------------------------
+      # 8.6 Download Runtime Verification Acceptance Artifact
+      # --------------------------------------------------
+      - name: Download Runtime Verification Acceptance Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rga-runtime-verification-acceptance
+          path: .\artifacts
+
+        continue-on-error: true
+
+      # --------------------------------------------------
+      # 8.7 Download Runtime Certification Artifact
+      # --------------------------------------------------
+      - name: Download Runtime Certification Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rga-runtime-certification
+          path: .\artifacts
+
+        continue-on-error: true
+
+      # --------------------------------------------------
+      # 8.8 Download Path A Operational Artifact
+      # --------------------------------------------------
+      - name: Download Path A Operational Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rga-path-a-operational
+          path: .\artifacts
+
+        continue-on-error: true    
+        
+      # --------------------------------------------------
+      # 8.9 Governance Artifact Inventory
+      # --------------------------------------------------
+      - name: Governance Artifact Inventory
         shell: pwsh
         run: |
-          $contract = Get-ChildItem `
-            ".\artifacts" `
+          Write-Host ""
+          Write-Host "[DEPLOYMENT-GATE] Governance Artifacts"
+          Write-Host "----------------------------------------"
+
+          Get-ChildItem `
+            .\artifacts `
             -Recurse `
-            -Filter "runtime_verification_contract.json" `
-            -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime |
-            Select-Object -Last 1
+            -File |
+            Select-Object FullName
 
-          if ($contract) {
-            "runtime_verification_contract_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
-          }
-
-      # --------------------------------------------------
-      # 8.9 Resolve Runtime Verification Acceptance
-      # --------------------------------------------------
-      - name: Resolve Runtime Verification Acceptance
-        id: runtime_verification_acceptance
-        shell: pwsh
-        run: |
-          $contract = Get-ChildItem `
-            ".\artifacts" `
-            -Recurse `
-            -Filter "runtime_verification_acceptance.json" `
-            -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime |
-            Select-Object -Last 1
-
-          if ($contract) {
-            "runtime_verification_acceptance_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
-          }
-
-      # --------------------------------------------------
-      # 8.10 Resolve Runtime Certification
-      # --------------------------------------------------
-      - name: Resolve Runtime Certification
-        id: runtime_certification
-        shell: pwsh
-        run: |
-          $contract = Get-ChildItem `
-            ".\artifacts" `
-            -Recurse `
-            -Filter "runtime_certification.json" `
-            -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime |
-            Select-Object -Last 1
-
-          if ($contract) {
-            "runtime_certification_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
-          }
-
-      # --------------------------------------------------
-      # 8.11 Resolve Path A Operational Contract
-      # --------------------------------------------------
-      - name: Resolve Path A Operational Contract
-        id: path_a_operational
-        shell: pwsh
-        run: |
-          $contract = Get-ChildItem `
-            ".\artifacts" `
-            -Recurse `
-            -Filter "path_a_operational.json" `
-            -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime |
-            Select-Object -Last 1
-
-          if ($contract) {
-            "path_a_operational_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
-          }          
+          Write-Host "----------------------------------------"        
 
       # --------------------------------------------------
       # 9. Run deployment gate
@@ -360,18 +258,32 @@ jobs:
       - name: Run deployment gate
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
+          # --------------------------------------------------
+          # Canonical artifact paths
+          # --------------------------------------------------
+
+          $OfflineValidationReport = "${{ steps.offline.outputs.report_path }}"
+          $RuntimeIndexPath = "${{ steps.runtime.outputs.runtime_index_path }}"
+
+          $RuntimeBaselinePath = ".\artifacts\runtime_baseline.json"
+          $DatabaseMutationPlanPath = ".\artifacts\database_mutation_plan.json"
+          $PersistenceContractPath = ".\artifacts\persistence_contract.json"
+          $RuntimeVerificationContractPath = ".\artifacts\runtime_verification_contract.json"
+          $RuntimeVerificationAcceptancePath = ".\artifacts\runtime_verification_acceptance.json"
+          $RuntimeCertificationPath = ".\artifacts\runtime_certification.json"
+          $PathAOperationalPath = ".\artifacts\path_a_operational.json"
+
+          # --------------------------------------------------
+          # Base args
+          # --------------------------------------------------
 
           $args = @(
             ".\deployment_gate.py",
 
             "--offline-validation-report",
-            "${{ steps.offline.outputs.report_path }}",
-
-            "--runtime-baseline",
-            "${{ steps.runtime_baseline.outputs.runtime_baseline_path }}",
-
-            "--database-mutation-plan",
-            ".\artifacts\database_mutation_plan.json",
+            $OfflineValidationReport,
 
             "--output",
             ".\deployment_gate_report.json"
@@ -391,16 +303,42 @@ jobs:
           }
 
           # --------------------------------------------------
+          # Stage 1
+          # Runtime Baseline
+          # --------------------------------------------------
+
+          if (Test-Path $RuntimeBaselinePath) {
+            $args += "--runtime-baseline"
+            $args += $RuntimeBaselinePath
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime baseline: $RuntimeBaselinePath"
+          }
+
+          # --------------------------------------------------
+          # Stage 2-3
+          # Database Mutation Plan / Policy
+          # --------------------------------------------------
+
+          if (Test-Path $DatabaseMutationPlanPath) {
+            $args += "--database-mutation-plan"
+            $args += $DatabaseMutationPlanPath
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE][WARN] Missing database mutation plan: $DatabaseMutationPlanPath"
+          }
+
+          # --------------------------------------------------
           # Stage 4
           # Persistence Contract
           # --------------------------------------------------
 
-          if (
-            "${{ steps.persistence_contract.outputs.persistence_contract_path }}"
-            -ne ""
-          ) {
+          if (Test-Path $PersistenceContractPath) {
             $args += "--persistence-contract"
-            $args += "${{ steps.persistence_contract.outputs.persistence_contract_path }}"
+            $args += $PersistenceContractPath
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE][WARN] Missing persistence contract: $PersistenceContractPath"
           }
 
           # --------------------------------------------------
@@ -408,12 +346,12 @@ jobs:
           # Runtime Verification Contract
           # --------------------------------------------------
 
-          if (
-            "${{ steps.runtime_verification.outputs.runtime_verification_contract_path }}"
-            -ne ""
-          ) {
+          if (Test-Path $RuntimeVerificationContractPath) {
             $args += "--runtime-verification-contract"
-            $args += "${{ steps.runtime_verification.outputs.runtime_verification_contract_path }}"
+            $args += $RuntimeVerificationContractPath
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime verification contract: $RuntimeVerificationContractPath"
           }
 
           # --------------------------------------------------
@@ -421,12 +359,12 @@ jobs:
           # Runtime Verification Acceptance
           # --------------------------------------------------
 
-          if (
-            "${{ steps.runtime_verification_acceptance.outputs.runtime_verification_acceptance_path }}"
-            -ne ""
-          ) {
+          if (Test-Path $RuntimeVerificationAcceptancePath) {
             $args += "--runtime-verification-acceptance"
-            $args += "${{ steps.runtime_verification_acceptance.outputs.runtime_verification_acceptance_path }}"
+            $args += $RuntimeVerificationAcceptancePath
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime verification acceptance: $RuntimeVerificationAcceptancePath"
           }
 
           # --------------------------------------------------
@@ -434,12 +372,12 @@ jobs:
           # Runtime Certification
           # --------------------------------------------------
 
-          if (
-            "${{ steps.runtime_certification.outputs.runtime_certification_path }}"
-            -ne ""
-          ) {
+          if (Test-Path $RuntimeCertificationPath) {
             $args += "--runtime-certification"
-            $args += "${{ steps.runtime_certification.outputs.runtime_certification_path }}"
+            $args += $RuntimeCertificationPath
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE][WARN] Missing runtime certification: $RuntimeCertificationPath"
           }
 
           # --------------------------------------------------
@@ -447,12 +385,12 @@ jobs:
           # Path A Operational
           # --------------------------------------------------
 
-          if (
-            "${{ steps.path_a_operational.outputs.path_a_operational_path }}"
-            -ne ""
-          ) {
+          if (Test-Path $PathAOperationalPath) {
             $args += "--path-a-operational"
-            $args += "${{ steps.path_a_operational.outputs.path_a_operational_path }}"
+            $args += $PathAOperationalPath
+          }
+          else {
+            Write-Host "[DEPLOYMENT-GATE][WARN] Missing Path A operational contract: $PathAOperationalPath"
           }
 
           # --------------------------------------------------
@@ -462,13 +400,15 @@ jobs:
           # Governance contracts are evaluated first.
           # --------------------------------------------------
 
-          if (
-            "${{ steps.runtime.outputs.runtime_index_path }}"
-            -ne ""
-          ) {
-            $args += "--runtime-index"
-            $args += "${{ steps.runtime.outputs.runtime_index_path }}"
-            $args += "--require-runtime-index"
+          if (-not [System.String]::IsNullOrWhiteSpace($RuntimeIndexPath)) {
+            if (Test-Path $RuntimeIndexPath) {
+              $args += "--runtime-index"
+              $args += $RuntimeIndexPath
+              $args += "--require-runtime-index"
+            }
+            else {
+              Write-Host "[DEPLOYMENT-GATE][WARN] Runtime index output was provided but file was not found: $RuntimeIndexPath"
+            }
           }
 
           # --------------------------------------------------
@@ -499,4 +439,9 @@ jobs:
             deployment_gate_report.json
             artifacts/runtime_baseline.json
             artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
+            artifacts/runtime_verification_contract.json
+            artifacts/runtime_verification_acceptance.json
+            artifacts/runtime_certification.json
+            artifacts/path_a_operational.json
           if-no-files-found: warn
