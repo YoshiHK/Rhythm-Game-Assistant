@@ -184,7 +184,7 @@ jobs:
             -not [string]::
               $RuntimeIndexPath
             )
-          ) {
+            {
 
             if (Test-Path $RuntimeIndexPath) {
 
