@@ -41,8 +41,8 @@ jobs:
 
     permissions:
       contents: read
-      security-events: write
-      actions: read
+      security-events: read
+      actions: write
 
     steps:
       - name: Checkout
@@ -3490,6 +3490,125 @@ jobs:
           PY
 
           python artifacts/artifact_bundle_manifest_generator.py
+          
+      ############################################################
+      # Write Runtime Verification Contract
+      ############################################################
+
+      - name: Write Runtime Verification Contract
+        if: ${{ always() }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          runtime_baseline = Path(
+              "artifacts/runtime_baseline.json"
+          )
+
+          persistence_contract = Path(
+              "artifacts/persistence_contract.json"
+          )
+
+          payload = {
+              "schema":
+                  "rga.runtime_verification_contract.v1.0",
+
+              "workflow":
+                  "runtime-audit",
+
+              "bot":
+                  "rga_backend_bot_1",
+
+              "lifecycle_stage":
+                  "stage_5_runtime_verification",
+
+              "verification_type":
+                  "global",
+
+              "source_contracts": {
+                  "runtime_baseline":
+                      str(runtime_baseline),
+
+                  "persistence_contract":
+                      str(persistence_contract),
+              },
+
+              "verification_scope": {
+
+                  "inventory_coverage":
+                      True,
+
+                  "asset_coverage":
+                      True,
+
+                  "pattern_coverage":
+                      True,
+
+                  "hash_consistency":
+                      True,
+
+                  "runtime_surface":
+                      True,
+
+                  "artifact_integrity":
+                      True,
+              },
+
+              "evidence_sources": [
+
+                  "runtime_verifier_report.json",
+
+                  "runtime_db_read_summary.json",
+
+                  "hash_inventory_summary.json",
+
+                  "asset_inventory_summary.json",
+
+                  "runtime_surface_summary.json",
+              ],
+
+              "governance": {
+
+                  "validation_is_local":
+                      True,
+
+                  "verification_is_global":
+                      True,
+
+                  "completed_phases_immutable":
+                      True,
+              },
+
+              "status": {
+
+                  "verification_performed":
+                      True,
+
+                  "verification_passed":
+                      None,
+
+                  "accepted":
+                      False,
+              }
+          }
+
+          Path(
+              "artifacts/runtime_verification_contract.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA] runtime_verification_contract.json generated"
+          )
+          PY         
+
 
       ############################################################
       # Verify Generated Reports
@@ -3799,6 +3918,22 @@ jobs:
           name: runtime-auditor-evidence
           path: artifacts/
           if-no-files-found: warn
+          
+      ############################################################
+      # Upload Runtime Verification Contract
+      ############################################################
+
+      - name: Upload Runtime Verification Contract
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: rga-runtime-verification
+
+          path: |
+            artifacts/runtime_verification_contract.json
+
+          if-no-files-found: warn          
 
       ############################################################
       # Upload Plan Audit Evidence
