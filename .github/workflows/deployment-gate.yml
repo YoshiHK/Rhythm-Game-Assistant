@@ -141,33 +141,73 @@ jobs:
       - name: Run deployment gate lite
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
+          $OfflineValidationReport =
+            "${{ steps.offline.outputs.report_path }}"
+
+          $RuntimeIndexPath =
+            "${{ steps.runtime.outputs.runtime_index_path }}"
+
           $args = @(
             ".\deployment_gate.py",
 
             "--offline-validation-report",
-            "${{ steps.offline.outputs.report_path }}",
+            $OfflineValidationReport,
 
             "--output",
             ".\deployment_gate_report.json"
           )
 
+          # --------------------------------------------------
+          # Governed Policy
+          # --------------------------------------------------
+
           if (Test-Path ".\config\policy.yml") {
+
             $args += "--policy-config"
             $args += ".\config\policy.yml"
+
           }
           elseif (Test-Path ".\config\policy.yaml") {
+
             $args += "--policy-config"
             $args += ".\config\policy.yaml"
+
           }
 
+          # --------------------------------------------------
+          # Optional Runtime Index
+          # --------------------------------------------------
+
           if (
-            "${{ steps.runtime.outputs.runtime_index_path }}"
-            -ne ""
+            -not [string]::
+              $RuntimeIndexPath
+            )
           ) {
-            $args += "--runtime-index"
-            $args += "${{ steps.runtime.outputs.runtime_index_path }}"
-            $args += "--require-runtime-index"
+
+            if (Test-Path $RuntimeIndexPath) {
+
+              $args += "--runtime-index"
+              $args += $RuntimeIndexPath
+              $args += "--require-runtime-index"
+
+            }
+            else {
+
+              Write-Host (
+                "[DEPLOYMENT-GATE-LITE][WARN] " +
+                "runtime_index.json path declared " +
+                "but file not found: " +
+                $RuntimeIndexPath
+              )
+
+            }
           }
+
+          # --------------------------------------------------
+          # Diagnostics
+          # --------------------------------------------------
 
           Write-Host ""
           Write-Host "[DEPLOYMENT-GATE-LITE] Arguments"
@@ -179,7 +219,7 @@ jobs:
 
           Write-Host "----------------------------------------"
 
-          .\.venv\Scripts\python.exe @args
+          & .\.venv\Scripts\python.exe @args
 
       # --------------------------------------------------
       # Upload report
