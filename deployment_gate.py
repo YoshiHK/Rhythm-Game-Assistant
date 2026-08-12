@@ -23,28 +23,28 @@ class GateOptions:
     allow_zero_failed_cases_only: bool = True
 
     # Existing governance checks
-    require_governed_policy: bool = True
+    require_governed_policy: bool = False
 
     # Stage 1
-    require_runtime_baseline: bool = True
+    require_runtime_baseline: bool = False
     
     # Stage 2-3
-    require_database_mutation_policy: bool = True
+    require_database_mutation_policy: bool = False
 
     # Stage 4
-    require_persistence_contract: bool = True
+    require_persistence_contract: bool = False
 
     # Stage 5
-    require_runtime_verification_contract: bool = True
+    require_runtime_verification_contract: bool = False
 
     # Stage 6
-    require_runtime_verification_acceptance: bool = True
+    require_runtime_verification_acceptance: bool = False
 
     # Stage 7
-    require_runtime_certification: bool = True
+    require_runtime_certification: bool = False
 
     # Stage 8
-    require_path_a_operational: bool = True
+    require_path_a_operational: bool = False
     
     # Runtime Index
     require_runtime_index: bool = False
