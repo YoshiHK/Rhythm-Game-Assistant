@@ -54,14 +54,68 @@ jobs:
           Write-Host "[GOVERNANCE-GATE] downloaded artifacts:"
           Get-ChildItem .\artifacts -Recurse -File | Select-Object FullName
 
+      # --------------------------------------------------
+      # Governance Artifact Inventory
+      #
+      # Discovery only.
+      #
+      # Presence
+      # !=
+      # Validation
+      #
+      # Generates:
+      #   governance_artifact_inventory.txt
+      # --------------------------------------------------
       - name: Governance Artifact Inventory
         shell: pwsh
         run: |
-          Get-ChildItem `
+          $InventoryPath =
+            ".\artifacts\governance_artifact_inventory.txt"
+
+          Write-Host ""
+          Write-Host "[GOVERNANCE-GATE] Artifact Inventory"
+          Write-Host "----------------------------------------"
+
+          $files = Get-ChildItem `
             .\artifacts `
             -Recurse `
-            -File |
-            Select-Object FullName  
+            -File `
+            -ErrorAction SilentlyContinue |
+            Sort-Object FullName
+
+          if (-not $files) {
+
+            Write-Host `
+              "[GOVERNANCE-GATE][WARN] No artifacts found."
+
+            "No governance artifacts discovered." |
+              Set-Content `
+                $InventoryPath `
+                -Encoding UTF8
+
+            exit 0
+          }
+
+          $lines = @()
+
+          foreach ($file in $files) {
+
+            $line = $file.FullName
+
+            Write-Host $line
+
+            $lines += $line
+          }
+
+          $lines |
+            Set-Content `
+              $InventoryPath `
+              -Encoding UTF8
+
+          Write-Host "----------------------------------------"
+          Write-Host ""
+          Write-Host `
+            "[GOVERNANCE-GATE] Inventory written: $InventoryPath"
 
       - name: Lifecycle Event Validation
         shell: pwsh
@@ -314,20 +368,29 @@ jobs:
 
           & .\.venv\Scripts\python.exe @args
           
+      # --------------------------------------------------
+      # Upload Deployment Governance Gate Report
+      # --------------------------------------------------
       - name: Upload Deployment Governance Gate Report
         if: >
           always() &&
           steps.governance_preconditions.outputs.governance_enabled == 'true'
         uses: actions/upload-artifact@v4
+
         with:
           name: deployment-governance-gate-report
+
           path: |
             deployment_gate_report.json
-            artifacts/runtime_baseline.json
-            artifacts/database_mutation_plan.json
-            artifacts/persistence_contract.json
-            artifacts/runtime_verification_contract.json
-            artifacts/runtime_verification_acceptance.json
-            artifacts/runtime_certification.json
-            artifacts/path_a_operational.json
-          if-no-files-found: warn          
+            artifacts/governance_artifact_inventory.txt
+            artifacts/**/runtime_baseline.json
+            artifacts/**/database_mutation_plan.json
+            artifacts/**/persistence_contract.json
+            artifacts/**/runtime_verification_contract.json
+            artifacts/**/runtime_verification_acceptance.json
+            artifacts/**/runtime_certification.json
+            artifacts/**/path_a_operational.json
+            artifacts/**/runtime_index.json
+            artifacts/**/lifecycle_event.json
+
+          if-no-files-found: warn    
