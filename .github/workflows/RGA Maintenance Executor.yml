@@ -472,7 +472,7 @@ jobs:
           }
 
           Path(
-              "artifacts/database_mutation_plan.json"
+              "artifacts/**/database_mutation_plan.json"
           ).write_text(
               json.dumps(
                   payload,
@@ -500,7 +500,7 @@ jobs:
           from pathlib import Path
 
           mutation_plan = Path(
-              "artifacts/database_mutation_plan.json"
+              "artifacts/**/database_mutation_plan.json"
           )
 
           payload = {
@@ -546,7 +546,7 @@ jobs:
           }
 
           Path(
-              "artifacts/persistence_contract.json"
+              "artifacts/**/persistence_contract.json"
           ).write_text(
               json.dumps(
                   payload,
@@ -2073,7 +2073,7 @@ jobs:
           name: rga-database-mutation-plan
 
           path: |
-            artifacts/database_mutation_plan.json
+            artifacts/**/database_mutation_plan.json
 
           if-no-files-found: warn
 
@@ -2090,7 +2090,7 @@ jobs:
           name: rga-persistence-contract
 
           path: |
-            artifacts/persistence_contract.json
+            artifacts/**/persistence_contract.json
 
           if-no-files-found: warn
           
