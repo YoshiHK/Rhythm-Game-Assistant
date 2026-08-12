@@ -227,28 +227,160 @@ jobs:
 
           Write-Host "[DEPLOYMENT-GATE] database_mutation_plan.json generated"
           Write-Host "[DEPLOYMENT-GATE] runtime_baseline=$runtimeBaselinePath"
+          
+      # --------------------------------------------------
+      # 8.7 Resolve Persistence Contract
+      # --------------------------------------------------
+      - name: Resolve Persistence Contract
+        id: persistence_contract
+        shell: pwsh
+        run: |
+          $contract = Get-ChildItem `
+            ".\artifacts" `
+            -Recurse `
+            -Filter "persistence_contract.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if ($contract) {
+            "persistence_contract_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
+          }
+          
+      # --------------------------------------------------
+      # 8.8 Resolve Runtime Verification Contract
+      # --------------------------------------------------
+      - name: Resolve Runtime Verification Contract
+        id: runtime_verification
+        shell: pwsh
+        run: |
+          $contract = Get-ChildItem `
+            ".\artifacts" `
+            -Recurse `
+            -Filter "runtime_verification_contract.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if ($contract) {
+            "runtime_verification_contract_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
+          }
+
+      # --------------------------------------------------
+      # 8.9 Resolve Runtime Verification Acceptance
+      # --------------------------------------------------
+      - name: Resolve Runtime Verification Acceptance
+        id: runtime_verification_acceptance
+        shell: pwsh
+        run: |
+          $contract = Get-ChildItem `
+            ".\artifacts" `
+            -Recurse `
+            -Filter "runtime_verification_acceptance.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if ($contract) {
+            "runtime_verification_acceptance_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
+          }
+
+      # --------------------------------------------------
+      # 8.10 Resolve Runtime Certification
+      # --------------------------------------------------
+      - name: Resolve Runtime Certification
+        id: runtime_certification
+        shell: pwsh
+        run: |
+          $contract = Get-ChildItem `
+            ".\artifacts" `
+            -Recurse `
+            -Filter "runtime_certification.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if ($contract) {
+            "runtime_certification_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
+          }
+
+      # --------------------------------------------------
+      # 8.11 Resolve Path A Operational Contract
+      # --------------------------------------------------
+      - name: Resolve Path A Operational Contract
+        id: path_a_operational
+        shell: pwsh
+        run: |
+          $contract = Get-ChildItem `
+            ".\artifacts" `
+            -Recurse `
+            -Filter "path_a_operational.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if ($contract) {
+            "path_a_operational_path=$($contract.FullName)" >> $env:GITHUB_OUTPUT
+          }          
 
       # --------------------------------------------------
       # 9. Run deployment gate
       #
-      # Includes:
+      # Governance aggregation:
       #
-      #   offline_validation_report.json
-      #   config/policy.yml
-      #   runtime_index.json, if generated
+      #   repo_smoke
+      #   phase5_summary
+      #   offline_validation
+      #   governed_policy
+      #
+      # Stage 1
+      #   runtime_baseline.json
+      #
+      # Stage 2-3
       #   database_mutation_plan.json
+      #
+      # Stage 4
+      #   persistence_contract.json
+      #
+      # Stage 5
+      #   runtime_verification_contract.json
+      #
+      # Stage 6
+      #   runtime_verification_acceptance.json
+      #
+      # Stage 7
+      #   runtime_certification.json
+      #
+      # Stage 8
+      #   path_a_operational.json
+      #
+      # runtime_index remains an execution artifact
+      # and is evaluated after governance checks.
       # --------------------------------------------------
       - name: Run deployment gate
         shell: pwsh
         run: |
+
           $args = @(
             ".\deployment_gate.py",
-            "--offline-validation-report", "${{ steps.offline.outputs.report_path }}",
-            "--database-mutation-plan", ".\artifacts\database_mutation_plan.json",
-            "--output", ".\deployment_gate_report.json"
+
+            "--offline-validation-report",
+            "${{ steps.offline.outputs.report_path }}",
+
+            "--runtime-baseline",
+            "${{ steps.runtime_baseline.outputs.runtime_baseline_path }}",
+
+            "--database-mutation-plan",
+            ".\artifacts\database_mutation_plan.json",
+
+            "--output",
+            ".\deployment_gate_report.json"
           )
 
-          # Pass governed policy configuration if present
+          # --------------------------------------------------
+          # Governed policy
+          # --------------------------------------------------
+
           if (Test-Path ".\config\policy.yml") {
             $args += "--policy-config"
             $args += ".\config\policy.yml"
@@ -258,17 +390,100 @@ jobs:
             $args += ".\config\policy.yaml"
           }
 
-          # Only require runtime_index if this run actually generated one inside CI-local workspace.
-          if ("${{ steps.runtime.outputs.runtime_index_path }}" -ne "") {
+          # --------------------------------------------------
+          # Stage 4
+          # Persistence Contract
+          # --------------------------------------------------
+
+          if (
+            "${{ steps.persistence_contract.outputs.persistence_contract_path }}"
+            -ne ""
+          ) {
+            $args += "--persistence-contract"
+            $args += "${{ steps.persistence_contract.outputs.persistence_contract_path }}"
+          }
+
+          # --------------------------------------------------
+          # Stage 5
+          # Runtime Verification Contract
+          # --------------------------------------------------
+
+          if (
+            "${{ steps.runtime_verification.outputs.runtime_verification_contract_path }}"
+            -ne ""
+          ) {
+            $args += "--runtime-verification-contract"
+            $args += "${{ steps.runtime_verification.outputs.runtime_verification_contract_path }}"
+          }
+
+          # --------------------------------------------------
+          # Stage 6
+          # Runtime Verification Acceptance
+          # --------------------------------------------------
+
+          if (
+            "${{ steps.runtime_verification_acceptance.outputs.runtime_verification_acceptance_path }}"
+            -ne ""
+          ) {
+            $args += "--runtime-verification-acceptance"
+            $args += "${{ steps.runtime_verification_acceptance.outputs.runtime_verification_acceptance_path }}"
+          }
+
+          # --------------------------------------------------
+          # Stage 7
+          # Runtime Certification
+          # --------------------------------------------------
+
+          if (
+            "${{ steps.runtime_certification.outputs.runtime_certification_path }}"
+            -ne ""
+          ) {
+            $args += "--runtime-certification"
+            $args += "${{ steps.runtime_certification.outputs.runtime_certification_path }}"
+          }
+
+          # --------------------------------------------------
+          # Stage 8
+          # Path A Operational
+          # --------------------------------------------------
+
+          if (
+            "${{ steps.path_a_operational.outputs.path_a_operational_path }}"
+            -ne ""
+          ) {
+            $args += "--path-a-operational"
+            $args += "${{ steps.path_a_operational.outputs.path_a_operational_path }}"
+          }
+
+          # --------------------------------------------------
+          # Runtime Index
+          #
+          # Runtime index is execution evidence.
+          # Governance contracts are evaluated first.
+          # --------------------------------------------------
+
+          if (
+            "${{ steps.runtime.outputs.runtime_index_path }}"
+            -ne ""
+          ) {
             $args += "--runtime-index"
             $args += "${{ steps.runtime.outputs.runtime_index_path }}"
             $args += "--require-runtime-index"
           }
 
-          Write-Host "[DEPLOYMENT-GATE] args:"
+          # --------------------------------------------------
+          # Diagnostics
+          # --------------------------------------------------
+
+          Write-Host ""
+          Write-Host "[DEPLOYMENT-GATE] Arguments"
+          Write-Host "----------------------------------------"
+
           $args | ForEach-Object {
             Write-Host "  $_"
           }
+
+          Write-Host "----------------------------------------"
 
           .\.venv\Scripts\python.exe @args
 
