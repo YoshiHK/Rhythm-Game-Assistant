@@ -157,9 +157,46 @@ jobs:
           else {
             "should_run=false" >> $env:GITHUB_OUTPUT
           }          
+          
+      # --------------------------------------------------
+      # Governance Preconditions
+      #
+      # Deployment Governance Gate should only run
+      # after post_audit has completed.
+      # --------------------------------------------------
+      - name: Governance Preconditions
+        id: governance_preconditions
+        shell: pwsh
+        run: |
+
+          if (
+            "${{ steps.post_audit.outputs.should_run }}"
+            -eq
+            "true"
+          ) {
+
+            Write-Host ""
+            Write-Host "[GOVERNANCE-GATE] Preconditions satisfied."
+            Write-Host "[GOVERNANCE-GATE] Governance aggregation enabled."
+
+            "governance_enabled=true" `
+              >> $env:GITHUB_OUTPUT
+
+          }
+          else {
+
+            Write-Host ""
+            Write-Host "[GOVERNANCE-GATE] Preconditions not satisfied."
+            Write-Host "[GOVERNANCE-GATE] Current lifecycle has not reached post_audit."
+            Write-Host "[GOVERNANCE-GATE] Governance aggregation skipped."
+
+            "governance_enabled=false" `
+              >> $env:GITHUB_OUTPUT
+
+          }          
 
       - name: Run Deployment Governance Gate
-        if: ${{ steps.post_audit.outputs.should_run == 'true' }}
+        if: if: ${{ steps.governance_preconditions.outputs.governance_enabled == 'true' }}
         shell: pwsh
         run: |
           $args = @(
@@ -216,7 +253,9 @@ jobs:
           .\.venv\Scripts\python.exe @args
           
       - name: Upload Deployment Governance Gate Report
-        if: always()
+        if: >
+          always() &&
+          steps.governance_preconditions.outputs.governance_enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: deployment-governance-gate-report
