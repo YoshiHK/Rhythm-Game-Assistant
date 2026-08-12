@@ -168,12 +168,13 @@ jobs:
         id: governance_preconditions
         shell: pwsh
         run: |
-
-          if (
+          $ShouldRun =
             "${{ steps.post_audit.outputs.should_run }}"
-            -eq
-            "true"
-          ) {
+
+          Write-Host ""
+          Write-Host "[GOVERNANCE-GATE] should_run=$ShouldRun"
+
+          if ($ShouldRun -eq "true") {
 
             Write-Host ""
             Write-Host "[GOVERNANCE-GATE] Preconditions satisfied."
@@ -193,36 +194,95 @@ jobs:
             "governance_enabled=false" `
               >> $env:GITHUB_OUTPUT
 
-          }          
+          }   
 
       - name: Run Deployment Governance Gate
         if: ${{ steps.governance_preconditions.outputs.governance_enabled == 'true' }}
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
           $args = @(
             ".\deployment_gate.py",
-            "--output", ".\deployment_gate_report.json"
+            "--output",
+            ".\deployment_gate_report.json"
           )
 
+          # --------------------------------------------------
+          # Policy
+          # --------------------------------------------------
+
           if (Test-Path ".\config\policy.yml") {
+
             $args += "--policy-config"
             $args += ".\config\policy.yml"
+
           }
           elseif (Test-Path ".\config\policy.yaml") {
+
             $args += "--policy-config"
             $args += ".\config\policy.yaml"
+
           }
 
-          $paths = @{
-            "--runtime-baseline" = ".\artifacts\runtime_baseline.json"
-            "--database-mutation-plan" = ".\artifacts\database_mutation_plan.json"
-            "--persistence-contract" = ".\artifacts\persistence_contract.json"
-            "--runtime-verification-contract" = ".\artifacts\runtime_verification_contract.json"
-            "--runtime-verification-acceptance" = ".\artifacts\runtime_verification_acceptance.json"
-            "--runtime-certification" = ".\artifacts\runtime_certification.json"
-            "--path-a-operational" = ".\artifacts\path_a_operational.json"
+          # --------------------------------------------------
+          # Governance Contracts
+          # --------------------------------------------------
+
+          $contracts = @{
+
+            "--runtime-baseline" =
+              "runtime_baseline.json"
+
+            "--database-mutation-plan" =
+              "database_mutation_plan.json"
+
+            "--persistence-contract" =
+              "persistence_contract.json"
+
+            "--runtime-verification-contract" =
+              "runtime_verification_contract.json"
+
+            "--runtime-verification-acceptance" =
+              "runtime_verification_acceptance.json"
+
+            "--runtime-certification" =
+              "runtime_certification.json"
+
+            "--path-a-operational" =
+              "path_a_operational.json"
           }
-          
+
+          foreach ($arg in $contracts.Keys) {
+
+            $file = Get-ChildItem `
+              .\artifacts `
+              -Recurse `
+              -Filter $contracts[$arg] `
+              -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime |
+              Select-Object -Last 1
+
+            if ($file) {
+
+              $args += $arg
+              $args += $file.FullName
+
+            }
+            else {
+
+              Write-Host (
+                "[GOVERNANCE-GATE][WARN] Missing " +
+                $contracts[$arg]
+              )
+
+            }
+          }
+
+          # --------------------------------------------------
+          # Optional runtime_index
+          # --------------------------------------------------
+
           $RuntimeIndex = Get-ChildItem `
             .\artifacts `
             -Recurse `
@@ -231,26 +291,28 @@ jobs:
             Select-Object -First 1
 
           if ($RuntimeIndex) {
-              $args += "--runtime-index"
-              $args += $RuntimeIndex.FullName
-              $args += "--require-runtime-index"
-          }
-          
 
-          foreach ($key in $paths.Keys) {
-            if (Test-Path $paths[$key]) {
-              $args += $key
-              $args += $paths[$key]
-            }
-            else {
-              Write-Host "[GOVERNANCE-GATE][WARN] Missing $key => $($paths[$key])"
-            }
+            $args += "--runtime-index"
+            $args += $RuntimeIndex.FullName
+            $args += "--require-runtime-index"
+
           }
 
-          Write-Host "[GOVERNANCE-GATE] args:"
-          $args | ForEach-Object { Write-Host "  $_" }
+          # --------------------------------------------------
+          # Diagnostics
+          # --------------------------------------------------
 
-          .\.venv\Scripts\python.exe @args
+          Write-Host ""
+          Write-Host "[GOVERNANCE-GATE] Arguments"
+          Write-Host "----------------------------------------"
+
+          $args | ForEach-Object {
+            Write-Host "  $_"
+          }
+
+          Write-Host "----------------------------------------"
+
+          & .\.venv\Scripts\python.exe @args
           
       - name: Upload Deployment Governance Gate Report
         if: >
