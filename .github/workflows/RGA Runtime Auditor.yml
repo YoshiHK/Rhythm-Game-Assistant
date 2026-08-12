@@ -3716,6 +3716,105 @@ jobs:
           print(
               "[RGA] runtime_verification_acceptance.json generated"
           )
+          
+      ############################################################
+      # Write Runtime Certification
+      ############################################################
+
+      - name: Write Runtime Certification
+        shell: python
+
+        run: |
+          import json
+          from pathlib import Path
+
+          acceptance_path = Path(
+              "artifacts/runtime_verification_acceptance.json"
+          )
+
+          accepted = False
+
+          if acceptance_path.exists():
+
+              acceptance = json.loads(
+                  acceptance_path.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              accepted = bool(
+                  acceptance.get(
+                      "accepted",
+                      False,
+                  )
+              )
+
+          payload = {
+              "schema":
+                  "rga.runtime_certification.v1.0",
+
+              "workflow":
+                  "runtime-audit",
+
+              "bot":
+                  "rga_backend_bot_1",
+
+              "lifecycle_stage":
+                  "stage_7_runtime_certification",
+
+              "source_contracts": {
+                  "runtime_verification_acceptance":
+                      str(acceptance_path),
+              },
+
+              "certification": {
+
+                  "runtime_certified":
+                      accepted,
+
+                  "certification_scope": {
+
+                      "runtime_baseline":
+                          True,
+
+                      "mutation_governance":
+                          True,
+
+                      "persistence_governance":
+                          True,
+
+                      "runtime_verification":
+                          True,
+                  },
+              },
+
+              "governance": {
+
+                  "validation_is_local":
+                      True,
+
+                  "verification_is_global":
+                      True,
+
+                  "completed_phases_immutable":
+                      True,
+              }
+          }
+
+          Path(
+              "artifacts/runtime_certification.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA] runtime_certification.json generated"
+          )          
 
       ############################################################
       # Verify Generated Reports
@@ -4044,7 +4143,23 @@ jobs:
           path: |
             artifacts/runtime_verification_acceptance.json
 
-          if-no-files-found: warn          
+          if-no-files-found: warn      
+
+      ############################################################
+      # Upload Runtime Certification
+      ############################################################
+
+      - name: Upload Runtime Certification
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: rga-runtime-certification
+
+          path: |
+            artifacts/runtime_certification.json
+
+          if-no-files-found: warn       
 
       ############################################################
       # Upload Runtime Auditor Evidence
