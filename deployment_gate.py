@@ -18,12 +18,36 @@ class GateOptions:
     require_repo_smoke: bool = True
     require_phase5_summary: bool = True
     require_offline_validation: bool = True
-    require_runtime_index: bool = False
     require_runtime_integrity_pass: bool = True
     require_runtime_stage_completion: bool = True
     allow_zero_failed_cases_only: bool = True
-    require_governed_policy: bool = True  # <--- Local storage policy check flag
+
+    # Existing governance checks
+    require_governed_policy: bool = True
+
+    # Stage 1
+    require_runtime_baseline: bool = True
+    
+    # Stage 2-3
     require_database_mutation_policy: bool = True
+
+    # Stage 4
+    require_persistence_contract: bool = True
+
+    # Stage 5
+    require_runtime_verification_contract: bool = True
+
+    # Stage 6
+    require_runtime_verification_acceptance: bool = True
+
+    # Stage 7
+    require_runtime_certification: bool = True
+
+    # Stage 8
+    require_path_a_operational: bool = True
+    
+    # Runtime Index
+    require_runtime_index: bool = False
 
 REQUIRED_RUNTIME_STAGES: Tuple[str, ...] = (
     "scan",
@@ -178,13 +202,71 @@ def evaluate_governed_policy(policy_path: Optional[Path], results: List[Dict[str
         _fail(results, "governed_policy", "policy_parse_error", {"error": str(e)})
 
 # --------------------------------------------------
-# Database Mutation Policy Validation
+# Stage 1: Runtime Baseline Contract
+# --------------------------------------------------
+def evaluate_runtime_baseline_contract(
+    runtime_baseline_path: Optional[Path],
+    results: List[Dict[str, Any]],
+) -> None:
+    if not runtime_baseline_path or not runtime_baseline_path.exists():
+        _fail(
+            results,
+            "runtime_baseline",
+            "runtime_baseline_missing",
+        )
+        return
+
+    try:
+        baseline = _load_json(runtime_baseline_path)
+
+        schema = baseline.get("schema")
+        if schema != "rga.runtime_baseline.v1.0":
+            _fail(
+                results,
+                "runtime_baseline",
+                "unsupported_runtime_baseline_schema",
+                {"schema": schema},
+            )
+            return
+
+        contract = baseline.get("contract") or {}
+        governance = baseline.get("governance") or {}
+        summary = baseline.get("summary") or {}
+
+        _ok(
+            results,
+            "runtime_baseline",
+            {
+                "schema": schema,
+                "baseline_ready": baseline.get("baseline_ready"),
+                "bootstrap_only": baseline.get("bootstrap_only", False),
+                "required_database_count": summary.get("required_database_count"),
+                "existing_database_count": summary.get("existing_database_count"),
+                "readable_database_count": summary.get("readable_database_count"),
+                "total_records": summary.get("total_records"),
+                "verification_required": contract.get("verification_required"),
+                "deployment_gate_required": contract.get("deployment_gate_required"),
+                "completed_phases_remain_immutable": governance.get(
+                    "completed_phases_remain_immutable"
+                ),
+            },
+        )
+
+    except Exception as e:
+        _fail(
+            results,
+            "runtime_baseline",
+            "runtime_baseline_parse_error",
+            {"error": str(e)},
+        ) 
+        
+# --------------------------------------------------
+# Stage 2-3: Database Mutation Policy Validation
 # --------------------------------------------------
 def evaluate_database_mutation_policy(
     mutation_plan_path: Optional[Path],
     results: List[Dict[str, Any]],
 ) -> None:
-
     if not mutation_plan_path or not mutation_plan_path.exists():
         _fail(
             results,
@@ -197,22 +279,16 @@ def evaluate_database_mutation_policy(
         plan = _load_json(mutation_plan_path)
 
         schema = plan.get("schema")
-
         if schema != "rga.database_mutation_plan.v1.0":
             _fail(
                 results,
                 "database_mutation_policy",
                 "unsupported_mutation_plan_schema",
-                {
-                    "schema": schema,
-                },
+                {"schema": schema},
             )
             return
 
-        runtime_baseline = plan.get(
-            "runtime_baseline"
-        )
-
+        runtime_baseline = plan.get("runtime_baseline")
         if not runtime_baseline:
             _fail(
                 results,
@@ -221,13 +297,9 @@ def evaluate_database_mutation_policy(
             )
             return
 
-        approval = plan.get(
-            "approval"
-        ) or {}
-
-        policy = plan.get(
-            "policy"
-        ) or {}
+        approval = plan.get("approval") or {}
+        policy = plan.get("policy") or {}
+        proposed_mutations = plan.get("proposed_mutations") or []
 
         _ok(
             results,
@@ -235,19 +307,11 @@ def evaluate_database_mutation_policy(
             {
                 "schema": schema,
                 "runtime_baseline": runtime_baseline,
-                "approval_required":
-                    approval.get("required"),
-                "policy_validation_required":
-                    policy.get(
-                        "validation_required"
-                    ),
-                "mutation_count":
-                    len(
-                        plan.get(
-                            "proposed_mutations"
-                        )
-                        or []
-                    ),
+                "approval_required": approval.get("required"),
+                "approval_state": approval.get("approved"),
+                "policy_validation_required": policy.get("validation_required"),
+                "policy_validated": policy.get("validated"),
+                "mutation_count": len(proposed_mutations),
             },
         )
 
@@ -256,10 +320,360 @@ def evaluate_database_mutation_policy(
             results,
             "database_mutation_policy",
             "database_mutation_plan_parse_error",
+            {"error": str(e)},
+        )
+        
+# --------------------------------------------------
+# Stage 4: Persistence Contract
+# --------------------------------------------------
+def evaluate_persistence_contract(
+    persistence_contract_path: Optional[Path],
+    results: List[Dict[str, Any]],
+) -> None:
+    if not persistence_contract_path or not persistence_contract_path.exists():
+        _fail(
+            results,
+            "persistence_contract",
+            "persistence_contract_missing",
+        )
+        return
+
+    try:
+        contract = _load_json(persistence_contract_path)
+
+        schema = contract.get("schema")
+        if schema != "rga.persistence_contract.v1.0":
+            _fail(
+                results,
+                "persistence_contract",
+                "unsupported_persistence_contract_schema",
+                {"schema": schema},
+            )
+            return
+
+        ownership = contract.get("ownership") or {}
+        permissions = contract.get("permissions") or {}
+        requirements = contract.get("runtime_requirements") or {}
+
+        if permissions.get("executor_may_write_db") is not False:
+            _fail(
+                results,
+                "persistence_contract",
+                "executor_db_write_not_explicitly_forbidden",
+                {"executor_may_write_db": permissions.get("executor_may_write_db")},
+            )
+            return
+
+        if permissions.get("persistence_layer_owns_db_writes") is not True:
+            _fail(
+                results,
+                "persistence_contract",
+                "persistence_layer_not_declared_owner",
+                {
+                    "persistence_layer_owns_db_writes":
+                        permissions.get("persistence_layer_owns_db_writes")
+                },
+            )
+            return
+
+        _ok(
+            results,
+            "persistence_contract",
             {
-                "error": str(e),
+                "schema": schema,
+                "planner": ownership.get("planner"),
+                "executor": ownership.get("executor"),
+                "approver": ownership.get("approver"),
+                "policy_validator": ownership.get("policy_validator"),
+                "executor_may_write_db": permissions.get("executor_may_write_db"),
+                "persistence_layer_owns_db_writes": permissions.get(
+                    "persistence_layer_owns_db_writes"
+                ),
+                "runtime_baseline_required": requirements.get(
+                    "runtime_baseline_required"
+                ),
+                "mutation_validation_required": requirements.get(
+                    "mutation_validation_required"
+                ),
             },
         )
+
+    except Exception as e:
+        _fail(
+            results,
+            "persistence_contract",
+            "persistence_contract_parse_error",
+            {"error": str(e)},
+        )
+        
+# --------------------------------------------------
+# Stage 5: Runtime Verification Contract
+# --------------------------------------------------
+def evaluate_runtime_verification_contract(
+    verification_contract_path: Optional[Path],
+    results: List[Dict[str, Any]],
+) -> None:
+    if not verification_contract_path or not verification_contract_path.exists():
+        _fail(
+            results,
+            "runtime_verification_contract",
+            "runtime_verification_contract_missing",
+        )
+        return
+
+    try:
+        contract = _load_json(verification_contract_path)
+
+        schema = contract.get("schema")
+        if schema != "rga.runtime_verification_contract.v1.0":
+            _fail(
+                results,
+                "runtime_verification_contract",
+                "unsupported_runtime_verification_contract_schema",
+                {"schema": schema},
+            )
+            return
+
+        scope = contract.get("verification_scope") or {}
+        governance = contract.get("governance") or {}
+        status = contract.get("status") or {}
+
+        required_scope = [
+            "inventory_coverage",
+            "asset_coverage",
+            "pattern_coverage",
+            "hash_consistency",
+            "runtime_surface",
+            "artifact_integrity",
+        ]
+
+        missing_scope = [
+            key for key in required_scope
+            if scope.get(key) is not True
+        ]
+
+        if missing_scope:
+            _fail(
+                results,
+                "runtime_verification_contract",
+                "required_verification_scope_missing",
+                {"missing_scope": missing_scope},
+            )
+            return
+
+        _ok(
+            results,
+            "runtime_verification_contract",
+            {
+                "schema": schema,
+                "verification_type": contract.get("verification_type"),
+                "verification_scope": scope,
+                "verification_performed": status.get("verification_performed"),
+                "verification_passed": status.get("verification_passed"),
+                "accepted": status.get("accepted"),
+                "verification_is_global": governance.get("verification_is_global"),
+                "completed_phases_immutable": governance.get(
+                    "completed_phases_immutable"
+                ),
+            },
+        )
+
+    except Exception as e:
+        _fail(
+            results,
+            "runtime_verification_contract",
+            "runtime_verification_contract_parse_error",
+            {"error": str(e)},
+        )   
+
+# --------------------------------------------------
+# Stage 6: Runtime Verification Acceptance
+# --------------------------------------------------
+def evaluate_runtime_verification_acceptance(
+    acceptance_path: Optional[Path],
+    results: List[Dict[str, Any]],
+) -> None:
+    if not acceptance_path or not acceptance_path.exists():
+        _fail(
+            results,
+            "runtime_verification_acceptance",
+            "runtime_verification_acceptance_missing",
+        )
+        return
+
+    try:
+        acceptance = _load_json(acceptance_path)
+
+        schema = acceptance.get("schema")
+        if schema != "rga.runtime_verification_acceptance.v1.0":
+            _fail(
+                results,
+                "runtime_verification_acceptance",
+                "unsupported_runtime_verification_acceptance_schema",
+                {"schema": schema},
+            )
+            return
+
+        accepted = bool(acceptance.get("accepted", False))
+
+        if not accepted:
+            _fail(
+                results,
+                "runtime_verification_acceptance",
+                "runtime_verification_not_accepted",
+                {
+                    "accepted": accepted,
+                    "reasons": acceptance.get("reasons") or [],
+                },
+            )
+            return
+
+        _ok(
+            results,
+            "runtime_verification_acceptance",
+            {
+                "schema": schema,
+                "accepted": accepted,
+                "source_contract": acceptance.get("source_contract"),
+                "reasons": acceptance.get("reasons") or [],
+            },
+        )
+
+    except Exception as e:
+        _fail(
+            results,
+            "runtime_verification_acceptance",
+            "runtime_verification_acceptance_parse_error",
+            {"error": str(e)},
+        )     
+
+# --------------------------------------------------
+# Stage 7: Runtime Certification
+# --------------------------------------------------
+def evaluate_runtime_certification(
+    certification_path: Optional[Path],
+    results: List[Dict[str, Any]],
+) -> None:
+    if not certification_path or not certification_path.exists():
+        _fail(
+            results,
+            "runtime_certification",
+            "runtime_certification_missing",
+        )
+        return
+
+    try:
+        certification = _load_json(certification_path)
+
+        schema = certification.get("schema")
+        if schema != "rga.runtime_certification.v1.0":
+            _fail(
+                results,
+                "runtime_certification",
+                "unsupported_runtime_certification_schema",
+                {"schema": schema},
+            )
+            return
+
+        certification_node = certification.get("certification") or {}
+        runtime_certified = bool(
+            certification_node.get("runtime_certified", False)
+        )
+
+        if not runtime_certified:
+            _fail(
+                results,
+                "runtime_certification",
+                "runtime_not_certified",
+                {"runtime_certified": runtime_certified},
+            )
+            return
+
+        _ok(
+            results,
+            "runtime_certification",
+            {
+                "schema": schema,
+                "runtime_certified": runtime_certified,
+                "certification_scope": certification_node.get(
+                    "certification_scope"
+                ) or {},
+            },
+        )
+
+    except Exception as e:
+        _fail(
+            results,
+            "runtime_certification",
+            "runtime_certification_parse_error",
+            {"error": str(e)},
+        ) 
+
+# --------------------------------------------------
+# Stage 8: Path A Operational Contract
+# --------------------------------------------------
+def evaluate_path_a_operational(
+    path_a_operational_path: Optional[Path],
+    results: List[Dict[str, Any]],
+) -> None:
+    if not path_a_operational_path or not path_a_operational_path.exists():
+        _fail(
+            results,
+            "path_a_operational",
+            "path_a_operational_contract_missing",
+        )
+        return
+
+    try:
+        contract = _load_json(path_a_operational_path)
+
+        schema = contract.get("schema")
+        if schema != "rga.path_a_operational.v1.0":
+            _fail(
+                results,
+                "path_a_operational",
+                "unsupported_path_a_operational_schema",
+                {"schema": schema},
+            )
+            return
+
+        state = contract.get("operational_state") or {}
+
+        path_a_operational = bool(
+            state.get("path_a_operational", False)
+        )
+
+        if not path_a_operational:
+            _fail(
+                results,
+                "path_a_operational",
+                "path_a_not_operational",
+                {
+                    "runtime_certified": state.get("runtime_certified"),
+                    "path_a_operational": state.get("path_a_operational"),
+                    "serving_ready": state.get("serving_ready"),
+                },
+            )
+            return
+
+        _ok(
+            results,
+            "path_a_operational",
+            {
+                "schema": schema,
+                "runtime_certified": state.get("runtime_certified"),
+                "path_a_operational": state.get("path_a_operational"),
+                "serving_ready": state.get("serving_ready"),
+            },
+        )
+
+    except Exception as e:
+        _fail(
+            results,
+            "path_a_operational",
+            "path_a_operational_parse_error",
+            {"error": str(e)},
+        )        
 
 def evaluate_runtime_index(index: Dict[str, Any], results: List[Dict[str, Any]], opts: GateOptions) -> None:
     schema_version = index.get("schema_version")
@@ -303,11 +717,35 @@ def evaluate_gate(
     repo_smoke_path: Optional[Path],
     phase5_summary_path: Optional[Path],
     offline_validation_path: Optional[Path],
-    runtime_index_path: Optional[Path],
     policy_config_path: Optional[Path] = None,
+
+    # Stage 1
+    runtime_baseline_path: Optional[Path] = None,
+
+    # Stage 2-3
     mutation_plan_path: Optional[Path] = None,
+
+    # Stage 4
+    persistence_contract_path: Optional[Path] = None,
+
+    # Stage 5
+    runtime_verification_contract_path: Optional[Path] = None,
+
+    # Stage 6
+    runtime_verification_acceptance_path: Optional[Path] = None,
+
+    # Stage 7
+    runtime_certification_path: Optional[Path] = None,
+
+    # Stage 8
+    path_a_operational_path: Optional[Path] = None,
+    
+    # Runtime Index
+    runtime_index_path: Optional[Path],
+
     options: GateOptions,
 ) -> Dict[str, Any]:
+    
     results: List[Dict[str, Any]] = []
     runtime_index_obj: Optional[Dict[str, Any]] = None
 
@@ -364,14 +802,67 @@ def evaluate_gate(
         evaluate_governed_policy(policy_config_path, results)
         
     # --------------------------------------------------
-    # Database mutation policy
+    # Stage 1: Runtime baseline
+    # --------------------------------------------------
+    if options.require_runtime_baseline:
+        evaluate_runtime_baseline_contract(
+            runtime_baseline_path,
+            results,
+        )
+
+    # --------------------------------------------------
+    # Stage 2-3: Database mutation policy
     # --------------------------------------------------
     if options.require_database_mutation_policy:
-
         evaluate_database_mutation_policy(
             mutation_plan_path,
             results,
-        )        
+        )
+
+    # --------------------------------------------------
+    # Stage 4: Persistence contract
+    # --------------------------------------------------
+    if options.require_persistence_contract:
+        evaluate_persistence_contract(
+            persistence_contract_path,
+            results,
+        )
+
+    # --------------------------------------------------
+    # Stage 5: Runtime verification contract
+    # --------------------------------------------------
+    if options.require_runtime_verification_contract:
+        evaluate_runtime_verification_contract(
+            runtime_verification_contract_path,
+            results,
+        )
+
+    # --------------------------------------------------
+    # Stage 6: Runtime verification acceptance
+    # --------------------------------------------------
+    if options.require_runtime_verification_acceptance:
+        evaluate_runtime_verification_acceptance(
+            runtime_verification_acceptance_path,
+            results,
+        )
+
+    # --------------------------------------------------
+    # Stage 7: Runtime certification
+    # --------------------------------------------------
+    if options.require_runtime_certification:
+        evaluate_runtime_certification(
+            runtime_certification_path,
+            results,
+        )
+
+    # --------------------------------------------------
+    # Stage 8: Path A operational
+    # --------------------------------------------------
+    if options.require_path_a_operational:
+        evaluate_path_a_operational(
+            path_a_operational_path,
+            results,
+        )    
 
     # --------------------------------------------------
     # Runtime index
@@ -411,9 +902,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--repo-smoke-summary", default="", help="Path to repo_smoke_summary.json")
     p.add_argument("--phase5-summary", default="", help="Path to test_case_summary.json")
     p.add_argument("--offline-validation-report", default="", help="Path to offline_validation_report.json")
-    p.add_argument("--runtime-index", default="", help="Path to runtime_index.json")
     p.add_argument("--policy-config", default="", help="Path to policy.yml or policy.yaml")
+    p.add_argument("--runtime-baseline", default="", help="Path to runtime_baseline.json")
     p.add_argument("--database-mutation-plan", default="", help="Path to database_mutation_plan.json")
+    p.add_argument("--persistence-contract", default="", help="Path to persistence_contract.json")
+    p.add_argument("--runtime-verification-contract", default="", help="Path to runtime_verification_contract.json")
+    p.add_argument("--runtime-verification-acceptance", default="", help="Path to runtime_verification_acceptance.json")
+    p.add_argument("--runtime-certification", default="", help="Path to runtime_certification.json")
+    p.add_argument("--path-a-operational", default="", help="Path to path_a_operational.json")
     p.add_argument("--require-runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
     p.add_argument("--output", default="deployment_gate_report.json", help="Output JSON report path")
     return p
@@ -421,27 +917,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_arg_parser().parse_args()
-
     repo_smoke_path = _read_if_exists(args.repo_smoke_summary) or _latest_json(["repo_smoke_summary.json"])
     phase5_summary_path = _read_if_exists(args.phase5_summary) or _latest_json(["test_case_summary.json"])
     offline_validation_path = _read_if_exists(args.offline_validation_report) or _latest_json(["offline_validation_report.json"])
-    runtime_index_path = _read_if_exists(args.runtime_index) or _latest_json(["runtime_index.json"])
-    mutation_plan_path = _read_if_exists(args.database_mutation_plan) or _latest_json(["database_mutation_plan.json"])
+    policy_config_path = _read_if_exists(args.policy_config) or _read_if_exists("config/policy.yml") or _read_if_exists("config/policy.yaml")
     
-    # Resolve policy path (checks config/policy.yml and config/policy.yaml automatically)
-    policy_config_path = (
-        _read_if_exists(args.policy_config)
-        or _read_if_exists("config/policy.yml")
-        or _read_if_exists("config/policy.yaml")
-    )
+    runtime_baseline_path = _read_if_exists(args.runtime_baseline) or _latest_json(["runtime_baseline.json"])
+    mutation_plan_path = _read_if_exists(args.database_mutation_plan) or _latest_json(["database_mutation_plan.json"])
+    persistence_contract_path = _read_if_exists(args.persistence_contract) or _latest_json(["persistence_contract.json"])
+    runtime_verification_contract_path = _read_if_exists(args.runtime_verification_contract) or _latest_json(["runtime_verification_contract.json"])
+    runtime_verification_acceptance_path = _read_if_exists(args.runtime_verification_acceptance) or _latest_json(["runtime_verification_acceptance.json"])
+    runtime_certification_path = _read_if_exists(args.runtime_certification) or _latest_json(["runtime_certification.json"])
+    path_a_operational_path = _read_if_exists(args.path_a_operational) or _latest_json(["path_a_operational.json"])
+    
+    runtime_index_path = _read_if_exists(args.runtime_index) or _latest_json(["runtime_index.json"])
 
     result = evaluate_gate(
         repo_smoke_path=repo_smoke_path,
         phase5_summary_path=phase5_summary_path,
         offline_validation_path=offline_validation_path,
-        runtime_index_path=runtime_index_path,
         policy_config_path=policy_config_path,
+        
+        runtime_baseline_path=runtime_baseline_path,
         mutation_plan_path=mutation_plan_path,
+        persistence_contract_path=persistence_contract_path,
+        runtime_verification_contract_path=runtime_verification_contract_path,
+        runtime_verification_acceptance_path=runtime_verification_acceptance_path,
+        runtime_certification_path=runtime_certification_path,
+        path_a_operational_path=path_a_operational_path,
+        
+        runtime_index_path=runtime_index_path,
+        
         options=GateOptions(require_runtime_index=bool(args.require_runtime_index)),
     )
 
