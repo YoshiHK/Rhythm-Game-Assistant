@@ -3814,7 +3814,102 @@ jobs:
 
           print(
               "[RGA] runtime_certification.json generated"
-          )          
+          )   
+
+      ############################################################
+      # Write Path A Operational Contract
+      ############################################################
+
+      - name: Write Path A Operational Contract
+        shell: python
+
+        run: |
+          import json
+          from pathlib import Path
+
+          certification_path = Path(
+              "artifacts/runtime_certification.json"
+          )
+
+          runtime_certified = False
+
+          if certification_path.exists():
+
+              certification = json.loads(
+                  certification_path.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              runtime_certified = bool(
+                  (
+                      certification.get(
+                          "certification"
+                      )
+                      or {}
+                  ).get(
+                      "runtime_certified",
+                      False,
+                  )
+              )
+
+          payload = {
+              "schema":
+                  "rga.path_a_operational.v1.0",
+
+              "workflow":
+                  "runtime-audit",
+
+              "bot":
+                  "rga_backend_bot_1",
+
+              "lifecycle_stage":
+                  "stage_8_path_a_operational",
+
+              "source_contracts": {
+                  "runtime_certification":
+                      str(certification_path),
+              },
+
+              "operational_state": {
+
+                  "runtime_certified":
+                      runtime_certified,
+
+                  "path_a_operational":
+                      runtime_certified,
+
+                  "serving_ready":
+                      runtime_certified,
+              },
+
+              "governance": {
+
+                  "validation_is_local":
+                      True,
+
+                  "verification_is_global":
+                      True,
+
+                  "completed_phases_immutable":
+                      True,
+              }
+          }
+
+          Path(
+              "artifacts/path_a_operational.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA] path_a_operational.json generated"
+          )      
 
       ############################################################
       # Verify Generated Reports
@@ -4159,7 +4254,23 @@ jobs:
           path: |
             artifacts/runtime_certification.json
 
-          if-no-files-found: warn       
+          if-no-files-found: warn    
+
+      ############################################################
+      # Upload Path A Operational Contract
+      ############################################################
+
+      - name: Upload Path A Operational Contract
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: rga-path-a-operational
+
+          path: |
+            artifacts/path_a_operational.json
+
+          if-no-files-found: warn          
 
       ############################################################
       # Upload Runtime Auditor Evidence
