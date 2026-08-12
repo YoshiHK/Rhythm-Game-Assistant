@@ -13,6 +13,10 @@ permissions:
 
 jobs:
   deployment-governance-gate:
+  
+    if: >
+      github.event.workflow_run.conclusion == 'success'
+    
     runs-on: windows-latest
 
     steps:
@@ -30,6 +34,11 @@ jobs:
           python -m venv .venv
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
           .\.venv\Scripts\python.exe -m pip install pyyaml
+          
+      - name: Verify GitHub CLI
+        shell: pwsh
+        run: |
+          gh --version         
 
       - name: Download Triggering Runtime Auditor Artifacts
         shell: pwsh
@@ -44,6 +53,81 @@ jobs:
 
           Write-Host "[GOVERNANCE-GATE] downloaded artifacts:"
           Get-ChildItem .\artifacts -Recurse -File | Select-Object FullName
+
+      - name: Governance Artifact Inventory
+        shell: pwsh
+        run: |
+          Get-ChildItem `
+            .\artifacts `
+            -Recurse `
+            -File |
+            Select-Object FullName  
+
+      - name: Lifecycle Event Validation
+        shell: pwsh
+        run: |
+          $event = Get-ChildItem `
+            .\artifacts `
+            -Recurse `
+            -Filter "lifecycle_event.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if (-not $event) {
+            throw "lifecycle_event.json not found."
+          }
+
+          $json = Get-Content `
+            $event.FullName `
+            -Raw |
+            ConvertFrom-Json
+
+          # ----------------------------------------------
+          # Schema validation
+          # ----------------------------------------------
+
+          if (
+            $json.schema -ne
+            "rga.lifecycle_event.v1.0"
+          ) {
+            throw (
+              "Unsupported lifecycle event schema: " +
+              [string]$json.schema
+            )
+          }
+
+          # ----------------------------------------------
+          # Required fields
+          # ----------------------------------------------
+
+          $required = @(
+            "audit_mode",
+            "completed_stage",
+            "next_stage",
+            "dispatch_required"
+          )
+
+          foreach ($field in $required) {
+
+            if (
+              -not $json.PSObject.Properties.Name.Contains(
+                $field
+              )
+            ) {
+              throw (
+                "Missing lifecycle event field: " +
+                $field
+              )
+            }
+          }
+
+          Write-Host ""
+          Write-Host "[GOVERNANCE-GATE] lifecycle event validated"
+          Write-Host "schema=$($json.schema)"
+          Write-Host "audit_mode=$($json.audit_mode)"
+          Write-Host "completed_stage=$($json.completed_stage)"
+          Write-Host "next_stage=$($json.next_stage)"            
           
       - name: Check Post-Audit Trigger
         id: post_audit
@@ -101,6 +185,20 @@ jobs:
             "--runtime-certification" = ".\artifacts\runtime_certification.json"
             "--path-a-operational" = ".\artifacts\path_a_operational.json"
           }
+          
+          $RuntimeIndex = Get-ChildItem `
+            .\artifacts `
+            -Recurse `
+            -Filter "runtime_index.json" `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if ($RuntimeIndex) {
+              $args += "--runtime-index"
+              $args += $RuntimeIndex.FullName
+              $args += "--require-runtime-index"
+          }
+          
 
           foreach ($key in $paths.Keys) {
             if (Test-Path $paths[$key]) {
