@@ -3496,9 +3496,9 @@ jobs:
       ############################################################
 
       - name: Write Runtime Verification Contract
-        if: ${{ always() }}
+        shell: python
+        
         run: |
-          python - <<'PY'
           import json
           from pathlib import Path
 
