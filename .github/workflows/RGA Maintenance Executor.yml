@@ -2046,7 +2046,7 @@ jobs:
       # Upload Plan Evidence
       ############################################################
 
-      - name: Upload Plan Evidence
+      - name: Upload Execution Plan Bundle
         if: ${{ always() && inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
 
@@ -2055,10 +2055,42 @@ jobs:
 
           path: |
             artifacts/execution_plan.json
-            artifacts/database_mutation_plan.json
-            artifacts/persistence_contract.json
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
+
+          if-no-files-found: warn
+
+      ############################################################
+      # Stage 2
+      # Upload Database Mutation Plan
+      ############################################################
+
+      - name: Upload Database Mutation Plan
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: rga-database-mutation-plan
+
+          path: |
+            artifacts/database_mutation_plan.json
+
+          if-no-files-found: warn
+
+      ############################################################
+      # Stage 4
+      # Upload Persistence Contract
+      ############################################################
+
+      - name: Upload Persistence Contract
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: rga-persistence-contract
+
+          path: |
+            artifacts/persistence_contract.json
 
           if-no-files-found: warn
           
