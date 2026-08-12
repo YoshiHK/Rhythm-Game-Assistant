@@ -930,7 +930,7 @@ def main() -> int:
     runtime_certification_path = _read_if_exists(args.runtime_certification) or _latest_json(["runtime_certification.json"])
     path_a_operational_path = _read_if_exists(args.path_a_operational) or _latest_json(["path_a_operational.json"])
     
-    runtime_index_path = _read_if_exists(args.runtime_index) or _latest_json(["runtime_index.json"])
+    runtime_index_path = _read_if_exists(args.require_runtime_index) or _latest_json(["runtime_index.json"])
 
     result = evaluate_gate(
         repo_smoke_path=repo_smoke_path,
