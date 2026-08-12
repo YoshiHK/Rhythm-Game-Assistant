@@ -3606,8 +3606,117 @@ jobs:
 
           print(
               "[RGA] runtime_verification_contract.json generated"
-          ) 
+          )
+          PY         
 
+      ############################################################
+      # Accept Runtime Verification
+      ############################################################
+
+      - name: Accept Runtime Verification
+        shell: python
+
+        run: |
+          import json
+          from pathlib import Path
+
+          contract_path = Path(
+              "artifacts/runtime_verification_contract.json"
+          )
+
+          accepted = False
+          reasons = []
+
+          if not contract_path.exists():
+              reasons.append(
+                  "runtime_verification_contract_missing"
+            )
+          else:
+
+              contract = json.loads(
+                  contract_path.read_text(
+                      encoding="utf-8"
+                  )
+              )
+
+              if (
+                  contract.get("schema")
+                  !=
+                  "rga.runtime_verification_contract.v1.0"
+              ):
+                  reasons.append(
+                      "invalid_schema"
+                  )
+
+              if (
+                  contract.get(
+                      "verification_type"
+                  )
+                  !=
+                  "global"
+              ):
+                  reasons.append(
+                      "invalid_verification_type"
+                  )
+
+              scope = (
+                  contract.get(
+                      "verification_scope"
+                  )
+                  or {}
+              )
+
+              required_scope = [
+                  "inventory_coverage",
+                  "asset_coverage",
+                  "pattern_coverage",
+                  "hash_consistency",
+                  "runtime_surface",
+                  "artifact_integrity",
+              ]
+
+              missing_scope = [
+                  s
+                  for s in required_scope
+                  if s not in scope
+              ]
+
+              if missing_scope:
+                  reasons.append(
+                      "missing_verification_scope"
+                  )
+
+          if not reasons:
+              accepted = True
+
+          result = {
+              "schema":
+                  "rga.runtime_verification_acceptance.v1.0",
+
+              "source_contract":
+                  str(contract_path),
+
+              "accepted":
+                  accepted,
+
+              "reasons":
+                  reasons,
+          }
+
+          Path(
+              "artifacts/runtime_verification_acceptance.json"
+          ).write_text(
+              json.dumps(
+                  result,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA] runtime_verification_acceptance.json generated"
+          )
 
       ############################################################
       # Verify Generated Reports
@@ -3905,18 +4014,6 @@ jobs:
           name: runtime-auditor-report-zip
           path: runtime-auditor-report.zip
           if-no-files-found: warn
-
-      ############################################################
-      # Upload Runtime Auditor Evidence
-      ############################################################
-
-      - name: Upload Runtime Auditor Evidence
-        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: runtime-auditor-evidence
-          path: artifacts/
-          if-no-files-found: warn
           
       ############################################################
       # Upload Runtime Verification Contract
@@ -3932,7 +4029,35 @@ jobs:
           path: |
             artifacts/runtime_verification_contract.json
 
+          if-no-files-found: warn    
+
+      ############################################################
+      # Upload Runtime Verification Acceptance
+      ############################################################
+
+      - name: Upload Runtime Verification Acceptance
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: rga-runtime-verification-acceptance
+
+          path: |
+            artifacts/runtime_verification_acceptance.json
+
           if-no-files-found: warn          
+
+      ############################################################
+      # Upload Runtime Auditor Evidence
+      ############################################################
+
+      - name: Upload Runtime Auditor Evidence
+        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-auditor-evidence
+          path: artifacts/
+          if-no-files-found: warn 
 
       ############################################################
       # Upload Plan Audit Evidence
