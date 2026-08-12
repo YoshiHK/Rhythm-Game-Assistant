@@ -1,0 +1,134 @@
+name: Deployment Governance Gate
+
+on:
+  workflow_run:
+    workflows:
+      - RGA Runtime Auditor
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deployment-governance-gate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create venv
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install pyyaml
+
+      - name: Download Triggering Runtime Auditor Artifacts
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
+
+          gh run download $env:RUN_ID `
+            --dir .\artifacts
+
+          Write-Host "[GOVERNANCE-GATE] downloaded artifacts:"
+          Get-ChildItem .\artifacts -Recurse -File | Select-Object FullName
+          
+      - name: Check Post-Audit Trigger
+        id: post_audit
+        shell: pwsh
+        run: |
+          $event = Get-ChildItem .\artifacts `
+            -Recurse `
+            -Filter "lifecycle_event.json" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1
+
+          if (-not $event) {
+            Write-Host "[GOVERNANCE-GATE] lifecycle_event.json not found."
+            "should_run=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $json = Get-Content $event.FullName -Raw | ConvertFrom-Json
+
+          Write-Host "[GOVERNANCE-GATE] completed_stage=$($json.completed_stage)"
+          Write-Host "[GOVERNANCE-GATE] next_stage=$($json.next_stage)"
+
+          if ($json.completed_stage -eq "post_audit" -or $json.next_stage -eq "complete") {
+            "should_run=true" >> $env:GITHUB_OUTPUT
+          }
+          else {
+            "should_run=false" >> $env:GITHUB_OUTPUT
+          }          
+
+      - name: Run Deployment Governance Gate
+        if: ${{ steps.post_audit.outputs.should_run == 'true' }}
+        shell: pwsh
+        run: |
+          $args = @(
+            ".\deployment_gate.py",
+            "--output", ".\deployment_gate_report.json"
+          )
+
+          if (Test-Path ".\config\policy.yml") {
+            $args += "--policy-config"
+            $args += ".\config\policy.yml"
+          }
+          elseif (Test-Path ".\config\policy.yaml") {
+            $args += "--policy-config"
+            $args += ".\config\policy.yaml"
+          }
+
+          $paths = @{
+            "--runtime-baseline" = ".\artifacts\runtime_baseline.json"
+            "--database-mutation-plan" = ".\artifacts\database_mutation_plan.json"
+            "--persistence-contract" = ".\artifacts\persistence_contract.json"
+            "--runtime-verification-contract" = ".\artifacts\runtime_verification_contract.json"
+            "--runtime-verification-acceptance" = ".\artifacts\runtime_verification_acceptance.json"
+            "--runtime-certification" = ".\artifacts\runtime_certification.json"
+            "--path-a-operational" = ".\artifacts\path_a_operational.json"
+          }
+
+          foreach ($key in $paths.Keys) {
+            if (Test-Path $paths[$key]) {
+              $args += $key
+              $args += $paths[$key]
+            }
+            else {
+              Write-Host "[GOVERNANCE-GATE][WARN] Missing $key => $($paths[$key])"
+            }
+          }
+
+          Write-Host "[GOVERNANCE-GATE] args:"
+          $args | ForEach-Object { Write-Host "  $_" }
+
+          .\.venv\Scripts\python.exe @args
+          
+      - name: Upload Deployment Governance Gate Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-governance-gate-report
+          path: |
+            deployment_gate_report.json
+            artifacts/runtime_baseline.json
+            artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
+            artifacts/runtime_verification_contract.json
+            artifacts/runtime_verification_acceptance.json
+            artifacts/runtime_certification.json
+            artifacts/path_a_operational.json
+          if-no-files-found: warn          
