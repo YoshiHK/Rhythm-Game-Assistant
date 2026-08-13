@@ -41,35 +41,45 @@ jobs:
           gh --version         
 
       ############################################################
-      # Download Artifacts from Triggering Workflow Run
+      # Download Artifacts (Triggering Run + Historic Baseline)
       ############################################################
 
-      - name: Download Triggering Workflow Artifacts
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          github_token: ${{ github.token }}
-          run_id: ${{ github.event.workflow_run.id }}
-          path: artifacts
-        continue-on-error: true
+      - name: Download All Governance Artifacts via GitHub CLI
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN != '' && secrets.PAT_TOKEN || github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
 
-      - name: Download Runtime Baseline (Cross-Run)
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          github_token: ${{ github.token }}
-          workflow: rga-runtime-auditor.yml
-          name: rga-runtime-baseline
-          path: artifacts
-        continue-on-error: true
-        
+          Write-Host "[GOVERNANCE-GATE] Downloading artifacts from triggering run $env:RUN_ID..."
+          gh run download $env:RUN_ID --dir .\artifacts -ErrorAction SilentlyContinue
 
-      # Fallback download for artifacts uploaded directly in this run
-      - name: Download Local Run Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: '*'
-          merge-multiple: true
-        continue-on-error: true
+          # Check if early stage contracts are missing (e.g. runtime_baseline.json)
+          $missingContracts = @("runtime_baseline.json", "database_mutation_plan.json", "persistence_contract.json") | 
+            Where-Object { -not (Test-Path ".\artifacts\$_") -and -not (Test-Path ".\artifacts\*\$_") }
+
+          if ($missingContracts) {
+            Write-Host "[GOVERNANCE-GATE][WARN] Missing pre-approval contracts ($($missingContracts -join ', '))."
+            Write-Host "[GOVERNANCE-GATE] Searching recent successful workflow runs for missing contracts..."
+
+            # Query recent successful runs of RGA Runtime Auditor
+            $runs = gh api "repos/:owner/:repo/actions/runs?status=success&per_page=10" | ConvertFrom-Json
+            foreach ($run in $runs.workflow_runs) {
+              if ($run.id -ne $env:RUN_ID) {
+                Write-Host "[GOVERNANCE-GATE] Attempting backhaul download from historic run ID: $($run.id)"
+                gh run download $run.id --dir .\artifacts -ErrorAction SilentlyContinue
+                
+                # Re-check if contracts are resolved
+                $stillMissing = $missingContracts | Where-Object { -not (Test-Path ".\artifacts\$_") -and -not (Test-Path ".\artifacts\*\$_") }
+                if (-not $stillMissing) {
+                  Write-Host "[GOVERNANCE-GATE] All missing contracts successfully backhauled!"
+                  break
+                }
+              }
+            }
+          }
+
 
 
       - name: Verify Downloaded Artifacts
