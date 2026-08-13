@@ -856,30 +856,92 @@ def build_gate_options(
         ),
     )
 
-def evaluate_runtime_index(index: Dict[str, Any], results: List[Dict[str, Any]], opts: GateOptions) -> None:
+def evaluate_runtime_index(
+    index: Dict[str, Any],
+    results: List[Dict[str, Any]],
+    opts: GateOptions,
+) -> None:
     schema_version = index.get("schema_version")
+
     last_run = index.get("last_run") or {}
     last_status = last_run.get("status")
 
+    # --------------------------------------------------
+    # Overall runtime completion
+    # --------------------------------------------------
+
     if last_status != "completed":
-        _fail(results, "runtime_index", "runtime_last_run_not_completed", {"status": last_status, "schema_version": schema_version})
+        _fail(
+            results,
+            "runtime_index",
+            "runtime_last_run_not_completed",
+            {
+                "status": last_status,
+                "schema_version": schema_version,
+            },
+        )
         return
 
+    # --------------------------------------------------
+    # Runtime stage completion verification
+    # --------------------------------------------------
+
     if opts.require_runtime_stage_completion:
+
         incomplete: Dict[str, Any] = {}
-        for stage in REQUIRED_RUNTIME_STAGES:
+
+        for stage in opts.REQUIRED_RUNTIME_STAGES:
+
             stage_obj = last_run.get(stage) or {}
+
             if stage_obj.get("status") != "completed":
                 incomplete[stage] = stage_obj.get("status")
+
         if incomplete:
-            _fail(results, "runtime_index", "runtime_stage_not_completed", {"incomplete": incomplete, "schema_version": schema_version})
+
+            _fail(
+                results,
+                "runtime_index",
+                "runtime_stage_not_completed",
+                {
+                    "incomplete": incomplete,
+                    "schema_version": schema_version,
+                },
+            )
+
             return
 
+    # --------------------------------------------------
+    # Runtime integrity verification
+    # --------------------------------------------------
+
     if opts.require_runtime_integrity_pass:
-        integrity = ((last_run.get("integrity_check") or {}).get("details") or {})
+
+        integrity = (
+            (
+                last_run.get("integrity_check")
+                or {}
+            ).get("details")
+            or {}
+        )
+
         if integrity.get("passed") is not True:
-            _fail(results, "runtime_index", "runtime_integrity_check_failed", {"integrity": integrity, "schema_version": schema_version})
+
+            _fail(
+                results,
+                "runtime_index",
+                "runtime_integrity_check_failed",
+                {
+                    "integrity": integrity,
+                    "schema_version": schema_version,
+                },
+            )
+
             return
+
+    # --------------------------------------------------
+    # Runtime index accepted
+    # --------------------------------------------------
 
     _ok(
         results,
@@ -889,6 +951,7 @@ def evaluate_runtime_index(index: Dict[str, Any], results: List[Dict[str, Any]],
             "run_id": last_run.get("run_id"),
             "report_date": last_run.get("report_date"),
             "mode": last_run.get("mode"),
+            "status": last_status,
         },
     )
 
@@ -1103,30 +1166,7 @@ def evaluate_gate(
         for item in results
     )
 
-    return {
-        "allowed": allowed,
-        "checks": results,
-        "summary": {
-            "passed": sum(
-                1 for item in results
-                if item.get("passed") is True
-            ),
-            "failed": sum(
-                1 for item in results
-                if item.get("passed") is False
-            ),
-            "required_runtime_index": options.require_runtime_index,
-            "governance_mode": (
-                options.require_runtime_baseline
-                or options.require_database_mutation_policy
-                or options.require_persistence_contract
-                or options.require_runtime_verification_contract
-                or options.require_runtime_verification_acceptance
-                or options.require_runtime_certification
-                or options.require_path_a_operational
-            ),
-        },
-    }
+
 
 def _latest_json(patterns: Iterable[str]) -> Optional[Path]:
     candidates: List[Path] = []
@@ -1145,7 +1185,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--phase5-summary", default="", help="Path to test_case_summary.json")
     p.add_argument("--offline-validation-report", default="", help="Path to offline_validation_report.json")
     p.add_argument("--policy-config", default="", help="Path to policy.yml or policy.yaml")
-    p.add_argument("--governance-mode", action="store_true", help="Enable Stage 1-8 governance contract checks")    
+    p.add_argument("--governance-mode", action="store_true", help="Enable Stage 1-8 governance contract checks")
+    p.add_argument("--runtime-index", default="", help="Path to runtime_index.json")    
     p.add_argument("--runtime-baseline", default="", help="Path to runtime_baseline.json")
     p.add_argument("--database-mutation-plan", default="", help="Path to database_mutation_plan.json")
     p.add_argument("--persistence-contract", default="", help="Path to persistence_contract.json")
@@ -1153,7 +1194,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--runtime-verification-acceptance", default="", help="Path to runtime_verification_acceptance.json")
     p.add_argument("--runtime-certification", default="", help="Path to runtime_certification.json")
     p.add_argument("--path-a-operational", default="", help="Path to path_a_operational.json")
-    p.add_argument("--runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
+    p.add_argument("--require-runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
     p.add_argument("--no-require-repo-smoke", action="store_true", help="Override policy to skip repo smoke summary requirement")
     p.add_argument("--no-require-phase5-summary", action="store_true", help="Override policy to skip Phase 5 summary requirement")
     p.add_argument("--no-require-offline-validation", action="store_true", help="Override policy to skip offline validation requirement")
@@ -1181,6 +1222,19 @@ def main() -> int:
     offline_validation_path = (
         _read_if_exists(args.offline_validation_report)
         or _latest_json(["offline_validation_report.json"])
+    )
+
+    runtime_index_path = (
+        _read_if_exists(
+            getattr(
+                args,
+                "runtime_index",
+                "",
+            )
+        )
+        or _latest_json(
+            ["runtime_index.json"]
+        )
     )
 
     policy_config_path = (
@@ -1225,11 +1279,6 @@ def main() -> int:
         _read_if_exists(args.path_a_operational)
         or _latest_json(["path_a_operational.json"])
     )
-    
-    runtime_index_path = (
-        _read_if_exists(args.runtime_index)
-        or _latest_json(["runtime_index.json"])
-    )    
 
     options = build_gate_options(
         policy=policy,
