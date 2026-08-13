@@ -1,11 +1,11 @@
-name: RGA Runtime Auditor
+name: Bot #1 - Runtime Auditor
 
 on:
   workflow_dispatch:
     inputs:
-      audit_mode:
+      audit_stage:
         description: "Stage in 10-step lifecycle loop"
-        required: true
+        required: false
         default: "pre_audit"
         type: choice
         options:
@@ -13,10 +13,21 @@ on:
           - plan_audit
           - persistence_verification
           - post_audit
+
+      audit_mode:
+        description: "Alias for audit_stage dispatched by lifecycle runner"
+        required: false
+        default: "pre_audit"
+
       audit_session_id:
         description: "Lifecycle Session Correlation ID"
         required: false
         default: ""
+
+      execution_plan:
+        description: "Path to execution plan artifact for plan_audit stage"
+        required: false
+        default: "artifacts/execution_plan.json"
 
 jobs:
   audit-execution:
@@ -34,7 +45,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
 
       ############################################################
       # Prepare Artifact Directory
