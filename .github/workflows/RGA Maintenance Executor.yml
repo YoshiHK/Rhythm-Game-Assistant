@@ -92,6 +92,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          
+      ############################################################
+      # Prepare Artifact Directory
+      ############################################################          
 
       - name: Prepare Artifact Directory
         run: |
@@ -136,6 +140,23 @@ jobs:
               encoding="utf-8",
           )
           PY
+          
+      ############################################################
+      # Resolve Artifact Token
+      ############################################################
+
+      - name: Resolve Artifact Token
+        id: artifact_token
+        shell: bash
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN_FALLBACK: ${{ github.token }}
+        run: |
+          if [ -n "$PAT_TOKEN" ]; then
+            echo "token=$PAT_TOKEN" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=$GH_TOKEN_FALLBACK" >> "$GITHUB_OUTPUT"
+          fi          
           
       ############################################################
       # Execution Gate
@@ -2033,35 +2054,47 @@ jobs:
           retention-days: 30          
 
       ############################################################
-      # Upload Plan Evidence
+      # Upload Execution Plan Bundle
       ############################################################
 
       - name: Upload Execution Plan Bundle
         if: ${{ always() && inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
-
         with:
           name: rga-execution-plan
-
           path: |
             artifacts/execution_plan.json
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
-
           if-no-files-found: warn
 
       ############################################################
-      # Upload Database Mutation Plan & Persistence Contract
+      # Stage 2
+      # Upload Database Mutation Plan
       ############################################################
 
-      - name: Upload Database Mutation Plan & Persistence Contract
-        if: always()
+      - name: Upload Database Mutation Plan
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
         with:
           name: rga-database-mutation-plan
           path: |
-            database_mutation_plan.json
-            persistence_contract.json
+            artifacts/database_mutation_plan.json
+          if-no-files-found: warn
+
+      ############################################################
+      # Stage 4
+      # Upload Persistence Contract
+      ############################################################
+
+      - name: Upload Persistence Contract
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-persistence-contract
+          path: |
+            artifacts/persistence_contract.json
+          if-no-files-found: warn
           
       ############################################################
       # Upload Dry Run Evidence
