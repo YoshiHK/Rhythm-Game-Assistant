@@ -438,54 +438,58 @@ jobs:
 
       - name: Write Database Mutation Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
+        env:
+          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
           python - <<'PY'
+          import os
           import json
           from pathlib import Path
+          from datetime import datetime, timezone
 
-          runtime_baseline = Path(
-              "artifacts/runtime_baseline.json"
-          )
+          runtime_baseline = Path("artifacts/runtime_baseline.json")
+          pre_audit_report = Path("artifacts/runtime_auditor_report.json")
+
+          audit_session_id = os.environ.get("AUDIT_SESSION_ID", "")
+          executor_mode = os.environ.get("EXECUTOR_MODE", "plan")
 
           payload = {
               "schema": "rga.database_mutation_plan.v1.0",
-
               "workflow": "RGA Maintenance Executor",
-
               "bot": "rga_executor_bot",
-
               "lifecycle_stage": "bot_2_plan",
-
-              "runtime_baseline": str(runtime_baseline),
-
+              "audit_session_id": audit_session_id,
+              "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+              "runtime_baseline": {
+                  "path": str(runtime_baseline),
+                  "present": runtime_baseline.exists(),
+              },
+              "pre_audit_report": {
+                  "path": str(pre_audit_report),
+                  "present": pre_audit_report.exists(),
+              },
               "approval": {
                   "required": True,
                   "approved": False,
+                  "approval_artifact": "artifacts/human_execution_approval.json",
               },
-
               "policy": {
                   "validation_required": True,
                   "validated": False,
+                  "phase_boundary_immutable": True,
               },
-
               "proposed_mutations": []
           }
 
-          Path(
-              "artifacts/database_mutation_plan.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
+          Path("artifacts/database_mutation_plan.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False),
               encoding="utf-8",
           )
 
-          print(
-              "[RGA] database_mutation_plan.json generated"
-          )
+          print("[RGA] database_mutation_plan.json generated successfully.")
           PY
+
           
       ############################################################
       # Write Persistence Contract
@@ -494,50 +498,43 @@ jobs:
       - name: Write Persistence Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
         shell: python
- 
+        env:
+          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
+          import os
           import json
           from pathlib import Path
+          from datetime import datetime, timezone
 
-          mutation_plan = Path(
-              "artifacts/database_mutation_plan.json"
-          )
+          mutation_plan = Path("artifacts/database_mutation_plan.json")
+          audit_session_id = os.environ.get("AUDIT_SESSION_ID", "")
 
           payload = {
-              "schema":
-                  "rga.persistence_contract.v1.0",
-
-              "workflow":
-                  "RGA Maintenance Executor",
-
-              "bot":
-                  "rga_executor_bot",
-
-              "lifecycle_stage":
-                  "stage_4_persistence_contract",
-
-              "source_contract":
-                  str(mutation_plan),
-
+              "schema": "rga.persistence_contract.v1.0",
+              "workflow": "RGA Maintenance Executor",
+              "bot": "rga_executor_bot",
+              "lifecycle_stage": "stage_4_persistence_contract",
+              "audit_session_id": audit_session_id,
+              "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+              "source_contract": str(mutation_plan),
+              "source_contract_present": mutation_plan.exists(),
               "ownership": {
                   "planner": "bot_2",
                   "executor": "persistence_layer",
                   "approver": "human",
                   "policy_validator": "deployment_gate",
               },
-
               "permissions": {
                   "executor_may_write_db": False,
                   "persistence_layer_owns_db_writes": True,
                   "human_approval_required": True,
                   "deployment_gate_required": True,
               },
-
               "runtime_requirements": {
                   "runtime_baseline_required": True,
                   "mutation_validation_required": True,
               },
-
               "status": {
                   "approved": False,
                   "validated": False,
@@ -545,20 +542,13 @@ jobs:
               },
           }
 
-          Path(
-              "artifacts/persistence_contract.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
+          Path("artifacts/persistence_contract.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False),
               encoding="utf-8",
           )
 
-          print(
-              "[RGA] persistence_contract.json generated"
-          )        
+          print("[RGA] persistence_contract.json generated successfully.")
+
 
       ############################################################
       # Execution Plan Fingerprint
@@ -2061,8 +2051,7 @@ jobs:
           if-no-files-found: warn
 
       ############################################################
-      # Stage 2
-      # Upload Database Mutation Plan
+      # Upload Database Mutation Plan Artifact
       ############################################################
 
       - name: Upload Database Mutation Plan
@@ -2072,12 +2061,11 @@ jobs:
           name: rga-database-mutation-plan
           path: |
             artifacts/database_mutation_plan.json
-          
           if-no-files-found: warn
 
+
       ############################################################
-      # Stage 4
-      # Upload Persistence Contract
+      # Upload Persistence Contract Artifact
       ############################################################
 
       - name: Upload Persistence Contract
@@ -2087,8 +2075,8 @@ jobs:
           name: rga-persistence-contract
           path: |
             artifacts/persistence_contract.json
-            
           if-no-files-found: warn
+
 
           
       ############################################################
