@@ -268,109 +268,79 @@ jobs:
           # --------------------------------------------------
           # Policy
           # --------------------------------------------------
-
           if (Test-Path ".\config\policy.yml") {
-
             $args += "--policy-config"
             $args += ".\config\policy.yml"
-
           }
           elseif (Test-Path ".\config\policy.yaml") {
-
             $args += "--policy-config"
             $args += ".\config\policy.yaml"
+          }
 
+          # --------------------------------------------------
+          # Operational Reports (Search in artifacts directory)
+          # --------------------------------------------------
+          $RepoSmoke = Get-ChildItem .\artifacts -Recurse -Filter "repo_smoke_summary.json" -ErrorAction SilentlyContinue | Select-Object -Last 1
+          if ($RepoSmoke) {
+            $args += "--repo-smoke-summary"
+            $args += $RepoSmoke.FullName
+          }
+
+          $Phase5 = Get-ChildItem .\artifacts -Recurse -Filter "test_case_summary.json" -ErrorAction SilentlyContinue | Select-Object -Last 1
+          if ($Phase5) {
+            $args += "--phase5-summary"
+            $args += $Phase5.FullName
+          }
+
+          $OfflineVal = Get-ChildItem .\artifacts -Recurse -Filter "offline_validation_report.json" -ErrorAction SilentlyContinue | Select-Object -Last 1
+          if ($OfflineVal) {
+            $args += "--offline-validation-report"
+            $args += $OfflineVal.FullName
           }
 
           # --------------------------------------------------
           # Governance Contracts
           # --------------------------------------------------
-
           $contracts = @{
-
-            "--runtime-baseline" =
-              "runtime_baseline.json"
-
-            "--database-mutation-plan" =
-              "database_mutation_plan.json"
-
-            "--persistence-contract" =
-              "persistence_contract.json"
-
-            "--runtime-verification-contract" =
-              "runtime_verification_contract.json"
-
-            "--runtime-verification-acceptance" =
-              "runtime_verification_acceptance.json"
-
-            "--runtime-certification" =
-              "runtime_certification.json"
-
-            "--path-a-operational" =
-              "path_a_operational.json"
+            "--runtime-baseline"                = "runtime_baseline.json"
+            "--database-mutation-plan"          = "database_mutation_plan.json"
+            "--persistence-contract"            = "persistence_contract.json"
+            "--runtime-verification-contract"   = "runtime_verification_contract.json"
+            "--runtime-verification-acceptance" = "runtime_verification_acceptance.json"
+            "--runtime-certification"           = "runtime_certification.json"
+            "--path-a-operational"              = "path_a_operational.json"
           }
 
           foreach ($arg in $contracts.Keys) {
-
-            $file = Get-ChildItem `
-              .\artifacts `
-              -Recurse `
-              -Filter $contracts[$arg] `
-              -ErrorAction SilentlyContinue |
-              Sort-Object LastWriteTime |
-              Select-Object -Last 1
-
+            $file = Get-ChildItem .\artifacts -Recurse -Filter $contracts[$arg] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
             if ($file) {
-
               $args += $arg
               $args += $file.FullName
-
             }
             else {
-
-              Write-Host (
-                "[GOVERNANCE-GATE][WARN] Missing " +
-                $contracts[$arg]
-              )
-
+              Write-Host "[GOVERNANCE-GATE][WARN] Missing $($contracts[$arg])"
             }
           }
 
           # --------------------------------------------------
           # Optional runtime_index
           # --------------------------------------------------
-
-          $RuntimeIndex = Get-ChildItem `
-            .\artifacts `
-            -Recurse `
-            -Filter "runtime_index.json" `
-            -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-
+          $RuntimeIndex = Get-ChildItem .\artifacts -Recurse -Filter "runtime_index.json" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($RuntimeIndex) {
-
             $args += "--runtime-index"
             $args += $RuntimeIndex.FullName
             $args += "--require-runtime-index"
-
           }
 
-          # --------------------------------------------------
-          # Diagnostics
-          # --------------------------------------------------
-
+          # Diagnostics & Execution
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] Arguments"
           Write-Host "----------------------------------------"
-
-          $args | ForEach-Object {
-            Write-Host "  $_"
-          }
-
+          $args | ForEach-Object { Write-Host "  $_" }
           Write-Host "----------------------------------------"
 
           & .\.venv\Scripts\python.exe @args
-          
+
       # --------------------------------------------------
       # Upload Deployment Governance Gate Report
       # --------------------------------------------------
