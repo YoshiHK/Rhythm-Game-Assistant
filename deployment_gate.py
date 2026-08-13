@@ -15,39 +15,42 @@ except ImportError:
 
 @dataclass(frozen=True)
 class GateOptions:
+    # --------------------------------------------------
+    # Lite Gate checks
+    # --------------------------------------------------
     require_repo_smoke: bool = True
     require_phase5_summary: bool = True
     require_offline_validation: bool = True
+    require_governed_policy: bool = True
+
+    # --------------------------------------------------
+    # Optional runtime index / execution evidence
+    # --------------------------------------------------
+    require_runtime_index: bool = False
     require_runtime_integrity_pass: bool = True
     require_runtime_stage_completion: bool = True
+
+    # --------------------------------------------------
+    # Phase 5 behavior
+    # --------------------------------------------------
     allow_zero_failed_cases_only: bool = True
+    require_feedback_case_determinism: bool = True
 
-    # Existing governance checks
-    require_governed_policy: bool = False
-
-    # Stage 1
+    # --------------------------------------------------
+    # Stage 1–8 Governance Chain
+    #
+    # Default False because deployment-gate.yml is Lite.
+    # deployment-governance-gate.yml should enable these
+    # via --governance-mode or policy.yml.
+    # --------------------------------------------------
     require_runtime_baseline: bool = False
-    
-    # Stage 2-3
     require_database_mutation_policy: bool = False
-
-    # Stage 4
     require_persistence_contract: bool = False
 
-    # Stage 5
     require_runtime_verification_contract: bool = False
-
-    # Stage 6
     require_runtime_verification_acceptance: bool = False
-
-    # Stage 7
     require_runtime_certification: bool = False
-
-    # Stage 8
     require_path_a_operational: bool = False
-    
-    # Runtime Index
-    require_runtime_index: bool = False
 
 
 REQUIRED_RUNTIME_STAGES: Tuple[str, ...] = (
@@ -63,7 +66,41 @@ REQUIRED_RUNTIME_STAGES: Tuple[str, ...] = (
 
 def _load_json(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+    
+def _load_policy(policy_path: Optional[Path]) -> Dict[str, Any]:
+    if not policy_path or not policy_path.exists():
+        return {}
 
+    content = policy_path.read_text(encoding="utf-8")
+
+    if yaml:
+        loaded = yaml.safe_load(content)
+        return loaded or {}
+
+    # Minimal fallback if PyYAML is unavailable.
+    return {}
+
+
+def _bool_policy(
+    policy: Dict[str, Any],
+    key: str,
+    default: bool,
+) -> bool:
+    value = policy.get(key, default)
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        return value.strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "y",
+            "on",
+        }
+
+    return bool(value)
 
 def _ok(results: List[Dict[str, Any]], check: str, details: Optional[Dict[str, Any]] = None) -> None:
     results.append({"check": check, "passed": True, "details": details or {}})
@@ -137,10 +174,25 @@ def evaluate_phase5_summary(summary: Dict[str, Any], results: List[Dict[str, Any
                         "case": case.get("case"),
                         "determinism": case.get("determinism"),
                     })
+                    
+    # Optional additional assertion:
+    # for every PASS feedback case, determinism should also PASS if present.
+    if not opts.require_feedback_case_determinism:
+        _ok(
+            results,
+            "phase5_summary",
+            {
+                "passed_cases": passed_cases,
+                "failed_cases": failed_cases,
+                "skipped_cases": skipped_cases,
+                "feedback_case_determinism_required": False,
+            },
+        )
+        return                    
 
         if bad_cases:
             _fail(results, "phase5_summary", "feedback_case_determinism_not_passed", {"cases": bad_cases})
-            return
+            return            
 
     _ok(
         results,
@@ -678,6 +730,131 @@ def evaluate_path_a_operational(
             "path_a_operational_parse_error",
             {"error": str(e)},
         )        
+        
+def build_gate_options(
+    *,
+    policy: Dict[str, Any],
+    governance_mode: bool,
+    require_runtime_index: bool,
+    no_require_repo_smoke: bool,
+    no_require_phase5_summary: bool,
+    no_require_offline_validation: bool,
+) -> GateOptions:
+    validation_rules = policy.get("validation_rules") or {}
+
+    # --------------------------------------------------
+    # Lite defaults
+    # --------------------------------------------------
+    require_repo_smoke = validation_rules.get(
+        "require_repo_smoke_summary",
+        True,
+    )
+
+    require_offline_validation = validation_rules.get(
+        "require_offline_validation_report",
+        True,
+    )
+
+    require_feedback_case_determinism = validation_rules.get(
+        "require_feedback_case_determinism",
+        True,
+    )
+
+    require_phase5_summary = True
+
+    # Explicit CLI overrides.
+    if no_require_repo_smoke:
+        require_repo_smoke = False
+
+    if no_require_phase5_summary:
+        require_phase5_summary = False
+
+    if no_require_offline_validation:
+        require_offline_validation = False
+
+    # --------------------------------------------------
+    # Governance mode enables Stage 1–8.
+    #
+    # policy.yml already declares these required flags.
+    # --------------------------------------------------
+    return GateOptions(
+        require_repo_smoke=bool(require_repo_smoke),
+        require_phase5_summary=bool(require_phase5_summary),
+        require_offline_validation=bool(require_offline_validation),
+        require_governed_policy=True,
+
+        require_runtime_index=bool(require_runtime_index),
+        require_runtime_integrity_pass=True,
+        require_runtime_stage_completion=True,
+
+        allow_zero_failed_cases_only=True,
+        require_feedback_case_determinism=bool(
+            require_feedback_case_determinism
+        ),
+
+        require_runtime_baseline=(
+            governance_mode
+            and _bool_policy(
+                policy,
+                "require_runtime_baseline",
+                True,
+            )
+        ),
+
+        require_database_mutation_policy=(
+            governance_mode
+            and _bool_policy(
+                policy,
+                "require_database_mutation_policy",
+                True,
+            )
+        ),
+
+        require_persistence_contract=(
+            governance_mode
+            and _bool_policy(
+                policy,
+                "require_persistence_contract",
+                True,
+            )
+        ),
+
+        require_runtime_verification_contract=(
+            governance_mode
+            and _bool_policy(
+                policy,
+                "require_runtime_verification_contract",
+                True,
+            )
+        ),
+
+        require_runtime_verification_acceptance=(
+            governance_mode
+            and _bool_policy(
+                policy,
+                "require_runtime_verification_acceptance",
+                True,
+            )
+        ),
+
+        require_runtime_certification=(
+            governance_mode
+            and _bool_policy(
+                policy,
+                "require_runtime_certification",
+                True,
+            )
+        ),
+
+        require_path_a_operational=(
+            governance_mode
+            and _bool_policy(
+                policy,
+                "require_path_a_operational",
+                True,
+            )
+        ),
+    )
 
 def evaluate_runtime_index(index: Dict[str, Any], results: List[Dict[str, Any]], opts: GateOptions) -> None:
     schema_version = index.get("schema_version")
@@ -715,12 +892,12 @@ def evaluate_runtime_index(index: Dict[str, Any], results: List[Dict[str, Any]],
         },
     )
 
-
 def evaluate_gate(
     *,
     repo_smoke_path: Optional[Path],
     phase5_summary_path: Optional[Path],
     offline_validation_path: Optional[Path],
+    runtime_index_path: Optional[Path],
     policy_config_path: Optional[Path] = None,
 
     # Stage 1
@@ -743,13 +920,9 @@ def evaluate_gate(
 
     # Stage 8
     path_a_operational_path: Optional[Path] = None,
-    
-    # Runtime Index
-    runtime_index_path: Optional[Path],
 
     options: GateOptions,
 ) -> Dict[str, Any]:
-    
     results: List[Dict[str, Any]] = []
     runtime_index_obj: Optional[Dict[str, Any]] = None
 
@@ -764,47 +937,84 @@ def evaluate_gate(
     # --------------------------------------------------
     if options.require_repo_smoke:
         if not repo_smoke_path or not repo_smoke_path.exists():
-            _fail(results, "repo_smoke", "repo_smoke_summary_missing")
+            _fail(
+                results,
+                "repo_smoke",
+                "repo_smoke_summary_missing",
+            )
         else:
-            evaluate_repo_smoke(_load_json(repo_smoke_path), results)
+            evaluate_repo_smoke(
+                _load_json(repo_smoke_path),
+                results,
+            )
 
     # --------------------------------------------------
     # Phase 5 summary
     # --------------------------------------------------
     if options.require_phase5_summary:
         if not phase5_summary_path or not phase5_summary_path.exists():
-            _fail(results, "phase5_summary", "phase5_summary_missing")
+            _fail(
+                results,
+                "phase5_summary",
+                "phase5_summary_missing",
+            )
         else:
-            evaluate_phase5_summary(_load_json(phase5_summary_path), results, options)
+            evaluate_phase5_summary(
+                _load_json(phase5_summary_path),
+                results,
+                options,
+            )
 
     # --------------------------------------------------
     # Offline validation
     # --------------------------------------------------
     resolved_offline_validation = offline_validation_path
 
-    # Future-facing fallback via runtime_index schema (if/when added)
-    if resolved_offline_validation is None and runtime_index_obj is not None:
-        resolved_offline_validation = _offline_validation_path_from_runtime_index(runtime_index_obj)
+    if (
+        resolved_offline_validation is None
+        and runtime_index_obj is not None
+    ):
+        resolved_offline_validation = (
+            _offline_validation_path_from_runtime_index(
+                runtime_index_obj
+            )
+        )
 
     if options.require_offline_validation:
-        if not resolved_offline_validation or not resolved_offline_validation.exists():
-            details = {}
+        if (
+            not resolved_offline_validation
+            or not resolved_offline_validation.exists()
+        ):
+            details: Dict[str, Any] = {}
+
             if runtime_index_obj is not None:
                 details["runtime_index_present"] = True
                 details["note"] = (
-                    "runtime_index.json is present, but current schema did not provide "
-                    "an offline validation output path"
+                    "runtime_index.json is present, but current schema "
+                    "did not provide an offline validation output path"
                 )
-            _fail(results, "offline_validation", "offline_validation_report_missing", details)
+
+            _fail(
+                results,
+                "offline_validation",
+                "offline_validation_report_missing",
+                details,
+            )
         else:
-            evaluate_offline_validation(_load_json(resolved_offline_validation), results)
+            evaluate_offline_validation(
+                _load_json(resolved_offline_validation),
+                results,
+            )
 
     # --------------------------------------------------
-    # Governed local storage policy check
+    # Governed policy
     # --------------------------------------------------
     if options.require_governed_policy:
-        evaluate_governed_policy(policy_config_path, results)
-        
+        evaluate_governed_policy(
+            policy_config_path,
+            results,
+        )
+
     # --------------------------------------------------
     # Stage 1: Runtime baseline
     # --------------------------------------------------
@@ -866,29 +1076,57 @@ def evaluate_gate(
         evaluate_path_a_operational(
             path_a_operational_path,
             results,
-        )    
+        )
 
     # --------------------------------------------------
     # Runtime index
+    #
+    # Runtime index is execution evidence and should be
+    # evaluated after governance contracts.
     # --------------------------------------------------
     if options.require_runtime_index:
         if runtime_index_obj is None:
-            _fail(results, "runtime_index", "runtime_index_missing")
+            _fail(
+                results,
+                "runtime_index",
+                "runtime_index_missing",
+            )
         else:
-            evaluate_runtime_index(runtime_index_obj, results, options)
+            evaluate_runtime_index(
+                runtime_index_obj,
+                results,
+                options,
+            )
 
-    allowed = all(item.get("passed") is True for item in results)
+    allowed = all(
+        item.get("passed") is True
+        for item in results
+    )
 
     return {
         "allowed": allowed,
         "checks": results,
         "summary": {
-            "passed": sum(1 for item in results if item.get("passed") is True),
-            "failed": sum(1 for item in results if item.get("passed") is False),
+            "passed": sum(
+                1 for item in results
+                if item.get("passed") is True
+            ),
+            "failed": sum(
+                1 for item in results
+                if item.get("passed") is False
+            ),
             "required_runtime_index": options.require_runtime_index,
+            "governance_mode": (
+                options.require_runtime_baseline
+                or options.require_database_mutation_policy
+                or options.require_persistence_contract
+                or options.require_runtime_verification_contract
+                or options.require_runtime_verification_acceptance
+                or options.require_runtime_certification
+                or options.require_path_a_operational
+            ),
         },
     }
-
 
 def _latest_json(patterns: Iterable[str]) -> Optional[Path]:
     candidates: List[Path] = []
@@ -907,6 +1145,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--phase5-summary", default="", help="Path to test_case_summary.json")
     p.add_argument("--offline-validation-report", default="", help="Path to offline_validation_report.json")
     p.add_argument("--policy-config", default="", help="Path to policy.yml or policy.yaml")
+    p.add_argument("--governance-mode", action="store_true", help="Enable Stage 1-8 governance contract checks")    
     p.add_argument("--runtime-baseline", default="", help="Path to runtime_baseline.json")
     p.add_argument("--database-mutation-plan", default="", help="Path to database_mutation_plan.json")
     p.add_argument("--persistence-contract", default="", help="Path to persistence_contract.json")
@@ -923,76 +1162,118 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_arg_parser().parse_args()
-    repo_smoke_path = _read_if_exists(args.repo_smoke_summary) or _latest_json(["repo_smoke_summary.json"])
-    phase5_summary_path = _read_if_exists(args.phase5_summary) or _latest_json(["test_case_summary.json", "phase5_summary.json"])
-    offline_validation_path = _read_if_exists(args.offline_validation_report) or _latest_json(["offline_validation_report.json"])
-    policy_config_path = _read_if_exists(args.policy_config) or _read_if_exists("config/policy.yml") or _read_if_exists("config/policy.yaml")
+
+    repo_smoke_path = (
+        _read_if_exists(args.repo_smoke_summary)
+        or _latest_json(["repo_smoke_summary.json"])
+    )
+
+    phase5_summary_path = (
+        _read_if_exists(args.phase5_summary)
+        or _latest_json(
+            [
+                "test_case_summary.json",
+                "phase5_summary.json",
+            ]
+        )
+    )
+
+    offline_validation_path = (
+        _read_if_exists(args.offline_validation_report)
+        or _latest_json(["offline_validation_report.json"])
+    )
+
+    policy_config_path = (
+        _read_if_exists(args.policy_config)
+        or _read_if_exists("config/policy.yml")
+        or _read_if_exists("config/policy.yaml")
+    )
+
+    policy = _load_policy(policy_config_path)
+
+    runtime_baseline_path = (
+        _read_if_exists(args.runtime_baseline)
+        or _latest_json(["runtime_baseline.json"])
+    )
+
+    mutation_plan_path = (
+        _read_if_exists(args.database_mutation_plan)
+        or _latest_json(["database_mutation_plan.json"])
+    )
+
+    persistence_contract_path = (
+        _read_if_exists(args.persistence_contract)
+        or _latest_json(["persistence_contract.json"])
+    )
+
+    runtime_verification_contract_path = (
+        _read_if_exists(args.runtime_verification_contract)
+        or _latest_json(["runtime_verification_contract.json"])
+    )
+
+    runtime_verification_acceptance_path = (
+        _read_if_exists(args.runtime_verification_acceptance)
+        or _latest_json(["runtime_verification_acceptance.json"])
+    )
+
+    runtime_certification_path = (
+        _read_if_exists(args.runtime_certification)
+        or _latest_json(["runtime_certification.json"])
+    )
+
+    path_a_operational_path = (
+        _read_if_exists(args.path_a_operational)
+        or _latest_json(["path_a_operational.json"])
+    )
     
-    runtime_baseline_path = _read_if_exists(args.runtime_baseline) or _latest_json(["runtime_baseline.json"])
-    mutation_plan_path = _read_if_exists(args.database_mutation_plan) or _latest_json(["database_mutation_plan.json"])
-    persistence_contract_path = _read_if_exists(args.persistence_contract) or _latest_json(["persistence_contract.json"])
-    runtime_verification_contract_path = _read_if_exists(args.runtime_verification_contract) or _latest_json(["runtime_verification_contract.json"])
-    runtime_verification_acceptance_path = _read_if_exists(args.runtime_verification_acceptance) or _latest_json(["runtime_verification_acceptance.json"])
-    runtime_certification_path = _read_if_exists(args.runtime_certification) or _latest_json(["runtime_certification.json"])
-    path_a_operational_path = _read_if_exists(args.path_a_operational) or _latest_json(["path_a_operational.json"])
-    
-    runtime_index_path = _read_if_exists(args.require_runtime_index) or _latest_json(["runtime_index.json"])
+    runtime_index_path = (
+        _read_if_exists(args.runtime_index)
+        or _latest_json(["runtime_index.json"])
+    )    
 
-    # Load validation_rules overrides from policy.yml if present
-    req_repo_smoke = True
-    req_phase5 = True
-    req_offline_val = True
-    allow_zero_failed_only = True
-
-    if policy_config_path and policy_config_path.exists():
-        try:
-            content = policy_config_path.read_text(encoding="utf-8")
-            if yaml:
-                policy_data = yaml.safe_load(content) or {}
-                v_rules = policy_data.get("validation_rules", {})
-                req_repo_smoke = v_rules.get("require_repo_smoke_summary", req_repo_smoke)
-                req_phase5 = v_rules.get("require_phase5_summary", req_phase5)
-                req_offline_val = v_rules.get("require_offline_validation_report", req_offline_val)
-                if "require_feedback_case_determinism" in v_rules:
-                    allow_zero_failed_only = v_rules.get("require_feedback_case_determinism")
-        except Exception:
-            pass
-
-    # CLI flags explicitly take precedence over policy file settings
-    if args.no_require_repo_smoke:
-        req_repo_smoke = False
-    if args.no_require_phase5_summary:
-        req_phase5 = False
-    if args.no_require_offline_validation:
-        req_offline_val = False
+    options = build_gate_options(
+        policy=policy,
+        governance_mode=bool(args.governance_mode),
+        require_runtime_index=bool(args.require_runtime_index),
+        no_require_repo_smoke=bool(args.no_require_repo_smoke),
+        no_require_phase5_summary=bool(args.no_require_phase5_summary),
+        no_require_offline_validation=bool(
+            args.no_require_offline_validation
+        ),
+    )
 
     result = evaluate_gate(
         repo_smoke_path=repo_smoke_path,
         phase5_summary_path=phase5_summary_path,
         offline_validation_path=offline_validation_path,
+        runtime_index_path=runtime_index_path,
         policy_config_path=policy_config_path,
-        
+
         runtime_baseline_path=runtime_baseline_path,
         mutation_plan_path=mutation_plan_path,
         persistence_contract_path=persistence_contract_path,
-        runtime_verification_contract_path=runtime_verification_contract_path,
-        runtime_verification_acceptance_path=runtime_verification_acceptance_path,
+        runtime_verification_contract_path=(
+            runtime_verification_contract_path
+        ),
+        runtime_verification_acceptance_path=(
+            runtime_verification_acceptance_path
+        ),
         runtime_certification_path=runtime_certification_path,
         path_a_operational_path=path_a_operational_path,
-        
-        runtime_index_path=runtime_index_path,
-        
-        options=GateOptions(
-            require_repo_smoke=req_repo_smoke,
-            require_phase5_summary=req_phase5,
-            require_offline_validation=req_offline_val,
-            allow_zero_failed_cases_only=allow_zero_failed_only,
-            require_runtime_index=bool(args.require_runtime_index),
-        ),
+
+        options=options,
     )
 
     out_path = Path(args.output)
-    out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    out_path.write_text(
+        json.dumps(
+            result,
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
     if result["allowed"]:
         print("[DEPLOYMENT-GATE][OK] Deployment gate passed")
@@ -1001,9 +1282,14 @@ def main() -> int:
 
     print("[DEPLOYMENT-GATE][FAIL] Deployment gate failed")
     print(f"[DEPLOYMENT-GATE][FAIL] Report: {out_path}")
+
     for item in result["checks"]:
         if item.get("passed") is False:
-            print(f"  - {item['check']}: {item.get('reason', 'unknown_reason')}")
+            print(
+                f"  - {item['check']}: "
+                f"{item.get('reason', 'unknown_reason')}"
+            )
+
     return 1
 
 if __name__ == "__main__":
