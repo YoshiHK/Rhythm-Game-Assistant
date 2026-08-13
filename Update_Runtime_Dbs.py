@@ -402,6 +402,12 @@ _BUCKET_CANONICAL_ROW_FAIL = "CANONICAL_ROW_FAIL"
 
 _BUCKET_UNKNOWN = "UNKNOWN"
 
+# --------------------------------------------------
+# Canonical Error Breakdown Contract
+# --------------------------------------------------
+
+CANONICAL_ERROR_SCHEMA_ID = "rga.canonical_error_breakdown.v1.0"
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
