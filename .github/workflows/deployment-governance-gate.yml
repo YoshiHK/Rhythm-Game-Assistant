@@ -45,7 +45,6 @@ jobs:
           gh --version         
 
       ############################################################
-      ############################################################
       # Download Artifacts (Triggering Run + Historic Baseline)
       ############################################################
 
@@ -78,14 +77,22 @@ jobs:
               if ($run.id -ne $env:RUN_ID) {
                 Write-Host "[GOVERNANCE-GATE] Attempting backhaul download from historic run ID: $($run.id)"
                 
+                # Download into run-specific folder to prevent zip overwrite collisions
+                $targetDir = ".\artifacts\historic_$($run.id)"
+                New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+
                 try {
-                  gh run download $run.id --dir .\artifacts
+                  gh run download $run.id --dir $targetDir
                 } catch {
                   # Ignore individual historic download failures
                 }
                 
-                # Re-check if contracts are resolved
-                $stillMissing = $missingContracts | Where-Object { -not (Test-Path ".\artifacts\$_") -and -not (Test-Path ".\artifacts\*\$_") }
+                # Re-check if missing contracts exist anywhere inside .\artifacts
+                $stillMissing = $missingContracts | Where-Object { 
+                  $contractName = $_
+                  -not (Get-ChildItem .\artifacts -Recurse -Filter $contractName -ErrorAction SilentlyContinue)
+                }
+
                 if (-not $stillMissing) {
                   Write-Host "[GOVERNANCE-GATE] All missing contracts successfully backhauled!"
                   break
