@@ -4313,7 +4313,26 @@ jobs:
           name: plan-audit-evidence
           path: artifacts/plan_audit_evidence.json
           if-no-files-found: warn
-
+          
+      ############################################################
+      # Bundle Governance Contracts for Deployment Gate
+      ############################################################
+      
+      - name: Bundle Governance Contracts for Deployment Gate
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-governance-contracts-bundle
+          path: |
+            artifacts/runtime_baseline.json
+            artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
+            artifacts/runtime_verification_contract.json
+            artifacts/runtime_verification_acceptance.json
+            artifacts/runtime_certification.json
+            artifacts/path_a_operational_contract.json
+            artifacts/lifecycle_event.json
+          if-no-files-found: warn
+          
       ############################################################
       # Upload Post Audit Contract
       ############################################################
