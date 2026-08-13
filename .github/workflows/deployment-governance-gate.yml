@@ -40,22 +40,30 @@ jobs:
         run: |
           gh --version         
 
-      - name: Download Triggering Runtime Auditor Artifacts
+      ############################################################
+      # Download All Artifacts
+      ############################################################
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: '*'
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Verify Downloaded Artifacts
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
-
-          # Download all artifacts attached to the triggering workflow run
-          gh run download $env:RUN_ID --dir .\artifacts
-
-          # Optional: If offline_validation_report or repo_smoke_summary are uploaded
-          # under separate jobs or runs, download them into .\artifacts as well
-          Write-Host "[GOVERNANCE-GATE] downloaded artifacts:"
-          Get-ChildItem .\artifacts -Recurse -File | Select-Object FullName
-
+          
+          Write-Host "[GOVERNANCE-GATE] Downloaded artifacts in .\artifacts :"
+          $files = Get-ChildItem .\artifacts -Recurse -File
+          if ($files) {
+              $files | Select-Object FullName
+          } else {
+              Write-Host "[GOVERNANCE-GATE][WARN] No artifacts found in .\artifacts"
+          }
 
       # --------------------------------------------------
       # Governance Artifact Inventory
