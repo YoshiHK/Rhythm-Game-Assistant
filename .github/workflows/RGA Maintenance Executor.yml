@@ -2068,13 +2068,11 @@ jobs:
       - name: Upload Database Mutation Plan
         if: ${{ always() && inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
-
         with:
           name: rga-database-mutation-plan
-
           path: |
+            artifacts/database_mutation_plan.json
             artifacts/**/database_mutation_plan.json
-
           if-no-files-found: warn
 
       ############################################################
@@ -2085,14 +2083,13 @@ jobs:
       - name: Upload Persistence Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
         uses: actions/upload-artifact@v4
-
         with:
           name: rga-persistence-contract
-
           path: |
+            artifacts/persistence_contract.json
             artifacts/**/persistence_contract.json
-
           if-no-files-found: warn
+
           
       ############################################################
       # Upload Dry Run Evidence
