@@ -21,3 +21,20 @@ validation_rules:
   require_repo_smoke_summary: false
   require_offline_validation_report: false
   require_feedback_case_determinism: false
+  
+  # Stage 1: Runtime Baseline
+  require_runtime_baseline: true
+
+  # Stage 2 & 3: Database Mutation Policy / Plan
+  require_database_mutation_policy: true
+
+  # Stage 4: Persistence Contract
+  require_persistence_contract: true
+
+  # Stages 5-8 (Already enabled / operational)
+  require_runtime_verification_acceptance: true
+  require_runtime_certification: true
+  require_path_a_operational: true
+  require_runtime_verification_contract: true
+
+  
