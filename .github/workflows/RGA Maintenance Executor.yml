@@ -2072,7 +2072,7 @@ jobs:
           name: rga-database-mutation-plan
           path: |
             artifacts/database_mutation_plan.json
-            artifacts/**/database_mutation_plan.json
+          
           if-no-files-found: warn
 
       ############################################################
@@ -2087,7 +2087,7 @@ jobs:
           name: rga-persistence-contract
           path: |
             artifacts/persistence_contract.json
-            artifacts/**/persistence_contract.json
+            
           if-no-files-found: warn
 
           
