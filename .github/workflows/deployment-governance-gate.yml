@@ -315,7 +315,14 @@ jobs:
           }
 
           foreach ($arg in $contracts.Keys) {
-            $file = Get-ChildItem .\artifacts -Recurse -Filter $contracts[$arg] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+            # Searches .\artifacts first, then falls back to root if not found in artifacts
+            $targetPattern = $contracts[$arg]
+            $file = Get-ChildItem .\artifacts -Recurse -Filter $targetPattern -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+
+            if (-not $file) {
+              $file = Get-ChildItem . -Filter $targetPattern -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+            }
+
             if ($file) {
               $args += $arg
               $args += $file.FullName
