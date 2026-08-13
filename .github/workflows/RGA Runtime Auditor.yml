@@ -62,8 +62,22 @@ jobs:
       ############################################################
 
       - name: Prepare Artifact Directory
+        shell: pwsh
         run: |
-          mkdir -p artifacts
+          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
+
+      ############################################################
+      # Download Backhaul Stage 1-4 Contracts from History
+      ############################################################
+      
+      - name: Backhaul Stage 1-4 Contracts from History
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.PAT_TOKEN }}
+          workflow: RGA Runtime Auditor.yml
+          path: artifacts
+        continue-on-error: true
+          
 
       ############################################################
       # Install Runtime Dependencies
