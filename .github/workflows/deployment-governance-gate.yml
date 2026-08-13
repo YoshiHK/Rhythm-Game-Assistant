@@ -333,6 +333,7 @@ jobs:
             ".\deployment_gate.py",
             "--output",
             ".\deployment_gate_report.json"
+            "--governance-mode"
           )
 
           # --------------------------------------------------
