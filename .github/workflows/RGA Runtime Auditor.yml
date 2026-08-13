@@ -67,17 +67,33 @@ jobs:
           New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
 
       ############################################################
+      # Resolve Artifact Download Token
+      ############################################################
+
+      - name: Resolve Artifact Download Token
+        id: artifact_token
+        shell: bash
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN_FALLBACK: ${{ github.token }}
+        run: |
+          if [ -n "$PAT_TOKEN" ]; then
+            echo "token=$PAT_TOKEN" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=$GH_TOKEN_FALLBACK" >> "$GITHUB_OUTPUT"
+          fi
+
+      ############################################################
       # Download Backhaul Stage 1-4 Contracts from History
       ############################################################
-      
+          
       - name: Backhaul Stage 1-4 Contracts from History
         uses: dawidd6/action-download-artifact@v6
         with:
-          github_token: ${{ secrets.PAT_TOKEN }}
-          workflow: RGA Runtime Auditor.yml
+          github_token: ${{ steps.artifact_token.outputs.token }}
+          workflow: RGA Maintenance Executor.yml
           path: artifacts
-        continue-on-error: true
-          
+          if_no_artifact_found: warn        
 
       ############################################################
       # Install Runtime Dependencies
