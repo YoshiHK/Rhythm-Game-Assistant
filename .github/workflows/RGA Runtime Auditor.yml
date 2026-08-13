@@ -93,7 +93,64 @@ jobs:
           github_token: ${{ steps.artifact_token.outputs.token }}
           workflow: RGA Maintenance Executor.yml
           path: artifacts
-          if_no_artifact_found: warn        
+          if_no_artifact_found: warn
+
+      ############################################################
+      # Import Local Runtime Baseline
+      #
+      # Bridge:
+      #
+      #   Run_UpdateRuntimeDbs.ps1
+      #         ↓
+      #   runtime_baseline.json
+      #         ↓
+      #   Runtime Auditor
+      #
+      # Stage 1:
+      #
+      #   Runtime Baseline Contract
+      #
+      ############################################################
+
+      - name: Import Local Runtime Baseline
+        shell: pwsh
+        run: |
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path .\artifacts | Out-Null
+
+          $baseline = Get-ChildItem `
+            . `
+            -Recurse `
+            -Filter "runtime_baseline.json" `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.FullName -notmatch "\\artifacts\\"
+            } |
+            Sort-Object LastWriteTime `
+            -Descending |
+            Select-Object -First 1
+
+          if ($baseline) {
+
+            Copy-Item `
+              $baseline.FullName `
+              ".\artifacts\runtime_baseline.json" `
+              -Force
+
+            Write-Host ""
+            Write-Host "[RUNTIME-AUDITOR] Runtime baseline imported"
+            Write-Host "Source      : $($baseline.FullName)"
+            Write-Host "Destination : .\artifacts\runtime_baseline.json"
+          }
+          else {
+
+            Write-Host ""
+            Write-Host "[RUNTIME-AUDITOR][WARN]"
+            Write-Host "No local runtime_baseline.json discovered."
+
+          }          
 
       ############################################################
       # Install Runtime Dependencies
@@ -4303,6 +4360,24 @@ jobs:
 
           path: |
             artifacts/path_a_operational.json
+
+          if-no-files-found: warn    
+
+      ############################################################
+      # Upload Runtime Baseline
+      #
+      # Stage 1 Contract
+      ############################################################
+
+      - name: Upload Runtime Baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: rga-runtime-baseline
+
+          path: |
+            artifacts/runtime_baseline.json
 
           if-no-files-found: warn          
 
