@@ -204,34 +204,29 @@ jobs:
 
           }
 
-          if ($baseline) {
+          $Destination =
+              (Resolve-Path ".\artifacts\runtime_baseline.json").Path
 
-            Copy-Item `
-              $baseline.FullName `
-              ".\artifacts\runtime_baseline.json" `
-              -Force
+          $Source =
+              (Resolve-Path $baseline.FullName).Path
 
-            Write-Host ""
-            Write-Host "[RUNTIME-AUDITOR] Runtime baseline imported"
-            Write-Host "Source      : $($baseline.FullName)"
-            Write-Host "Destination : .\artifacts\runtime_baseline.json"
+          if (
+              $Source -ieq $Destination
+          ) {
 
-            Get-Content `
-              ".\artifacts\runtime_baseline.json" `
-              -Raw |
-              Write-Host
+              Write-Host ""
+              Write-Host "[RUNTIME-AUDITOR] Runtime baseline already in canonical bridge location."
 
           }
           else {
 
-            Write-Host ""
-            Write-Host "[RUNTIME-AUDITOR][WARN]"
-            Write-Host "No runtime_baseline.json discovered."
-            Write-Host ""
-            Write-Host "Expected locations:"
-            Write-Host "  1. .\artifacts\runtime_baseline.json"
-            Write-Host "  2. .\artifacts\runtime_db_build_*\runtime_baseline.json"
-            Write-Host "  3. repo workspace fallback: **\runtime_baseline.json"
+              Copy-Item `
+                  $Source `
+                  $Destination `
+                  -Force
+
+              Write-Host ""
+              Write-Host "[RUNTIME-AUDITOR] Runtime baseline imported."
 
           }
 
