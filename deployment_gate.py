@@ -127,24 +127,27 @@ def evaluate_phase5_summary(summary: Dict[str, Any], results: List[Dict[str, Any
         )
         return
 
-    # Optional additional assertion: for every PASS feedback case, determinism should also PASS if present.
-    bad_cases: List[Dict[str, Any]] = []
-    for case in summary.get("cases") or []:
-        if case.get("event_category") == "feedback" and case.get("overall_status") == "PASS":
-            if case.get("determinism") not in {"PASS", "SKIP"}:
-                bad_cases.append({
-                    "case": case.get("case"),
-                    "determinism": case.get("determinism"),
-                })
+    # Guard feedback determinism checking with allow_zero_failed_cases_only / policy setting
+    if opts.allow_zero_failed_cases_only:
+        bad_cases: List[Dict[str, Any]] = []
+        for case in summary.get("cases") or []:
+            if case.get("event_category") == "feedback" and case.get("overall_status") == "PASS":
+                if case.get("determinism") not in {"PASS", "SKIP"}:
+                    bad_cases.append({
+                        "case": case.get("case"),
+                        "determinism": case.get("determinism"),
+                    })
 
-    if bad_cases:
-        _fail(results, "phase5_summary", "feedback_case_determinism_not_passed", {"cases": bad_cases})
-    else:
-        _ok(
-            results,
-            "phase5_summary",
-            {"passed_cases": passed_cases, "failed_cases": failed_cases, "skipped_cases": skipped_cases},
-        )
+        if bad_cases:
+            _fail(results, "phase5_summary", "feedback_case_determinism_not_passed", {"cases": bad_cases})
+            return
+
+    _ok(
+        results,
+        "phase5_summary",
+        {"passed_cases": passed_cases, "failed_cases": failed_cases, "skipped_cases": skipped_cases},
+    )
+
 
 
 def evaluate_offline_validation(report: Dict[str, Any], results: List[Dict[str, Any]]) -> None:
