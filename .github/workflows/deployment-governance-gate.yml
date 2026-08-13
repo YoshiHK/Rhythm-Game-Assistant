@@ -52,6 +52,16 @@ jobs:
           path: artifacts
         continue-on-error: true
 
+      - name: Download Runtime Baseline (Cross-Run)
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ github.token }}
+          workflow: rga-runtime-auditor.yml
+          name: rga-runtime-baseline
+          path: artifacts
+        continue-on-error: true
+        
+
       # Fallback download for artifacts uploaded directly in this run
       - name: Download Local Run Artifacts
         uses: actions/download-artifact@v4
