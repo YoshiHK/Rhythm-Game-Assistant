@@ -57,11 +57,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
 
           Write-Host "[GOVERNANCE-GATE] Downloading artifacts from triggering run $env:RUN_ID..."
-          try {
-            gh run download $env:RUN_ID --dir .\artifacts
-          } catch {
-            Write-Host "[GOVERNANCE-GATE][WARN] Primary download had warnings/errors."
-          }
+          cmd.exe /c "gh run download %RUN_ID% --dir .\artifacts 2>nul"
 
           # Check if early stage contracts are missing (e.g. runtime_baseline.json)
           $missingContracts = @("runtime_baseline.json", "database_mutation_plan.json", "persistence_contract.json") | 
@@ -72,7 +68,7 @@ jobs:
             Write-Host "[GOVERNANCE-GATE] Searching recent successful workflow runs for missing contracts..."
 
             # Query recent successful runs
-            $runs = gh api "repos/:owner/:repo/actions/runs?status=success&per_page=10" | ConvertFrom-Json
+            $runs = gh api "repos/:owner/:repo/actions/runs?status=success&per_page=15" | ConvertFrom-Json
             foreach ($run in $runs.workflow_runs) {
               if ($run.id -ne $env:RUN_ID) {
                 Write-Host "[GOVERNANCE-GATE] Attempting backhaul download from historic run ID: $($run.id)"
@@ -81,11 +77,10 @@ jobs:
                 $targetDir = ".\artifacts\historic_$($run.id)"
                 New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 
-                try {
-                  gh run download $run.id --dir $targetDir
-                } catch {
-                  # Ignore individual historic download failures
-                }
+                # Use cmd /c so gh exit code 1 (no valid artifacts) doesn't break PowerShell loop
+                $historicRunId = $run.id
+                cmd.exe /c "gh run download $historicRunId --dir $targetDir 2>nul"
+                $LASTEXITCODE = 0
                 
                 # Re-check if missing contracts exist anywhere inside .\artifacts
                 $stillMissing = $missingContracts | Where-Object { 
@@ -100,6 +95,7 @@ jobs:
               }
             }
           }
+
 
       - name: Verify Downloaded Artifacts
         shell: pwsh
