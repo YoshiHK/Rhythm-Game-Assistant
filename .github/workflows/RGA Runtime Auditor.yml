@@ -1,4 +1,4 @@
-name: Bot #1 - Runtime Auditor
+name: RGA Runtime Auditor
 
 on:
   workflow_dispatch:
