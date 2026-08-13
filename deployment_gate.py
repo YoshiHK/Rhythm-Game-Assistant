@@ -1166,7 +1166,34 @@ def evaluate_gate(
         for item in results
     )
 
-
+    return {
+        "allowed": allowed,
+        "checks": results,
+        "summary": {
+            "passed": sum(
+                1
+                for item in results
+                if item.get("passed") is True
+            ),
+            "failed": sum(
+                1
+                for item in results
+                if item.get("passed") is False
+            ),
+            "required_runtime_index": (
+                options.require_runtime_index
+            ),
+            "governance_mode": (
+                options.require_runtime_baseline
+                or options.require_database_mutation_policy
+                or options.require_persistence_contract
+                or options.require_runtime_verification_contract
+                or options.require_runtime_verification_acceptance
+                or options.require_runtime_certification
+                or options.require_path_a_operational
+            ),
+        },
+    }
 
 def _latest_json(patterns: Iterable[str]) -> Optional[Path]:
     candidates: List[Path] = []
@@ -1312,6 +1339,11 @@ def main() -> int:
 
         options=options,
     )
+    
+    if result is None:
+        raise RuntimeError(
+            "evaluate_gate() returned None."
+        )
 
     out_path = Path(args.output)
 
