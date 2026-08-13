@@ -49,6 +49,7 @@ class GateOptions:
     # Runtime Index
     require_runtime_index: bool = False
 
+
 REQUIRED_RUNTIME_STAGES: Tuple[str, ...] = (
     "scan",
     "ingestion",
@@ -911,14 +912,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--runtime-certification", default="", help="Path to runtime_certification.json")
     p.add_argument("--path-a-operational", default="", help="Path to path_a_operational.json")
     p.add_argument("--require-runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
+    p.add_argument("--no-require-repo-smoke", action="store_true", help="Override policy to skip repo smoke summary requirement")
+    p.add_argument("--no-require-phase5-summary", action="store_true", help="Override policy to skip Phase 5 summary requirement")
+    p.add_argument("--no-require-offline-validation", action="store_true", help="Override policy to skip offline validation requirement")
     p.add_argument("--output", default="deployment_gate_report.json", help="Output JSON report path")
     return p
-
 
 def main() -> int:
     args = build_arg_parser().parse_args()
     repo_smoke_path = _read_if_exists(args.repo_smoke_summary) or _latest_json(["repo_smoke_summary.json"])
-    phase5_summary_path = _read_if_exists(args.phase5_summary) or _latest_json(["test_case_summary.json"])
+    phase5_summary_path = _read_if_exists(args.phase5_summary) or _latest_json(["test_case_summary.json", "phase5_summary.json"])
     offline_validation_path = _read_if_exists(args.offline_validation_report) or _latest_json(["offline_validation_report.json"])
     policy_config_path = _read_if_exists(args.policy_config) or _read_if_exists("config/policy.yml") or _read_if_exists("config/policy.yaml")
     
@@ -931,6 +934,34 @@ def main() -> int:
     path_a_operational_path = _read_if_exists(args.path_a_operational) or _latest_json(["path_a_operational.json"])
     
     runtime_index_path = _read_if_exists(args.require_runtime_index) or _latest_json(["runtime_index.json"])
+
+    # Load validation_rules overrides from policy.yml if present
+    req_repo_smoke = True
+    req_phase5 = True
+    req_offline_val = True
+    allow_zero_failed_only = True
+
+    if policy_config_path and policy_config_path.exists():
+        try:
+            content = policy_config_path.read_text(encoding="utf-8")
+            if yaml:
+                policy_data = yaml.safe_load(content) or {}
+                v_rules = policy_data.get("validation_rules", {})
+                req_repo_smoke = v_rules.get("require_repo_smoke_summary", req_repo_smoke)
+                req_phase5 = v_rules.get("require_phase5_summary", req_phase5)
+                req_offline_val = v_rules.get("require_offline_validation_report", req_offline_val)
+                if "require_feedback_case_determinism" in v_rules:
+                    allow_zero_failed_only = v_rules.get("require_feedback_case_determinism")
+        except Exception:
+            pass
+
+    # CLI flags explicitly take precedence over policy file settings
+    if args.no_require_repo_smoke:
+        req_repo_smoke = False
+    if args.no_require_phase5_summary:
+        req_phase5 = False
+    if args.no_require_offline_validation:
+        req_offline_val = False
 
     result = evaluate_gate(
         repo_smoke_path=repo_smoke_path,
@@ -948,7 +979,13 @@ def main() -> int:
         
         runtime_index_path=runtime_index_path,
         
-        options=GateOptions(require_runtime_index=bool(args.require_runtime_index)),
+        options=GateOptions(
+            require_repo_smoke=req_repo_smoke,
+            require_phase5_summary=req_phase5,
+            require_offline_validation=req_offline_val,
+            allow_zero_failed_cases_only=allow_zero_failed_only,
+            require_runtime_index=bool(args.require_runtime_index),
+        ),
     )
 
     out_path = Path(args.output)
@@ -965,7 +1002,6 @@ def main() -> int:
         if item.get("passed") is False:
             print(f"  - {item['check']}: {item.get('reason', 'unknown_reason')}")
     return 1
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
