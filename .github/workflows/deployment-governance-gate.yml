@@ -299,12 +299,15 @@ jobs:
           }
 
           # --------------------------------------------------
-          # Governance Contracts
+          # Governance Contracts (Stages 1-8)
           # --------------------------------------------------
-          $contracts = @{
+          $contracts = [ordered]@{
+            # Stage 1-4 Contracts
             "--runtime-baseline"                = "runtime_baseline.json"
             "--database-mutation-plan"          = "database_mutation_plan.json"
             "--persistence-contract"            = "persistence_contract.json"
+            
+            # Stage 5-8 Contracts
             "--runtime-verification-contract"   = "runtime_verification_contract.json"
             "--runtime-verification-acceptance" = "runtime_verification_acceptance.json"
             "--runtime-certification"           = "runtime_certification.json"
@@ -316,9 +319,10 @@ jobs:
             if ($file) {
               $args += $arg
               $args += $file.FullName
+              Write-Host "[GOVERNANCE-GATE][INFO] Attached artifact for $arg : $($file.FullName)"
             }
             else {
-              Write-Host "[GOVERNANCE-GATE][WARN] Missing $($contracts[$arg])"
+              Write-Host "[GOVERNANCE-GATE][WARN] Missing artifact for $arg ($($contracts[$arg]))"
             }
           }
 
