@@ -184,11 +184,21 @@ jobs:
       - name: Lifecycle Event Validation
         shell: pwsh
         run: |
-          # Check .\artifacts first (recursively), fall back to root '.'
-          $event = Get-ChildItem .\artifacts -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
+          # Target triggering run's event specifically (exclude historic backhaul folders)
+          $event = Get-ChildItem .\artifacts -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch "historic_" } |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
 
+          # Fallback: Deep search excluding historic folders
+          if (-not $event) {
+            $event = Get-ChildItem .\artifacts -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -notmatch "historic_" } |
+              Sort-Object LastWriteTime |
+              Select-Object -Last 1
+          }
+
+          # Fallback: Root directory check
           if (-not $event) {
             $event = Get-ChildItem . -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime |
@@ -196,7 +206,7 @@ jobs:
           }
 
           if (-not $event) {
-            throw "lifecycle_event.json not found in .\artifacts or root directory."
+            throw "lifecycle_event.json not found in triggering run artifacts."
           }
 
           Write-Host "[GOVERNANCE-GATE] Validating lifecycle event file at: $($event.FullName)"
@@ -229,29 +239,34 @@ jobs:
             }
           }
 
-          # Check mode field (supports either audit_mode or executor_mode)
-          $hasMode = $json.PSObject.Properties.Name.Contains("audit_mode") -or $json.PSObject.Properties.Name.Contains("executor_mode")
+          # Check mode field (supports audit_mode, executor_mode, or legacy execution mode if fallback needed)
+          $hasMode = $json.PSObject.Properties.Name.Contains("audit_mode") -or 
+                     $json.PSObject.Properties.Name.Contains("executor_mode") -or
+                     $json.PSObject.Properties.Name.Contains("mode")
+
           if (-not $hasMode) {
             throw "Missing lifecycle mode field (expected 'audit_mode' or 'executor_mode')"
           }
 
-          $effectiveMode = if ($json.audit_mode) { $json.audit_mode } else { $json.executor_mode }
+          $effectiveMode = if ($json.audit_mode) { $json.audit_mode } elseif ($json.executor_mode) { $json.executor_mode } else { $json.mode }
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] [OK] Lifecycle event successfully validated!"
           Write-Host "  schema          : $($json.schema)"
           Write-Host "  mode            : $effectiveMode"
           Write-Host "  completed_stage : $($json.completed_stage)"
-          Write-Host "  next_stage      : $($json.next_stage)"            
+          Write-Host "  next_stage      : $($json.next_stage)"
+            
+      ############################################################
+      # Check Post-Audit Trigger
+      ############################################################
           
       - name: Check Post-Audit Trigger
         id: post_audit
         shell: pwsh
         run: |
-          $event = Get-ChildItem .\artifacts `
-            -Recurse `
-            -Filter "lifecycle_event.json" `
-            -ErrorAction SilentlyContinue |
+          $event = Get-ChildItem .\artifacts -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch "historic_" } |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
 
@@ -271,7 +286,8 @@ jobs:
           }
           else {
             "should_run=false" >> $env:GITHUB_OUTPUT
-          }          
+          }
+
           
       # --------------------------------------------------
       # Governance Preconditions
