@@ -3,7 +3,7 @@ name: Bot #1 - Runtime Auditor
 on:
   workflow_dispatch:
     inputs:
-      audit_stage:
+      audit_mode:
         description: "Stage in 10-step lifecycle loop"
         required: true
         default: "pre_audit"
@@ -34,6 +34,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
 
       ############################################################
       # Prepare Artifact Directory
