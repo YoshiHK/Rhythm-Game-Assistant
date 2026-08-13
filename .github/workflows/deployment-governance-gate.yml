@@ -41,6 +41,7 @@ jobs:
           gh --version         
 
       ############################################################
+      ############################################################
       # Download Artifacts (Triggering Run + Historic Baseline)
       ############################################################
 
@@ -53,7 +54,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
 
           Write-Host "[GOVERNANCE-GATE] Downloading artifacts from triggering run $env:RUN_ID..."
-          gh run download $env:RUN_ID --dir .\artifacts -ErrorAction SilentlyContinue
+          try {
+            gh run download $env:RUN_ID --dir .\artifacts
+          } catch {
+            Write-Host "[GOVERNANCE-GATE][WARN] Primary download had warnings/errors."
+          }
 
           # Check if early stage contracts are missing (e.g. runtime_baseline.json)
           $missingContracts = @("runtime_baseline.json", "database_mutation_plan.json", "persistence_contract.json") | 
@@ -63,12 +68,17 @@ jobs:
             Write-Host "[GOVERNANCE-GATE][WARN] Missing pre-approval contracts ($($missingContracts -join ', '))."
             Write-Host "[GOVERNANCE-GATE] Searching recent successful workflow runs for missing contracts..."
 
-            # Query recent successful runs of RGA Runtime Auditor
+            # Query recent successful runs
             $runs = gh api "repos/:owner/:repo/actions/runs?status=success&per_page=10" | ConvertFrom-Json
             foreach ($run in $runs.workflow_runs) {
               if ($run.id -ne $env:RUN_ID) {
                 Write-Host "[GOVERNANCE-GATE] Attempting backhaul download from historic run ID: $($run.id)"
-                gh run download $run.id --dir .\artifacts -ErrorAction SilentlyContinue
+                
+                try {
+                  gh run download $run.id --dir .\artifacts
+                } catch {
+                  # Ignore individual historic download failures
+                }
                 
                 # Re-check if contracts are resolved
                 $stillMissing = $missingContracts | Where-Object { -not (Test-Path ".\artifacts\$_") -and -not (Test-Path ".\artifacts\*\$_") }
@@ -79,8 +89,6 @@ jobs:
               }
             }
           }
-
-
 
       - name: Verify Downloaded Artifacts
         shell: pwsh
