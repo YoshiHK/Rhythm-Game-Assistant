@@ -1153,7 +1153,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--runtime-verification-acceptance", default="", help="Path to runtime_verification_acceptance.json")
     p.add_argument("--runtime-certification", default="", help="Path to runtime_certification.json")
     p.add_argument("--path-a-operational", default="", help="Path to path_a_operational.json")
-    p.add_argument("--require-runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
+    p.add_argument("--runtime-index", action="store_true", help="Require runtime_index.json to be present and valid")
     p.add_argument("--no-require-repo-smoke", action="store_true", help="Override policy to skip repo smoke summary requirement")
     p.add_argument("--no-require-phase5-summary", action="store_true", help="Override policy to skip Phase 5 summary requirement")
     p.add_argument("--no-require-offline-validation", action="store_true", help="Override policy to skip offline validation requirement")
