@@ -2051,33 +2051,17 @@ jobs:
           if-no-files-found: warn
 
       ############################################################
-      # Upload Database Mutation Plan Artifact
+      # Upload Database Mutation Plan & Persistence Contract
       ############################################################
 
-      - name: Upload Database Mutation Plan
-        if: ${{ always() && inputs.executor_mode == 'plan' }}
+      - name: Upload Database Mutation Plan & Persistence Contract
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rga-database-mutation-plan
           path: |
-            artifacts/database_mutation_plan.json
-          if-no-files-found: warn
-
-
-      ############################################################
-      # Upload Persistence Contract Artifact
-      ############################################################
-
-      - name: Upload Persistence Contract
-        if: ${{ always() && inputs.executor_mode == 'plan' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: rga-persistence-contract
-          path: |
-            artifacts/persistence_contract.json
-          if-no-files-found: warn
-
-
+            database_mutation_plan.json
+            persistence_contract.json
           
       ############################################################
       # Upload Dry Run Evidence
@@ -2097,6 +2081,7 @@ jobs:
             artifacts/runtime_executor_stderr_summary.json
             artifacts/runtime_executor_exit_code.txt
           if-no-files-found: warn
+          
       ############################################################
       # Upload Execute Evidence
       ############################################################
