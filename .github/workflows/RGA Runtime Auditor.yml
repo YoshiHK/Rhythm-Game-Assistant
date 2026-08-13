@@ -1,4 +1,4 @@
-name: RGA Runtime Auditor
+name: Bot #1 - Runtime Auditor
 
 on:
   workflow_dispatch:
@@ -25,9 +25,19 @@ on:
         default: ""
 
       execution_plan:
-        description: "Path to execution plan artifact for plan_audit stage"
+        description: "Path to execution plan artifact"
         required: false
         default: "artifacts/execution_plan.json"
+
+      pre_audit_report:
+        description: "Path to pre-audit report artifact"
+        required: false
+        default: "artifacts/runtime_auditor_report.json"
+
+      post_audit_report:
+        description: "Path to post-audit report artifact"
+        required: false
+        default: "artifacts/post_audit_report.json"
 
 jobs:
   audit-execution:
@@ -45,6 +55,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
 
       ############################################################
       # Prepare Artifact Directory
