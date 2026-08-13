@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
   actions: read
+  
+concurrency:
+  group: deployment-governance-gate-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deployment-governance-gate:
