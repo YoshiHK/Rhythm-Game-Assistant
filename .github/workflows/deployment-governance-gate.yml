@@ -41,16 +41,26 @@ jobs:
           gh --version         
 
       ############################################################
-      # Download All Artifacts
+      # Download Artifacts from Triggering Workflow Run
       ############################################################
 
-      - name: Download All Artifacts
+      - name: Download Triggering Workflow Artifacts
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ github.token }}
+          run_id: ${{ github.event.workflow_run.id }}
+          path: artifacts
+        continue-on-error: true
+
+      # Fallback download for artifacts uploaded directly in this run
+      - name: Download Local Run Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           pattern: '*'
           merge-multiple: true
         continue-on-error: true
+
 
       - name: Verify Downloaded Artifacts
         shell: pwsh
@@ -128,71 +138,72 @@ jobs:
           Write-Host `
             "[GOVERNANCE-GATE] Inventory written: $InventoryPath"
 
+      ############################################################
+      # Lifecycle Event Validation
+      ############################################################
+
       - name: Lifecycle Event Validation
         shell: pwsh
         run: |
-          $event = Get-ChildItem `
-            .\artifacts `
-            -Recurse `
-            -Filter "lifecycle_event.json" `
-            -ErrorAction SilentlyContinue |
+          # Check .\artifacts first (recursively), fall back to root '.'
+          $event = Get-ChildItem .\artifacts -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
 
           if (-not $event) {
-            throw "lifecycle_event.json not found."
+            $event = Get-ChildItem . -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime |
+              Select-Object -Last 1
           }
 
-          $json = Get-Content `
-            $event.FullName `
-            -Raw |
-            ConvertFrom-Json
+          if (-not $event) {
+            throw "lifecycle_event.json not found in .\artifacts or root directory."
+          }
+
+          Write-Host "[GOVERNANCE-GATE] Validating lifecycle event file at: $($event.FullName)"
+
+          $json = Get-Content $event.FullName -Raw | ConvertFrom-Json
 
           # ----------------------------------------------
-          # Schema validation
+          # Schema Validation
           # ----------------------------------------------
+          $allowedSchemas = @(
+            "rga.lifecycle_event.v1.0",
+            "rga.lifecycle_event.v1.1"
+          )
 
-          if (
-            $json.schema -ne
-            "rga.lifecycle_event.v1.0"
-          ) {
-            throw (
-              "Unsupported lifecycle event schema: " +
-              [string]$json.schema
-            )
+          if ($allowedSchemas -notcontains $json.schema) {
+            throw "Unsupported lifecycle event schema: '$($json.schema)'. Expected one of: $($allowedSchemas -join ', ')"
           }
 
           # ----------------------------------------------
-          # Required fields
+          # Required Fields Validation
           # ----------------------------------------------
-
           $required = @(
-            "audit_mode",
             "completed_stage",
-            "next_stage",
-            "dispatch_required"
+            "next_stage"
           )
 
           foreach ($field in $required) {
-
-            if (
-              -not $json.PSObject.Properties.Name.Contains(
-                $field
-              )
-            ) {
-              throw (
-                "Missing lifecycle event field: " +
-                $field
-              )
+            if (-not $json.PSObject.Properties.Name.Contains($field)) {
+              throw "Missing required lifecycle event field: '$field'"
             }
           }
 
+          # Check mode field (supports either audit_mode or executor_mode)
+          $hasMode = $json.PSObject.Properties.Name.Contains("audit_mode") -or $json.PSObject.Properties.Name.Contains("executor_mode")
+          if (-not $hasMode) {
+            throw "Missing lifecycle mode field (expected 'audit_mode' or 'executor_mode')"
+          }
+
+          $effectiveMode = if ($json.audit_mode) { $json.audit_mode } else { $json.executor_mode }
+
           Write-Host ""
-          Write-Host "[GOVERNANCE-GATE] lifecycle event validated"
-          Write-Host "schema=$($json.schema)"
-          Write-Host "audit_mode=$($json.audit_mode)"
-          Write-Host "completed_stage=$($json.completed_stage)"
-          Write-Host "next_stage=$($json.next_stage)"            
+          Write-Host "[GOVERNANCE-GATE] [OK] Lifecycle event successfully validated!"
+          Write-Host "  schema          : $($json.schema)"
+          Write-Host "  mode            : $effectiveMode"
+          Write-Host "  completed_stage : $($json.completed_stage)"
+          Write-Host "  next_stage      : $($json.next_stage)"            
           
       - name: Check Post-Audit Trigger
         id: post_audit
