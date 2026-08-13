@@ -383,14 +383,14 @@ jobs:
           path: |
             deployment_gate_report.json
             artifacts/governance_artifact_inventory.txt
-            artifacts/**/runtime_baseline.json
-            artifacts/**/database_mutation_plan.json
-            artifacts/**/persistence_contract.json
-            artifacts/**/runtime_verification_contract.json
-            artifacts/**/runtime_verification_acceptance.json
-            artifacts/**/runtime_certification.json
-            artifacts/**/path_a_operational.json
-            artifacts/**/runtime_index.json
-            artifacts/**/lifecycle_event.json
+            artifacts/runtime_baseline.json
+            artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
+            artifacts/runtime_verification_contract.json
+            artifacts/runtime_verification_acceptance.json
+            artifacts/runtime_certification.json
+            artifacts/path_a_operational.json
+            artifacts/runtime_index.json
+            artifacts/lifecycle_event.json
 
           if-no-files-found: warn    
