@@ -672,11 +672,33 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
     }
 
     Assert-File $RuntimeBaselinePath "runtime_baseline.json"
-	
-	Copy-Item `
-		$RuntimeBaselinePath `
-		"$ArtifactsRoot\runtime_baseline.json" `
-		-Force	
+
+    # ------------------------------------------------------------
+    # Publish Canonical Runtime Baseline
+    #
+    # Governance Bridge:
+    #
+    #   runtime_db_build_<timestamp>
+    #           ↓
+    #   artifacts/runtime_baseline.json
+    #
+    # GitHub Runtime Auditor consumes the
+    # canonical path instead of timestamped bundles.
+    # ------------------------------------------------------------
+
+    Copy-Item `
+        $RuntimeBaselinePath `
+        (Join-Path $ArtifactsRoot "runtime_baseline.json") `
+        -Force
+
+    Write-Host ""
+    Write-Host "[RUNTIME BASELINE] Published canonical baseline:"
+    Write-Host "  $(Join-Path $ArtifactsRoot 'runtime_baseline.json')"
+
+    Assert-File `
+        (Join-Path $ArtifactsRoot "runtime_baseline.json") `
+        "canonical runtime_baseline.json"
+
 
     # ------------------------------------------------------------
     # Strict verification
