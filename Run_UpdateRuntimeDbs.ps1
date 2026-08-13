@@ -239,14 +239,22 @@ Write-Step "Update Runtime DBs - Environment"
 Push-Location $HarnessRoot
 
 try {
+
     # ------------------------------------------------------------
     # Phase 7 config path
     # ------------------------------------------------------------
 
-    $Phase7ConfigRoot = Join-Path $HarnessRoot "Phase 7 - Games Recommendation\config"
+    $Phase7ConfigRoot = Join-Path `
+        $HarnessRoot `
+        "Phase 7 - Games Recommendation\config"
 
-    Assert-File (Join-Path $Phase7ConfigRoot "games_loader.py") "Phase 7 games_loader.py"
-    Assert-File (Join-Path $Phase7ConfigRoot "games.json") "Phase 7 games.json"
+    Assert-File `
+        (Join-Path $Phase7ConfigRoot "games_loader.py") `
+        "Phase 7 games_loader.py"
+
+    Assert-File `
+        (Join-Path $Phase7ConfigRoot "games.json") `
+        "Phase 7 games.json"
 
     # ------------------------------------------------------------
     # PYTHONPATH
@@ -277,6 +285,22 @@ try {
 		Write-Host "JsonOut            : $JsonOutPath"
 	}
 
+    # ------------------------------------------------------------
+    # UTF-8 safety
+    #
+    # Prevent:
+    #   UnicodeEncodeError: cp950 ...
+    #
+    # when chart filenames contain
+    # Japanese / Unicode characters.
+    # ------------------------------------------------------------
+
+    $env:PYTHONUTF8 = "1"
+    $env:PYTHONIOENCODING = "utf-8"
+
+    Write-Host "PYTHONUTF8       : $env:PYTHONUTF8"
+    Write-Host "PYTHONIOENCODING : $env:PYTHONIOENCODING"
+	
     # ------------------------------------------------------------
     # Optional rebuild mode
     # ------------------------------------------------------------
@@ -648,6 +672,11 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
     }
 
     Assert-File $RuntimeBaselinePath "runtime_baseline.json"
+	
+	Copy-Item `
+		$RuntimeBaselinePath `
+		"$ArtifactsRoot\runtime_baseline.json" `
+		-Force	
 
     # ------------------------------------------------------------
     # Strict verification
