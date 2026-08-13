@@ -98,39 +98,111 @@ jobs:
       ############################################################
       # Import Local Runtime Baseline
       #
-      # Bridge:
+      # Stage 1 bridge:
       #
       #   Run_UpdateRuntimeDbs.ps1
-      #         ↓
-      #   runtime_baseline.json
-      #         ↓
-      #   Runtime Auditor
+      #     default output:
       #
-      # Stage 1:
+      #       artifacts/runtime_db_build_*/runtime_baseline.json
       #
-      #   Runtime Baseline Contract
+      #   Runtime Auditor canonical import:
+      #
+      #       artifacts/runtime_baseline.json
       #
       ############################################################
 
       - name: Import Local Runtime Baseline
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
           New-Item `
             -ItemType Directory `
             -Force `
             -Path .\artifacts | Out-Null
 
-          $baseline = Get-ChildItem `
-            . `
+          Write-Host ""
+          Write-Host "[RUNTIME-AUDITOR] Searching for local runtime_baseline.json"
+          Write-Host "------------------------------------------------------------"
+
+          # ------------------------------------------------------
+          # Candidate 1:
+          # Canonical governance bridge path
+          # ------------------------------------------------------
+
+          $candidateCanonical = Get-Item `
+            ".\artifacts\runtime_baseline.json" `
+            -ErrorAction SilentlyContinue
+
+          # ------------------------------------------------------
+          # Candidate 2:
+          # Run_UpdateRuntimeDbs.ps1 default report bundle path
+          #
+          #   artifacts/runtime_db_build_*/runtime_baseline.json
+          # ------------------------------------------------------
+
+          $candidateReportBundle = Get-ChildItem `
+            ".\artifacts" `
             -Recurse `
             -Filter "runtime_baseline.json" `
+            -File `
             -ErrorAction SilentlyContinue |
             Where-Object {
-              $_.FullName -notmatch "\\artifacts\\"
+              $_.FullName -match "runtime_db_build_"
             } |
             Sort-Object LastWriteTime `
             -Descending |
             Select-Object -First 1
+
+          # ------------------------------------------------------
+          # Candidate 3:
+          # Broad fallback within repo workspace
+          #
+          # Exclude common non-source / dependency / git folders.
+          # ------------------------------------------------------
+
+          $candidateFallback = Get-ChildItem `
+            "." `
+            -Recurse `
+            -Filter "runtime_baseline.json" `
+            -File `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.FullName -notmatch "\\.git\\" `
+              -and $_.FullName -notmatch "\\.venv\\" `
+              -and $_.FullName -notmatch "\\node_modules\\" `
+              -and $_.FullName -notmatch "\\artifacts\\runtime_baseline.json$"
+            } |
+            Sort-Object LastWriteTime `
+            -Descending |
+            Select-Object -First 1
+
+          $baseline = $null
+
+          if ($candidateCanonical) {
+
+            $baseline = $candidateCanonical
+
+            Write-Host "[RUNTIME-AUDITOR] Candidate selected: canonical bridge"
+            Write-Host "Source: $($baseline.FullName)"
+
+          }
+          elseif ($candidateReportBundle) {
+
+            $baseline = $candidateReportBundle
+
+            Write-Host "[RUNTIME-AUDITOR] Candidate selected: runtime_db_build report bundle"
+            Write-Host "Source: $($baseline.FullName)"
+
+          }
+          elseif ($candidateFallback) {
+
+            $baseline = $candidateFallback
+
+            Write-Host "[RUNTIME-AUDITOR] Candidate selected: fallback discovery"
+            Write-Host "Source: $($baseline.FullName)"
+
+          }
 
           if ($baseline) {
 
@@ -143,14 +215,25 @@ jobs:
             Write-Host "[RUNTIME-AUDITOR] Runtime baseline imported"
             Write-Host "Source      : $($baseline.FullName)"
             Write-Host "Destination : .\artifacts\runtime_baseline.json"
+
+            Get-Content `
+              ".\artifacts\runtime_baseline.json" `
+              -Raw |
+              Write-Host
+
           }
           else {
 
             Write-Host ""
             Write-Host "[RUNTIME-AUDITOR][WARN]"
-            Write-Host "No local runtime_baseline.json discovered."
+            Write-Host "No runtime_baseline.json discovered."
+            Write-Host ""
+            Write-Host "Expected locations:"
+            Write-Host "  1. .\artifacts\runtime_baseline.json"
+            Write-Host "  2. .\artifacts\runtime_db_build_*\runtime_baseline.json"
+            Write-Host "  3. repo workspace fallback: **\runtime_baseline.json"
 
-          }          
+          }
 
       ############################################################
       # Install Runtime Dependencies
