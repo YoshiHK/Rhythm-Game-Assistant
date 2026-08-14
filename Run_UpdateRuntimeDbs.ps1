@@ -778,7 +778,85 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
     else {
         Write-Host "Runtime DB baseline build completed." -ForegroundColor Green
     }
-}
+
+	# ------------------------------------------------------------
+    # GitHub API Commit & Push Trigger
+    # ------------------------------------------------------------
+    Write-Step "7) Push Runtime Baseline via GitHub API"
+
+    $RepoOwner = "YoshiHK" # Your GitHub username/org
+    $RepoName  = "Rhythm-Game-Assistant"
+    $Branch    = "main"
+    $FilePath  = "artifacts/runtime_baseline.json"
+    $LocalFile = Join-Path $ArtifactsRoot "runtime_baseline.json"
+
+    # Read file content and encode in Base64 for GitHub API
+    $FileBytes   = [System.IO.File]::ReadAllBytes($LocalFile)
+    $Base64Content = [System.Convert]::ToBase64String($FileBytes)
+
+    # Retrieve GitHub Token from environment variable
+    $GitHubToken = $env:PAT_TOKEN
+    if ([System.String]::IsNullOrWhiteSpace($GitHubToken)) {
+        throw "PAT_TOKEN environment variable is not set."
+    }
+
+    $Headers = @{
+        "Authorization" = "Bearer $GitHubToken"
+        "Accept"        = "application/vnd.github.v3+json"
+    }
+
+    # Check if file exists on remote branch to obtain its SHA (for updating)
+    $Uri = "https://api.github.com/repos/$RepoOwner/$RepoName/contents/$FilePath?ref=$Branch"
+    $Sha = $null
+
+    try {
+        $ExistingFile = Invoke-RestMethod -Uri $Uri -Method Get -Headers $Headers
+        $Sha = $ExistingFile.sha
+        Write-Host "Found existing remote file SHA: $Sha" -ForegroundColor Yellow
+    } catch {
+        Write-Host "Remote file does not exist yet. Will perform initial creation." -ForegroundColor Cyan
+    }
+
+    # Construct commit body
+    $CommitBody = @{
+        message = "auto(runtime): publish updated runtime_baseline.json [skip ci]"
+        content = $Base64Content
+        branch  = $Branch
+    }
+
+    if ($Sha) {
+        $CommitBody["sha"] = $Sha
+    }
+
+    $JsonBody = $CommitBody | ConvertTo-Json -Depth 5
+
+    # Push commit to GitHub via API
+    $PutUri = "https://api.github.com/repos/$RepoOwner/$RepoName/contents/$FilePath"
+    $Response = Invoke-RestMethod -Uri $PutUri -Method Put -Headers $Headers -Body $JsonBody -ContentType "application/json"
+
+    Write-Host "Successfully committed runtime_baseline.json via GitHub API!" -ForegroundColor Green
+    Write-Host "Commit SHA: $($Response.commit.sha)" -ForegroundColor DarkCyan
+
+    }
+
+    # ------------------------------------------------------------
+    # Dispatch RGA Lifecycle Runner Workflow
+    # ------------------------------------------------------------
+    Write-Step "8) Trigger RGA Lifecycle Runner"
+
+    $WorkflowUri = "https://api.github.com/repos/$RepoOwner/$RepoName/actions/workflows/RGA Lifecycle Runner.yml/dispatches"
+
+    $DispatchBody = @{
+        ref = $Branch
+        inputs = @{
+            trigger_source = "local_powershell_ingestion"
+        }
+    } | ConvertTo-Json
+
+    Invoke-RestMethod -Uri $WorkflowUri -Method Post -Headers $Headers -Body $DispatchBody -ContentType "application/json"
+
+    Write-Host "RGA Lifecycle Runner triggered successfully!" -ForegroundColor Green
+	
 finally {
     Pop-Location
 }
