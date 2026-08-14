@@ -779,8 +779,8 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
         Write-Host "Runtime DB baseline build completed." -ForegroundColor Green
     }
 
-	# ------------------------------------------------------------
-    # GitHub API Commit & Push Trigger
+    # ------------------------------------------------------------
+    # 7) GitHub API Commit & Push Trigger
     # ------------------------------------------------------------
     Write-Step "7) Push Runtime Baseline via GitHub API"
 
@@ -794,7 +794,7 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
     $FileBytes   = [System.IO.File]::ReadAllBytes($LocalFile)
     $Base64Content = [System.Convert]::ToBase64String($FileBytes)
 
-    # Retrieve GitHub Token from environment variable
+    # Retrieve GitHub PAT Token from environment variable
     $GitHubToken = $env:PAT_TOKEN
     if ([System.String]::IsNullOrWhiteSpace($GitHubToken)) {
         throw "PAT_TOKEN environment variable is not set."
@@ -818,8 +818,9 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
     }
 
     # Construct commit body
+    # NOTE: Removed [skip ci] so PAT_TOKEN push triggers downstream auditing steps
     $CommitBody = @{
-        message = "auto(runtime): publish updated runtime_baseline.json [skip ci]"
+        message = "auto(runtime): publish updated runtime_baseline.json"
         content = $Base64Content
         branch  = $Branch
     }
@@ -836,27 +837,8 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
 
     Write-Host "Successfully committed runtime_baseline.json via GitHub API!" -ForegroundColor Green
     Write-Host "Commit SHA: $($Response.commit.sha)" -ForegroundColor DarkCyan
-
-    }
-
-    # ------------------------------------------------------------
-    # Dispatch RGA Lifecycle Runner Workflow
-    # ------------------------------------------------------------
-    Write-Step "8) Trigger RGA Lifecycle Runner"
-
-    $WorkflowUri = "https://api.github.com/repos/$RepoOwner/$RepoName/actions/workflows/RGA Lifecycle Runner.yml/dispatches"
-
-    $DispatchBody = @{
-        ref = $Branch
-        inputs = @{
-            trigger_source = "local_powershell_ingestion"
-        }
-    } | ConvertTo-Json
-
-    Invoke-RestMethod -Uri $WorkflowUri -Method Post -Headers $Headers -Body $DispatchBody -ContentType "application/json"
-
-    Write-Host "RGA Lifecycle Runner triggered successfully!" -ForegroundColor Green
 }	
+
 finally {
     Pop-Location
 }
