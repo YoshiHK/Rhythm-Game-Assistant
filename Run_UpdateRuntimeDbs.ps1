@@ -856,7 +856,7 @@ print(f"[RUNTIME BASELINE] total_records={total_records}")
     Invoke-RestMethod -Uri $WorkflowUri -Method Post -Headers $Headers -Body $DispatchBody -ContentType "application/json"
 
     Write-Host "RGA Lifecycle Runner triggered successfully!" -ForegroundColor Green
-	
+}	
 finally {
     Pop-Location
 }
