@@ -293,6 +293,8 @@ jobs:
           EXECUTION_APPROVAL=""
 
           TRIGGER_SOURCE="unknown"
+          
+          BACKHAUL_OVERRIDE="false"
 
           ######################################################
           # workflow_dispatch
@@ -411,6 +413,11 @@ jobs:
             #   REF_INPUT must stay on the runtime-baseline branch,
             #   not main, so downstream Bot #1 can see the committed
             #   artifacts/runtime_baseline.json.
+            #
+            # Also important:
+            #
+            #   This is a NEW lifecycle session.
+            #   It must not inherit an old lifecycle_backhaul.json.
             ######################################################
 
             case "${DEFAULT_REF:-}" in
@@ -425,11 +432,15 @@ jobs:
 
                 TRIGGER_SOURCE="runtime_baseline_push"
 
+                BACKHAUL_OVERRIDE="true"
+
                 echo "runtime baseline push detected."
                 echo "branch=${DEFAULT_REF}"
                 echo "selected_stage=${STAGE}"
                 echo "ref_input=${REF_INPUT}"
                 echo "audit_session_id=${AUDIT_SESSION_ID}"
+                echo "trigger_source=${TRIGGER_SOURCE}"
+                echo "backhaul_override=${BACKHAUL_OVERRIDE}"
 
                 ;;
 
@@ -449,9 +460,15 @@ jobs:
 
                 TRIGGER_SOURCE="push"
 
+                BACKHAUL_OVERRIDE="false"
+
                 echo "push detected."
+                echo "branch=${DEFAULT_REF:-main}"
                 echo "selected_stage=${STAGE}"
+                echo "ref_input=${REF_INPUT}"
                 echo "audit_session_id=${AUDIT_SESSION_ID}"
+                echo "trigger_source=${TRIGGER_SOURCE}"
+                echo "backhaul_override=${BACKHAUL_OVERRIDE}"
 
                 ;;
 
@@ -509,6 +526,7 @@ jobs:
             echo "EXECUTION_APPROVAL=$EXECUTION_APPROVAL"
 
             echo "TRIGGER_SOURCE=$TRIGGER_SOURCE"
+            echo "BACKHAUL_OVERRIDE=$BACKHAUL_OVERRIDE"            
 
             echo "TRIGGERING_WORKFLOW=$TRIGGERING_WORKFLOW"
             echo "TRIGGERING_WORKFLOW_ID=$TRIGGERING_WORKFLOW_ID"
@@ -954,6 +972,53 @@ jobs:
 
           case "${TRIGGER_SOURCE:-}" in
 
+            runtime_baseline_push)
+
+              ####################################################
+              # Runtime Baseline Push
+              #
+              # This is a new lifecycle session created by:
+              #
+              #   PowerShell
+              #     ↓
+              #   github_lifecycle_bridge.py
+              #     ↓
+              #   commit artifacts/runtime_baseline.json
+              #     ↓
+              #   push runtime-baseline/update-*
+              #
+              # It must start at pre_audit.
+              # It must not inherit an old lifecycle_backhaul.json.
+              ####################################################
+
+              STAGE="pre_audit"
+              NEXT_STAGE="plan"
+              DISPATCH_REQUIRED="true"
+              WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
+              DISPATCH_INPUTS="$(
+                jq -cn \
+                  --arg audit_mode "pre_audit" \
+                  --arg audit_session_id "${AUDIT_SESSION_ID}" \
+                  '{
+                    audit_mode: $audit_mode,
+                    audit_session_id: $audit_session_id
+                  }'
+              )"
+
+              BACKHAUL_OVERRIDE="true"
+
+              REASON="Lifecycle initiated from runtime baseline push."
+
+              echo "runtime_baseline_push resolved."
+              echo "current_stage=${STAGE}"
+              echo "next_stage=${NEXT_STAGE}"
+              echo "workflow_file=${WORKFLOW_FILE}"
+              echo "dispatch_required=${DISPATCH_REQUIRED}"
+              echo "backhaul_override=${BACKHAUL_OVERRIDE}"
+
+              ;;
+
             push)
 
               STAGE="pre_audit"
@@ -1002,6 +1067,47 @@ jobs:
                 REASON="Triggering workflow did not complete successfully."
 
               else
+
+                ##################################################
+                # Runtime Baseline Push Backhaul Guard
+                #
+                # If this run is marked as a fresh runtime baseline
+                # lifecycle session, do not inherit old backhaul.
+                #
+                # This prevents:
+                #
+                #   runtime_baseline push
+                #     → stale lifecycle_backhaul.json
+                #     → post_audit
+                #
+                # Instead, the lifecycle must begin at:
+                #
+                #   pre_audit
+                ##################################################
+
+                if [ "${BACKHAUL_OVERRIDE:-false}" = "true" ]; then
+
+                  echo "Ignoring lifecycle_backhaul.json."
+                  echo "Reason: new lifecycle session."
+
+                  STAGE="pre_audit"
+                  NEXT_STAGE="plan"
+                  DISPATCH_REQUIRED="true"
+                  WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
+                  DISPATCH_INPUTS="$(
+                    jq -cn \
+                      --arg audit_mode "pre_audit" \
+                      --arg audit_session_id "${AUDIT_SESSION_ID}" \
+                      '{
+                        audit_mode: $audit_mode,
+                        audit_session_id: $audit_session_id
+                      }'
+                  )"
+
+                  REASON="Lifecycle initiated from runtime baseline push; backhaul ignored."
+
+                fi
 
                 ##################################################
                 # Backhaul-first resolution
@@ -1057,7 +1163,7 @@ jobs:
                 # Resolve from Backhaul
                 ##################################################
 
-                if [ -n "${BACKHAUL_FILE}" ]; then
+                if [ "${BACKHAUL_OVERRIDE:-false}" != "true" ] && [ -n "${BACKHAUL_FILE}" ]; then
 
                   echo "Lifecycle backhaul found: ${BACKHAUL_FILE}"
 
