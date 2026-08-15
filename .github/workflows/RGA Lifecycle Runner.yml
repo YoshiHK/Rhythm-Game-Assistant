@@ -364,6 +364,8 @@ jobs:
             echo "workflow_dispatch detected."
             echo "selected_stage=${STAGE}"
             echo "audit_session_id=${AUDIT_SESSION_ID}"
+            echo "RESOLVED_STAGE="
+            echo "NEXT_STAGE="
 
           ######################################################
           # workflow_run
@@ -1688,6 +1690,71 @@ jobs:
               ;;
 
           esac
+          
+          ##########################################################
+          # Export lifecycle routing outcome
+          #
+          # This is the handoff contract from:
+          #
+          #   Determine Next Lifecycle Stage
+          #
+          # to:
+          #
+          #   Write Lifecycle State
+          #   Write Lifecycle Event Contract
+          #   Dispatch Next Workflow
+          ##########################################################
+
+          if [ -z "${STAGE:-}" ]; then
+
+            echo "STAGE was not resolved." >&2
+            echo "TRIGGER_SOURCE=${TRIGGER_SOURCE:-unknown}" >&2
+            echo "BACKHAUL_OVERRIDE=${BACKHAUL_OVERRIDE:-false}" >&2
+
+            exit 1
+
+          fi
+
+          if [ -z "${DISPATCH_REQUIRED:-}" ]; then
+            DISPATCH_REQUIRED="false"
+          fi
+
+          if [ -z "${WORKFLOW_FILE:-}" ]; then
+            WORKFLOW_FILE=""
+          fi
+
+          if [ -z "${NEXT_STAGE:-}" ]; then
+            NEXT_STAGE=""
+          fi
+
+          if [ -z "${DISPATCH_INPUTS:-}" ]; then
+            DISPATCH_INPUTS="{}"
+          fi
+
+          if [ -z "${REASON:-}" ]; then
+            REASON="Lifecycle stage resolved."
+          fi
+
+          echo "Resolved lifecycle routing:"
+          echo "  STAGE=${STAGE}"
+          echo "  NEXT_STAGE=${NEXT_STAGE}"
+          echo "  DISPATCH_REQUIRED=${DISPATCH_REQUIRED}"
+          echo "  WORKFLOW_FILE=${WORKFLOW_FILE}"
+          echo "  AUDIT_SESSION_ID=${AUDIT_SESSION_ID}"
+          echo "  REASON=${REASON}"
+
+          {
+            echo "RESOLVED_STAGE=${STAGE}"
+            echo "NEXT_STAGE=${NEXT_STAGE}"
+            echo "DISPATCH_REQUIRED=${DISPATCH_REQUIRED}"
+            echo "WORKFLOW_FILE=${WORKFLOW_FILE}"
+            echo "AUDIT_SESSION_ID=${AUDIT_SESSION_ID}"
+            echo "LIFECYCLE_REASON=${REASON}"
+
+            echo "DISPATCH_INPUTS<<EOF_INPUTS"
+            echo "${DISPATCH_INPUTS}"
+            echo "EOF_INPUTS"
+          } >> "$GITHUB_ENV"
 
       ##########################################################
       # Write Lifecycle State
@@ -1700,6 +1767,15 @@ jobs:
 
           mkdir -p artifacts
 
+          if [ -z "${RESOLVED_STAGE:-}" ]; then
+
+            echo "RESOLVED_STAGE is missing." >&2
+            echo "Determine Next Lifecycle Stage did not export RESOLVED_STAGE." >&2
+
+            exit 1
+
+          fi
+
           COMPLETED_STAGES='[]'
           COMPLETED_COUNT=0
           PROGRESS_PERCENT=0
@@ -1710,7 +1786,7 @@ jobs:
 
           LIFECYCLE_STATUS="running"
 
-          case "${RESOLVED_STAGE}" in
+          case "${RESOLVED_STAGE:-unknown}" in
 
             pre_audit)
               COMPLETED_STAGES='["pre_audit"]'
@@ -1767,7 +1843,7 @@ jobs:
 
           if [ "${DISPATCH_REQUIRED:-false}" = "false" ] \
              && [ -z "${NEXT_STAGE:-}" ] \
-             && [ "${RESOLVED_STAGE}" = "post_audit" ]
+             && [ "${RESOLVED_STAGE:-unknown}" = "post_audit" ]
           then
             LIFECYCLE_STATUS="complete"
           fi
@@ -1778,7 +1854,7 @@ jobs:
             --arg trigger_wf "${TRIGGERING_WORKFLOW}" \
             --arg trigger_run "${TRIGGERING_RUN_ID}" \
             --arg trigger_conc "${TRIGGERING_CONCLUSION}" \
-            --arg current "${RESOLVED_STAGE}" \
+            --arg current "${RESOLVED_STAGE:-unknown}" \
             --arg next "${NEXT_STAGE}" \
             --arg status "${LIFECYCLE_STATUS}" \
             --argjson completed "${COMPLETED_STAGES}" \
@@ -1866,7 +1942,7 @@ jobs:
 
           LIFECYCLE_STATUS="running"
 
-          case "${RESOLVED_STAGE}" in
+          case "${RESOLVED_STAGE:-unknown}" in
 
             complete)
 
@@ -1901,7 +1977,7 @@ jobs:
           jq -n \
             --arg session "${AUDIT_SESSION_ID}" \
             --arg trigger_src "${TRIGGER_SOURCE}" \
-            --arg completed "${RESOLVED_STAGE}" \
+            --arg completed "${RESOLVED_STAGE:-unknown}" \
             --arg next "${EVENT_NEXT_STAGE}" \
             --arg lifecycle_status "${LIFECYCLE_STATUS}" \
             --arg wf "${WORKFLOW_FILE}" \
