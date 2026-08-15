@@ -1908,7 +1908,7 @@ jobs:
         if: always()
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.RGA_Access }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -2120,6 +2120,18 @@ jobs:
 
           echo "Dispatch payload:"
           cat /tmp/rga_lifecycle_dispatch_payload.json
+          
+          ########################################################
+          # Token diagnostics
+          ########################################################
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "GH_TOKEN is missing." >&2
+            exit 1
+          fi
+
+          echo "GH_TOKEN supplied."
+          echo "Token length: ${#GH_TOKEN}"          
 
           ########################################################
           # GitHub workflow_dispatch
