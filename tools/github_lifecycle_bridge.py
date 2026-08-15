@@ -225,16 +225,19 @@ def write_json(
     )
 
 
-def resolve_token(token_env: str) -> Optionalcandidates = [
+def resolve_token(
+    token_env: str,
+) -> Optional[str]:
+
+    candidates = [
         token_env,
         "PAT_TOKEN",
         "GH_TOKEN",
         "GITHUB_TOKEN",
     ]
 
-    seen = set()
+    seen =for name in candidates:
 
-    for name in candidates:
         if not name or name in seen:
             continue
 
@@ -246,7 +249,6 @@ def resolve_token(token_env: str) -> Optionalcandidates = [
             return value.strip()
 
     return None
-
 
 def repo_api_root(config: BridgeConfig) -> str:
     return (
