@@ -1899,16 +1899,25 @@ jobs:
       #
       #       workflow_run
       #
-      #   - Does not audit.
-      #   - Does not execute.
-      #   - Does not approve.
+      # Token policy:
+      #
+      #   - Pre-human_approval phases use PAT_TOKEN.
+      #
+      #   - Post-human_approval phases use github.token.
+      #
+      #   - Do not use secrets.GITHUB_TOKEN.
+      #     Use github.token for the built-in token.
+      #
+      #   - Do not print token values.
       ############################################################
 
       - name: Dispatch next workflow
         if: always()
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN_FALLBACK: ${{ github.token }}
+          GH_OWNER_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -1946,7 +1955,6 @@ jobs:
                 > artifacts/lifecycle_dispatch_result.json
 
               exit 0
-
               ;;
 
             halted)
@@ -1979,7 +1987,6 @@ jobs:
                 > artifacts/lifecycle_dispatch_result.json
 
               exit 0
-
               ;;
 
           esac
@@ -2068,6 +2075,86 @@ jobs:
           fi
 
           ########################################################
+          # Token selection policy
+          #
+          # Pre-human_approval:
+          #   pre_audit / plan / plan_audit
+          #   → PAT_TOKEN
+          #
+          # Post-human_approval:
+          #   execute / post_audit / complete / deployment-side
+          #   → github.token
+          #
+          # If NEXT_STAGE is available, prefer NEXT_STAGE because
+          # this step dispatches the next executable workflow.
+          ########################################################
+
+          TOKEN_STAGE="${NEXT_STAGE:-${RESOLVED_STAGE:-unknown}}"
+
+          PRE_HUMAN_APPROVAL="false"
+
+          case "${TOKEN_STAGE}" in
+            pre_audit|plan|plan_audit|human_approval)
+              PRE_HUMAN_APPROVAL="true"
+              ;;
+          esac
+
+          if [ "${PRE_HUMAN_APPROVAL}" = "true" ]; then
+            DISPATCH_TOKEN="${PAT_TOKEN:-}"
+            DISPATCH_TOKEN_SOURCE="secrets.PAT_TOKEN"
+          else
+            DISPATCH_TOKEN="${GITHUB_TOKEN_FALLBACK:-}"
+            DISPATCH_TOKEN_SOURCE="github.token"
+          fi
+
+          if [ -z "${DISPATCH_TOKEN}" ]; then
+
+            echo "Dispatch token is missing." >&2
+            echo "Token stage: ${TOKEN_STAGE}" >&2
+            echo "Expected token source: ${DISPATCH_TOKEN_SOURCE}" >&2
+
+            jq -n \
+              --arg current "${RESOLVED_STAGE:-unknown}" \
+              --arg next "${NEXT_STAGE:-}" \
+              --arg status "${LIFECYCLE_STATUS:-running}" \
+              --arg workflow "${WORKFLOW_FILE}" \
+              --arg ref "${REF_INPUT}" \
+              --arg token_stage "${TOKEN_STAGE}" \
+              --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
+              '{
+                schema: "rga.lifecycle_dispatch_result.v1.1",
+                dispatch_performed: false,
+                dispatch_created: false,
+                current_stage: $current,
+                next_stage: (
+                  if $next == ""
+                  then null
+                  else $next
+                  end
+                ),
+                lifecycle_status: $status,
+                target_workflow: $workflow,
+                ref: $ref,
+                reason: "dispatch token missing",
+                token_stage: $token_stage,
+                token_source: $token_source,
+                chronology_owner: "lifecycle_runner",
+                workflow_run_continuation_expected: true,
+                downstream_contract_expected: "artifacts/lifecycle_event.json",
+                downstream_backhaul_expected: "artifacts/lifecycle_backhaul.json",
+                downstream_resume_model: "workflow_run_contract_backhaul"
+              }' \
+              > artifacts/lifecycle_dispatch_result.json
+
+            exit 1
+
+          fi
+
+          echo "Dispatch token source: ${DISPATCH_TOKEN_SOURCE}"
+          echo "Dispatch token stage: ${TOKEN_STAGE}"
+          echo "Dispatch token length: ${#DISPATCH_TOKEN}"
+
+          ########################################################
           # Validate dispatch inputs
           ########################################################
 
@@ -2078,8 +2165,8 @@ jobs:
           ########################################################
 
           ENCODED_WORKFLOW="$(
-            printf '%s' "${WORKFLOW_FILE}" \
-              | jq -sRr @uri
+            printf '%s' "${WORKFLOW_FILE}" |
+              jq -sRr @uri
           )"
 
           ########################################################
@@ -2095,7 +2182,7 @@ jobs:
             }' \
             > /tmp/rga_lifecycle_dispatch_payload.json
 
-          API_URL="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
+          API_URL="https://api.github.com/repos/${GH_OWNER_REPO}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
 
           ########################################################
           # Dispatch diagnostics
@@ -2120,18 +2207,6 @@ jobs:
 
           echo "Dispatch payload:"
           cat /tmp/rga_lifecycle_dispatch_payload.json
-          
-          ########################################################
-          # Token diagnostics
-          ########################################################
-
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "GH_TOKEN is missing." >&2
-            exit 1
-          fi
-
-          echo "GH_TOKEN supplied."
-          echo "Token length: ${#GH_TOKEN}"          
 
           ########################################################
           # GitHub workflow_dispatch
@@ -2142,9 +2217,10 @@ jobs:
               -o /tmp/rga_lifecycle_dispatch_response.json \
               -w "%{http_code}" \
               -X POST \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "Content-Type: application/json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
               "$API_URL" \
               -d @/tmp/rga_lifecycle_dispatch_payload.json \
               || true
@@ -2157,6 +2233,18 @@ jobs:
           if [ "${HTTP_STATUS}" != "204" ]; then
 
             echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
+
+            if [ "${HTTP_STATUS}" = "401" ]; then
+              echo "::error::workflow_dispatch unauthorized. Check token source ${DISPATCH_TOKEN_SOURCE}." >&2
+            fi
+
+            if [ "${HTTP_STATUS}" = "403" ]; then
+              echo "::error::workflow_dispatch forbidden. Check Actions permission / token scope." >&2
+            fi
+
+            if [ "${HTTP_STATUS}" = "404" ]; then
+              echo "::error::workflow file or repository not found for token." >&2
+            fi
 
             if [ "${HTTP_STATUS}" = "422" ]; then
               echo "::error::workflow_dispatch is not available or workflow file name is incorrect." >&2
@@ -2176,6 +2264,8 @@ jobs:
               --arg workflow "${WORKFLOW_FILE}" \
               --arg ref "${REF_INPUT}" \
               --arg http_status "${HTTP_STATUS}" \
+              --arg token_stage "${TOKEN_STAGE}" \
+              --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
               '{
                 schema: "rga.lifecycle_dispatch_result.v1.1",
                 dispatch_performed: false,
@@ -2191,6 +2281,8 @@ jobs:
                 target_workflow: $workflow,
                 ref: $ref,
                 http_status: $http_status,
+                token_stage: $token_stage,
+                token_source: $token_source,
                 reason: "workflow_dispatch failed",
                 chronology_owner: "lifecycle_runner",
                 workflow_run_continuation_expected: true,
@@ -2214,6 +2306,8 @@ jobs:
             --arg status "${LIFECYCLE_STATUS:-running}" \
             --arg workflow "${WORKFLOW_FILE}" \
             --arg ref "${REF_INPUT}" \
+            --arg token_stage "${TOKEN_STAGE}" \
+            --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
             '{
               schema: "rga.lifecycle_dispatch_result.v1.1",
               dispatch_performed: true,
@@ -2228,6 +2322,8 @@ jobs:
               lifecycle_status: $status,
               target_workflow: $workflow,
               ref: $ref,
+              token_stage: $token_stage,
+              token_source: $token_source,
               chronology_owner: "lifecycle_runner",
               workflow_run_continuation_expected: true,
               downstream_contract_expected: "artifacts/lifecycle_event.json",
