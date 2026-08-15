@@ -57,7 +57,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = ROOT / "artifacts"
 
 RUNTIME_BASELINE_SCHEMA = "rga.runtime_baseline.v1.0"
