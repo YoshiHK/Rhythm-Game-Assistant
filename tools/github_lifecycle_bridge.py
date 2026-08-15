@@ -236,7 +236,9 @@ def resolve_token(
         "GITHUB_TOKEN",
     ]
 
-    seen = for name in candidates:
+    seen = set()
+    
+    for name in candidates:
 
         if not name or name in seen:
             continue
