@@ -79,6 +79,7 @@ on:
   push:
     branches:
       - main
+      - "runtime-baseline/update-*"      
 
   ##############################################################
   # Manual Lifecycle Entry
@@ -203,6 +204,8 @@ on:
       - completed
     branches:
       - main
+      - "runtime-baseline/update-*"
+      
 concurrency:
   group: rga-lifecycle-${{ github.ref }}
   cancel-in-progress: false
@@ -388,17 +391,71 @@ jobs:
 
           elif [ "$EVENT_NAME" = "push" ]; then
 
-            STAGE="pre_audit"
+            ######################################################
+            # Runtime Baseline Push
+            #
+            # Bridge entry:
+            #
+            #   PowerShell
+            #     ↓
+            #   github_lifecycle_bridge.py
+            #     ↓
+            #   commit artifacts/runtime_baseline.json
+            #     ↓
+            #   push runtime-baseline/update-*
+            #
+            # This push is the lifecycle start signal.
+            #
+            # Important:
+            #
+            #   REF_INPUT must stay on the runtime-baseline branch,
+            #   not main, so downstream Bot #1 can see the committed
+            #   artifacts/runtime_baseline.json.
+            ######################################################
 
-            REF_INPUT="${DEFAULT_REF:-main}"
+            case "${DEFAULT_REF:-}" in
 
-            AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+              runtime-baseline/update-*)
 
-            TRIGGER_SOURCE="push"
+                STAGE="pre_audit"
 
-            echo "push detected."
-            echo "selected_stage=${STAGE}"
-            echo "audit_session_id=${AUDIT_SESSION_ID}"
+                REF_INPUT="${DEFAULT_REF}"
+
+                AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+
+                TRIGGER_SOURCE="runtime_baseline_push"
+
+                echo "runtime baseline push detected."
+                echo "branch=${DEFAULT_REF}"
+                echo "selected_stage=${STAGE}"
+                echo "ref_input=${REF_INPUT}"
+                echo "audit_session_id=${AUDIT_SESSION_ID}"
+
+                ;;
+
+              *)
+
+                ######################################################
+                # Generic Push
+                #
+                # Normal repository push entry.
+                ######################################################
+
+                STAGE="pre_audit"
+
+                REF_INPUT="${DEFAULT_REF:-main}"
+
+                AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+
+                TRIGGER_SOURCE="push"
+
+                echo "push detected."
+                echo "selected_stage=${STAGE}"
+                echo "audit_session_id=${AUDIT_SESSION_ID}"
+
+                ;;
+
+            esac
 
           ######################################################
           # fallback
@@ -1916,6 +1973,7 @@ jobs:
         shell: bash
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          RGA_ACCESS: ${{ secrets.RGA_Access }}
           GITHUB_TOKEN_FALLBACK: ${{ github.token }}
           GH_OWNER_REPO: ${{ github.repository }}
         run: |
@@ -2078,15 +2136,12 @@ jobs:
           # Token selection policy
           #
           # Pre-human_approval:
-          #   pre_audit / plan / plan_audit
-          #   → PAT_TOKEN
+          #   pre_audit / plan / plan_audit / human_approval
+          #   → PAT_TOKEN or RGA_Access fallback
           #
           # Post-human_approval:
           #   execute / post_audit / complete / deployment-side
           #   → github.token
-          #
-          # If NEXT_STAGE is available, prefer NEXT_STAGE because
-          # this step dispatches the next executable workflow.
           ########################################################
 
           TOKEN_STAGE="${NEXT_STAGE:-${RESOLVED_STAGE:-unknown}}"
@@ -2100,11 +2155,25 @@ jobs:
           esac
 
           if [ "${PRE_HUMAN_APPROVAL}" = "true" ]; then
-            DISPATCH_TOKEN="${PAT_TOKEN:-}"
-            DISPATCH_TOKEN_SOURCE="secrets.PAT_TOKEN"
+
+            if [ -n "${PAT_TOKEN:-}" ]; then
+              DISPATCH_TOKEN="${PAT_TOKEN}"
+              DISPATCH_TOKEN_SOURCE="secrets.PAT_TOKEN"
+
+            elif [ -n "${RGA_ACCESS:-}" ]; then
+              DISPATCH_TOKEN="${RGA_ACCESS}"
+              DISPATCH_TOKEN_SOURCE="secrets.RGA_Access"
+
+            else
+              DISPATCH_TOKEN=""
+              DISPATCH_TOKEN_SOURCE="missing pre-human approval PAT"
+            fi
+
           else
+
             DISPATCH_TOKEN="${GITHUB_TOKEN_FALLBACK:-}"
             DISPATCH_TOKEN_SOURCE="github.token"
+
           fi
 
           if [ -z "${DISPATCH_TOKEN}" ]; then
