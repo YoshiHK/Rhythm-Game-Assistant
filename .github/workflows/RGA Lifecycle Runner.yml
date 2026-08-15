@@ -1251,7 +1251,7 @@ jobs:
                 # Resolve from Event Contract
                 ##################################################
 
-                elif [ -n "${EVENT_FILE}" ]; then
+                elif [ "${BACKHAUL_OVERRIDE:-false}" != "true" ] && [ -n "${EVENT_FILE}" ]; then
 
                   echo "Lifecycle event found: ${EVENT_FILE}"
 
@@ -1313,7 +1313,7 @@ jobs:
                 # Legacy Artifact Fallback
                 ##################################################
 
-                else
+                elif [ "${BACKHAUL_OVERRIDE:-false}" != "true" ]; then
 
                   echo "No lifecycle_backhaul.json found."
                   echo "No lifecycle_event.json found."
@@ -1406,8 +1406,13 @@ jobs:
                     REASON="No lifecycle_backhaul.json, lifecycle_event.json, or recognized legacy canonical artifact was found in triggering workflow artifacts."
 
                   fi
+                
+                else
 
-                fi
+                  echo "Lifecycle contract resolution skipped."
+                  echo "Reason: BACKHAUL_OVERRIDE=true"
+
+                fi                
 
               fi
 
@@ -1433,27 +1438,31 @@ jobs:
           ##########################################################
           # Canonical Lifecycle Routing
           #
-          # Executable stages:
+          # Stage Resolution decides:
           #
-          #   pre_audit
-          #   plan
-          #   plan_audit
-          #   human_approval
-          #   execute
-          #   post_audit
+          #   STAGE
           #
-          # Terminal statuses:
+          # Canonical Routing decides:
           #
-          #   complete
-          #   halted
+          #   WORKFLOW_FILE
+          #   NEXT_STAGE
+          #   DISPATCH_REQUIRED
+          #   DISPATCH_INPUTS
+          #
           ##########################################################
 
-          case "$STAGE" in
+          case "${STAGE}" in
+
+            ######################################################
+            # pre_audit
+            ######################################################
 
             pre_audit)
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
               NEXT_STAGE="plan"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1468,10 +1477,16 @@ jobs:
 
               ;;
 
+            ######################################################
+            # plan
+            ######################################################
+
             plan)
 
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
+
               NEXT_STAGE="plan_audit"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1488,9 +1503,16 @@ jobs:
 
               ;;
 
+            ######################################################
+            # plan_audit
+            ######################################################
+
             plan_audit)
+
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
               NEXT_STAGE="human_approval"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1503,44 +1525,68 @@ jobs:
                     audit_session_id: $session,
                     execution_plan: $plan
                   }'
-                )"
+              )"
+
               ;;
 
+            ######################################################
+            # human_approval
+            ######################################################
 
             human_approval)
 
-              NEXT_STAGE="execute"
-              DISPATCH_REQUIRED="false"
               WORKFLOW_FILE=""
+
+              NEXT_STAGE="execute"
+
+              DISPATCH_REQUIRED="false"
+
               DISPATCH_INPUTS="{}"
+
               REASON="Human approval checkpoint reached. Create or provide human_execution_approval.json before running execute."
 
               ;;
+
+            ######################################################
+            # execute
+            ######################################################
 
             execute)
 
               if [ -z "${EXECUTION_APPROVAL:-}" ]; then
 
                 STAGE="halted"
+
                 NEXT_STAGE=""
+
                 DISPATCH_REQUIRED="false"
+
                 WORKFLOW_FILE=""
+
                 DISPATCH_INPUTS="{}"
+
                 REASON="execution_approval missing."
 
               elif [ "${EXECUTION_APPROVAL}" != "APPROVE_RGA_EXECUTION" ]; then
 
                 STAGE="halted"
+
                 NEXT_STAGE=""
+
                 DISPATCH_REQUIRED="false"
+
                 WORKFLOW_FILE=""
+
                 DISPATCH_INPUTS="{}"
+
                 REASON="invalid execution_approval phrase."
 
               else
 
                 WORKFLOW_FILE="RGA Maintenance Executor.yml"
+
                 NEXT_STAGE="post_audit"
+
                 DISPATCH_REQUIRED="true"
 
                 DISPATCH_INPUTS="$(
@@ -1563,10 +1609,16 @@ jobs:
 
               ;;
 
+            ######################################################
+            # post_audit
+            ######################################################
+
             post_audit)
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
-              NEXT_STAGE=""
+
+              NEXT_STAGE="complete"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1585,53 +1637,57 @@ jobs:
 
               ;;
 
+            ######################################################
+            # complete
+            ######################################################
+
             complete)
 
-              NEXT_STAGE=""
-              DISPATCH_REQUIRED="false"
               WORKFLOW_FILE=""
+
+              NEXT_STAGE=""
+
+              DISPATCH_REQUIRED="false"
+
               DISPATCH_INPUTS="{}"
+
               REASON="Lifecycle complete."
 
               ;;
 
+            ######################################################
+            # halted
+            ######################################################
+
             halted)
 
-              NEXT_STAGE=""
-              DISPATCH_REQUIRED="false"
               WORKFLOW_FILE=""
+
+              NEXT_STAGE=""
+
+              DISPATCH_REQUIRED="false"
+
               DISPATCH_INPUTS="{}"
 
-              if [ -z "${REASON}" ]; then
+              if [ -z "${REASON:-}" ]; then
                 REASON="Lifecycle halted."
               fi
 
               ;;
 
+            ######################################################
+            # unsupported
+            ######################################################
+
             *)
 
-              echo "Unsupported resolved stage: $STAGE" >&2
+              echo "Unsupported resolved stage: ${STAGE}" >&2
+
               exit 1
 
               ;;
 
           esac
-
-          ##########################################################
-          # Export lifecycle routing outcome
-          ##########################################################
-
-          {
-            echo "RESOLVED_STAGE=$STAGE"
-            echo "NEXT_STAGE=$NEXT_STAGE"
-            echo "DISPATCH_REQUIRED=$DISPATCH_REQUIRED"
-            echo "WORKFLOW_FILE=$WORKFLOW_FILE"
-            echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
-            echo "LIFECYCLE_REASON=$REASON"
-            echo "DISPATCH_INPUTS<<EOF_INPUTS"
-            echo "$DISPATCH_INPUTS"
-            echo "EOF_INPUTS"
-          } >> "$GITHUB_ENV"
 
       ##########################################################
       # Write Lifecycle State
@@ -2254,6 +2310,13 @@ jobs:
             echo "REF_INPUT is empty but dispatch was required." >&2
             exit 1
           fi
+          
+          if [ "${DISPATCH_REQUIRED:-false}" = "true" ] && [ -z "${NEXT_STAGE:-}" ]; then
+            echo "NEXT_STAGE is empty while dispatch is required." >&2
+            echo "RESOLVED_STAGE=${RESOLVED_STAGE:-unknown}" >&2
+            echo "WORKFLOW_FILE=${WORKFLOW_FILE:-}" >&2
+            exit 1
+          fi          
 
           ########################################################
           # Tooling guard
@@ -2275,6 +2338,13 @@ jobs:
           #   execute / post_audit / complete / deployment-side
           #   → github.token
           ########################################################
+          
+          echo "Dispatch routing diagnostics:"
+          echo "  RESOLVED_STAGE=${RESOLVED_STAGE:-unknown}"
+          echo "  NEXT_STAGE=${NEXT_STAGE:-}"
+          echo "  WORKFLOW_FILE=${WORKFLOW_FILE:-}"
+          echo "  REF_INPUT=${REF_INPUT:-}"
+          echo "  DISPATCH_REQUIRED=${DISPATCH_REQUIRED:-false}"          
 
           TOKEN_STAGE="${NEXT_STAGE:-${RESOLVED_STAGE:-unknown}}"
 
