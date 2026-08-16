@@ -380,13 +380,13 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      origin_mode: ${{ steps.origin.outputs.origin_mode }}
-      lifecycle_category: ${{ steps.origin.outputs.lifecycle_category }}
+      origin_mode: ${{ steps.context.outputs.origin_mode }}
+      lifecycle_category: ${{ steps.context.outputs.lifecycle_category }}
 
     steps:
 
-      - name: Resolve Origin Mode
-        id: origin
+      - name: Resolve Lifecycle Context
+        id: context
 
         shell: bash
 
@@ -410,27 +410,14 @@ jobs:
 
             push)
 
-              #
-              # Push-triggered automation.
-              #
-              # Current governance model recognizes two
-              # automated origins:
-              #
-              #   powershell_auto
-              #   github_edit_auto
-              #
-              # The Runner records push_automation here.
-              #
-              # Detailed origin attribution should remain
-              # observational and must not affect routing.
-              #
-
               echo "origin_mode=push_automation" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_category=Automated" >> "$GITHUB_OUTPUT"
               ;;
 
             *)
 
               echo "origin_mode=unknown" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_category=Unknown" >> "$GITHUB_OUTPUT"
               ;;
 
           esac
