@@ -3371,6 +3371,19 @@ jobs:
           echo "Dispatched workflow '${WORKFLOW_FILE}' successfully."
           echo "Lifecycle dispatch result written:"
           cat artifacts/lifecycle_dispatch_result.json
+          
+      ########################################################
+      # Upload Lifecycle Dispatch Result
+      ########################################################
+
+      - name: Upload Lifecycle Dispatch Result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-lifecycle-dispatch-result
+          path: artifacts/lifecycle_dispatch_result.json
+          if-no-files-found: warn
+          retention-days: 30          
 
       ############################################################
       # Upload Lifecycle Event
