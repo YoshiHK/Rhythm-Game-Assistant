@@ -75,6 +75,109 @@ on:
   #   GitHub push → Lifecycle Runner path.
   #
   ##############################################################
+  #
+  # Origin Modes
+  #
+  # Lifecycle Runner recognizes different lifecycle origins.
+  #
+  # Origin Mode is a governance classification only.
+  #
+  # Origin Mode MUST NOT:
+  #
+  #   - modify lifecycle chronology
+  #   - alter stage sequencing
+  #   - introduce fallback routing
+  #   - bypass governance checks
+  #   - change completed phase behavior
+  #
+  # Origin Mode MAY:
+  #
+  #   - improve observability
+  #   - improve diagnostics
+  #   - explain execution context
+  #   - assist lifecycle investigation
+  #
+  ##############################################################
+  #
+  # Origin Mode: powershell_auto
+  #
+  # Entry Path:
+  #
+  #   Local PowerShell
+  #     ↓
+  #   Git Commit
+  #     ↓
+  #   Git Push
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Characteristics:
+  #
+  #   - local environment available
+  #   - runtime baseline commonly present  
+  #   - full automation path
+  #
+  ##############################################################
+  #
+  # Origin Mode: github_edit_auto
+  #
+  # Entry Path:
+  #
+  #   GitHub Web Editor
+  #     ↓
+  #   Commit
+  #     ↓
+  #   Push Event
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Characteristics:
+  #
+  #   - no local PowerShell invocation
+  #   - repository-only change source
+  #   - remains Runner-driven
+  #
+  ##############################################################
+  #
+  # Origin Mode: workflow_dispatch_manual
+  #
+  # Entry Path:
+  #
+  #   GitHub Actions
+  #     ↓
+  #   workflow_dispatch
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Characteristics:
+  #
+  #   - explicit operator initiation
+  #   - approval resume
+  #   - lifecycle recovery
+  #   - manual orchestration
+  #
+  ##############################################################
+  #
+  # Origin Mode: contract_continuation
+  #
+  # Entry Path:
+  #
+  #   Runtime Auditor
+  #     or
+  #   Maintenance Executor
+  #     ↓
+  #   workflow_run
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Characteristics:
+  #
+  #   - contract-driven continuation
+  #   - consumes lifecycle_event.json
+  #   - consumes lifecycle_backhaul.json
+  #   - preserves chronology ownership
+  #
+  ##############################################################
 
   push:
     branches:
@@ -272,40 +375,74 @@ permissions:
 
 jobs:
 
-  determine-source:
+  determine-origin:
 
     runs-on: ubuntu-latest
 
     outputs:
-      auto_source: ${{ steps.source.outputs.auto_source }}
+      origin_mode: ${{ steps.origin.outputs.origin_mode }}
 
     steps:
 
-      - name: Resolve AUTO_SOURCE
-        id: source
+      - name: Resolve Origin Mode
+        id: origin
 
         shell: bash
 
         run: |
 
-          REF="${GITHUB_REF_NAME}"
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
 
-          if [[ "$REF" == "main" ]]; then
-            echo "auto_source=main" >> "$GITHUB_OUTPUT"
+          case "$EVENT_NAME" in
 
-          elif [[ "$REF" == runtime-baseline/update-* ]]; then
-            echo "auto_source=runtime_baseline" >> "$GITHUB_OUTPUT"
+            workflow_run)
 
-          else
-            echo "auto_source=manual" >> "$GITHUB_OUTPUT"
-          fi
+              echo "origin_mode=contract_continuation" >> "$GITHUB_OUTPUT"
+              ;;
+
+            workflow_dispatch)
+
+              echo "origin_mode=workflow_dispatch_manual" >> "$GITHUB_OUTPUT"
+              ;;
+
+            push)
+
+              #
+              # Push-triggered automation.
+              #
+              # Current governance model recognizes two
+              # automated origins:
+              #
+              #   powershell_auto
+              #   github_edit_auto
+              #
+              # The Runner records push_automation here.
+              #
+              # Detailed origin attribution should remain
+              # observational and must not affect routing.
+              #
+
+              echo "origin_mode=push_automation" >> "$GITHUB_OUTPUT"
+              ;;
+
+            *)
+
+              echo "origin_mode=unknown" >> "$GITHUB_OUTPUT"
+              ;;
+
+          esac
 
   lifecycle-runner:
+  
+    needs:
+      - determine-origin
 
     runs-on: ubuntu-latest
+    
+    env:
+      ORIGIN_MODE: ${{ needs.determine-origin.outputs.origin_mode }}
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
         
@@ -2432,7 +2569,7 @@ jobs:
 
             echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
 
-            echo "- AUTO_SOURCE: \`${AUTO_SOURCE:-unknown}\`"
+            echo "- Origin mode: \`${ORIGIN_MODE:-unknown}\`"
 
             echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
 
@@ -2460,6 +2597,18 @@ jobs:
 
             echo ""
 
+            echo "### Origin Mode Reference"
+            echo ""
+
+            echo "| Origin Mode | Description |"
+            echo "|-------------|-------------|"
+            echo "| powershell_auto | Local PowerShell → Commit → Push → Lifecycle Runner |"
+            echo "| github_edit_auto | GitHub Web Edit → Commit → Push → Lifecycle Runner |"
+            echo "| workflow_dispatch_manual | Manual workflow_dispatch initiated by operator |"
+            echo "| contract_continuation | workflow_run continuation from Runtime Auditor or Maintenance Executor |"
+
+            echo ""
+
             if [ -n "${LIFECYCLE_REASON:-}" ]; then
               echo "### Reason"
               echo ""
@@ -2467,7 +2616,7 @@ jobs:
               echo ""
             fi
 
-          } >> "$GITHUB_STEP_SUMMARY"    
+          } >> "$GITHUB_STEP_SUMMARY"  
 
       ############################################################
       # Dispatch Next Workflow
