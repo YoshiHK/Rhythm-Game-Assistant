@@ -715,6 +715,13 @@ jobs:
             echo ""
             echo "Lifecycle event found:"
             echo "  ${UPSTREAM_EVENT_FILE}"
+            
+            echo ""
+            echo "===== CONSUMED EVENT ====="
+
+            cat artifacts/upstream_lifecycle_event.json
+
+            echo "=========================="            
 
           else
 
@@ -729,6 +736,13 @@ jobs:
 
             cp "${UPSTREAM_BACKHAUL_FILE}" \
               artifacts/upstream_lifecycle_backhaul.json
+              
+            echo ""
+            echo "===== CONSUMED BACKHAUL ====="
+
+            cat artifacts/upstream_lifecycle_backhaul.json
+
+            echo "============================="              
 
             echo ""
             echo "Lifecycle backhaul found:"
@@ -952,12 +966,50 @@ jobs:
           echo ""
           echo "Backhaul resolution:"
           cat artifacts/lifecycle_backhaul_resolution.json
+          
+          jq -n \
+            --arg run_id "${RUN_ID}" \
+            --arg workflow "${WORKFLOW_NAME}" \
+            --arg event_file "${UPSTREAM_EVENT_FILE}" \
+            --arg backhaul_file "${UPSTREAM_BACKHAUL_FILE}" \
+            --arg event_stage "${EVENT_NEXT_STAGE}" \
+            --arg backhaul_stage "${BACKHAUL_NEXT_STAGE}" \
+            --arg event_status "${EVENT_STATUS}" \
+            --arg backhaul_status "${BACKHAUL_STATUS}" \
+            '{
+              triggering_run_id: $run_id,
+              triggering_workflow: $workflow,
+
+              upstream_event_file: $event_file,
+
+              upstream_backhaul_file: $backhaul_file,
+
+              event_next_stage: $event_stage,
+ 
+              backhaul_next_stage: $backhaul_stage,
+
+              event_status: $event_status,
+
+              backhaul_status: $backhaul_status
+            }' \
+          > artifacts/contract_trace.json          
 
           echo ""
           echo "Artifact API response preview:"
           sed -n '1,120p' \
             artifacts/lifecycle_trigger_artifacts.json \
             || true
+            
+          ########################################################
+          # Upload Contract Trace
+          ########################################################            
+            
+          - name: Upload Contract Trace
+            if: always()
+            uses: actions/upload-artifact@v4
+            with:
+              name: rga-contract-trace
+              path: artifacts/contract_trace.json            
 
       ########################################################
       # Determine Next Lifecycle Stage
@@ -1019,6 +1071,12 @@ jobs:
               ####################################################
 
               STAGE="pre_audit"
+              
+              rm -f artifacts/upstream_lifecycle_backhaul.json || true
+
+              rm -f artifacts/upstream_lifecycle_event.json || true
+
+              rm -f artifacts/contract_trace.json || true              
 
               BACKHAUL_OVERRIDE="true"
 
