@@ -1241,6 +1241,34 @@ jobs:
                   BACKHAUL_SESSION="$(
                     jq -r '.audit_session_id // empty' "${BACKHAUL_FILE}"
                   )"
+                  
+                  ##################################################
+                  # Session Isolation
+                  #
+                  # Ignore lifecycle contracts created by a
+                  # different lifecycle session.
+                  ##################################################
+
+                  echo "Expected session: ${AUDIT_SESSION_ID}"
+
+                  echo "Backhaul session: ${BACKHAUL_SESSION}" 
+
+                  if [ -n "${BACKHAUL_SESSION}" ] \
+                     && [ -n "${AUDIT_SESSION_ID}" ] \
+                     && [ "${BACKHAUL_SESSION}" != "${AUDIT_SESSION_ID}" ]
+                  then
+
+                    echo ""
+                    echo "======================================"
+                    echo "Ignoring stale lifecycle_backhaul.json"
+                    echo "Expected: ${AUDIT_SESSION_ID}"
+                    echo "Found:    ${BACKHAUL_SESSION}"
+                    echo "======================================"
+                    echo ""
+
+                    BACKHAUL_FILE=""
+
+                  fi                  
 
                   BACKHAUL_STATUS="$(
                     jq -r '.lifecycle_status // "running"' "${BACKHAUL_FILE}"
