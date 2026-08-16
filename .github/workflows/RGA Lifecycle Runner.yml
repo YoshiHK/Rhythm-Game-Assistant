@@ -604,9 +604,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          ########################################################
+          # Clean lifecycle trigger workspace
+          #
+          # Prevent previous broad downloads or stale files from
+          # contaminating current lifecycle routing.
+          ########################################################
+
+          rm -rf lifecycle_trigger || true
+
           mkdir -p \
             artifacts \
-            lifecycle_trigger
+            lifecycle_trigger/rga-lifecycle-event \
+            lifecycle_trigger/rga-lifecycle-backhaul
 
           ########################################################
           # Diagnostics
@@ -653,8 +663,16 @@ jobs:
           ########################################################
 
           gh run download "${RUN_ID}" \
-            --dir lifecycle_trigger \
-            || true
+            -R "${{ github.repository }}" \
+            -n rga-lifecycle-event \
+            -D lifecycle_trigger/rga-lifecycle-event \
+            || echo "::warning::rga-lifecycle-event artifact not found."
+
+          gh run download "${RUN_ID}" \
+            -R "${{ github.repository }}" \
+            -n rga-lifecycle-backhaul \
+            -D lifecycle_trigger/rga-lifecycle-backhaul \
+            || echo "::warning::rga-lifecycle-backhaul artifact not found."
 
           ########################################################
           # Index downloaded files
@@ -685,7 +703,7 @@ jobs:
           ########################################################
 
           UPSTREAM_EVENT_FILE="$(
-            find lifecycle_trigger \
+            find lifecycle_trigger/rga-lifecycle-event \
               -type f \
               -name 'lifecycle_event.json' \
               -print \
@@ -694,7 +712,7 @@ jobs:
           )"
 
           UPSTREAM_BACKHAUL_FILE="$(
-            find lifecycle_trigger \
+            find lifecycle_trigger/rga-lifecycle-backhaul \
               -type f \
               -name 'lifecycle_backhaul.json' \
               -print \
@@ -992,7 +1010,7 @@ jobs:
 
               backhaul_status: $backhaul_status
             }' \
-          > artifacts/contract_trace.json          
+              > artifacts/contract_trace.json          
 
           echo ""
           echo "Artifact API response preview:"
@@ -1000,16 +1018,16 @@ jobs:
             artifacts/lifecycle_trigger_artifacts.json \
             || true
             
-          ########################################################
-          # Upload Contract Trace
-          ########################################################            
-            
-          - name: Upload Contract Trace
-            if: always()
-            uses: actions/upload-artifact@v4
-            with:
-              name: rga-contract-trace
-              path: artifacts/contract_trace.json            
+      ########################################################
+      # Upload Contract Trace
+      ########################################################            
+        
+      - name: Upload Contract Trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-contract-trace
+          path: artifacts/contract_trace.json            
 
       ########################################################
       # Determine Next Lifecycle Stage
