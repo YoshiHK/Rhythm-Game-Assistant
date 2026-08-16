@@ -1342,14 +1342,17 @@ jobs:
             
       ########################################################
       # Upload Contract Trace
-      ########################################################            
-        
+      ########################################################
+
       - name: Upload Contract Trace
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rga-contract-trace
-          path: artifacts/contract_trace.json            
+          path: |
+            artifacts/contract_trace.json
+            contract_trace.json
+          if-no-files-found: warn        
 
       ########################################################
       # Determine Next Lifecycle Stage
@@ -2032,7 +2035,7 @@ jobs:
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
 
-              NEXT_STAGE="complete"
+              NEXT_STAGE="governance_gate"
 
               DISPATCH_REQUIRED="true"
 
@@ -2051,6 +2054,34 @@ jobs:
               )"
 
               ;;
+              
+            ######################################################
+            # governance_gate
+            ######################################################
+
+            governance_gate)
+
+              WORKFLOW_FILE="deployment-governance-gate.yml"
+
+              NEXT_STAGE="complete"
+
+              DISPATCH_REQUIRED="true"
+
+              DISPATCH_INPUTS="$(
+                jq -c -n \
+                  --arg session "${AUDIT_SESSION_ID}" \
+                  --arg stage "governance_gate" \
+                  --arg ref "${REF:-main}" \
+                  '{
+                    audit_session_id: $session,
+                    lifecycle_stage: $stage,
+                    ref: $ref
+                  }'
+              )"
+
+              REASON="Post-audit completed. Dispatching Deployment Governance Gate."
+
+              ;;              
 
             ######################################################
             # complete
@@ -2260,42 +2291,48 @@ jobs:
             pre_audit)
               COMPLETED_STAGES='["pre_audit"]'
               COMPLETED_COUNT=1
-              PROGRESS_PERCENT=16.67
+              PROGRESS_PERCENT=12.50
               ;;
 
             plan)
               COMPLETED_STAGES='["pre_audit","plan"]'
               COMPLETED_COUNT=2
-              PROGRESS_PERCENT=33.33
+              PROGRESS_PERCENT=25.00
               ;;
 
             plan_audit)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit"]'
               COMPLETED_COUNT=3
-              PROGRESS_PERCENT=50.00
+              PROGRESS_PERCENT=37.50
               ;;
 
             human_approval)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval"]'
               COMPLETED_COUNT=4
-              PROGRESS_PERCENT=66.67
+              PROGRESS_PERCENT=50.00
               ;;
 
             execute)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute"]'
               COMPLETED_COUNT=5
-              PROGRESS_PERCENT=83.33
+              PROGRESS_PERCENT=62.50
               ;;
 
             post_audit)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
               COMPLETED_COUNT=6
-              PROGRESS_PERCENT=100.00
+              PROGRESS_PERCENT=75.00
+              ;;
+
+            governance_gate)
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit","governance_gate"]'
+              COMPLETED_COUNT=7
+              PROGRESS_PERCENT=87.50
               ;;
 
             complete)
-              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
-              COMPLETED_COUNT=6
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit","governance_gate","complete"]'
+              COMPLETED_COUNT=8
               PROGRESS_PERCENT=100.00
               LIFECYCLE_STATUS="complete"
               ;;
@@ -2307,15 +2344,18 @@ jobs:
           esac
 
           ########################################################
-          # Terminal lifecycle override
+          # No terminal override for post_audit
+          #
+          # post_audit is not terminal.
+          #
+          # Canonical lifecycle is:
+          #
+          #   post_audit
+          #     ↓
+          #   governance_gate
+          #     ↓
+          #   complete
           ########################################################
-
-          if [ "${DISPATCH_REQUIRED:-false}" = "false" ] \
-             && [ -z "${NEXT_STAGE:-}" ] \
-             && [ "${RESOLVED_STAGE:-unknown}" = "post_audit" ]
-          then
-            LIFECYCLE_STATUS="complete"
-          fi
 
           jq -n \
             --arg session "${AUDIT_SESSION_ID}" \
@@ -2333,7 +2373,7 @@ jobs:
             --argjson count ${COMPLETED_COUNT} \
             --argjson progress ${PROGRESS_PERCENT} \
             '{
-              schema: "rga.lifecycle_state.v1.4",
+              schema: "rga.lifecycle_state.v1.5",
 
               audit_session_id: $session,
 
@@ -2381,11 +2421,13 @@ jobs:
                 "plan_audit",
                 "human_approval",
                 "execute",
-                "post_audit"
+                "post_audit",
+                "governance_gate",
+                "complete"
               ],
 
               lifecycle_progress: {
-                stage_count: 6,
+                stage_count: 8,
                 completed_count: $count,
                 progress_percent: $progress
               }
@@ -2394,14 +2436,14 @@ jobs:
 
           echo "Lifecycle state written:"
           cat artifacts/lifecycle_state.json
-          
+
           ########################################################
           # Export lifecycle status for downstream steps
           ########################################################
 
           {
             echo "LIFECYCLE_STATUS=${LIFECYCLE_STATUS}"
-          } >> "$GITHUB_ENV"          
+          } >> "$GITHUB_ENV"        
           
       ############################################################
       # Write Lifecycle Event Contract
@@ -2439,13 +2481,30 @@ jobs:
 
             post_audit)
 
-              if [ "${DISPATCH_REQUIRED:-false}" = "false" ] \
-                 && [ -z "${NEXT_STAGE:-}" ]
-              then
+              ####################################################
+              # post_audit is not terminal.
+              #
+              # It must continue to:
+              #
+              #   governance_gate
+              #
+              # Completion is declared only after governance_gate.
+              ####################################################
 
-                LIFECYCLE_STATUS="complete"
+              LIFECYCLE_STATUS="running"
 
-              fi
+              ;;
+
+            governance_gate)
+
+              ####################################################
+              # governance_gate is the final governance checkpoint.
+              #
+              # It may dispatch the Deployment Governance Gate
+              # workflow and then hand off to complete.
+              ####################################################
+
+              LIFECYCLE_STATUS="running"
 
               ;;
 
@@ -2461,7 +2520,7 @@ jobs:
             --argjson dispatch ${EVENT_DISPATCH_REQUIRED} \
             '
             {
-              schema: "rga.lifecycle_event.v1.1",
+              schema: "rga.lifecycle_event.v1.2",
 
               audit_session_id: $session,
 
@@ -2503,6 +2562,7 @@ jobs:
                 bot_2_role: "planner_executor",
                 approval_authority: "human",
                 human_approval_required: true,
+                governance_gate_required: true,
                 completed_phases_remain_immutable: true
               }
             }' \
@@ -2559,14 +2619,61 @@ jobs:
             execute:post_audit)
               VALID="true"
               ;;
+              
+            post_audit:governance_gate)
+              VALID="true"
+              ;;
+
+            governance_gate:complete)
+              VALID="true"
+              ;;              
 
           esac
 
           ########################################################
-          # Intermediate transition states (Audit / Execute)
+          # Temporary Compatibility Rules
+          #
+          # Purpose:
+          #
+          #   Maintain compatibility with historical lifecycle
+          #   contracts during migration to the canonical:
+          #
+          #     pre_audit
+          #       → plan
+          #       → plan_audit
+          #       → human_approval
+          #       → execute
+          #       → post_audit
+          #       → governance_gate
+          #       → complete
+          #
+          # Important:
+          #
+          #   These rules intentionally accept certain
+          #   non-terminal running states that may originate
+          #   from older lifecycle contracts.
+          #
+          #   They MUST NOT become authoritative lifecycle
+          #   routing logic.
+          #
+          # TODO:
+          #
+          #   Remove after all lifecycle producers and
+          #   consumers are upgraded to the governance_gate
+          #   lifecycle model.
           ########################################################
 
-          # 1. Transitioning to Runtime Auditor from post_audit
+          # Legacy post_audit running state
+          #
+          # Example:
+          #
+          #   completed_stage = post_audit
+          #   dispatch_required = true
+          #   lifecycle_status = running
+          #
+          # This may appear during transition from older
+          # post_audit contracts.
+
           if [ "$COMPLETED_STAGE" = "post_audit" ] \
              && [ "$DISPATCH_REQUIRED" = "true" ] \
              && [ "$LIFECYCLE_STATUS" = "running" ]
@@ -2574,7 +2681,18 @@ jobs:
             VALID="true"
           fi
 
-          # 2. General non-terminal running state with dispatch
+          # Generic non-terminal running state
+          #
+          # Accepts historical lifecycle contracts that
+          # still declare:
+          #
+          #   next_stage
+          #   dispatch_required=true
+          #   lifecycle_status=running
+          #
+          # without requiring the Validator to infer stage
+          # ownership.
+
           if [ -n "$NEXT_STAGE" ] \
              && [ "$NEXT_STAGE" != "none" ] \
              && [ "$DISPATCH_REQUIRED" = "true" ] \
@@ -2587,16 +2705,7 @@ jobs:
           # Terminal lifecycle states
           ########################################################
 
-          # 1. Post-audit completed & lifecycle complete
-          if [ "$COMPLETED_STAGE" = "post_audit" ] \
-             && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
-             && [ "$LIFECYCLE_STATUS" = "complete" ] \
-             && [ "$DISPATCH_REQUIRED" = "false" ]
-          then
-            VALID="true"
-          fi
-
-          # 2. General terminal completion (catches stage="complete")
+          # 1. General terminal completion (catches stage="complete")
           if [ "$COMPLETED_STAGE" = "complete" ] \
              && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
              && [ "$LIFECYCLE_STATUS" = "complete" ] \
@@ -2605,7 +2714,7 @@ jobs:
             VALID="true"
           fi
 
-          # 3. Halted lifecycle state
+          # 2. Halted lifecycle state
           if [ "$COMPLETED_STAGE" = "halted" ] \
              && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
              && [ "$LIFECYCLE_STATUS" = "halted" ] \
