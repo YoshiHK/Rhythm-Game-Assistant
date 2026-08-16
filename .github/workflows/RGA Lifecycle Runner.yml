@@ -381,6 +381,7 @@ jobs:
 
     outputs:
       origin_mode: ${{ steps.origin.outputs.origin_mode }}
+      lifecycle_category: ${{ steps.origin.outputs.lifecycle_category }}
 
     steps:
 
@@ -398,11 +399,13 @@ jobs:
             workflow_run)
 
               echo "origin_mode=contract_continuation" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_category=Automated" >> "$GITHUB_OUTPUT"
               ;;
 
             workflow_dispatch)
 
               echo "origin_mode=workflow_dispatch_manual" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_category=Manual" >> "$GITHUB_OUTPUT"
               ;;
 
             push)
@@ -441,6 +444,7 @@ jobs:
     
     env:
       ORIGIN_MODE: ${{ needs.determine-origin.outputs.origin_mode }}
+      LIFECYCLE_CATEGORY: ${{ needs.determine-origin.outputs.lifecycle_category }}
 
     steps:
       - name: Checkout
@@ -2575,11 +2579,9 @@ jobs:
             echo ""
 
             echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
-
+            echo "- Lifecycle category: \`${LIFECYCLE_CATEGORY:-unknown}\`"
             echo "- Origin mode: \`${ORIGIN_MODE:-unknown}\`"
-
             echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
-
             echo "- Current stage: \`${RESOLVED_STAGE:-unknown}\`"
 
             if [ -n "${RUNNER_MODE:-}" ]; then
@@ -2667,12 +2669,12 @@ jobs:
             echo "### Origin Mode Reference"
             echo ""
 
-            echo "| Origin Mode | Description |"
-            echo "|-------------|-------------|"
-            echo "| powershell_auto | Local PowerShell → Commit → Push → Lifecycle Runner |"
-            echo "| github_edit_auto | GitHub Web Edit → Commit → Push → Lifecycle Runner |"
-            echo "| workflow_dispatch_manual | Manual workflow_dispatch initiated by operator |"
-            echo "| contract_continuation | workflow_run continuation from Runtime Auditor or Maintenance Executor |"
+            echo "| Lifecycle Category | Origin Mode | Description |"
+            echo "|-------------------|-------------|-------------|"
+            echo "| Automated | powershell_auto | Local PowerShell → Commit → Push → Lifecycle Runner |"
+            echo "| Automated | github_edit_auto | GitHub Web Edit → Commit → Push → Lifecycle Runner |"
+            echo "| Automated | contract_continuation | workflow_run continuation from Runtime Auditor or Maintenance Executor |"
+            echo "| Manual | workflow_dispatch_manual | Manual workflow_dispatch initiated by operator |"
 
             echo ""
 
