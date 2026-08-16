@@ -811,7 +811,9 @@ jobs:
 
           fi
 
-          if [ "${BACKHAUL_FOUND}" = "true" ]; then
+          if [ "${BACKHAUL_FOUND}" = "true" ] \
+             && [ "${VALID_BACKHAUL:-false}" = "true" ]
+          then
 
             BACKHAUL_COMPLETED_STAGE="$(
               jq -r '.completed_stage // empty' \
@@ -844,8 +846,8 @@ jobs:
 
           BACKHAUL_CONSISTENT="unknown"
 
-          if [ "${EVENT_FOUND}" = "true" ] \
-             && [ "${BACKHAUL_FOUND}" = "true" ]
+          if [ "${BACKHAUL_FOUND}" = "true" ] \
+             && [ "${VALID_BACKHAUL:-false}" = "true" ]
           then
 
             if [ "${EVENT_COMPLETED_STAGE}" = "${BACKHAUL_COMPLETED_STAGE}" ] \
@@ -1308,7 +1310,9 @@ jobs:
                     echo "======================================"
                     echo ""
 
-                    BACKHAUL_FILE=""
+                  else
+                  
+                    VALID_BACKHAUL="true"
 
                   fi                  
 
