@@ -1,18 +1,42 @@
 name: Deployment Governance Gate
 
 on:
-  workflow_run:
-    workflows:
-      - RGA Runtime Auditor
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+
+      audit_session_id:
+        description: >-
+          Lifecycle session identifier authorized by Lifecycle Runner.
+
+        required: true
+
+        default: ""
+
+      lifecycle_stage:
+        description: >-
+          Lifecycle stage requested by Lifecycle Runner.
+
+          Expected value:
+
+          governance_gate
+
+        required: true
+
+        default: governance_gate
+
+      ref:
+        description: Git ref, branch, or SHA for governance evaluation.
+
+        required: false
+
+        default: main
 
 permissions:
   contents: read
   actions: read
-  
+
 concurrency:
-  group: deployment-governance-gate-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: deployment-governance-gate-${{ github.event.inputs.audit_session_id || github.ref }}
   cancel-in-progress: true
 
 jobs:
