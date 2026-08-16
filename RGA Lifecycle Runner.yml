@@ -3,7 +3,7 @@ name: RGA Lifecycle Runner
 on:
 
   ##############################################################
-  # Primary Lifecycle Entry Point
+  # Automated Lifecycle Entry Point
   #
   # Governance Model
   #
@@ -21,9 +21,13 @@ on:
   #
   ##############################################################
   #
-  # Lifecycle Model
+  # Automated Lifecycle Model
   #
-  #   Push
+  #   PowerShell / GitHub Edit
+  #
+  #     ↓
+  #
+  #   Git Commit / Git Push
   #
   #     ↓
   #
@@ -55,59 +59,250 @@ on:
   #
   #     ↓
   #
+  #   governance_gate
+  #
+  #     ↓
+  #
   #   complete
   #
   ##############################################################
   #
-  # Continuation Model
+  # Important:
   #
-  #   Bot workflows publish:
+  #   This push trigger MUST remain enabled.
   #
-  #     lifecycle_event.json
-  #     lifecycle_backhaul.json
+  #   It preserves:
   #
-  #   Lifecycle Runner resumes through:
+  #     - local PowerShell → GitHub push → Lifecycle Runner
+  #     - GitHub Web Edit → commit → Lifecycle Runner
   #
-  #     workflow_run
+  ##############################################################
   #
-  #   Bot workflows MUST NOT:
+  # Lifecycle Context Model
   #
-  #     dispatch Lifecycle Runner
+  # Lifecycle Runner records three governance-facing fields:
+  #
+  #   lifecycle_category
+  #     → high-level execution category
+  #
+  #   lifecycle_origin
+  #     → where the lifecycle originally began
+  #
+  #   invocation_mode
+  #     → why this specific Runner invocation occurred
+  #
+  ##############################################################
+  #
+  # These fields are classification / observability metadata only.
+  #
+  # They MUST NOT:
+  #
+  #   - modify lifecycle chronology
+  #   - alter stage sequencing
+  #   - introduce fallback routing
+  #   - bypass governance checks
+  #   - change completed phase behavior
+  #
+  # They MAY:
+  #
+  #   - improve observability
+  #   - improve diagnostics
+  #   - explain execution context
+  #   - assist lifecycle investigation
+  #
+  ##############################################################
+  #
+  # Lifecycle Origin: powershell_auto
+  #
+  # Entry Path:
+  #
+  #   Local PowerShell
+  #     ↓
+  #   Git Commit
+  #     ↓
+  #   Git Push
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Characteristics:
+  #
+  #   - local environment available
+  #   - runtime baseline commonly present
+  #   - full automation path
+  #
+  ##############################################################
+  #
+  # Lifecycle Origin: github_edit_auto
+  #
+  # Entry Path:
+  #
+  #   GitHub Web Editor
+  #     ↓
+  #   Commit
+  #     ↓
+  #   Push Event
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Characteristics:
+  #
+  #   - no local PowerShell invocation
+  #   - repository-only change source
+  #   - remains Runner-driven
+  #
+  ##############################################################
+  #
+  # Lifecycle Origin: workflow_dispatch_manual
+  #
+  # Entry Path:
+  #
+  #   GitHub Actions
+  #     ↓
+  #   workflow_dispatch
+  #     ↓
+  #   Lifecycle Runner
+  #
+  # Characteristics:
+  #
+  #   - explicit operator initiation
+  #   - approval resume
+  #   - lifecycle recovery
+  #   - manual orchestration
+  #
+  ##############################################################
+  #
+  # Invocation Mode: push_automation
+  #
+  # Trigger Source:
+  #
+  #   push
+  #
+  # Meaning:
+  #
+  #   The Runner was invoked by repository push automation.
+  #
+  # Notes:
+  #
+  #   This invocation may originate from either:
+  #
+  #     - powershell_auto
+  #     - github_edit_auto
+  #
+  #   Exact lifecycle_origin attribution must be explicitly
+  #   carried by lifecycle metadata if required.
+  #
+  #   The Runner must not guess.
+  #
+  ##############################################################
+  #
+  # Invocation Mode: workflow_dispatch_manual
+  #
+  # Trigger Source:
+  #
+  #   workflow_dispatch
+  #
+  # Meaning:
+  #
+  #   The Runner was explicitly started by an operator.
+  #
+  ##############################################################
+  #
+  # Invocation Mode: contract_continuation
+  #
+  # Trigger Source:
+  #
+  #   workflow_run
+  #
+  # Produced By:
+  #
+  #   Runtime Auditor
+  #     or
+  #   Maintenance Executor
+  #
+  # Meaning:
+  #
+  #   The Runner was resumed by a completed bot workflow.
+  #
+  # Characteristics:
+  #
+  #   - contract-driven continuation
+  #   - consumes lifecycle_event.json
+  #   - consumes lifecycle_backhaul.json
+  #   - preserves chronology ownership
   #
   ##############################################################
 
   push:
     branches:
       - main
-      - "runtime-baseline/update-*"      
+      - "runtime-baseline/update-*"
 
   ##############################################################
-  # Manual Lifecycle Entry
+  # Manual Runner Control
   #
-  # Used for:
+  # This is NOT the normal bot-mode manual workflow.
   #
-  #   - human approval
-  #   - execute stage
-  #   - recovery
-  #   - manual stage starts
+  # Used only for:
+  #
+  #   - starting an automated lifecycle session manually
+  #   - resuming a lifecycle at human_approval
+  #   - resuming execute after human approval artifact exists
+  #   - recovery from interrupted lifecycle wiring
+  #
+  # Manual bot-mode execution should be performed from:
+  #
+  #   - RGA Runtime Auditor
+  #   - RGA Maintenance Executor
+  #
+  # not from this Lifecycle Runner.
   #
   ##############################################################
 
   workflow_dispatch:
     inputs:
 
+      runner_mode:
+        description: >-
+          Runner control mode.
+
+          automated_lifecycle:
+            Start or resume the canonical Runner-driven lifecycle.
+
+          approval_resume:
+            Resume from the human approval checkpoint after
+            human_execution_approval.json exists.
+
+          recovery:
+            Recovery-only mode for lifecycle wiring/session repair.
+
+          Do not use this workflow to manually run individual bot modes.
+          Use RGA Runtime Auditor or RGA Maintenance Executor instead.
+
+        required: true
+
+        default: automated_lifecycle
+
+        type: choice
+
+        options:
+          - automated_lifecycle
+          - approval_resume
+          - recovery
+
       lifecycle_stage:
         description: >-
-          Lifecycle stage to start or resume.
+          Runner lifecycle stage.
 
-          Allowed values:
+          This field is for Runner-owned lifecycle recovery only.
 
-            pre_audit
-            plan
-            plan_audit
-            human_approval
-            execute
-            post_audit
+          Normal automated runs should use pre_audit or leave the
+          default unchanged.
+
+          Human approval resume should use human_approval or execute
+          only after human_execution_approval.json has been committed
+          or otherwise made available to the workflow.
+
+          Manual single-stage bot execution should NOT be launched here.
 
         required: true
 
@@ -117,11 +312,8 @@ on:
 
         options:
           - pre_audit
-          - plan
-          - plan_audit
           - human_approval
           - execute
-          - post_audit
 
       ref:
         description: Git ref, branch, or SHA for downstream dispatch.
@@ -134,7 +326,10 @@ on:
         description: >-
           Optional lifecycle session identifier.
 
-          If omitted a new session ID will be generated.
+          If omitted, a new session ID will be generated.
+
+          For approval_resume or recovery, provide the existing
+          lifecycle session ID when possible.
 
         required: false
 
@@ -144,6 +339,8 @@ on:
         description: >-
           Bot #1 pre-audit report path.
 
+          Used by Runner-owned lifecycle continuation and recovery only.
+
         required: false
 
         default: artifacts/runtime_auditor_report.json
@@ -151,6 +348,8 @@ on:
       execution_plan:
         description: >-
           Bot #2 execution plan path.
+
+          Used by Runner-owned lifecycle continuation and recovery only.
 
         required: false
 
@@ -160,14 +359,17 @@ on:
         description: >-
           Human approval artifact path.
 
+          Required before Runner is allowed to continue from
+          human_approval into execute.
+
         required: false
 
         default: artifacts/human_execution_approval.json
 
       execution_approval:
         description: >-
-          Safety approval phrase required
-          for lifecycle_stage=execute.
+          Safety approval phrase required when resuming execute
+          through the Lifecycle Runner.
 
           Expected value:
 
@@ -178,7 +380,7 @@ on:
         default: ""
 
   ##############################################################
-  # Contract-Driven Lifecycle Continuation
+  # Contract-Driven Automated Lifecycle Continuation
   #
   # Trigger Source:
   #
@@ -194,6 +396,14 @@ on:
   #   lifecycle_event.json
   #   lifecycle_backhaul.json
   #
+  # Automated rule:
+  #
+  #   Bot workflows publish contracts.
+  #
+  #   Lifecycle Runner consumes contracts.
+  #
+  #   Bot workflows MUST NOT dispatch Lifecycle Runner directly.
+  #
   ##############################################################
 
   workflow_run:
@@ -205,7 +415,7 @@ on:
     branches:
       - main
       - "runtime-baseline/update-*"
-      
+
 concurrency:
   group: rga-lifecycle-${{ github.ref }}
   cancel-in-progress: false
@@ -218,14 +428,143 @@ permissions:
 
 jobs:
 
-  lifecycle-runner:
+  determine-origin:
 
     runs-on: ubuntu-latest
 
+    outputs:
+      lifecycle_category: ${{ steps.context.outputs.lifecycle_category }}
+      lifecycle_origin: ${{ steps.context.outputs.lifecycle_origin }}
+      invocation_mode: ${{ steps.context.outputs.invocation_mode }}
+
     steps:
 
+      - name: Resolve Lifecycle Context
+        id: context
+
+        shell: bash
+
+        run: |
+
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
+
+          case "$EVENT_NAME" in
+
+            workflow_run)
+
+              echo "lifecycle_category=Automated" >> "$GITHUB_OUTPUT"
+
+              #
+              # Invocation is known:
+              #
+              #   workflow_run means this Runner invocation was caused
+              #   by a completed bot workflow.
+              #
+              # Lifecycle origin is not inferred here.
+              # It should be propagated by lifecycle metadata if needed.
+              #
+
+              echo "lifecycle_origin=inherited_from_lifecycle_contract" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=contract_continuation" >> "$GITHUB_OUTPUT"
+              ;;
+
+            workflow_dispatch)
+
+              echo "lifecycle_category=Manual" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_origin=workflow_dispatch_manual" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=workflow_dispatch_manual" >> "$GITHUB_OUTPUT"
+              ;;
+
+            push)
+
+              echo "lifecycle_category=Automated" >> "$GITHUB_OUTPUT"
+
+              #
+              # Push-triggered automation.
+              #
+              # Current governance model recognizes two possible
+              # automated lifecycle origins:
+              #
+              #   powershell_auto
+              #   github_edit_auto
+              #
+              # This Runner section intentionally does not guess
+              # between them.
+              #
+              # Exact attribution should be supplied by explicit
+              # lifecycle metadata if required.
+              #
+
+              echo "lifecycle_origin=push_automation_unattributed" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=push_automation" >> "$GITHUB_OUTPUT"
+              ;;
+
+            *)
+
+              echo "lifecycle_category=Unknown" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_origin=unknown" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=unknown" >> "$GITHUB_OUTPUT"
+              ;;
+
+          esac
+
+  lifecycle-runner:
+
+    needs:
+      - determine-origin
+
+    runs-on: ubuntu-latest
+
+    env:
+      LIFECYCLE_CATEGORY: ${{ needs.determine-origin.outputs.lifecycle_category }}
+      LIFECYCLE_ORIGIN: ${{ needs.determine-origin.outputs.lifecycle_origin }}
+      INVOCATION_MODE: ${{ needs.determine-origin.outputs.invocation_mode }}
+
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
+        
+      ########################################################
+      # Sanitize Lifecycle Workspace
+      #
+      # Purpose:
+      #
+      #   Prevent stale lifecycle_event.json /
+      #   lifecycle_backhaul.json from contaminating a new
+      #   runtime-baseline/update-* lifecycle session.
+      #
+      # Keep:
+      #
+      #   artifacts/runtime_baseline.json
+      #
+      # Remove only transient lifecycle routing state.
+      ########################################################
+
+      - name: Sanitize lifecycle workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts lifecycle_trigger
+
+          echo "Sanitizing transient lifecycle state..."
+
+          rm -rf lifecycle_trigger/* || true
+
+          rm -f artifacts/upstream_lifecycle_event.json || true
+          rm -f artifacts/upstream_lifecycle_backhaul.json || true
+          rm -f artifacts/lifecycle_backhaul_resolution.json || true
+          rm -f artifacts/lifecycle_dispatch_result.json || true
+          rm -f artifacts/lifecycle_trigger_workflow.json || true
+          rm -f artifacts/lifecycle_trigger_artifacts.json || true
+          rm -f artifacts/lifecycle_trigger_files.txt || true
+
+          echo "Preserving canonical runtime baseline if present:"
+          if [ -f artifacts/runtime_baseline.json ]; then
+            echo "  artifacts/runtime_baseline.json exists"
+          else
+            echo "  artifacts/runtime_baseline.json not present in workspace"
+          fi
 
       ########################################################
       # Prepare Lifecycle Context
@@ -236,6 +575,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
 
+          MANUAL_RUNNER_MODE: ${{ github.event.inputs.runner_mode }}
           MANUAL_STAGE: ${{ github.event.inputs.lifecycle_stage }}
           MANUAL_REF: ${{ github.event.inputs.ref }}
           MANUAL_SESSION: ${{ github.event.inputs.audit_session_id }}
@@ -267,6 +607,8 @@ jobs:
 
           REF_INPUT="${DEFAULT_REF:-main}"
 
+          RUNNER_MODE=""
+
           AUDIT_SESSION_ID=""
 
           PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
@@ -278,7 +620,7 @@ jobs:
           EXECUTION_APPROVAL=""
 
           TRIGGER_SOURCE="unknown"
-          
+
           BACKHAUL_OVERRIDE="false"
 
           ######################################################
@@ -288,14 +630,17 @@ jobs:
           #
           # Used for:
           #
-          #   - manual stage starts
-          #   - human-approved execute
-          #   - manual recovery / resume
+          #   - manually starting a Runner-owned lifecycle
+          #   - human approval resume
+          #   - execute resume after approval declaration
+          #   - recovery / repair
           #
           # This is NOT used by Bot #1 / Bot #2 to resume Runner.
           ######################################################
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+
+            RUNNER_MODE="${MANUAL_RUNNER_MODE:-automated_lifecycle}"
 
             STAGE="${MANUAL_STAGE:-pre_audit}"
 
@@ -313,6 +658,17 @@ jobs:
 
             TRIGGER_SOURCE="workflow_dispatch"
 
+            ####################################################
+            # Session handling
+            #
+            # workflow_dispatch may either:
+            #
+            #   - start a new lifecycle session
+            #   - resume an existing approved lifecycle session
+            #
+            # If a session is not provided, generate one.
+            ####################################################
+
             if [ -z "$AUDIT_SESSION_ID" ]; then
 
               AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
@@ -320,8 +676,11 @@ jobs:
             fi
 
             echo "workflow_dispatch detected."
+            echo "runner_mode=${RUNNER_MODE}"
             echo "selected_stage=${STAGE}"
+            echo "ref_input=${REF_INPUT}"
             echo "audit_session_id=${AUDIT_SESSION_ID}"
+            echo "trigger_source=${TRIGGER_SOURCE}"
 
           ######################################################
           # workflow_run
@@ -338,45 +697,53 @@ jobs:
           #   lifecycle_event.json
           #   lifecycle_backhaul.json
           #
-          # Stage remains auto_detect here.
-          # The Determine Next Lifecycle Stage step will read
-          # downloaded upstream artifacts and resolve the stage.
+          # Important:
+          #
+          #   This step must NOT create the authoritative
+          #   lifecycle session from GitHub run ID.
+          #
+          #   The authoritative audit_session_id must be read
+          #   from the downloaded lifecycle contract by the
+          #   Determine Next Lifecycle Stage step.
+          #
+          #   The value below is diagnostic/provisional only.
           ######################################################
 
           elif [ "$EVENT_NAME" = "workflow_run" ]; then
+
+            RUNNER_MODE="contract_continuation"
 
             STAGE="auto_detect"
 
             REF_INPUT="${TRIGGERING_HEAD_BRANCH:-${DEFAULT_REF:-main}}"
 
-            if [ -n "${TRIGGERING_RUN_ID:-}" ]; then
-
-              AUDIT_SESSION_ID="rga-session-${TRIGGERING_RUN_ID}"
-
-            else
-
-              AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
-
-            fi
+            AUDIT_SESSION_ID="pending_contract_session"
 
             TRIGGER_SOURCE="workflow_run"
 
+            BACKHAUL_OVERRIDE="false"
+
             echo "workflow_run detected."
+            echo "runner_mode=${RUNNER_MODE}"
             echo "triggering_workflow=${TRIGGERING_WORKFLOW}"
             echo "triggering_run_id=${TRIGGERING_RUN_ID}"
             echo "triggering_conclusion=${TRIGGERING_CONCLUSION}"
             echo "selected_stage=${STAGE}"
+            echo "ref_input=${REF_INPUT}"
             echo "audit_session_id=${AUDIT_SESSION_ID}"
+            echo "trigger_source=${TRIGGER_SOURCE}"
 
           ######################################################
           # push
           #
-          # Primary lifecycle entry point.
+          # Primary automated lifecycle entry point.
           #
           # Push starts a new governed lifecycle at pre_audit.
           ######################################################
 
           elif [ "$EVENT_NAME" = "push" ]; then
+
+            RUNNER_MODE="automated_lifecycle"
 
             ######################################################
             # Runtime Baseline Push
@@ -420,6 +787,7 @@ jobs:
                 BACKHAUL_OVERRIDE="true"
 
                 echo "runtime baseline push detected."
+                echo "runner_mode=${RUNNER_MODE}"
                 echo "branch=${DEFAULT_REF}"
                 echo "selected_stage=${STAGE}"
                 echo "ref_input=${REF_INPUT}"
@@ -448,6 +816,7 @@ jobs:
                 BACKHAUL_OVERRIDE="false"
 
                 echo "push detected."
+                echo "runner_mode=${RUNNER_MODE}"
                 echo "branch=${DEFAULT_REF:-main}"
                 echo "selected_stage=${STAGE}"
                 echo "ref_input=${REF_INPUT}"
@@ -460,23 +829,17 @@ jobs:
             esac
 
           ######################################################
-          # fallback
+          # unsupported trigger
+          #
+          # No fallback lifecycle start.
           ######################################################
 
           else
 
-            STAGE="pre_audit"
+            echo "Unsupported trigger detected." >&2
+            echo "event_name=${EVENT_NAME}" >&2
 
-            REF_INPUT="${DEFAULT_REF:-main}"
-
-            AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
-
-            TRIGGER_SOURCE="$EVENT_NAME"
-
-            echo "unknown trigger detected."
-            echo "event_name=${EVENT_NAME}"
-            echo "selected_stage=${STAGE}"
-            echo "audit_session_id=${AUDIT_SESSION_ID}"
+            exit 1
 
           fi
 
@@ -484,17 +847,20 @@ jobs:
           # Canonical Lifecycle
           ######################################################
 
-          CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit"
+          CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit,governance_gate,complete"
 
           ######################################################
           # Diagnostics
           ######################################################
 
           echo "EVENT_NAME=${EVENT_NAME}"
+          echo "RUNNER_MODE=${RUNNER_MODE}"
           echo "TRIGGER_SOURCE=${TRIGGER_SOURCE}"
           echo "STAGE=${STAGE}"
           echo "REF_INPUT=${REF_INPUT}"
           echo "AUDIT_SESSION_ID=${AUDIT_SESSION_ID}"
+          echo "BACKHAUL_OVERRIDE=${BACKHAUL_OVERRIDE}"
+          echo "CANONICAL_LIFECYCLE=${CANONICAL_LIFECYCLE}"
 
           ######################################################
           # Export Environment
@@ -503,6 +869,7 @@ jobs:
           {
             echo "STAGE=$STAGE"
             echo "REF_INPUT=$REF_INPUT"
+            echo "RUNNER_MODE=$RUNNER_MODE"
             echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
 
             echo "PRE_AUDIT_REPORT=$PRE_AUDIT_REPORT"
@@ -511,7 +878,7 @@ jobs:
             echo "EXECUTION_APPROVAL=$EXECUTION_APPROVAL"
 
             echo "TRIGGER_SOURCE=$TRIGGER_SOURCE"
-            echo "BACKHAUL_OVERRIDE=$BACKHAUL_OVERRIDE"            
+            echo "BACKHAUL_OVERRIDE=$BACKHAUL_OVERRIDE"
 
             echo "TRIGGERING_WORKFLOW=$TRIGGERING_WORKFLOW"
             echo "TRIGGERING_WORKFLOW_ID=$TRIGGERING_WORKFLOW_ID"
@@ -521,33 +888,9 @@ jobs:
             echo "CANONICAL_LIFECYCLE=$CANONICAL_LIFECYCLE"
           } >> "$GITHUB_ENV"
 
-      ############################################################
+      ########################################################
       # Download Triggering Workflow Artifacts
-      #
-      # Purpose:
-      #
-      #   workflow_run
-      #     → download triggering workflow artifacts
-      #     → locate lifecycle_event.json
-      #     → locate lifecycle_backhaul.json
-      #     → normalize them into canonical upstream paths
-      #
-      #   push
-      #     → skipped; no upstream workflow artifacts
-      #
-      #   workflow_dispatch
-      #     → skipped; no upstream workflow artifacts unless
-      #       manually supplied by later extension
-      #
-      # Canonical outputs:
-      #
-      #   artifacts/lifecycle_trigger_workflow.json
-      #   artifacts/lifecycle_trigger_artifacts.json
-      #   artifacts/lifecycle_trigger_files.txt
-      #   artifacts/upstream_lifecycle_event.json
-      #   artifacts/upstream_lifecycle_backhaul.json
-      #   artifacts/lifecycle_backhaul_resolution.json
-      ############################################################
+      ########################################################
 
       - name: Download Triggering Workflow Artifacts
         if: ${{ github.event_name == 'workflow_run' }}
@@ -562,9 +905,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          ########################################################
+          # Clean lifecycle trigger workspace
+          #
+          # Prevent previous broad downloads or stale files from
+          # contaminating current lifecycle routing.
+          ########################################################
+
+          rm -rf lifecycle_trigger || true
+
           mkdir -p \
             artifacts \
-            lifecycle_trigger
+            lifecycle_trigger/rga-lifecycle-event \
+            lifecycle_trigger/rga-lifecycle-backhaul
 
           ########################################################
           # Diagnostics
@@ -576,6 +929,18 @@ jobs:
           echo "  Run ID: ${RUN_ID}"
           echo "  Head branch: ${WORKFLOW_HEAD_BRANCH}"
           echo "  Conclusion: ${WORKFLOW_CONCLUSION}"
+
+          ########################################################
+          # workflow_run conclusion guard
+          ########################################################
+
+          if [ "${WORKFLOW_CONCLUSION}" != "success" ]; then
+            echo "::error::Triggering workflow did not complete successfully."
+            echo "workflow_name=${WORKFLOW_NAME}"
+            echo "run_id=${RUN_ID}"
+            echo "conclusion=${WORKFLOW_CONCLUSION}"
+            exit 1
+          fi
 
           ########################################################
           # Store triggering workflow metadata
@@ -603,16 +968,25 @@ jobs:
 
           gh api \
             "repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts" \
-            > artifacts/lifecycle_trigger_artifacts.json \
-            || true
+            > artifacts/lifecycle_trigger_artifacts.json
 
           ########################################################
-          # Download artifacts from triggering workflow
+          # Download lifecycle artifacts from triggering workflow
+          #
+          # These artifacts are expected from Bot #1 / Bot #2.
           ########################################################
 
           gh run download "${RUN_ID}" \
-            --dir lifecycle_trigger \
-            || true
+            -R "${{ github.repository }}" \
+            -n rga-lifecycle-event \
+            -D lifecycle_trigger/rga-lifecycle-event \
+            || echo "::warning::rga-lifecycle-event artifact not found."
+
+          gh run download "${RUN_ID}" \
+            -R "${{ github.repository }}" \
+            -n rga-lifecycle-backhaul \
+            -D lifecycle_trigger/rga-lifecycle-backhaul \
+            || echo "::warning::rga-lifecycle-backhaul artifact not found."
 
           ########################################################
           # Index downloaded files
@@ -639,11 +1013,11 @@ jobs:
           fi
 
           ########################################################
-          # Backhaul-aware artifact resolution
+          # Resolve expected lifecycle artifacts
           ########################################################
 
           UPSTREAM_EVENT_FILE="$(
-            find lifecycle_trigger \
+            find lifecycle_trigger/rga-lifecycle-event \
               -type f \
               -name 'lifecycle_event.json' \
               -print \
@@ -652,7 +1026,7 @@ jobs:
           )"
 
           UPSTREAM_BACKHAUL_FILE="$(
-            find lifecycle_trigger \
+            find lifecycle_trigger/rga-lifecycle-backhaul \
               -type f \
               -name 'lifecycle_backhaul.json' \
               -print \
@@ -662,6 +1036,8 @@ jobs:
 
           EVENT_FOUND="false"
           BACKHAUL_FOUND="false"
+          VALID_EVENT="false"
+          VALID_BACKHAUL="false"
 
           if [ -n "${UPSTREAM_EVENT_FILE}" ]; then
 
@@ -674,10 +1050,15 @@ jobs:
             echo "Lifecycle event found:"
             echo "  ${UPSTREAM_EVENT_FILE}"
 
+            echo ""
+            echo "===== CONSUMED EVENT ====="
+            cat artifacts/upstream_lifecycle_event.json
+            echo "=========================="
+
           else
 
-            echo ""
-            echo "Lifecycle event not found."
+            echo "::error::Lifecycle event artifact not found."
+            exit 1
 
           fi
 
@@ -692,100 +1073,172 @@ jobs:
             echo "Lifecycle backhaul found:"
             echo "  ${UPSTREAM_BACKHAUL_FILE}"
 
+            echo ""
+            echo "===== CONSUMED BACKHAUL ====="
+            cat artifacts/upstream_lifecycle_backhaul.json
+            echo "============================="
+
           else
 
-            echo ""
-            echo "Lifecycle backhaul not found."
+            echo "::error::Lifecycle backhaul artifact not found."
+            exit 1
 
           fi
 
           ########################################################
-          # Extract event/backhaul summary when available
-          ########################################################
-
-          EVENT_COMPLETED_STAGE=""
-          EVENT_NEXT_STAGE=""
-          EVENT_STATUS=""
-          EVENT_DISPATCH_REQUIRED=""
-
-          BACKHAUL_COMPLETED_STAGE=""
-          BACKHAUL_NEXT_STAGE=""
-          BACKHAUL_STATUS=""
-          BACKHAUL_DISPATCH_REQUIRED=""
-
-          if [ "${EVENT_FOUND}" = "true" ]; then
-
-            EVENT_COMPLETED_STAGE="$(
-              jq -r '.completed_stage // empty' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-            EVENT_NEXT_STAGE="$(
-              jq -r '.next_stage // empty' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-            EVENT_STATUS="$(
-              jq -r '.lifecycle_status // "running"' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-            EVENT_DISPATCH_REQUIRED="$(
-              jq -r '.dispatch_required // false' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-          fi
-
-          if [ "${BACKHAUL_FOUND}" = "true" ]; then
-
-            BACKHAUL_COMPLETED_STAGE="$(
-              jq -r '.completed_stage // empty' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-            BACKHAUL_NEXT_STAGE="$(
-              jq -r '.next_stage // empty' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-            BACKHAUL_STATUS="$(
-              jq -r '.lifecycle_status // "running"' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-            BACKHAUL_DISPATCH_REQUIRED="$(
-              jq -r '.dispatch_required // false' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-          fi
-
-          ########################################################
-          # Backhaul consistency check
+          # Validate lifecycle artifact shape
           #
-          # This does not fail the job yet.
-          # It records whether event/backhaul agree.
+          # This validates artifact presence and minimum contract
+          # shape only. Stage semantics are validated later by
+          # Validate Lifecycle Event Contract.
           ########################################################
 
-          BACKHAUL_CONSISTENT="unknown"
-
-          if [ "${EVENT_FOUND}" = "true" ] \
-             && [ "${BACKHAUL_FOUND}" = "true" ]
+          if jq -e \
+            '.schema
+             and .audit_session_id
+             and .completed_stage
+             and (.dispatch_required != null)' \
+            artifacts/upstream_lifecycle_event.json \
+            >/dev/null
           then
+            VALID_EVENT="true"
+          else
+            echo "::error::Invalid lifecycle_event.json shape."
+            cat artifacts/upstream_lifecycle_event.json
+            exit 1
+          fi
 
-            if [ "${EVENT_COMPLETED_STAGE}" = "${BACKHAUL_COMPLETED_STAGE}" ] \
-               && [ "${EVENT_NEXT_STAGE}" = "${BACKHAUL_NEXT_STAGE}" ] \
-               && [ "${EVENT_DISPATCH_REQUIRED}" = "${BACKHAUL_DISPATCH_REQUIRED}" ]
-            then
+          if jq -e \
+            '.schema
+             and .audit_session_id
+             and .completed_stage
+             and (.dispatch_required != null)' \
+            artifacts/upstream_lifecycle_backhaul.json \
+            >/dev/null
+          then
+            VALID_BACKHAUL="true"
+          else
+            echo "::error::Invalid lifecycle_backhaul.json shape."
+            cat artifacts/upstream_lifecycle_backhaul.json
+            exit 1
+          fi
 
-              BACKHAUL_CONSISTENT="true"
+          ########################################################
+          # Extract event/backhaul summary
+          ########################################################
 
-            else
+          EVENT_SESSION="$(
+            jq -r '.audit_session_id // empty' \
+              artifacts/upstream_lifecycle_event.json
+          )"
 
-              BACKHAUL_CONSISTENT="false"
+          EVENT_COMPLETED_STAGE="$(
+            jq -r '.completed_stage // empty' \
+              artifacts/upstream_lifecycle_event.json
+          )"
 
-            fi
+          EVENT_NEXT_STAGE="$(
+            jq -r '.next_stage // empty' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          EVENT_STATUS="$(
+            jq -r '.lifecycle_status // "running"' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          EVENT_DISPATCH_REQUIRED="$(
+            jq -r '.dispatch_required // false' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          BACKHAUL_SESSION="$(
+            jq -r '.audit_session_id // empty' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_COMPLETED_STAGE="$(
+            jq -r '.completed_stage // empty' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_NEXT_STAGE="$(
+            jq -r '.next_stage // empty' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_STATUS="$(
+            jq -r '.lifecycle_status // "running"' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_DISPATCH_REQUIRED="$(
+            jq -r '.dispatch_required // false' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          ########################################################
+          # Authoritative session resolution
+          #
+          # workflow_run must inherit session from lifecycle
+          # contract, not from GitHub workflow_run id.
+          ########################################################
+
+          if [ -z "${EVENT_SESSION}" ]; then
+            echo "::error::Event contract is missing audit_session_id."
+            exit 1
+          fi
+
+          if [ -z "${BACKHAUL_SESSION}" ]; then
+            echo "::error::Backhaul contract is missing audit_session_id."
+            exit 1
+          fi
+
+          if [ "${EVENT_SESSION}" != "${BACKHAUL_SESSION}" ]; then
+            echo "::error::Lifecycle event/backhaul session mismatch."
+            echo "EVENT audit_session_id    = ${EVENT_SESSION}"
+            echo "BACKHAUL audit_session_id = ${BACKHAUL_SESSION}"
+            exit 1
+          fi
+
+          CONTRACT_SESSION_ID="${EVENT_SESSION}"
+
+          ########################################################
+          # Event/backhaul consistency check
+          ########################################################
+
+          BACKHAUL_CONSISTENT="false"
+
+          if [ "${EVENT_COMPLETED_STAGE}" = "${BACKHAUL_COMPLETED_STAGE}" ] \
+             && [ "${EVENT_NEXT_STAGE}" = "${BACKHAUL_NEXT_STAGE}" ] \
+             && [ "${EVENT_STATUS}" = "${BACKHAUL_STATUS}" ] \
+             && [ "${EVENT_DISPATCH_REQUIRED}" = "${BACKHAUL_DISPATCH_REQUIRED}" ]
+          then
+            BACKHAUL_CONSISTENT="true"
+          fi
+
+          ########################################################
+          # Hard consistency gate
+          #
+          # If event and backhaul both exist, they must agree.
+          # Never continue with contradictory lifecycle routing.
+          ########################################################
+
+          if [ "${BACKHAUL_CONSISTENT}" != "true" ]; then
+
+            echo "::error::Lifecycle event/backhaul mismatch."
+            echo "EVENT audit_session_id       = ${EVENT_SESSION}"
+            echo "BACKHAUL audit_session_id    = ${BACKHAUL_SESSION}"
+            echo "EVENT completed_stage        = ${EVENT_COMPLETED_STAGE}"
+            echo "BACKHAUL completed_stage     = ${BACKHAUL_COMPLETED_STAGE}"
+            echo "EVENT next_stage             = ${EVENT_NEXT_STAGE}"
+            echo "BACKHAUL next_stage          = ${BACKHAUL_NEXT_STAGE}"
+            echo "EVENT lifecycle_status       = ${EVENT_STATUS}"
+            echo "BACKHAUL lifecycle_status    = ${BACKHAUL_STATUS}"
+            echo "EVENT dispatch_required      = ${EVENT_DISPATCH_REQUIRED}"
+            echo "BACKHAUL dispatch_required   = ${BACKHAUL_DISPATCH_REQUIRED}"
+
+            exit 1
 
           fi
 
@@ -801,8 +1254,13 @@ jobs:
             --argjson file_count "${FILE_COUNT}" \
             --argjson event_found "${EVENT_FOUND}" \
             --argjson backhaul_found "${BACKHAUL_FOUND}" \
+            --argjson valid_event "${VALID_EVENT}" \
+            --argjson valid_backhaul "${VALID_BACKHAUL}" \
             --arg upstream_event_file "${UPSTREAM_EVENT_FILE}" \
             --arg upstream_backhaul_file "${UPSTREAM_BACKHAUL_FILE}" \
+            --arg event_session "${EVENT_SESSION}" \
+            --arg backhaul_session "${BACKHAUL_SESSION}" \
+            --arg contract_session "${CONTRACT_SESSION_ID}" \
             --arg event_completed_stage "${EVENT_COMPLETED_STAGE}" \
             --arg event_next_stage "${EVENT_NEXT_STAGE}" \
             --arg event_status "${EVENT_STATUS}" \
@@ -813,7 +1271,7 @@ jobs:
             --arg backhaul_dispatch_required "${BACKHAUL_DISPATCH_REQUIRED}" \
             --arg backhaul_consistent "${BACKHAUL_CONSISTENT}" \
             '{
-              schema: "rga.lifecycle_backhaul_resolution.v1.0",
+              schema: "rga.lifecycle_backhaul_resolution.v1.1",
 
               triggering_workflow: {
                 workflow_name: $workflow_name,
@@ -826,6 +1284,8 @@ jobs:
                 downloaded_file_count: $file_count,
                 lifecycle_event_found: $event_found,
                 lifecycle_backhaul_found: $backhaul_found,
+                lifecycle_event_valid: $valid_event,
+                lifecycle_backhaul_valid: $valid_backhaul,
                 upstream_lifecycle_event_file: (
                   if $upstream_event_file == ""
                   then null
@@ -838,6 +1298,13 @@ jobs:
                   else $upstream_backhaul_file
                   end
                 )
+              },
+
+              authoritative_session: {
+                event_audit_session_id: $event_session,
+                backhaul_audit_session_id: $backhaul_session,
+                resolved_audit_session_id: $contract_session,
+                source: "lifecycle_contract"
               },
 
               lifecycle_event: {
@@ -904,6 +1371,77 @@ jobs:
             > artifacts/lifecycle_backhaul_resolution.json
 
           ########################################################
+          # Contract trace
+          ########################################################
+
+          jq -n \
+            --arg run_id "${RUN_ID}" \
+            --arg workflow "${WORKFLOW_NAME}" \
+            --arg event_file "${UPSTREAM_EVENT_FILE}" \
+            --arg backhaul_file "${UPSTREAM_BACKHAUL_FILE}" \
+            --arg event_session "${EVENT_SESSION}" \
+            --arg backhaul_session "${BACKHAUL_SESSION}" \
+            --arg resolved_session "${CONTRACT_SESSION_ID}" \
+            --arg event_completed_stage "${EVENT_COMPLETED_STAGE}" \
+            --arg backhaul_completed_stage "${BACKHAUL_COMPLETED_STAGE}" \
+            --arg event_stage "${EVENT_NEXT_STAGE}" \
+            --arg backhaul_stage "${BACKHAUL_NEXT_STAGE}" \
+            --arg event_status "${EVENT_STATUS}" \
+            --arg backhaul_status "${BACKHAUL_STATUS}" \
+            --arg event_dispatch "${EVENT_DISPATCH_REQUIRED}" \
+            --arg backhaul_dispatch "${BACKHAUL_DISPATCH_REQUIRED}" \
+            --arg consistent "${BACKHAUL_CONSISTENT}" \
+            '{
+              schema: "rga.contract_trace.v1.1",
+
+              triggering_run_id: $run_id,
+              triggering_workflow: $workflow,
+
+              upstream_event_file: $event_file,
+              upstream_backhaul_file: $backhaul_file,
+
+              event_audit_session_id: $event_session,
+              backhaul_audit_session_id: $backhaul_session,
+              resolved_audit_session_id: $resolved_session,
+
+              event_completed_stage: $event_completed_stage,
+              backhaul_completed_stage: $backhaul_completed_stage,
+
+              event_next_stage: $event_stage,
+              backhaul_next_stage: $backhaul_stage,
+
+              event_status: $event_status,
+              backhaul_status: $backhaul_status,
+
+              event_dispatch_required: $event_dispatch,
+              backhaul_dispatch_required: $backhaul_dispatch,
+
+              event_and_backhaul_consistent: $consistent
+            }' \
+            > artifacts/contract_trace.json
+
+          ########################################################
+          # Export contract-derived session and diagnostics
+          ########################################################
+
+          {
+            echo "AUDIT_SESSION_ID=${CONTRACT_SESSION_ID}"
+            echo "UPSTREAM_EVENT_COMPLETED_STAGE=${EVENT_COMPLETED_STAGE}"
+            echo "UPSTREAM_EVENT_NEXT_STAGE=${EVENT_NEXT_STAGE}"
+            echo "UPSTREAM_EVENT_STATUS=${EVENT_STATUS}"
+            echo "UPSTREAM_EVENT_DISPATCH_REQUIRED=${EVENT_DISPATCH_REQUIRED}"
+
+            echo "UPSTREAM_BACKHAUL_COMPLETED_STAGE=${BACKHAUL_COMPLETED_STAGE}"
+            echo "UPSTREAM_BACKHAUL_NEXT_STAGE=${BACKHAUL_NEXT_STAGE}"
+            echo "UPSTREAM_BACKHAUL_STATUS=${BACKHAUL_STATUS}"
+            echo "UPSTREAM_BACKHAUL_DISPATCH_REQUIRED=${BACKHAUL_DISPATCH_REQUIRED}"
+
+            echo "BACKHAUL_CONSISTENT=${BACKHAUL_CONSISTENT}"
+            echo "VALID_EVENT=${VALID_EVENT}"
+            echo "VALID_BACKHAUL=${VALID_BACKHAUL}"
+          } >> "$GITHUB_ENV"
+
+          ########################################################
           # Human-readable diagnostics
           ########################################################
 
@@ -912,10 +1450,28 @@ jobs:
           cat artifacts/lifecycle_backhaul_resolution.json
 
           echo ""
+          echo "Contract trace:"
+          cat artifacts/contract_trace.json
+
+          echo ""
           echo "Artifact API response preview:"
           sed -n '1,120p' \
             artifacts/lifecycle_trigger_artifacts.json \
             || true
+            
+      ########################################################
+      # Upload Contract Trace
+      ########################################################
+
+      - name: Upload Contract Trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-contract-trace
+          path: |
+            artifacts/contract_trace.json
+            contract_trace.json
+          if-no-files-found: warn        
 
       ########################################################
       # Determine Next Lifecycle Stage
@@ -977,19 +1533,12 @@ jobs:
               ####################################################
 
               STAGE="pre_audit"
-              NEXT_STAGE="plan"
-              DISPATCH_REQUIRED="true"
-              WORKFLOW_FILE="RGA Runtime Auditor.yml"
+              
+              rm -f artifacts/upstream_lifecycle_backhaul.json || true
 
-              DISPATCH_INPUTS="$(
-                jq -cn \
-                  --arg audit_mode "pre_audit" \
-                  --arg audit_session_id "${AUDIT_SESSION_ID}" \
-                  '{
-                    audit_mode: $audit_mode,
-                    audit_session_id: $audit_session_id
-                  }'
-              )"
+              rm -f artifacts/upstream_lifecycle_event.json || true
+
+              rm -f artifacts/contract_trace.json || true              
 
               BACKHAUL_OVERRIDE="true"
 
@@ -1031,7 +1580,7 @@ jobs:
               STAGE="pre_audit"
             fi
 
-            REASON="Lifecycle stage selected manually."
+            REASON="Recovery mode selected for lifecycle session repair."
 
             ;;
 
@@ -1154,6 +1703,36 @@ jobs:
                   BACKHAUL_SESSION="$(
                     jq -r '.audit_session_id // empty' "${BACKHAUL_FILE}"
                   )"
+                  
+                  ##################################################
+                  # Session Isolation
+                  #
+                  # Ignore lifecycle contracts created by a
+                  # different lifecycle session.
+                  ##################################################
+
+                  echo "Expected session: ${AUDIT_SESSION_ID}"
+
+                  echo "Backhaul session: ${BACKHAUL_SESSION}" 
+
+                  if [ -n "${BACKHAUL_SESSION}" ] \
+                     && [ -n "${AUDIT_SESSION_ID}" ] \
+                     && [ "${BACKHAUL_SESSION}" != "${AUDIT_SESSION_ID}" ]
+                  then
+
+                    echo ""
+                    echo "======================================"
+                    echo "Ignoring stale lifecycle_backhaul.json"
+                    echo "Expected: ${AUDIT_SESSION_ID}"
+                    echo "Found:    ${BACKHAUL_SESSION}"
+                    echo "======================================"
+                    echo ""
+
+                  else
+                  
+                    VALID_BACKHAUL="true"
+
+                  fi                  
 
                   BACKHAUL_STATUS="$(
                     jq -r '.lifecycle_status // "running"' "${BACKHAUL_FILE}"
@@ -1209,7 +1788,7 @@ jobs:
                 # Resolve from Event Contract
                 ##################################################
 
-                elif [ -n "${EVENT_FILE}" ]; then
+                elif [ "${BACKHAUL_OVERRIDE:-false}" != "true" ] && [ -n "${EVENT_FILE}" ]; then
 
                   echo "Lifecycle event found: ${EVENT_FILE}"
 
@@ -1271,7 +1850,7 @@ jobs:
                 # Legacy Artifact Fallback
                 ##################################################
 
-                else
+                elif [ "${BACKHAUL_OVERRIDE:-false}" != "true" ]; then
 
                   echo "No lifecycle_backhaul.json found."
                   echo "No lifecycle_event.json found."
@@ -1364,8 +1943,13 @@ jobs:
                     REASON="No lifecycle_backhaul.json, lifecycle_event.json, or recognized legacy canonical artifact was found in triggering workflow artifacts."
 
                   fi
+                
+                else
 
-                fi
+                  echo "Lifecycle contract resolution skipped."
+                  echo "Reason: BACKHAUL_OVERRIDE=true"
+
+                fi                
 
               fi
 
@@ -1391,27 +1975,31 @@ jobs:
           ##########################################################
           # Canonical Lifecycle Routing
           #
-          # Executable stages:
+          # Stage Resolution decides:
           #
-          #   pre_audit
-          #   plan
-          #   plan_audit
-          #   human_approval
-          #   execute
-          #   post_audit
+          #   STAGE
           #
-          # Terminal statuses:
+          # Canonical Routing decides:
           #
-          #   complete
-          #   halted
+          #   WORKFLOW_FILE
+          #   NEXT_STAGE
+          #   DISPATCH_REQUIRED
+          #   DISPATCH_INPUTS
+          #
           ##########################################################
 
-          case "$STAGE" in
+          case "${STAGE}" in
+
+            ######################################################
+            # pre_audit
+            ######################################################
 
             pre_audit)
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
               NEXT_STAGE="plan"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1426,10 +2014,16 @@ jobs:
 
               ;;
 
+            ######################################################
+            # plan
+            ######################################################
+
             plan)
 
               WORKFLOW_FILE="RGA Maintenance Executor.yml"
+
               NEXT_STAGE="plan_audit"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1446,9 +2040,16 @@ jobs:
 
               ;;
 
+            ######################################################
+            # plan_audit
+            ######################################################
+
             plan_audit)
+
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
+
               NEXT_STAGE="human_approval"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1461,44 +2062,68 @@ jobs:
                     audit_session_id: $session,
                     execution_plan: $plan
                   }'
-                )"
+              )"
+
               ;;
 
+            ######################################################
+            # human_approval
+            ######################################################
 
             human_approval)
 
-              NEXT_STAGE="execute"
-              DISPATCH_REQUIRED="false"
               WORKFLOW_FILE=""
+
+              NEXT_STAGE="execute"
+
+              DISPATCH_REQUIRED="false"
+
               DISPATCH_INPUTS="{}"
+
               REASON="Human approval checkpoint reached. Create or provide human_execution_approval.json before running execute."
 
               ;;
+
+            ######################################################
+            # execute
+            ######################################################
 
             execute)
 
               if [ -z "${EXECUTION_APPROVAL:-}" ]; then
 
                 STAGE="halted"
+
                 NEXT_STAGE=""
+
                 DISPATCH_REQUIRED="false"
+
                 WORKFLOW_FILE=""
+
                 DISPATCH_INPUTS="{}"
+
                 REASON="execution_approval missing."
 
               elif [ "${EXECUTION_APPROVAL}" != "APPROVE_RGA_EXECUTION" ]; then
 
                 STAGE="halted"
+
                 NEXT_STAGE=""
+
                 DISPATCH_REQUIRED="false"
+
                 WORKFLOW_FILE=""
+
                 DISPATCH_INPUTS="{}"
+
                 REASON="invalid execution_approval phrase."
 
               else
 
                 WORKFLOW_FILE="RGA Maintenance Executor.yml"
+
                 NEXT_STAGE="post_audit"
+
                 DISPATCH_REQUIRED="true"
 
                 DISPATCH_INPUTS="$(
@@ -1521,10 +2146,16 @@ jobs:
 
               ;;
 
+            ######################################################
+            # post_audit
+            ######################################################
+
             post_audit)
 
               WORKFLOW_FILE="RGA Runtime Auditor.yml"
-              NEXT_STAGE=""
+
+              NEXT_STAGE="governance_gate"
+
               DISPATCH_REQUIRED="true"
 
               DISPATCH_INPUTS="$(
@@ -1542,54 +2173,207 @@ jobs:
               )"
 
               ;;
+              
+            ######################################################
+            # governance_gate
+            ######################################################
+
+            governance_gate)
+
+              WORKFLOW_FILE="deployment-governance-gate.yml"
+
+              NEXT_STAGE="complete"
+
+              DISPATCH_REQUIRED="true"
+
+              DISPATCH_INPUTS="$(
+                jq -c -n \
+                  --arg session "${AUDIT_SESSION_ID}" \
+                  --arg stage "governance_gate" \
+                  --arg ref "${REF:-main}" \
+                  '{
+                    audit_session_id: $session,
+                    lifecycle_stage: $stage,
+                    ref: $ref
+                  }'
+              )"
+
+              REASON="Post-audit completed. Dispatching Deployment Governance Gate."
+
+              ;;              
+
+            ######################################################
+            # complete
+            ######################################################
 
             complete)
 
-              NEXT_STAGE=""
-              DISPATCH_REQUIRED="false"
               WORKFLOW_FILE=""
+
+              NEXT_STAGE=""
+
+              DISPATCH_REQUIRED="false"
+
               DISPATCH_INPUTS="{}"
+
               REASON="Lifecycle complete."
 
               ;;
 
+            ######################################################
+            # halted
+            ######################################################
+
             halted)
 
-              NEXT_STAGE=""
-              DISPATCH_REQUIRED="false"
               WORKFLOW_FILE=""
+
+              NEXT_STAGE=""
+
+              DISPATCH_REQUIRED="false"
+
               DISPATCH_INPUTS="{}"
 
-              if [ -z "${REASON}" ]; then
+              if [ -z "${REASON:-}" ]; then
                 REASON="Lifecycle halted."
               fi
 
               ;;
 
+            ######################################################
+            # unsupported
+            ######################################################
+
             *)
 
-              echo "Unsupported resolved stage: $STAGE" >&2
+              echo "Unsupported resolved stage: ${STAGE}" >&2
+
               exit 1
 
               ;;
 
           esac
-
+          
           ##########################################################
           # Export lifecycle routing outcome
+          #
+          # This is the handoff contract from:
+          #
+          #   Determine Next Lifecycle Stage
+          #
+          # to:
+          #
+          #   Write Lifecycle State
+          #   Write Lifecycle Event Contract
+          #   Dispatch Next Workflow
           ##########################################################
 
+          if [ -z "${STAGE:-}" ]; then
+
+            echo "STAGE was not resolved." >&2
+            echo "TRIGGER_SOURCE=${TRIGGER_SOURCE:-unknown}" >&2
+            echo "BACKHAUL_OVERRIDE=${BACKHAUL_OVERRIDE:-false}" >&2
+
+            exit 1
+
+          fi
+
+          if [ -z "${DISPATCH_REQUIRED:-}" ]; then
+            DISPATCH_REQUIRED="false"
+          fi
+
+          if [ -z "${WORKFLOW_FILE:-}" ]; then
+            WORKFLOW_FILE=""
+          fi
+
+          if [ -z "${NEXT_STAGE:-}" ]; then
+            NEXT_STAGE=""
+          fi
+
+          if [ -z "${DISPATCH_INPUTS:-}" ]; then
+            DISPATCH_INPUTS="{}"
+          fi
+
+          if [ -z "${REASON:-}" ]; then
+            REASON="Lifecycle stage resolved."
+          fi
+
+          echo "Resolved lifecycle routing:"
+          echo "  STAGE=${STAGE}"
+          echo "  NEXT_STAGE=${NEXT_STAGE}"
+          echo "  DISPATCH_REQUIRED=${DISPATCH_REQUIRED}"
+          echo "  WORKFLOW_FILE=${WORKFLOW_FILE}"
+          echo "  AUDIT_SESSION_ID=${AUDIT_SESSION_ID}"
+          echo "  REASON=${REASON}"
+
           {
-            echo "RESOLVED_STAGE=$STAGE"
-            echo "NEXT_STAGE=$NEXT_STAGE"
-            echo "DISPATCH_REQUIRED=$DISPATCH_REQUIRED"
-            echo "WORKFLOW_FILE=$WORKFLOW_FILE"
-            echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
-            echo "LIFECYCLE_REASON=$REASON"
+            echo "RESOLVED_STAGE=${STAGE}"
+            echo "NEXT_STAGE=${NEXT_STAGE}"
+            echo "DISPATCH_REQUIRED=${DISPATCH_REQUIRED}"
+            echo "WORKFLOW_FILE=${WORKFLOW_FILE}"
+            echo "AUDIT_SESSION_ID=${AUDIT_SESSION_ID}"
+            echo "LIFECYCLE_REASON=${REASON}"
+
             echo "DISPATCH_INPUTS<<EOF_INPUTS"
-            echo "$DISPATCH_INPUTS"
+            echo "${DISPATCH_INPUTS}"
             echo "EOF_INPUTS"
           } >> "$GITHUB_ENV"
+          
+          ##########################################################
+          # Stage Trace Artifact
+          #
+          # Pure observability.
+          # Does not affect lifecycle routing.
+          ##########################################################
+
+          jq -n \
+            --arg trigger_source "${TRIGGER_SOURCE:-}" \
+            --arg stage "${STAGE:-}" \
+            --arg resolved_stage "${STAGE:-}" \
+            --arg next_stage "${NEXT_STAGE:-}" \
+            --arg lifecycle_reason "${REASON:-}" \
+            --arg workflow_file "${WORKFLOW_FILE:-}" \
+            --arg dispatch_required "${DISPATCH_REQUIRED:-}" \
+            --arg backhaul_override "${BACKHAUL_OVERRIDE:-}" \
+            --arg audit_session_id "${AUDIT_SESSION_ID:-}" \
+            '{
+              trigger_source: $trigger_source,
+              stage: $stage,
+              resolved_stage: $resolved_stage,
+              next_stage: (
+                if $next_stage == ""
+                then null
+                else $next_stage
+                end
+              ),
+              lifecycle_reason: $lifecycle_reason,
+              workflow_file: (
+                if $workflow_file == ""
+                then null
+                else $workflow_file
+                end
+              ),
+              dispatch_required: $dispatch_required,
+              backhaul_override: $backhaul_override,
+              audit_session_id: $audit_session_id
+            }' \
+            > artifacts/stage_trace.json
+
+          echo "Stage trace written:"
+          cat artifacts/stage_trace.json     
+
+      ############################################################
+      # Upload Stage Trace
+      ############################################################
+
+      - name: Upload Stage Trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-stage-trace
+          path: artifacts/stage_trace.json
+          if-no-files-found: warn
+          retention-days: 30          
 
       ##########################################################
       # Write Lifecycle State
@@ -1602,6 +2386,15 @@ jobs:
 
           mkdir -p artifacts
 
+          if [ -z "${RESOLVED_STAGE:-}" ]; then
+
+            echo "RESOLVED_STAGE is missing." >&2
+            echo "Determine Next Lifecycle Stage did not export RESOLVED_STAGE." >&2
+
+            exit 1
+
+          fi
+
           COMPLETED_STAGES='[]'
           COMPLETED_COUNT=0
           PROGRESS_PERCENT=0
@@ -1612,47 +2405,53 @@ jobs:
 
           LIFECYCLE_STATUS="running"
 
-          case "${RESOLVED_STAGE}" in
+          case "${RESOLVED_STAGE:-unknown}" in
 
             pre_audit)
               COMPLETED_STAGES='["pre_audit"]'
               COMPLETED_COUNT=1
-              PROGRESS_PERCENT=16.67
+              PROGRESS_PERCENT=12.50
               ;;
 
             plan)
               COMPLETED_STAGES='["pre_audit","plan"]'
               COMPLETED_COUNT=2
-              PROGRESS_PERCENT=33.33
+              PROGRESS_PERCENT=25.00
               ;;
 
             plan_audit)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit"]'
               COMPLETED_COUNT=3
-              PROGRESS_PERCENT=50.00
+              PROGRESS_PERCENT=37.50
               ;;
 
             human_approval)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval"]'
               COMPLETED_COUNT=4
-              PROGRESS_PERCENT=66.67
+              PROGRESS_PERCENT=50.00
               ;;
 
             execute)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute"]'
               COMPLETED_COUNT=5
-              PROGRESS_PERCENT=83.33
+              PROGRESS_PERCENT=62.50
               ;;
 
             post_audit)
               COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
               COMPLETED_COUNT=6
-              PROGRESS_PERCENT=100.00
+              PROGRESS_PERCENT=75.00
+              ;;
+
+            governance_gate)
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit","governance_gate"]'
+              COMPLETED_COUNT=7
+              PROGRESS_PERCENT=87.50
               ;;
 
             complete)
-              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit"]'
-              COMPLETED_COUNT=6
+              COMPLETED_STAGES='["pre_audit","plan","plan_audit","human_approval","execute","post_audit","governance_gate","complete"]'
+              COMPLETED_COUNT=8
               PROGRESS_PERCENT=100.00
               LIFECYCLE_STATUS="complete"
               ;;
@@ -1664,15 +2463,18 @@ jobs:
           esac
 
           ########################################################
-          # Terminal lifecycle override
+          # No terminal override for post_audit
+          #
+          # post_audit is not terminal.
+          #
+          # Canonical lifecycle is:
+          #
+          #   post_audit
+          #     ↓
+          #   governance_gate
+          #     ↓
+          #   complete
           ########################################################
-
-          if [ "${DISPATCH_REQUIRED:-false}" = "false" ] \
-             && [ -z "${NEXT_STAGE:-}" ] \
-             && [ "${RESOLVED_STAGE}" = "post_audit" ]
-          then
-            LIFECYCLE_STATUS="complete"
-          fi
 
           jq -n \
             --arg session "${AUDIT_SESSION_ID}" \
@@ -1680,7 +2482,7 @@ jobs:
             --arg trigger_wf "${TRIGGERING_WORKFLOW}" \
             --arg trigger_run "${TRIGGERING_RUN_ID}" \
             --arg trigger_conc "${TRIGGERING_CONCLUSION}" \
-            --arg current "${RESOLVED_STAGE}" \
+            --arg current "${RESOLVED_STAGE:-unknown}" \
             --arg next "${NEXT_STAGE}" \
             --arg status "${LIFECYCLE_STATUS}" \
             --argjson completed "${COMPLETED_STAGES}" \
@@ -1690,7 +2492,7 @@ jobs:
             --argjson count ${COMPLETED_COUNT} \
             --argjson progress ${PROGRESS_PERCENT} \
             '{
-              schema: "rga.lifecycle_state.v1.4",
+              schema: "rga.lifecycle_state.v1.5",
 
               audit_session_id: $session,
 
@@ -1738,11 +2540,13 @@ jobs:
                 "plan_audit",
                 "human_approval",
                 "execute",
-                "post_audit"
+                "post_audit",
+                "governance_gate",
+                "complete"
               ],
 
               lifecycle_progress: {
-                stage_count: 6,
+                stage_count: 8,
                 completed_count: $count,
                 progress_percent: $progress
               }
@@ -1751,6 +2555,14 @@ jobs:
 
           echo "Lifecycle state written:"
           cat artifacts/lifecycle_state.json
+
+          ########################################################
+          # Export lifecycle status for downstream steps
+          ########################################################
+
+          {
+            echo "LIFECYCLE_STATUS=${LIFECYCLE_STATUS}"
+          } >> "$GITHUB_ENV"        
           
       ############################################################
       # Write Lifecycle Event Contract
@@ -1768,7 +2580,7 @@ jobs:
 
           LIFECYCLE_STATUS="running"
 
-          case "${RESOLVED_STAGE}" in
+          case "${RESOLVED_STAGE:-unknown}" in
 
             complete)
 
@@ -1788,13 +2600,30 @@ jobs:
 
             post_audit)
 
-              if [ "${DISPATCH_REQUIRED:-false}" = "false" ] \
-                 && [ -z "${NEXT_STAGE:-}" ]
-              then
+              ####################################################
+              # post_audit is not terminal.
+              #
+              # It must continue to:
+              #
+              #   governance_gate
+              #
+              # Completion is declared only after governance_gate.
+              ####################################################
 
-                LIFECYCLE_STATUS="complete"
+              LIFECYCLE_STATUS="running"
 
-              fi
+              ;;
+
+            governance_gate)
+
+              ####################################################
+              # governance_gate is the final governance checkpoint.
+              #
+              # It may dispatch the Deployment Governance Gate
+              # workflow and then hand off to complete.
+              ####################################################
+
+              LIFECYCLE_STATUS="running"
 
               ;;
 
@@ -1803,14 +2632,14 @@ jobs:
           jq -n \
             --arg session "${AUDIT_SESSION_ID}" \
             --arg trigger_src "${TRIGGER_SOURCE}" \
-            --arg completed "${RESOLVED_STAGE}" \
+            --arg completed "${RESOLVED_STAGE:-unknown}" \
             --arg next "${EVENT_NEXT_STAGE}" \
             --arg lifecycle_status "${LIFECYCLE_STATUS}" \
             --arg wf "${WORKFLOW_FILE}" \
             --argjson dispatch ${EVENT_DISPATCH_REQUIRED} \
             '
             {
-              schema: "rga.lifecycle_event.v1.1",
+              schema: "rga.lifecycle_event.v1.2",
 
               audit_session_id: $session,
 
@@ -1852,6 +2681,7 @@ jobs:
                 bot_2_role: "planner_executor",
                 approval_authority: "human",
                 human_approval_required: true,
+                governance_gate_required: true,
                 completed_phases_remain_immutable: true
               }
             }' \
@@ -1908,14 +2738,61 @@ jobs:
             execute:post_audit)
               VALID="true"
               ;;
+              
+            post_audit:governance_gate)
+              VALID="true"
+              ;;
+
+            governance_gate:complete)
+              VALID="true"
+              ;;              
 
           esac
 
           ########################################################
-          # Intermediate transition states (Audit / Execute)
+          # Temporary Compatibility Rules
+          #
+          # Purpose:
+          #
+          #   Maintain compatibility with historical lifecycle
+          #   contracts during migration to the canonical:
+          #
+          #     pre_audit
+          #       → plan
+          #       → plan_audit
+          #       → human_approval
+          #       → execute
+          #       → post_audit
+          #       → governance_gate
+          #       → complete
+          #
+          # Important:
+          #
+          #   These rules intentionally accept certain
+          #   non-terminal running states that may originate
+          #   from older lifecycle contracts.
+          #
+          #   They MUST NOT become authoritative lifecycle
+          #   routing logic.
+          #
+          # TODO:
+          #
+          #   Remove after all lifecycle producers and
+          #   consumers are upgraded to the governance_gate
+          #   lifecycle model.
           ########################################################
 
-          # 1. Transitioning to Runtime Auditor from post_audit
+          # Legacy post_audit running state
+          #
+          # Example:
+          #
+          #   completed_stage = post_audit
+          #   dispatch_required = true
+          #   lifecycle_status = running
+          #
+          # This may appear during transition from older
+          # post_audit contracts.
+
           if [ "$COMPLETED_STAGE" = "post_audit" ] \
              && [ "$DISPATCH_REQUIRED" = "true" ] \
              && [ "$LIFECYCLE_STATUS" = "running" ]
@@ -1923,7 +2800,18 @@ jobs:
             VALID="true"
           fi
 
-          # 2. General non-terminal running state with dispatch
+          # Generic non-terminal running state
+          #
+          # Accepts historical lifecycle contracts that
+          # still declare:
+          #
+          #   next_stage
+          #   dispatch_required=true
+          #   lifecycle_status=running
+          #
+          # without requiring the Validator to infer stage
+          # ownership.
+
           if [ -n "$NEXT_STAGE" ] \
              && [ "$NEXT_STAGE" != "none" ] \
              && [ "$DISPATCH_REQUIRED" = "true" ] \
@@ -1936,16 +2824,7 @@ jobs:
           # Terminal lifecycle states
           ########################################################
 
-          # 1. Post-audit completed & lifecycle complete
-          if [ "$COMPLETED_STAGE" = "post_audit" ] \
-             && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
-             && [ "$LIFECYCLE_STATUS" = "complete" ] \
-             && [ "$DISPATCH_REQUIRED" = "false" ]
-          then
-            VALID="true"
-          fi
-
-          # 2. General terminal completion (catches stage="complete")
+          # 1. General terminal completion (catches stage="complete")
           if [ "$COMPLETED_STAGE" = "complete" ] \
              && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
              && [ "$LIFECYCLE_STATUS" = "complete" ] \
@@ -1954,7 +2833,7 @@ jobs:
             VALID="true"
           fi
 
-          # 3. Halted lifecycle state
+          # 2. Halted lifecycle state
           if [ "$COMPLETED_STAGE" = "halted" ] \
              && { [ -z "$NEXT_STAGE" ] || [ "$NEXT_STAGE" = "none" ]; } \
              && [ "$LIFECYCLE_STATUS" = "halted" ] \
@@ -1994,10 +2873,23 @@ jobs:
             echo "## RGA Lifecycle Runner"
             echo ""
 
-            echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
-            echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
+            ########################################################
+            # Lifecycle State
+            ########################################################
 
+            echo "### Lifecycle State"
+            echo ""
+
+            echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
+            echo "- Lifecycle category: \`${LIFECYCLE_CATEGORY:-unknown}\`"
+            echo "- Lifecycle origin: \`${LIFECYCLE_ORIGIN:-unknown}\`"
+            echo "- Invocation mode: \`${INVOCATION_MODE:-unknown}\`"
+            echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
             echo "- Current stage: \`${RESOLVED_STAGE:-unknown}\`"
+
+            if [ -n "${RUNNER_MODE:-}" ]; then
+              echo "- Runner mode: \`${RUNNER_MODE}\`"
+            fi
 
             if [ -n "${LIFECYCLE_STATUS:-}" ]; then
               echo "- Lifecycle status: \`${LIFECYCLE_STATUS}\`"
@@ -2017,6 +2909,82 @@ jobs:
 
             echo ""
 
+            ########################################################
+            # Governance Context
+            ########################################################
+
+            echo "### Governance Context"
+            echo ""
+
+            echo "- Chronology owner: \`Lifecycle Runner\`"
+            echo "- Verification owner: \`Runtime Auditor (Bot #1)\`"
+            echo "- Planning / execution owner: \`Maintenance Executor (Bot #2)\`"
+            echo "- Approval authority: \`Human\`"
+
+            echo ""
+
+            ########################################################
+            # Expected Lifecycle
+            ########################################################
+
+            echo "### Canonical Lifecycle"
+            echo ""
+
+            echo "\`pre_audit → plan → plan_audit → human_approval → execute → post_audit → governance_gate → complete\`"
+
+            echo ""
+
+            ########################################################
+            # Current Checkpoint Interpretation
+            ########################################################
+
+            echo "### Current Checkpoint"
+
+            echo ""
+
+            case "${RESOLVED_STAGE:-}" in
+
+              human_approval)
+
+                echo "- Lifecycle is paused at the required human approval checkpoint."
+                echo "- Execute must not run until approval requirements are satisfied."
+                ;;
+
+              execute)
+
+                echo "- Lifecycle is currently in execution."
+                echo "- Post-audit is expected after execution completion."
+                ;;
+
+              post_audit)
+
+                echo "- Post-audit verification is in progress."
+                ;;
+
+            esac
+
+            echo ""
+
+            ########################################################
+            # Origin Mode Reference
+            ########################################################
+
+            echo "### Lifecycle Context Reference"
+            echo ""
+
+            echo "| Lifecycle Category | Lifecycle Origin | Invocation Mode | Description |"
+            echo "|-------------------|------------------|-----------------|-------------|"
+            echo "| Automated | powershell_auto | push_automation | Local PowerShell → Commit → Push → Lifecycle Runner |"
+            echo "| Automated | github_edit_auto | push_automation | GitHub Web Edit → Commit → Push → Lifecycle Runner |"
+            echo "| Automated | inherited_from_lifecycle_contract | contract_continuation | workflow_run continuation from Runtime Auditor or Maintenance Executor |"
+            echo "| Manual | workflow_dispatch_manual | workflow_dispatch_manual | Manual workflow_dispatch initiated by operator |"
+
+            echo ""
+
+            ########################################################
+            # Reason
+            ########################################################
+
             if [ -n "${LIFECYCLE_REASON:-}" ]; then
               echo "### Reason"
               echo ""
@@ -2024,7 +2992,7 @@ jobs:
               echo ""
             fi
 
-          } >> "$GITHUB_STEP_SUMMARY"       
+          } >> "$GITHUB_STEP_SUMMARY"
 
       ############################################################
       # Dispatch Next Workflow
@@ -2212,6 +3180,13 @@ jobs:
             echo "REF_INPUT is empty but dispatch was required." >&2
             exit 1
           fi
+          
+          if [ "${DISPATCH_REQUIRED:-false}" = "true" ] && [ -z "${NEXT_STAGE:-}" ]; then
+            echo "NEXT_STAGE is empty while dispatch is required." >&2
+            echo "RESOLVED_STAGE=${RESOLVED_STAGE:-unknown}" >&2
+            echo "WORKFLOW_FILE=${WORKFLOW_FILE:-}" >&2
+            exit 1
+          fi          
 
           ########################################################
           # Tooling guard
@@ -2233,6 +3208,13 @@ jobs:
           #   execute / post_audit / complete / deployment-side
           #   → github.token
           ########################################################
+          
+          echo "Dispatch routing diagnostics:"
+          echo "  RESOLVED_STAGE=${RESOLVED_STAGE:-unknown}"
+          echo "  NEXT_STAGE=${NEXT_STAGE:-}"
+          echo "  WORKFLOW_FILE=${WORKFLOW_FILE:-}"
+          echo "  REF_INPUT=${REF_INPUT:-}"
+          echo "  DISPATCH_REQUIRED=${DISPATCH_REQUIRED:-false}"          
 
           TOKEN_STAGE="${NEXT_STAGE:-${RESOLVED_STAGE:-unknown}}"
 
