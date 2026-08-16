@@ -3363,7 +3363,7 @@ jobs:
             echo "API response:" >&2
 
             sed -n '1,200p' \
-              /tmp/rga_lifecycle_dispatch_response.json \
+              "${DISPATCH_RESPONSE}" \
               >&2 \
               || true
 
@@ -3376,49 +3376,44 @@ jobs:
               --arg http_status "${HTTP_STATUS}" \
               --arg token_stage "${TOKEN_STAGE}" \
               --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
-              '{
-                schema: "rga.lifecycle_dispatch_result.v1.1",
-                dispatch_performed: false,
-                dispatch_created: false,
-                current_stage: $current,
-                next_stage: (
-                  if $next == ""
-                  then null
-                  else $next
-                  end
-                ),
-                lifecycle_status: $status,
-                target_workflow: $workflow,
-                ref: $ref,
-                http_status: $http_status,
-                token_stage: $token_stage,
-                token_source: $token_source,
-                reason: "workflow_dispatch failed",
-                chronology_owner: "lifecycle_runner",
               --arg downstream_contract "${DOWNSTREAM_CONTRACT_EXPECTED:-}" \
               --arg downstream_backhaul "${DOWNSTREAM_BACKHAUL_EXPECTED:-}" \
               --arg downstream_resume_model "${DOWNSTREAM_RESUME_MODEL:-workflow_run_contract_backhaul}" \
               --argjson workflow_run_expected "${WORKFLOW_RUN_CONTINUATION_EXPECTED:-true}" \
               '{
                 schema: "rga.lifecycle_dispatch_result.v1.2",
+
                 dispatch_performed: false,
                 dispatch_created: false,
+
                 current_stage: $current,
-                next_stage: (
-                  if $next == ""
-                  then null
-                  else $next
-                  end
-                ),
+
+                next_stage:
+                  (
+                    if $next == ""
+                    then null
+                    else $next
+                    end
+                  ),
+
                 lifecycle_status: $status,
+
                 target_workflow: $workflow,
+
                 ref: $ref,
+
                 http_status: $http_status,
+
                 token_stage: $token_stage,
+
                 token_source: $token_source,
+
                 reason: "workflow_dispatch failed",
+
                 chronology_owner: "lifecycle_runner",
+
                 workflow_run_continuation_expected: $workflow_run_expected,
+
                 downstream_contract_expected:
                   (
                     if $downstream_contract == ""
@@ -3426,6 +3421,7 @@ jobs:
                     else $downstream_contract
                     end
                   ),
+
                 downstream_backhaul_expected:
                   (
                     if $downstream_backhaul == ""
@@ -3433,7 +3429,10 @@ jobs:
                     else $downstream_backhaul
                     end
                   ),
-                downstream_resume_model: $downstream_resume_model
+
+                downstream_resume_model: $downstream_resume_model,
+
+                bot_must_not_dispatch_runner: true
               }' \
               > artifacts/lifecycle_dispatch_result.json
 
