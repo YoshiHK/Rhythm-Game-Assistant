@@ -3,7 +3,7 @@ name: RGA Lifecycle Runner
 on:
 
   ##############################################################
-  # Primary Lifecycle Entry Point
+  # Automated Lifecycle Entry Point
   #
   # Governance Model
   #
@@ -21,9 +21,13 @@ on:
   #
   ##############################################################
   #
-  # Lifecycle Model
+  # Automated Lifecycle Model
   #
-  #   Push
+  #   PowerShell
+  #
+  #     ↓
+  #
+  #   Git Commit / Git Push
   #
   #     ↓
   #
@@ -55,59 +59,94 @@ on:
   #
   #     ↓
   #
+  #   governance_gate
+  #
+  #     ↓
+  #
   #   complete
   #
   ##############################################################
   #
-  # Continuation Model
+  # Important:
   #
-  #   Bot workflows publish:
+  #   This push trigger MUST remain enabled.
   #
-  #     lifecycle_event.json
-  #     lifecycle_backhaul.json
-  #
-  #   Lifecycle Runner resumes through:
-  #
-  #     workflow_run
-  #
-  #   Bot workflows MUST NOT:
-  #
-  #     dispatch Lifecycle Runner
+  #   It preserves the current local PowerShell →
+  #   GitHub push → Lifecycle Runner path.
   #
   ##############################################################
 
   push:
     branches:
       - main
-      - "runtime-baseline/update-*"      
+      - "runtime-baseline/update-*"
 
   ##############################################################
-  # Manual Lifecycle Entry
+  # Manual Runner Control
   #
-  # Used for:
+  # This is NOT the normal bot-mode manual workflow.
   #
-  #   - human approval
-  #   - execute stage
-  #   - recovery
-  #   - manual stage starts
+  # Used only for:
+  #
+  #   - starting an automated lifecycle session manually
+  #   - resuming a lifecycle at human_approval
+  #   - resuming execute after human approval artifact exists
+  #   - recovery from interrupted lifecycle wiring
+  #
+  # Manual bot-mode execution should be performed from:
+  #
+  #   - RGA Runtime Auditor
+  #   - RGA Maintenance Executor
+  #
+  # not from this Lifecycle Runner.
   #
   ##############################################################
 
   workflow_dispatch:
     inputs:
 
+      runner_mode:
+        description: >-
+          Runner control mode.
+
+          automated_lifecycle:
+            Start or resume the canonical Runner-driven lifecycle.
+
+          approval_resume:
+            Resume from the human approval checkpoint after
+            human_execution_approval.json exists.
+
+          recovery:
+            Recovery-only mode for lifecycle wiring/session repair.
+
+          Do not use this workflow to manually run individual bot modes.
+          Use RGA Runtime Auditor or RGA Maintenance Executor instead.
+
+        required: true
+
+        default: automated_lifecycle
+
+        type: choice
+
+        options:
+          - automated_lifecycle
+          - approval_resume
+          - recovery
+
       lifecycle_stage:
         description: >-
-          Lifecycle stage to start or resume.
+          Runner lifecycle stage.
 
-          Allowed values:
+          This field is for Runner-owned lifecycle recovery only.
 
-            pre_audit
-            plan
-            plan_audit
-            human_approval
-            execute
-            post_audit
+          Normal automated runs should use pre_audit or leave the
+          default unchanged.
+
+          Human approval resume should use human_approval or execute
+          only after human_execution_approval.json has been committed
+          or otherwise made available to the workflow.
+
+          Manual single-stage bot execution should NOT be launched here.
 
         required: true
 
@@ -117,11 +156,8 @@ on:
 
         options:
           - pre_audit
-          - plan
-          - plan_audit
           - human_approval
           - execute
-          - post_audit
 
       ref:
         description: Git ref, branch, or SHA for downstream dispatch.
@@ -134,7 +170,10 @@ on:
         description: >-
           Optional lifecycle session identifier.
 
-          If omitted a new session ID will be generated.
+          If omitted, a new session ID will be generated.
+
+          For approval_resume or recovery, provide the existing
+          lifecycle session ID when possible.
 
         required: false
 
@@ -144,6 +183,8 @@ on:
         description: >-
           Bot #1 pre-audit report path.
 
+          Used by Runner-owned lifecycle continuation and recovery only.
+
         required: false
 
         default: artifacts/runtime_auditor_report.json
@@ -151,6 +192,8 @@ on:
       execution_plan:
         description: >-
           Bot #2 execution plan path.
+
+          Used by Runner-owned lifecycle continuation and recovery only.
 
         required: false
 
@@ -160,14 +203,17 @@ on:
         description: >-
           Human approval artifact path.
 
+          Required before Runner is allowed to continue from
+          human_approval into execute.
+
         required: false
 
         default: artifacts/human_execution_approval.json
 
       execution_approval:
         description: >-
-          Safety approval phrase required
-          for lifecycle_stage=execute.
+          Safety approval phrase required when resuming execute
+          through the Lifecycle Runner.
 
           Expected value:
 
@@ -178,7 +224,7 @@ on:
         default: ""
 
   ##############################################################
-  # Contract-Driven Lifecycle Continuation
+  # Contract-Driven Automated Lifecycle Continuation
   #
   # Trigger Source:
   #
@@ -194,6 +240,14 @@ on:
   #   lifecycle_event.json
   #   lifecycle_backhaul.json
   #
+  # Automated rule:
+  #
+  #   Bot workflows publish contracts.
+  #
+  #   Lifecycle Runner consumes contracts.
+  #
+  #   Bot workflows MUST NOT dispatch Lifecycle Runner directly.
+  #
   ##############################################################
 
   workflow_run:
@@ -205,7 +259,7 @@ on:
     branches:
       - main
       - "runtime-baseline/update-*"
-      
+
 concurrency:
   group: rga-lifecycle-${{ github.ref }}
   cancel-in-progress: false
@@ -1161,7 +1215,7 @@ jobs:
               STAGE="pre_audit"
             fi
 
-            REASON="Lifecycle stage selected manually."
+            REASON="Recovery mode selected for lifecycle session repair."
 
             ;;
 
