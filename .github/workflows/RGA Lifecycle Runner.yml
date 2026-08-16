@@ -1740,6 +1740,62 @@ jobs:
             echo "${DISPATCH_INPUTS}"
             echo "EOF_INPUTS"
           } >> "$GITHUB_ENV"
+          
+          ##########################################################
+          # Stage Trace Artifact
+          #
+          # Pure observability.
+          # Does not affect lifecycle routing.
+          ##########################################################
+
+          jq -n \
+            --arg trigger_source "${TRIGGER_SOURCE:-}" \
+            --arg stage "${STAGE:-}" \
+            --arg resolved_stage "${STAGE:-}" \
+            --arg next_stage "${NEXT_STAGE:-}" \
+            --arg lifecycle_reason "${REASON:-}" \
+            --arg workflow_file "${WORKFLOW_FILE:-}" \
+            --arg dispatch_required "${DISPATCH_REQUIRED:-}" \
+            --arg backhaul_override "${BACKHAUL_OVERRIDE:-}" \
+            --arg audit_session_id "${AUDIT_SESSION_ID:-}" \
+            '{
+              trigger_source: $trigger_source,
+              stage: $stage,
+              resolved_stage: $resolved_stage,
+              next_stage: (
+                if $next_stage == ""
+                then null
+                else $next_stage
+                end
+              ),
+              lifecycle_reason: $lifecycle_reason,
+              workflow_file: (
+                if $workflow_file == ""
+                then null
+                else $workflow_file
+                end
+              ),
+              dispatch_required: $dispatch_required,
+              backhaul_override: $backhaul_override,
+              audit_session_id: $audit_session_id
+            }' \
+            > artifacts/stage_trace.json
+
+          echo "Stage trace written:"
+          cat artifacts/stage_trace.json     
+
+      ############################################################
+      # Upload Stage Trace
+      ############################################################
+
+      - name: Upload Stage Trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rga-stage-trace
+          path: artifacts/stage_trace.json
+          if-no-files-found: warn
+          retention-days: 30          
 
       ##########################################################
       # Write Lifecycle State
