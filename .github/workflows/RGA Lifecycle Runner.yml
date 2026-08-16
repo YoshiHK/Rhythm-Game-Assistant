@@ -857,11 +857,35 @@ jobs:
 
             else
 
-              BACKHAUL_CONSISTENT="false"
+              BACKHAUL_CONSISTENT="false"              
 
             fi
 
           fi
+          
+          ########################################################
+          # Hard consistency gate
+          #
+          # If event and backhaul both exist, they must agree.
+          # Never continue with contradictory lifecycle routing.
+          ########################################################
+
+          if [ "${EVENT_FOUND}" = "true" ] \
+             && [ "${BACKHAUL_FOUND}" = "true" ] \
+             && [ "${BACKHAUL_CONSISTENT}" != "true" ]
+          then
+
+            echo "::error::Lifecycle event/backhaul mismatch."
+            echo "EVENT completed_stage      = ${EVENT_COMPLETED_STAGE}"
+            echo "BACKHAUL completed_stage   = ${BACKHAUL_COMPLETED_STAGE}"
+            echo "EVENT next_stage           = ${EVENT_NEXT_STAGE}"
+            echo "BACKHAUL next_stage        = ${BACKHAUL_NEXT_STAGE}"
+            echo "EVENT dispatch_required    = ${EVENT_DISPATCH_REQUIRED}"
+            echo "BACKHAUL dispatch_required = ${BACKHAUL_DISPATCH_REQUIRED}"
+
+            exit 1
+
+          fi          
 
           ########################################################
           # Write backhaul resolution report
