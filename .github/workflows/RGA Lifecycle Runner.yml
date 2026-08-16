@@ -258,126 +258,66 @@ on:
   #
   ##############################################################
 
-  workflow_dispatch:
-    inputs:
+workflow_dispatch:
+  inputs:
 
-      runner_mode:
-        description: >-
-          Runner control mode.
+    operator_action:
+      description: >-
+        What do you want to do?
 
-          automated_lifecycle:
-            Start or resume the canonical Runner-driven lifecycle.
+        start_lifecycle
+          Start a new lifecycle.
 
-          approval_resume:
-            Resume from the human approval checkpoint after
-            human_execution_approval.json exists.
+        resume_after_approval
+          Continue an approved lifecycle.
 
-          recovery:
-            Recovery-only mode for lifecycle wiring/session repair.
+        recover_lifecycle
+          Repair lifecycle wiring or session state.
 
-          Do not use this workflow to manually run individual bot modes.
-          Use RGA Runtime Auditor or RGA Maintenance Executor instead.
+      required: true
 
-        required: true
+      default: start_lifecycle
 
-        default: automated_lifecycle
+      type: choice
 
-        type: choice
+      options:
+        - start_lifecycle
+        - resume_after_approval
+        - recover_lifecycle
 
-        options:
-          - automated_lifecycle
-          - approval_resume
-          - recovery
+    audit_session_id:
+      description: >-
+        Lifecycle session to continue.
 
-      lifecycle_stage:
-        description: >-
-          Runner lifecycle stage.
+        Leave empty when starting a new lifecycle.
 
-          This field is for Runner-owned lifecycle recovery only.
+        Required for:
+          resume_after_approval
+          recover_lifecycle
 
-          Normal automated runs should use pre_audit or leave the
-          default unchanged.
+      required: false
 
-          Human approval resume should use human_approval or execute
-          only after human_execution_approval.json has been committed
-          or otherwise made available to the workflow.
+      default: ""
 
-          Manual single-stage bot execution should NOT be launched here.
+    execution_approval:
+      description: >-
+        Required only when resuming execution.
 
-        required: true
+        Enter:
 
-        default: pre_audit
+        APPROVE_RGA_EXECUTION
 
-        type: choice
+      required: false
 
-        options:
-          - pre_audit
-          - human_approval
-          - execute
+      default: ""
 
-      ref:
-        description: Git ref, branch, or SHA for downstream dispatch.
+    ref:
+      description: >-
+        Git ref, branch, or SHA.
 
-        required: false
+      required: false
 
-        default: main
-
-      audit_session_id:
-        description: >-
-          Optional lifecycle session identifier.
-
-          If omitted, a new session ID will be generated.
-
-          For approval_resume or recovery, provide the existing
-          lifecycle session ID when possible.
-
-        required: false
-
-        default: ""
-
-      pre_audit_report:
-        description: >-
-          Bot #1 pre-audit report path.
-
-          Used by Runner-owned lifecycle continuation and recovery only.
-
-        required: false
-
-        default: artifacts/runtime_auditor_report.json
-
-      execution_plan:
-        description: >-
-          Bot #2 execution plan path.
-
-          Used by Runner-owned lifecycle continuation and recovery only.
-
-        required: false
-
-        default: artifacts/execution_plan.json
-
-      approval_artifact:
-        description: >-
-          Human approval artifact path.
-
-          Required before Runner is allowed to continue from
-          human_approval into execute.
-
-        required: false
-
-        default: artifacts/human_execution_approval.json
-
-      execution_approval:
-        description: >-
-          Safety approval phrase required when resuming execute
-          through the Lifecycle Runner.
-
-          Expected value:
-
-          APPROVE_RGA_EXECUTION
-
-        required: false
-
-        default: ""
+      default: main
 
   ##############################################################
   # Contract-Driven Automated Lifecycle Continuation
