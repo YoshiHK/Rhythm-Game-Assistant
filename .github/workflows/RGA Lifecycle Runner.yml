@@ -1321,30 +1321,16 @@ jobs:
             
       ########################################################
       # Upload Lifecycle Backhaul Resolution
-      #
-      # Produced by:
-      #
-      #   Download Triggering Workflow Artifacts
-      #
-      # Purpose:
-      #
-      #   Preserve the event/backhaul resolution report used
-      #   by workflow_run contract consumption.
-      #
-      # Notes:
-      #
-      #   This artifact is only expected for workflow_run
-      #   continuations.
       ########################################################
 
       - name: Upload Lifecycle Backhaul Resolution
-        if: always()
+        if: ${{ always() && github.event_name == 'workflow_run' }}
         uses: actions/upload-artifact@v4
         with:
           name: rga-lifecycle-backhaul-resolution
           path: artifacts/lifecycle_backhaul_resolution.json
           if-no-files-found: warn
-          retention-days: 30            
+          retention-days: 30       
             
       ########################################################
       # Upload Contract Trace
