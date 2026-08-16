@@ -261,123 +261,63 @@ on:
   workflow_dispatch:
     inputs:
 
-      runner_mode:
+      operator_action:
         description: >-
-          Runner control mode.
+          What do you want to do?
 
-          automated_lifecycle:
-            Start or resume the canonical Runner-driven lifecycle.
+          start_lifecycle
+            Start a new lifecycle.
 
-          approval_resume:
-            Resume from the human approval checkpoint after
-            human_execution_approval.json exists.
+          resume_after_approval
+            Continue an approved lifecycle.
 
-          recovery:
-            Recovery-only mode for lifecycle wiring/session repair.
-
-          Do not use this workflow to manually run individual bot modes.
-          Use RGA Runtime Auditor or RGA Maintenance Executor instead.
+          recover_lifecycle
+            Repair lifecycle wiring or session state.
 
         required: true
 
-        default: automated_lifecycle
+        default: start_lifecycle
 
         type: choice
 
         options:
-          - automated_lifecycle
-          - approval_resume
-          - recovery
-
-      lifecycle_stage:
-        description: >-
-          Runner lifecycle stage.
-
-          This field is for Runner-owned lifecycle recovery only.
-
-          Normal automated runs should use pre_audit or leave the
-          default unchanged.
-
-          Human approval resume should use human_approval or execute
-          only after human_execution_approval.json has been committed
-          or otherwise made available to the workflow.
-
-          Manual single-stage bot execution should NOT be launched here.
-
-        required: true
-
-        default: pre_audit
-
-        type: choice
-
-        options:
-          - pre_audit
-          - human_approval
-          - execute
-
-      ref:
-        description: Git ref, branch, or SHA for downstream dispatch.
-
-        required: false
-
-        default: main
+          - start_lifecycle
+          - resume_after_approval
+          - recover_lifecycle
 
       audit_session_id:
         description: >-
-          Optional lifecycle session identifier.
+          Lifecycle session to continue.
 
-          If omitted, a new session ID will be generated.
+          Leave empty when starting a new lifecycle.
 
-          For approval_resume or recovery, provide the existing
-          lifecycle session ID when possible.
+          Required for:
+            resume_after_approval
+            recover_lifecycle
 
         required: false
 
         default: ""
 
-      pre_audit_report:
-        description: >-
-          Bot #1 pre-audit report path.
-
-          Used by Runner-owned lifecycle continuation and recovery only.
-
-        required: false
-
-        default: artifacts/runtime_auditor_report.json
-
-      execution_plan:
-        description: >-
-          Bot #2 execution plan path.
-
-          Used by Runner-owned lifecycle continuation and recovery only.
-
-        required: false
-
-        default: artifacts/execution_plan.json
-
-      approval_artifact:
-        description: >-
-          Human approval artifact path.
-
-          Required before Runner is allowed to continue from
-          human_approval into execute.
-
-        required: false
-
-        default: artifacts/human_execution_approval.json
-
       execution_approval:
         description: >-
-          Safety approval phrase required when resuming execute
-          through the Lifecycle Runner.
+          Required only when resuming execution.
 
-          Expected value:
+          Enter:
 
           APPROVE_RGA_EXECUTION
 
         required: false
 
         default: ""
+
+      ref:
+        description: >-
+          Git ref, branch, or SHA.
+
+        required: false
+
+        default: main
 
   ##############################################################
   # Contract-Driven Automated Lifecycle Continuation
@@ -2917,7 +2857,7 @@ jobs:
       ############################################################
 
       - name: Dispatch next workflow
-        if: always()
+        if: ${{ success() }}
         shell: bash
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -3055,6 +2995,23 @@ jobs:
             echo "WORKFLOW_FILE is empty but dispatch was required." >&2
             exit 1
           fi
+          
+          ########################################################
+          # Runner self-dispatch guard
+          #
+          # Bot workflows may be dispatched by the Runner.
+          # The Runner must not dispatch itself.
+          ########################################################
+
+          case "${WORKFLOW_FILE}" in
+            "RGA Lifecycle Runner.yml"|"RGA Lifecycle Runner")
+              echo "Lifecycle Runner attempted to dispatch itself." >&2
+              echo "WORKFLOW_FILE=${WORKFLOW_FILE}" >&2
+              echo "RESOLVED_STAGE=${RESOLVED_STAGE:-unknown}" >&2
+              echo "NEXT_STAGE=${NEXT_STAGE:-}" >&2
+              exit 1
+              ;;
+          esac          
 
           if [ -z "${DISPATCH_INPUTS:-}" ]; then
             echo "DISPATCH_INPUTS is empty but dispatch was required." >&2
@@ -3204,6 +3161,10 @@ jobs:
           # Build workflow_dispatch payload
           ########################################################
 
+          DISPATCH_PAYLOAD="/tmp/rga_lifecycle_dispatch_payload.json"
+          DISPATCH_RESPONSE="/tmp/rga_lifecycle_dispatch_response.json"
+          DISPATCH_STATUS="/tmp/rga_lifecycle_dispatch_status.txt"
+
           jq -n \
             --arg ref "${REF_INPUT}" \
             --argjson inputs "${DISPATCH_INPUTS}" \
@@ -3211,7 +3172,7 @@ jobs:
               ref: $ref,
               inputs: $inputs
             }' \
-            > /tmp/rga_lifecycle_dispatch_payload.json
+            > "${DISPATCH_PAYLOAD}"
 
           API_URL="https://api.github.com/repos/${GH_OWNER_REPO}/actions/workflows/${ENCODED_WORKFLOW}/dispatches"
 
@@ -3237,25 +3198,83 @@ jobs:
           echo "Expected backhaul artifact: artifacts/lifecycle_backhaul.json"
 
           echo "Dispatch payload:"
-          cat /tmp/rga_lifecycle_dispatch_payload.json
+          cat "${DISPATCH_PAYLOAD}"
+
+          if [ ! -s "${DISPATCH_PAYLOAD}" ]; then
+            echo "Dispatch payload file was not created or is empty." >&2
+            exit 1
+          fi
 
           ########################################################
           # GitHub workflow_dispatch
+          #
+          # Keep curl execution outside command substitution.
+          # This avoids shell parsing ambiguity around multiline
+          # command substitution and continuation characters.
           ########################################################
 
+          set +e
+
+          curl -sS \
+            -o "${DISPATCH_RESPONSE}" \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${API_URL}" \
+            -d @"${DISPATCH_PAYLOAD}" \
+            > "${DISPATCH_STATUS}"
+
+          CURL_EXIT_CODE="$?"
+
+          set -e
+
           HTTP_STATUS="$(
-            curl -sS \
-              -o /tmp/rga_lifecycle_dispatch_response.json \
-              -w "%{http_code}" \
-              -X POST \
-              -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "Content-Type: application/json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "$API_URL" \
-              -d @/tmp/rga_lifecycle_dispatch_payload.json \
-              || true
+            cat "${DISPATCH_STATUS}" 2>/dev/null || echo "000"
           )"
+
+          if [ "${CURL_EXIT_CODE}" != "0" ]; then
+            echo "curl failed before GitHub API status could be trusted." >&2
+            echo "curl_exit_code=${CURL_EXIT_CODE}" >&2
+            echo "http_status=${HTTP_STATUS}" >&2
+
+            if [ -f "${DISPATCH_RESPONSE}" ]; then
+              echo "API response:" >&2
+              sed -n '1,200p' "${DISPATCH_RESPONSE}" >&2 || true
+            fi
+
+            exit 1
+          fi
+          
+          ########################################################
+          # Downstream continuation expectations
+          #
+          # Bot workflows are expected to publish lifecycle
+          # contracts and resume the Runner through workflow_run.
+          #
+          # Governance Gate is a terminal governance stage and
+          # should not be treated as a Bot contract producer unless
+          # explicitly designed that way.
+          ########################################################
+
+          DOWNSTREAM_CONTRACT_EXPECTED="artifacts/lifecycle_event.json"
+          DOWNSTREAM_BACKHAUL_EXPECTED="artifacts/lifecycle_backhaul.json"
+          DOWNSTREAM_RESUME_MODEL="workflow_run_contract_backhaul"
+          WORKFLOW_RUN_CONTINUATION_EXPECTED="true"
+
+          case "${NEXT_STAGE:-}" in
+
+            governance_gate)
+
+              DOWNSTREAM_CONTRACT_EXPECTED=""
+              DOWNSTREAM_BACKHAUL_EXPECTED=""
+              DOWNSTREAM_RESUME_MODEL="governance_terminal_stage"
+              WORKFLOW_RUN_CONTINUATION_EXPECTED="false"
+              ;;
+
+          esac          
 
           ########################################################
           # Dispatch failure
@@ -3284,7 +3303,7 @@ jobs:
             echo "API response:" >&2
 
             sed -n '1,200p' \
-              /tmp/rga_lifecycle_dispatch_response.json \
+              "${DISPATCH_RESPONSE}" \
               >&2 \
               || true
 
@@ -3297,29 +3316,63 @@ jobs:
               --arg http_status "${HTTP_STATUS}" \
               --arg token_stage "${TOKEN_STAGE}" \
               --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
+              --arg downstream_contract "${DOWNSTREAM_CONTRACT_EXPECTED:-}" \
+              --arg downstream_backhaul "${DOWNSTREAM_BACKHAUL_EXPECTED:-}" \
+              --arg downstream_resume_model "${DOWNSTREAM_RESUME_MODEL:-workflow_run_contract_backhaul}" \
+              --argjson workflow_run_expected "${WORKFLOW_RUN_CONTINUATION_EXPECTED:-true}" \
               '{
-                schema: "rga.lifecycle_dispatch_result.v1.1",
+                schema: "rga.lifecycle_dispatch_result.v1.2",
+
                 dispatch_performed: false,
                 dispatch_created: false,
+
                 current_stage: $current,
-                next_stage: (
-                  if $next == ""
-                  then null
-                  else $next
-                  end
-                ),
+
+                next_stage:
+                  (
+                    if $next == ""
+                    then null
+                    else $next
+                    end
+                  ),
+
                 lifecycle_status: $status,
+
                 target_workflow: $workflow,
+
                 ref: $ref,
+
                 http_status: $http_status,
+
                 token_stage: $token_stage,
+
                 token_source: $token_source,
+
                 reason: "workflow_dispatch failed",
+
                 chronology_owner: "lifecycle_runner",
-                workflow_run_continuation_expected: true,
-                downstream_contract_expected: "artifacts/lifecycle_event.json",
-                downstream_backhaul_expected: "artifacts/lifecycle_backhaul.json",
-                downstream_resume_model: "workflow_run_contract_backhaul"
+
+                workflow_run_continuation_expected: $workflow_run_expected,
+
+                downstream_contract_expected:
+                  (
+                    if $downstream_contract == ""
+                    then null
+                    else $downstream_contract
+                    end
+                  ),
+
+                downstream_backhaul_expected:
+                  (
+                    if $downstream_backhaul == ""
+                    then null
+                    else $downstream_backhaul
+                    end
+                  ),
+
+                downstream_resume_model: $downstream_resume_model,
+
+                bot_must_not_dispatch_runner: true
               }' \
               > artifacts/lifecycle_dispatch_result.json
 
@@ -3339,27 +3392,58 @@ jobs:
             --arg ref "${REF_INPUT}" \
             --arg token_stage "${TOKEN_STAGE}" \
             --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
+            --arg downstream_contract "${DOWNSTREAM_CONTRACT_EXPECTED:-}" \
+            --arg downstream_backhaul "${DOWNSTREAM_BACKHAUL_EXPECTED:-}" \
+            --arg downstream_resume_model "${DOWNSTREAM_RESUME_MODEL:-workflow_run_contract_backhaul}" \
+            --argjson workflow_run_expected "${WORKFLOW_RUN_CONTINUATION_EXPECTED:-true}" \
             '{
-              schema: "rga.lifecycle_dispatch_result.v1.1",
+              schema: "rga.lifecycle_dispatch_result.v1.2",
+
               dispatch_performed: true,
               dispatch_created: true,
+
               current_stage: $current,
-              next_stage: (
-                if $next == ""
-                then null
-                else $next
-                end
-              ),
+
+              next_stage:
+                (
+                  if $next == ""
+                  then null
+                  else $next
+                  end
+                ),
+
               lifecycle_status: $status,
+
               target_workflow: $workflow,
+
               ref: $ref,
+
               token_stage: $token_stage,
+
               token_source: $token_source,
+
               chronology_owner: "lifecycle_runner",
-              workflow_run_continuation_expected: true,
-              downstream_contract_expected: "artifacts/lifecycle_event.json",
-              downstream_backhaul_expected: "artifacts/lifecycle_backhaul.json",
-              downstream_resume_model: "workflow_run_contract_backhaul",
+
+              workflow_run_continuation_expected: $workflow_run_expected,
+
+              downstream_contract_expected:
+                (
+                  if $downstream_contract == ""
+                  then null
+                  else $downstream_contract
+                  end
+                ),
+
+              downstream_backhaul_expected:
+                (
+                  if $downstream_backhaul == ""
+                  then null
+                  else $downstream_backhaul
+                  end
+                ),
+
+              downstream_resume_model: $downstream_resume_model,
+
               bot_must_not_dispatch_runner: true
             }' \
             > artifacts/lifecycle_dispatch_result.json
