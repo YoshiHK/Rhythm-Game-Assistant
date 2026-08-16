@@ -342,14 +342,18 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
 
-          MANUAL_RUNNER_MODE: ${{ github.event.inputs.runner_mode }}
-          MANUAL_STAGE: ${{ github.event.inputs.lifecycle_stage }}
+          ####################################################
+          # New operator-facing workflow_dispatch inputs
+          ####################################################
+
+          MANUAL_OPERATOR_ACTION: ${{ github.event.inputs.operator_action }}
           MANUAL_REF: ${{ github.event.inputs.ref }}
           MANUAL_SESSION: ${{ github.event.inputs.audit_session_id }}
-          MANUAL_PRE_AUDIT_REPORT: ${{ github.event.inputs.pre_audit_report }}
-          MANUAL_EXECUTION_PLAN: ${{ github.event.inputs.execution_plan }}
-          MANUAL_APPROVAL_ARTIFACT: ${{ github.event.inputs.approval_artifact }}
           MANUAL_EXECUTION_APPROVAL: ${{ github.event.inputs.execution_approval }}
+
+          ####################################################
+          # workflow_run metadata
+          ####################################################
 
           TRIGGERING_WORKFLOW: ${{ github.event.workflow_run.name }}
           TRIGGERING_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
@@ -374,6 +378,8 @@ jobs:
 
           REF_INPUT="${DEFAULT_REF:-main}"
 
+          OPERATOR_ACTION=""
+
           RUNNER_MODE=""
 
           AUDIT_SESSION_ID=""
@@ -393,56 +399,134 @@ jobs:
           ######################################################
           # workflow_dispatch
           #
-          # Manual lifecycle operation.
+          # Operator-facing lifecycle control.
           #
-          # Used for:
+          # Supported actions:
           #
-          #   - manually starting a Runner-owned lifecycle
-          #   - human approval resume
-          #   - execute resume after approval declaration
-          #   - recovery / repair
+          #   start_lifecycle
+          #     → start a new lifecycle at pre_audit
           #
-          # This is NOT used by Bot #1 / Bot #2 to resume Runner.
+          #   resume_after_approval
+          #     → continue an approved lifecycle at execute
+          #
+          #   recover_lifecycle
+          #     → restore the lifecycle to the human_approval
+          #       checkpoint for inspection / repair
+          #
+          # This panel is not for manual Bot #1 / Bot #2 testing.
           ######################################################
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
 
-            RUNNER_MODE="${MANUAL_RUNNER_MODE:-automated_lifecycle}"
-
-            STAGE="${MANUAL_STAGE:-pre_audit}"
+            OPERATOR_ACTION="${MANUAL_OPERATOR_ACTION:-start_lifecycle}"
 
             REF_INPUT="${MANUAL_REF:-main}"
 
             AUDIT_SESSION_ID="${MANUAL_SESSION:-}"
-
-            PRE_AUDIT_REPORT="${MANUAL_PRE_AUDIT_REPORT:-artifacts/runtime_auditor_report.json}"
-
-            EXECUTION_PLAN="${MANUAL_EXECUTION_PLAN:-artifacts/execution_plan.json}"
-
-            APPROVAL_ARTIFACT="${MANUAL_APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
 
             EXECUTION_APPROVAL="${MANUAL_EXECUTION_APPROVAL:-}"
 
             TRIGGER_SOURCE="workflow_dispatch"
 
             ####################################################
-            # Session handling
+            # Map operator action to internal Runner semantics.
             #
-            # workflow_dispatch may either:
-            #
-            #   - start a new lifecycle session
-            #   - resume an existing approved lifecycle session
-            #
-            # If a session is not provided, generate one.
+            # The UI exposes operator intent.
+            # The Runner maps intent to stage / mode.
             ####################################################
 
-            if [ -z "$AUDIT_SESSION_ID" ]; then
+            case "${OPERATOR_ACTION}" in
 
-              AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+              start_lifecycle)
 
-            fi
+                RUNNER_MODE="automated_lifecycle"
+
+                STAGE="pre_audit"
+
+                if [ -z "${AUDIT_SESSION_ID}" ]; then
+                  AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
+                fi
+
+                ;;
+
+              resume_after_approval)
+
+                RUNNER_MODE="approval_resume"
+
+                STAGE="execute"
+
+                if [ -z "${AUDIT_SESSION_ID}" ]; then
+
+                  echo "audit_session_id is required for resume_after_approval." >&2
+                  echo "Provide the lifecycle session shown at the human_approval checkpoint." >&2
+
+                  exit 1
+
+                fi
+
+                if [ -z "${EXECUTION_APPROVAL}" ]; then
+
+                  echo "execution_approval is required for resume_after_approval." >&2
+                  echo "Expected value: APPROVE_RGA_EXECUTION" >&2
+
+                  exit 1
+
+                fi
+
+                if [ "${EXECUTION_APPROVAL}" != "APPROVE_RGA_EXECUTION" ]; then
+
+                  echo "Invalid execution_approval phrase." >&2
+                  echo "Expected value: APPROVE_RGA_EXECUTION" >&2
+
+                  exit 1
+
+                fi
+
+                ;;
+
+              recover_lifecycle)
+
+                RUNNER_MODE="recovery"
+
+                ################################################
+                # Recovery is deliberately conservative.
+                #
+                # It returns the session to the human approval
+                # checkpoint instead of dispatching execution.
+                #
+                # Use resume_after_approval to execute.
+                ################################################
+
+                STAGE="human_approval"
+
+                if [ -z "${AUDIT_SESSION_ID}" ]; then
+
+                  echo "audit_session_id is required for recover_lifecycle." >&2
+                  echo "Provide the lifecycle session to inspect or repair." >&2
+
+                  exit 1
+
+                fi
+
+                ;;
+
+              *)
+
+                echo "Unsupported operator_action." >&2
+                echo "operator_action=${OPERATOR_ACTION}" >&2
+                echo "Supported values:" >&2
+                echo "  start_lifecycle" >&2
+                echo "  resume_after_approval" >&2
+                echo "  recover_lifecycle" >&2
+
+                exit 1
+
+                ;;
+
+            esac
 
             echo "workflow_dispatch detected."
+            echo "operator_action=${OPERATOR_ACTION}"
             echo "runner_mode=${RUNNER_MODE}"
             echo "selected_stage=${STAGE}"
             echo "ref_input=${REF_INPUT}"
@@ -471,12 +555,14 @@ jobs:
           #
           #   The authoritative audit_session_id must be read
           #   from the downloaded lifecycle contract by the
-          #   Determine Next Lifecycle Stage step.
+          #   contract consumption / stage resolution steps.
           #
           #   The value below is diagnostic/provisional only.
           ######################################################
 
           elif [ "$EVENT_NAME" = "workflow_run" ]; then
+
+            OPERATOR_ACTION="contract_continuation"
 
             RUNNER_MODE="contract_continuation"
 
@@ -491,6 +577,7 @@ jobs:
             BACKHAUL_OVERRIDE="false"
 
             echo "workflow_run detected."
+            echo "operator_action=${OPERATOR_ACTION}"
             echo "runner_mode=${RUNNER_MODE}"
             echo "triggering_workflow=${TRIGGERING_WORKFLOW}"
             echo "triggering_run_id=${TRIGGERING_RUN_ID}"
@@ -509,6 +596,8 @@ jobs:
           ######################################################
 
           elif [ "$EVENT_NAME" = "push" ]; then
+
+            OPERATOR_ACTION="push_automation"
 
             RUNNER_MODE="automated_lifecycle"
 
@@ -554,6 +643,7 @@ jobs:
                 BACKHAUL_OVERRIDE="true"
 
                 echo "runtime baseline push detected."
+                echo "operator_action=${OPERATOR_ACTION}"
                 echo "runner_mode=${RUNNER_MODE}"
                 echo "branch=${DEFAULT_REF}"
                 echo "selected_stage=${STAGE}"
@@ -583,6 +673,7 @@ jobs:
                 BACKHAUL_OVERRIDE="false"
 
                 echo "push detected."
+                echo "operator_action=${OPERATOR_ACTION}"
                 echo "runner_mode=${RUNNER_MODE}"
                 echo "branch=${DEFAULT_REF:-main}"
                 echo "selected_stage=${STAGE}"
@@ -621,6 +712,7 @@ jobs:
           ######################################################
 
           echo "EVENT_NAME=${EVENT_NAME}"
+          echo "OPERATOR_ACTION=${OPERATOR_ACTION}"
           echo "RUNNER_MODE=${RUNNER_MODE}"
           echo "TRIGGER_SOURCE=${TRIGGER_SOURCE}"
           echo "STAGE=${STAGE}"
@@ -636,6 +728,7 @@ jobs:
           {
             echo "STAGE=$STAGE"
             echo "REF_INPUT=$REF_INPUT"
+            echo "OPERATOR_ACTION=$OPERATOR_ACTION"
             echo "RUNNER_MODE=$RUNNER_MODE"
             echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
 
