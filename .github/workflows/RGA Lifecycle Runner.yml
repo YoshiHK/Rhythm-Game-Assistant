@@ -874,6 +874,7 @@ jobs:
 
           if [ "${EVENT_FOUND}" = "true" ] \
              && [ "${BACKHAUL_FOUND}" = "true" ] \
+             && [ "${VALID_BACKHAUL:-false}" = "true" ]
              && [ "${BACKHAUL_CONSISTENT}" != "true" ]
           then
 
