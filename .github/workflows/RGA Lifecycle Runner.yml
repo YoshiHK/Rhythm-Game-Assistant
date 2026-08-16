@@ -2567,6 +2567,13 @@ jobs:
             echo "## RGA Lifecycle Runner"
             echo ""
 
+            ########################################################
+            # Lifecycle State
+            ########################################################
+
+            echo "### Lifecycle State"
+            echo ""
+
             echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
 
             echo "- Origin mode: \`${ORIGIN_MODE:-unknown}\`"
@@ -2597,6 +2604,66 @@ jobs:
 
             echo ""
 
+            ########################################################
+            # Governance Context
+            ########################################################
+
+            echo "### Governance Context"
+            echo ""
+
+            echo "- Chronology owner: \`Lifecycle Runner\`"
+            echo "- Verification owner: \`Runtime Auditor (Bot #1)\`"
+            echo "- Planning / execution owner: \`Maintenance Executor (Bot #2)\`"
+            echo "- Approval authority: \`Human\`"
+
+            echo ""
+
+            ########################################################
+            # Expected Lifecycle
+            ########################################################
+
+            echo "### Canonical Lifecycle"
+            echo ""
+
+            echo "\`pre_audit → plan → plan_audit → human_approval → execute → post_audit → governance_gate → complete\`"
+
+            echo ""
+
+            ########################################################
+            # Current Checkpoint Interpretation
+            ########################################################
+
+            echo "### Current Checkpoint"
+
+            echo ""
+
+            case "${RESOLVED_STAGE:-}" in
+
+              human_approval)
+
+                echo "- Lifecycle is paused at the required human approval checkpoint."
+                echo "- Execute must not run until approval requirements are satisfied."
+                ;;
+
+              execute)
+
+                echo "- Lifecycle is currently in execution."
+                echo "- Post-audit is expected after execution completion."
+                ;;
+
+              post_audit)
+
+                echo "- Post-audit verification is in progress."
+                ;;
+
+            esac
+
+            echo ""
+
+            ########################################################
+            # Origin Mode Reference
+            ########################################################
+
             echo "### Origin Mode Reference"
             echo ""
 
@@ -2609,6 +2676,10 @@ jobs:
 
             echo ""
 
+            ########################################################
+            # Reason
+            ########################################################
+
             if [ -n "${LIFECYCLE_REASON:-}" ]; then
               echo "### Reason"
               echo ""
@@ -2616,7 +2687,7 @@ jobs:
               echo ""
             fi
 
-          } >> "$GITHUB_STEP_SUMMARY"  
+          } >> "$GITHUB_STEP_SUMMARY"
 
       ############################################################
       # Dispatch Next Workflow
