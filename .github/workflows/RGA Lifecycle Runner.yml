@@ -272,6 +272,34 @@ permissions:
 
 jobs:
 
+  determine-source:
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      auto_source: ${{ steps.source.outputs.auto_source }}
+
+    steps:
+
+      - name: Resolve AUTO_SOURCE
+        id: source
+
+        shell: bash
+
+        run: |
+
+          REF="${GITHUB_REF_NAME}"
+
+          if [[ "$REF" == "main" ]]; then
+            echo "auto_source=main" >> "$GITHUB_OUTPUT"
+
+          elif [[ "$REF" == runtime-baseline/update-* ]]; then
+            echo "auto_source=runtime_baseline" >> "$GITHUB_OUTPUT"
+
+          else
+            echo "auto_source=manual" >> "$GITHUB_OUTPUT"
+          fi
+
   lifecycle-runner:
 
     runs-on: ubuntu-latest
@@ -2403,9 +2431,16 @@ jobs:
             echo ""
 
             echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
+
+            echo "- AUTO_SOURCE: \`${AUTO_SOURCE:-unknown}\`"
+
             echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
 
             echo "- Current stage: \`${RESOLVED_STAGE:-unknown}\`"
+
+            if [ -n "${RUNNER_MODE:-}" ]; then
+              echo "- Runner mode: \`${RUNNER_MODE}\`"
+            fi
 
             if [ -n "${LIFECYCLE_STATUS:-}" ]; then
               echo "- Lifecycle status: \`${LIFECYCLE_STATUS}\`"
@@ -2432,7 +2467,7 @@ jobs:
               echo ""
             fi
 
-          } >> "$GITHUB_STEP_SUMMARY"       
+          } >> "$GITHUB_STEP_SUMMARY"    
 
       ############################################################
       # Dispatch Next Workflow
