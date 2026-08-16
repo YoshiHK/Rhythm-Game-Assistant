@@ -575,6 +575,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
 
+          MANUAL_RUNNER_MODE: ${{ github.event.inputs.runner_mode }}
           MANUAL_STAGE: ${{ github.event.inputs.lifecycle_stage }}
           MANUAL_REF: ${{ github.event.inputs.ref }}
           MANUAL_SESSION: ${{ github.event.inputs.audit_session_id }}
@@ -606,6 +607,8 @@ jobs:
 
           REF_INPUT="${DEFAULT_REF:-main}"
 
+          RUNNER_MODE=""
+
           AUDIT_SESSION_ID=""
 
           PRE_AUDIT_REPORT="artifacts/runtime_auditor_report.json"
@@ -617,7 +620,7 @@ jobs:
           EXECUTION_APPROVAL=""
 
           TRIGGER_SOURCE="unknown"
-          
+
           BACKHAUL_OVERRIDE="false"
 
           ######################################################
@@ -627,14 +630,17 @@ jobs:
           #
           # Used for:
           #
-          #   - manual stage starts
-          #   - human-approved execute
-          #   - manual recovery / resume
+          #   - manually starting a Runner-owned lifecycle
+          #   - human approval resume
+          #   - execute resume after approval declaration
+          #   - recovery / repair
           #
           # This is NOT used by Bot #1 / Bot #2 to resume Runner.
           ######################################################
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+
+            RUNNER_MODE="${MANUAL_RUNNER_MODE:-automated_lifecycle}"
 
             STAGE="${MANUAL_STAGE:-pre_audit}"
 
@@ -652,6 +658,17 @@ jobs:
 
             TRIGGER_SOURCE="workflow_dispatch"
 
+            ####################################################
+            # Session handling
+            #
+            # workflow_dispatch may either:
+            #
+            #   - start a new lifecycle session
+            #   - resume an existing approved lifecycle session
+            #
+            # If a session is not provided, generate one.
+            ####################################################
+
             if [ -z "$AUDIT_SESSION_ID" ]; then
 
               AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
@@ -659,8 +676,11 @@ jobs:
             fi
 
             echo "workflow_dispatch detected."
+            echo "runner_mode=${RUNNER_MODE}"
             echo "selected_stage=${STAGE}"
+            echo "ref_input=${REF_INPUT}"
             echo "audit_session_id=${AUDIT_SESSION_ID}"
+            echo "trigger_source=${TRIGGER_SOURCE}"
 
           ######################################################
           # workflow_run
@@ -677,45 +697,53 @@ jobs:
           #   lifecycle_event.json
           #   lifecycle_backhaul.json
           #
-          # Stage remains auto_detect here.
-          # The Determine Next Lifecycle Stage step will read
-          # downloaded upstream artifacts and resolve the stage.
+          # Important:
+          #
+          #   This step must NOT create the authoritative
+          #   lifecycle session from GitHub run ID.
+          #
+          #   The authoritative audit_session_id must be read
+          #   from the downloaded lifecycle contract by the
+          #   Determine Next Lifecycle Stage step.
+          #
+          #   The value below is diagnostic/provisional only.
           ######################################################
 
           elif [ "$EVENT_NAME" = "workflow_run" ]; then
+
+            RUNNER_MODE="contract_continuation"
 
             STAGE="auto_detect"
 
             REF_INPUT="${TRIGGERING_HEAD_BRANCH:-${DEFAULT_REF:-main}}"
 
-            if [ -n "${TRIGGERING_RUN_ID:-}" ]; then
-
-              AUDIT_SESSION_ID="rga-session-${TRIGGERING_RUN_ID}"
-
-            else
-
-              AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
-
-            fi
+            AUDIT_SESSION_ID="pending_contract_session"
 
             TRIGGER_SOURCE="workflow_run"
 
+            BACKHAUL_OVERRIDE="false"
+
             echo "workflow_run detected."
+            echo "runner_mode=${RUNNER_MODE}"
             echo "triggering_workflow=${TRIGGERING_WORKFLOW}"
             echo "triggering_run_id=${TRIGGERING_RUN_ID}"
             echo "triggering_conclusion=${TRIGGERING_CONCLUSION}"
             echo "selected_stage=${STAGE}"
+            echo "ref_input=${REF_INPUT}"
             echo "audit_session_id=${AUDIT_SESSION_ID}"
+            echo "trigger_source=${TRIGGER_SOURCE}"
 
           ######################################################
           # push
           #
-          # Primary lifecycle entry point.
+          # Primary automated lifecycle entry point.
           #
           # Push starts a new governed lifecycle at pre_audit.
           ######################################################
 
           elif [ "$EVENT_NAME" = "push" ]; then
+
+            RUNNER_MODE="automated_lifecycle"
 
             ######################################################
             # Runtime Baseline Push
@@ -759,6 +787,7 @@ jobs:
                 BACKHAUL_OVERRIDE="true"
 
                 echo "runtime baseline push detected."
+                echo "runner_mode=${RUNNER_MODE}"
                 echo "branch=${DEFAULT_REF}"
                 echo "selected_stage=${STAGE}"
                 echo "ref_input=${REF_INPUT}"
@@ -787,6 +816,7 @@ jobs:
                 BACKHAUL_OVERRIDE="false"
 
                 echo "push detected."
+                echo "runner_mode=${RUNNER_MODE}"
                 echo "branch=${DEFAULT_REF:-main}"
                 echo "selected_stage=${STAGE}"
                 echo "ref_input=${REF_INPUT}"
@@ -799,23 +829,17 @@ jobs:
             esac
 
           ######################################################
-          # fallback
+          # unsupported trigger
+          #
+          # No fallback lifecycle start.
           ######################################################
 
           else
 
-            STAGE="pre_audit"
+            echo "Unsupported trigger detected." >&2
+            echo "event_name=${EVENT_NAME}" >&2
 
-            REF_INPUT="${DEFAULT_REF:-main}"
-
-            AUDIT_SESSION_ID="rga-session-$(date -u +%Y%m%dT%H%M%SZ)"
-
-            TRIGGER_SOURCE="$EVENT_NAME"
-
-            echo "unknown trigger detected."
-            echo "event_name=${EVENT_NAME}"
-            echo "selected_stage=${STAGE}"
-            echo "audit_session_id=${AUDIT_SESSION_ID}"
+            exit 1
 
           fi
 
@@ -823,17 +847,20 @@ jobs:
           # Canonical Lifecycle
           ######################################################
 
-          CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit"
+          CANONICAL_LIFECYCLE="pre_audit,plan,plan_audit,human_approval,execute,post_audit,governance_gate,complete"
 
           ######################################################
           # Diagnostics
           ######################################################
 
           echo "EVENT_NAME=${EVENT_NAME}"
+          echo "RUNNER_MODE=${RUNNER_MODE}"
           echo "TRIGGER_SOURCE=${TRIGGER_SOURCE}"
           echo "STAGE=${STAGE}"
           echo "REF_INPUT=${REF_INPUT}"
           echo "AUDIT_SESSION_ID=${AUDIT_SESSION_ID}"
+          echo "BACKHAUL_OVERRIDE=${BACKHAUL_OVERRIDE}"
+          echo "CANONICAL_LIFECYCLE=${CANONICAL_LIFECYCLE}"
 
           ######################################################
           # Export Environment
@@ -842,6 +869,7 @@ jobs:
           {
             echo "STAGE=$STAGE"
             echo "REF_INPUT=$REF_INPUT"
+            echo "RUNNER_MODE=$RUNNER_MODE"
             echo "AUDIT_SESSION_ID=$AUDIT_SESSION_ID"
 
             echo "PRE_AUDIT_REPORT=$PRE_AUDIT_REPORT"
@@ -850,7 +878,7 @@ jobs:
             echo "EXECUTION_APPROVAL=$EXECUTION_APPROVAL"
 
             echo "TRIGGER_SOURCE=$TRIGGER_SOURCE"
-            echo "BACKHAUL_OVERRIDE=$BACKHAUL_OVERRIDE"            
+            echo "BACKHAUL_OVERRIDE=$BACKHAUL_OVERRIDE"
 
             echo "TRIGGERING_WORKFLOW=$TRIGGERING_WORKFLOW"
             echo "TRIGGERING_WORKFLOW_ID=$TRIGGERING_WORKFLOW_ID"
@@ -860,33 +888,9 @@ jobs:
             echo "CANONICAL_LIFECYCLE=$CANONICAL_LIFECYCLE"
           } >> "$GITHUB_ENV"
 
-      ############################################################
+      ########################################################
       # Download Triggering Workflow Artifacts
-      #
-      # Purpose:
-      #
-      #   workflow_run
-      #     → download triggering workflow artifacts
-      #     → locate lifecycle_event.json
-      #     → locate lifecycle_backhaul.json
-      #     → normalize them into canonical upstream paths
-      #
-      #   push
-      #     → skipped; no upstream workflow artifacts
-      #
-      #   workflow_dispatch
-      #     → skipped; no upstream workflow artifacts unless
-      #       manually supplied by later extension
-      #
-      # Canonical outputs:
-      #
-      #   artifacts/lifecycle_trigger_workflow.json
-      #   artifacts/lifecycle_trigger_artifacts.json
-      #   artifacts/lifecycle_trigger_files.txt
-      #   artifacts/upstream_lifecycle_event.json
-      #   artifacts/upstream_lifecycle_backhaul.json
-      #   artifacts/lifecycle_backhaul_resolution.json
-      ############################################################
+      ########################################################
 
       - name: Download Triggering Workflow Artifacts
         if: ${{ github.event_name == 'workflow_run' }}
@@ -927,6 +931,18 @@ jobs:
           echo "  Conclusion: ${WORKFLOW_CONCLUSION}"
 
           ########################################################
+          # workflow_run conclusion guard
+          ########################################################
+
+          if [ "${WORKFLOW_CONCLUSION}" != "success" ]; then
+            echo "::error::Triggering workflow did not complete successfully."
+            echo "workflow_name=${WORKFLOW_NAME}"
+            echo "run_id=${RUN_ID}"
+            echo "conclusion=${WORKFLOW_CONCLUSION}"
+            exit 1
+          fi
+
+          ########################################################
           # Store triggering workflow metadata
           ########################################################
 
@@ -952,11 +968,12 @@ jobs:
 
           gh api \
             "repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts" \
-            > artifacts/lifecycle_trigger_artifacts.json \
-            || true
+            > artifacts/lifecycle_trigger_artifacts.json
 
           ########################################################
-          # Download artifacts from triggering workflow
+          # Download lifecycle artifacts from triggering workflow
+          #
+          # These artifacts are expected from Bot #1 / Bot #2.
           ########################################################
 
           gh run download "${RUN_ID}" \
@@ -996,7 +1013,7 @@ jobs:
           fi
 
           ########################################################
-          # Backhaul-aware artifact resolution
+          # Resolve expected lifecycle artifacts
           ########################################################
 
           UPSTREAM_EVENT_FILE="$(
@@ -1019,6 +1036,8 @@ jobs:
 
           EVENT_FOUND="false"
           BACKHAUL_FOUND="false"
+          VALID_EVENT="false"
+          VALID_BACKHAUL="false"
 
           if [ -n "${UPSTREAM_EVENT_FILE}" ]; then
 
@@ -1030,18 +1049,16 @@ jobs:
             echo ""
             echo "Lifecycle event found:"
             echo "  ${UPSTREAM_EVENT_FILE}"
-            
+
             echo ""
             echo "===== CONSUMED EVENT ====="
-
             cat artifacts/upstream_lifecycle_event.json
-
-            echo "=========================="            
+            echo "=========================="
 
           else
 
-            echo ""
-            echo "Lifecycle event not found."
+            echo "::error::Lifecycle event artifact not found."
+            exit 1
 
           fi
 
@@ -1051,117 +1068,155 @@ jobs:
 
             cp "${UPSTREAM_BACKHAUL_FILE}" \
               artifacts/upstream_lifecycle_backhaul.json
-              
-            echo ""
-            echo "===== CONSUMED BACKHAUL ====="
-
-            cat artifacts/upstream_lifecycle_backhaul.json
-
-            echo "============================="              
 
             echo ""
             echo "Lifecycle backhaul found:"
             echo "  ${UPSTREAM_BACKHAUL_FILE}"
 
+            echo ""
+            echo "===== CONSUMED BACKHAUL ====="
+            cat artifacts/upstream_lifecycle_backhaul.json
+            echo "============================="
+
           else
 
-            echo ""
-            echo "Lifecycle backhaul not found."
+            echo "::error::Lifecycle backhaul artifact not found."
+            exit 1
 
           fi
 
           ########################################################
-          # Extract event/backhaul summary when available
-          ########################################################
-
-          EVENT_COMPLETED_STAGE=""
-          EVENT_NEXT_STAGE=""
-          EVENT_STATUS=""
-          EVENT_DISPATCH_REQUIRED=""
-
-          BACKHAUL_COMPLETED_STAGE=""
-          BACKHAUL_NEXT_STAGE=""
-          BACKHAUL_STATUS=""
-          BACKHAUL_DISPATCH_REQUIRED=""
-
-          if [ "${EVENT_FOUND}" = "true" ]; then
-
-            EVENT_COMPLETED_STAGE="$(
-              jq -r '.completed_stage // empty' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-            EVENT_NEXT_STAGE="$(
-              jq -r '.next_stage // empty' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-            EVENT_STATUS="$(
-              jq -r '.lifecycle_status // "running"' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-            EVENT_DISPATCH_REQUIRED="$(
-              jq -r '.dispatch_required // false' \
-                artifacts/upstream_lifecycle_event.json
-            )"
-
-          fi
-
-          if [ "${BACKHAUL_FOUND}" = "true" ] \
-             && [ "${VALID_BACKHAUL:-false}" = "true" ]
-          then
-
-            BACKHAUL_COMPLETED_STAGE="$(
-              jq -r '.completed_stage // empty' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-            BACKHAUL_NEXT_STAGE="$(
-              jq -r '.next_stage // empty' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-            BACKHAUL_STATUS="$(
-              jq -r '.lifecycle_status // "running"' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-            BACKHAUL_DISPATCH_REQUIRED="$(
-              jq -r '.dispatch_required // false' \
-                artifacts/upstream_lifecycle_backhaul.json
-            )"
-
-          fi
-
-          ########################################################
-          # Backhaul consistency check
+          # Validate lifecycle artifact shape
           #
-          # This does not fail the job yet.
-          # It records whether event/backhaul agree.
+          # This validates artifact presence and minimum contract
+          # shape only. Stage semantics are validated later by
+          # Validate Lifecycle Event Contract.
           ########################################################
 
-          BACKHAUL_CONSISTENT="unknown"
-
-          if [ "${BACKHAUL_FOUND}" = "true" ] \
-             && [ "${VALID_BACKHAUL:-false}" = "true" ]
+          if jq -e \
+            '.schema
+             and .audit_session_id
+             and .completed_stage
+             and (.dispatch_required != null)' \
+            artifacts/upstream_lifecycle_event.json \
+            >/dev/null
           then
-
-            if [ "${EVENT_COMPLETED_STAGE}" = "${BACKHAUL_COMPLETED_STAGE}" ] \
-               && [ "${EVENT_NEXT_STAGE}" = "${BACKHAUL_NEXT_STAGE}" ] \
-               && [ "${EVENT_DISPATCH_REQUIRED}" = "${BACKHAUL_DISPATCH_REQUIRED}" ]
-            then
-
-              BACKHAUL_CONSISTENT="true"
-
-            else
-
-              BACKHAUL_CONSISTENT="false"              
-
-            fi
-
+            VALID_EVENT="true"
+          else
+            echo "::error::Invalid lifecycle_event.json shape."
+            cat artifacts/upstream_lifecycle_event.json
+            exit 1
           fi
-          
+
+          if jq -e \
+            '.schema
+             and .audit_session_id
+             and .completed_stage
+             and (.dispatch_required != null)' \
+            artifacts/upstream_lifecycle_backhaul.json \
+            >/dev/null
+          then
+            VALID_BACKHAUL="true"
+          else
+            echo "::error::Invalid lifecycle_backhaul.json shape."
+            cat artifacts/upstream_lifecycle_backhaul.json
+            exit 1
+          fi
+
+          ########################################################
+          # Extract event/backhaul summary
+          ########################################################
+
+          EVENT_SESSION="$(
+            jq -r '.audit_session_id // empty' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          EVENT_COMPLETED_STAGE="$(
+            jq -r '.completed_stage // empty' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          EVENT_NEXT_STAGE="$(
+            jq -r '.next_stage // empty' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          EVENT_STATUS="$(
+            jq -r '.lifecycle_status // "running"' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          EVENT_DISPATCH_REQUIRED="$(
+            jq -r '.dispatch_required // false' \
+              artifacts/upstream_lifecycle_event.json
+          )"
+
+          BACKHAUL_SESSION="$(
+            jq -r '.audit_session_id // empty' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_COMPLETED_STAGE="$(
+            jq -r '.completed_stage // empty' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_NEXT_STAGE="$(
+            jq -r '.next_stage // empty' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_STATUS="$(
+            jq -r '.lifecycle_status // "running"' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          BACKHAUL_DISPATCH_REQUIRED="$(
+            jq -r '.dispatch_required // false' \
+              artifacts/upstream_lifecycle_backhaul.json
+          )"
+
+          ########################################################
+          # Authoritative session resolution
+          #
+          # workflow_run must inherit session from lifecycle
+          # contract, not from GitHub workflow_run id.
+          ########################################################
+
+          if [ -z "${EVENT_SESSION}" ]; then
+            echo "::error::Event contract is missing audit_session_id."
+            exit 1
+          fi
+
+          if [ -z "${BACKHAUL_SESSION}" ]; then
+            echo "::error::Backhaul contract is missing audit_session_id."
+            exit 1
+          fi
+
+          if [ "${EVENT_SESSION}" != "${BACKHAUL_SESSION}" ]; then
+            echo "::error::Lifecycle event/backhaul session mismatch."
+            echo "EVENT audit_session_id    = ${EVENT_SESSION}"
+            echo "BACKHAUL audit_session_id = ${BACKHAUL_SESSION}"
+            exit 1
+          fi
+
+          CONTRACT_SESSION_ID="${EVENT_SESSION}"
+
+          ########################################################
+          # Event/backhaul consistency check
+          ########################################################
+
+          BACKHAUL_CONSISTENT="false"
+
+          if [ "${EVENT_COMPLETED_STAGE}" = "${BACKHAUL_COMPLETED_STAGE}" ] \
+             && [ "${EVENT_NEXT_STAGE}" = "${BACKHAUL_NEXT_STAGE}" ] \
+             && [ "${EVENT_STATUS}" = "${BACKHAUL_STATUS}" ] \
+             && [ "${EVENT_DISPATCH_REQUIRED}" = "${BACKHAUL_DISPATCH_REQUIRED}" ]
+          then
+            BACKHAUL_CONSISTENT="true"
+          fi
+
           ########################################################
           # Hard consistency gate
           #
@@ -1169,21 +1224,23 @@ jobs:
           # Never continue with contradictory lifecycle routing.
           ########################################################
 
-          if [ "${BACKHAUL_FOUND}" = "true" ] \
-             && [ "${VALID_BACKHAUL:-false}" = "true" ]
-          then
+          if [ "${BACKHAUL_CONSISTENT}" != "true" ]; then
 
             echo "::error::Lifecycle event/backhaul mismatch."
-            echo "EVENT completed_stage      = ${EVENT_COMPLETED_STAGE}"
-            echo "BACKHAUL completed_stage   = ${BACKHAUL_COMPLETED_STAGE}"
-            echo "EVENT next_stage           = ${EVENT_NEXT_STAGE}"
-            echo "BACKHAUL next_stage        = ${BACKHAUL_NEXT_STAGE}"
-            echo "EVENT dispatch_required    = ${EVENT_DISPATCH_REQUIRED}"
-            echo "BACKHAUL dispatch_required = ${BACKHAUL_DISPATCH_REQUIRED}"
+            echo "EVENT audit_session_id       = ${EVENT_SESSION}"
+            echo "BACKHAUL audit_session_id    = ${BACKHAUL_SESSION}"
+            echo "EVENT completed_stage        = ${EVENT_COMPLETED_STAGE}"
+            echo "BACKHAUL completed_stage     = ${BACKHAUL_COMPLETED_STAGE}"
+            echo "EVENT next_stage             = ${EVENT_NEXT_STAGE}"
+            echo "BACKHAUL next_stage          = ${BACKHAUL_NEXT_STAGE}"
+            echo "EVENT lifecycle_status       = ${EVENT_STATUS}"
+            echo "BACKHAUL lifecycle_status    = ${BACKHAUL_STATUS}"
+            echo "EVENT dispatch_required      = ${EVENT_DISPATCH_REQUIRED}"
+            echo "BACKHAUL dispatch_required   = ${BACKHAUL_DISPATCH_REQUIRED}"
 
             exit 1
 
-          fi          
+          fi
 
           ########################################################
           # Write backhaul resolution report
@@ -1197,8 +1254,13 @@ jobs:
             --argjson file_count "${FILE_COUNT}" \
             --argjson event_found "${EVENT_FOUND}" \
             --argjson backhaul_found "${BACKHAUL_FOUND}" \
+            --argjson valid_event "${VALID_EVENT}" \
+            --argjson valid_backhaul "${VALID_BACKHAUL}" \
             --arg upstream_event_file "${UPSTREAM_EVENT_FILE}" \
             --arg upstream_backhaul_file "${UPSTREAM_BACKHAUL_FILE}" \
+            --arg event_session "${EVENT_SESSION}" \
+            --arg backhaul_session "${BACKHAUL_SESSION}" \
+            --arg contract_session "${CONTRACT_SESSION_ID}" \
             --arg event_completed_stage "${EVENT_COMPLETED_STAGE}" \
             --arg event_next_stage "${EVENT_NEXT_STAGE}" \
             --arg event_status "${EVENT_STATUS}" \
@@ -1209,7 +1271,7 @@ jobs:
             --arg backhaul_dispatch_required "${BACKHAUL_DISPATCH_REQUIRED}" \
             --arg backhaul_consistent "${BACKHAUL_CONSISTENT}" \
             '{
-              schema: "rga.lifecycle_backhaul_resolution.v1.0",
+              schema: "rga.lifecycle_backhaul_resolution.v1.1",
 
               triggering_workflow: {
                 workflow_name: $workflow_name,
@@ -1222,6 +1284,8 @@ jobs:
                 downloaded_file_count: $file_count,
                 lifecycle_event_found: $event_found,
                 lifecycle_backhaul_found: $backhaul_found,
+                lifecycle_event_valid: $valid_event,
+                lifecycle_backhaul_valid: $valid_backhaul,
                 upstream_lifecycle_event_file: (
                   if $upstream_event_file == ""
                   then null
@@ -1234,6 +1298,13 @@ jobs:
                   else $upstream_backhaul_file
                   end
                 )
+              },
+
+              authoritative_session: {
+                event_audit_session_id: $event_session,
+                backhaul_audit_session_id: $backhaul_session,
+                resolved_audit_session_id: $contract_session,
+                source: "lifecycle_contract"
               },
 
               lifecycle_event: {
@@ -1300,39 +1371,87 @@ jobs:
             > artifacts/lifecycle_backhaul_resolution.json
 
           ########################################################
+          # Contract trace
+          ########################################################
+
+          jq -n \
+            --arg run_id "${RUN_ID}" \
+            --arg workflow "${WORKFLOW_NAME}" \
+            --arg event_file "${UPSTREAM_EVENT_FILE}" \
+            --arg backhaul_file "${UPSTREAM_BACKHAUL_FILE}" \
+            --arg event_session "${EVENT_SESSION}" \
+            --arg backhaul_session "${BACKHAUL_SESSION}" \
+            --arg resolved_session "${CONTRACT_SESSION_ID}" \
+            --arg event_completed_stage "${EVENT_COMPLETED_STAGE}" \
+            --arg backhaul_completed_stage "${BACKHAUL_COMPLETED_STAGE}" \
+            --arg event_stage "${EVENT_NEXT_STAGE}" \
+            --arg backhaul_stage "${BACKHAUL_NEXT_STAGE}" \
+            --arg event_status "${EVENT_STATUS}" \
+            --arg backhaul_status "${BACKHAUL_STATUS}" \
+            --arg event_dispatch "${EVENT_DISPATCH_REQUIRED}" \
+            --arg backhaul_dispatch "${BACKHAUL_DISPATCH_REQUIRED}" \
+            --arg consistent "${BACKHAUL_CONSISTENT}" \
+            '{
+              schema: "rga.contract_trace.v1.1",
+
+              triggering_run_id: $run_id,
+              triggering_workflow: $workflow,
+
+              upstream_event_file: $event_file,
+              upstream_backhaul_file: $backhaul_file,
+
+              event_audit_session_id: $event_session,
+              backhaul_audit_session_id: $backhaul_session,
+              resolved_audit_session_id: $resolved_session,
+
+              event_completed_stage: $event_completed_stage,
+              backhaul_completed_stage: $backhaul_completed_stage,
+
+              event_next_stage: $event_stage,
+              backhaul_next_stage: $backhaul_stage,
+
+              event_status: $event_status,
+              backhaul_status: $backhaul_status,
+
+              event_dispatch_required: $event_dispatch,
+              backhaul_dispatch_required: $backhaul_dispatch,
+
+              event_and_backhaul_consistent: $consistent
+            }' \
+            > artifacts/contract_trace.json
+
+          ########################################################
+          # Export contract-derived session and diagnostics
+          ########################################################
+
+          {
+            echo "AUDIT_SESSION_ID=${CONTRACT_SESSION_ID}"
+            echo "UPSTREAM_EVENT_COMPLETED_STAGE=${EVENT_COMPLETED_STAGE}"
+            echo "UPSTREAM_EVENT_NEXT_STAGE=${EVENT_NEXT_STAGE}"
+            echo "UPSTREAM_EVENT_STATUS=${EVENT_STATUS}"
+            echo "UPSTREAM_EVENT_DISPATCH_REQUIRED=${EVENT_DISPATCH_REQUIRED}"
+
+            echo "UPSTREAM_BACKHAUL_COMPLETED_STAGE=${BACKHAUL_COMPLETED_STAGE}"
+            echo "UPSTREAM_BACKHAUL_NEXT_STAGE=${BACKHAUL_NEXT_STAGE}"
+            echo "UPSTREAM_BACKHAUL_STATUS=${BACKHAUL_STATUS}"
+            echo "UPSTREAM_BACKHAUL_DISPATCH_REQUIRED=${BACKHAUL_DISPATCH_REQUIRED}"
+
+            echo "BACKHAUL_CONSISTENT=${BACKHAUL_CONSISTENT}"
+            echo "VALID_EVENT=${VALID_EVENT}"
+            echo "VALID_BACKHAUL=${VALID_BACKHAUL}"
+          } >> "$GITHUB_ENV"
+
+          ########################################################
           # Human-readable diagnostics
           ########################################################
 
           echo ""
           echo "Backhaul resolution:"
           cat artifacts/lifecycle_backhaul_resolution.json
-          
-          jq -n \
-            --arg run_id "${RUN_ID}" \
-            --arg workflow "${WORKFLOW_NAME}" \
-            --arg event_file "${UPSTREAM_EVENT_FILE}" \
-            --arg backhaul_file "${UPSTREAM_BACKHAUL_FILE}" \
-            --arg event_stage "${EVENT_NEXT_STAGE}" \
-            --arg backhaul_stage "${BACKHAUL_NEXT_STAGE}" \
-            --arg event_status "${EVENT_STATUS}" \
-            --arg backhaul_status "${BACKHAUL_STATUS}" \
-            '{
-              triggering_run_id: $run_id,
-              triggering_workflow: $workflow,
 
-              upstream_event_file: $event_file,
-
-              upstream_backhaul_file: $backhaul_file,
-
-              event_next_stage: $event_stage,
- 
-              backhaul_next_stage: $backhaul_stage,
-
-              event_status: $event_status,
-
-              backhaul_status: $backhaul_status
-            }' \
-              > artifacts/contract_trace.json          
+          echo ""
+          echo "Contract trace:"
+          cat artifacts/contract_trace.json
 
           echo ""
           echo "Artifact API response preview:"
@@ -1345,14 +1464,14 @@ jobs:
       ########################################################
 
       - name: Upload Contract Trace
-        if: always()
+        if: >
+          always() &&
+          github.event_name == 'workflow_run'
         uses: actions/upload-artifact@v4
         with:
           name: rga-contract-trace
-          path: |
-            artifacts/contract_trace.json
-            contract_trace.json
-          if-no-files-found: warn        
+          path: artifacts/contract_trace.json
+          if-no-files-found: error      
 
       ########################################################
       # Determine Next Lifecycle Stage
