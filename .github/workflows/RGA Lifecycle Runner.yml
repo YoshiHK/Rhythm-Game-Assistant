@@ -23,7 +23,7 @@ on:
   #
   # Automated Lifecycle Model
   #
-  #   PowerShell
+  #   PowerShell / GitHub Edit
   #
   #     ↓
   #
@@ -71,18 +71,31 @@ on:
   #
   #   This push trigger MUST remain enabled.
   #
-  #   It preserves the current local PowerShell →
-  #   GitHub push → Lifecycle Runner path.
+  #   It preserves:
+  #
+  #     - local PowerShell → GitHub push → Lifecycle Runner
+  #     - GitHub Web Edit → commit → Lifecycle Runner
   #
   ##############################################################
   #
-  # Origin Modes
+  # Lifecycle Context Model
   #
-  # Lifecycle Runner recognizes different lifecycle origins.
+  # Lifecycle Runner records three governance-facing fields:
   #
-  # Origin Mode is a governance classification only.
+  #   lifecycle_category
+  #     → high-level execution category
   #
-  # Origin Mode MUST NOT:
+  #   lifecycle_origin
+  #     → where the lifecycle originally began
+  #
+  #   invocation_mode
+  #     → why this specific Runner invocation occurred
+  #
+  ##############################################################
+  #
+  # These fields are classification / observability metadata only.
+  #
+  # They MUST NOT:
   #
   #   - modify lifecycle chronology
   #   - alter stage sequencing
@@ -90,7 +103,7 @@ on:
   #   - bypass governance checks
   #   - change completed phase behavior
   #
-  # Origin Mode MAY:
+  # They MAY:
   #
   #   - improve observability
   #   - improve diagnostics
@@ -99,7 +112,7 @@ on:
   #
   ##############################################################
   #
-  # Origin Mode: powershell_auto
+  # Lifecycle Origin: powershell_auto
   #
   # Entry Path:
   #
@@ -114,12 +127,12 @@ on:
   # Characteristics:
   #
   #   - local environment available
-  #   - runtime baseline commonly present  
+  #   - runtime baseline commonly present
   #   - full automation path
   #
   ##############################################################
   #
-  # Origin Mode: github_edit_auto
+  # Lifecycle Origin: github_edit_auto
   #
   # Entry Path:
   #
@@ -139,7 +152,7 @@ on:
   #
   ##############################################################
   #
-  # Origin Mode: workflow_dispatch_manual
+  # Lifecycle Origin: workflow_dispatch_manual
   #
   # Entry Path:
   #
@@ -158,17 +171,57 @@ on:
   #
   ##############################################################
   #
-  # Origin Mode: contract_continuation
+  # Invocation Mode: push_automation
   #
-  # Entry Path:
+  # Trigger Source:
+  #
+  #   push
+  #
+  # Meaning:
+  #
+  #   The Runner was invoked by repository push automation.
+  #
+  # Notes:
+  #
+  #   This invocation may originate from either:
+  #
+  #     - powershell_auto
+  #     - github_edit_auto
+  #
+  #   Exact lifecycle_origin attribution must be explicitly
+  #   carried by lifecycle metadata if required.
+  #
+  #   The Runner must not guess.
+  #
+  ##############################################################
+  #
+  # Invocation Mode: workflow_dispatch_manual
+  #
+  # Trigger Source:
+  #
+  #   workflow_dispatch
+  #
+  # Meaning:
+  #
+  #   The Runner was explicitly started by an operator.
+  #
+  ##############################################################
+  #
+  # Invocation Mode: contract_continuation
+  #
+  # Trigger Source:
+  #
+  #   workflow_run
+  #
+  # Produced By:
   #
   #   Runtime Auditor
   #     or
   #   Maintenance Executor
-  #     ↓
-  #   workflow_run
-  #     ↓
-  #   Lifecycle Runner
+  #
+  # Meaning:
+  #
+  #   The Runner was resumed by a completed bot workflow.
   #
   # Characteristics:
   #
@@ -380,8 +433,9 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      origin_mode: ${{ steps.context.outputs.origin_mode }}
       lifecycle_category: ${{ steps.context.outputs.lifecycle_category }}
+      lifecycle_origin: ${{ steps.context.outputs.lifecycle_origin }}
+      invocation_mode: ${{ steps.context.outputs.invocation_mode }}
 
     steps:
 
@@ -398,40 +452,73 @@ jobs:
 
             workflow_run)
 
-              echo "origin_mode=contract_continuation" >> "$GITHUB_OUTPUT"
               echo "lifecycle_category=Automated" >> "$GITHUB_OUTPUT"
+
+              #
+              # Invocation is known:
+              #
+              #   workflow_run means this Runner invocation was caused
+              #   by a completed bot workflow.
+              #
+              # Lifecycle origin is not inferred here.
+              # It should be propagated by lifecycle metadata if needed.
+              #
+
+              echo "lifecycle_origin=inherited_from_lifecycle_contract" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=contract_continuation" >> "$GITHUB_OUTPUT"
               ;;
 
             workflow_dispatch)
 
-              echo "origin_mode=workflow_dispatch_manual" >> "$GITHUB_OUTPUT"
               echo "lifecycle_category=Manual" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_origin=workflow_dispatch_manual" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=workflow_dispatch_manual" >> "$GITHUB_OUTPUT"
               ;;
 
             push)
 
-              echo "origin_mode=push_automation" >> "$GITHUB_OUTPUT"
               echo "lifecycle_category=Automated" >> "$GITHUB_OUTPUT"
+
+              #
+              # Push-triggered automation.
+              #
+              # Current governance model recognizes two possible
+              # automated lifecycle origins:
+              #
+              #   powershell_auto
+              #   github_edit_auto
+              #
+              # This Runner section intentionally does not guess
+              # between them.
+              #
+              # Exact attribution should be supplied by explicit
+              # lifecycle metadata if required.
+              #
+
+              echo "lifecycle_origin=push_automation_unattributed" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=push_automation" >> "$GITHUB_OUTPUT"
               ;;
 
             *)
 
-              echo "origin_mode=unknown" >> "$GITHUB_OUTPUT"
               echo "lifecycle_category=Unknown" >> "$GITHUB_OUTPUT"
+              echo "lifecycle_origin=unknown" >> "$GITHUB_OUTPUT"
+              echo "invocation_mode=unknown" >> "$GITHUB_OUTPUT"
               ;;
 
           esac
 
   lifecycle-runner:
-  
+
     needs:
       - determine-origin
 
     runs-on: ubuntu-latest
-    
+
     env:
-      ORIGIN_MODE: ${{ needs.determine-origin.outputs.origin_mode }}
       LIFECYCLE_CATEGORY: ${{ needs.determine-origin.outputs.lifecycle_category }}
+      LIFECYCLE_ORIGIN: ${{ needs.determine-origin.outputs.lifecycle_origin }}
+      INVOCATION_MODE: ${{ needs.determine-origin.outputs.invocation_mode }}
 
     steps:
       - name: Checkout
@@ -2567,7 +2654,8 @@ jobs:
 
             echo "- Session: \`${AUDIT_SESSION_ID:-}\`"
             echo "- Lifecycle category: \`${LIFECYCLE_CATEGORY:-unknown}\`"
-            echo "- Origin mode: \`${ORIGIN_MODE:-unknown}\`"
+            echo "- Lifecycle origin: \`${LIFECYCLE_ORIGIN:-unknown}\`"
+            echo "- Invocation mode: \`${INVOCATION_MODE:-unknown}\`"
             echo "- Trigger source: \`${TRIGGER_SOURCE:-}\`"
             echo "- Current stage: \`${RESOLVED_STAGE:-unknown}\`"
 
@@ -2653,15 +2741,15 @@ jobs:
             # Origin Mode Reference
             ########################################################
 
-            echo "### Origin Mode Reference"
+            echo "### Lifecycle Context Reference"
             echo ""
 
-            echo "| Lifecycle Category | Origin Mode | Description |"
-            echo "|-------------------|-------------|-------------|"
-            echo "| Automated | powershell_auto | Local PowerShell → Commit → Push → Lifecycle Runner |"
-            echo "| Automated | github_edit_auto | GitHub Web Edit → Commit → Push → Lifecycle Runner |"
-            echo "| Automated | contract_continuation | workflow_run continuation from Runtime Auditor or Maintenance Executor |"
-            echo "| Manual | workflow_dispatch_manual | Manual workflow_dispatch initiated by operator |"
+            echo "| Lifecycle Category | Lifecycle Origin | Invocation Mode | Description |"
+            echo "|-------------------|------------------|-----------------|-------------|"
+            echo "| Automated | powershell_auto | push_automation | Local PowerShell → Commit → Push → Lifecycle Runner |"
+            echo "| Automated | github_edit_auto | push_automation | GitHub Web Edit → Commit → Push → Lifecycle Runner |"
+            echo "| Automated | inherited_from_lifecycle_contract | contract_continuation | workflow_run continuation from Runtime Auditor or Maintenance Executor |"
+            echo "| Manual | workflow_dispatch_manual | workflow_dispatch_manual | Manual workflow_dispatch initiated by operator |"
 
             echo ""
 
