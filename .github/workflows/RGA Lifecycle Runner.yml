@@ -364,8 +364,6 @@ jobs:
             echo "workflow_dispatch detected."
             echo "selected_stage=${STAGE}"
             echo "audit_session_id=${AUDIT_SESSION_ID}"
-            echo "RESOLVED_STAGE="
-            echo "NEXT_STAGE="
 
           ######################################################
           # workflow_run
@@ -1021,19 +1019,6 @@ jobs:
               ####################################################
 
               STAGE="pre_audit"
-              NEXT_STAGE="plan"
-              DISPATCH_REQUIRED="true"
-              WORKFLOW_FILE="RGA Runtime Auditor.yml"
-
-              DISPATCH_INPUTS="$(
-                jq -cn \
-                  --arg audit_mode "pre_audit" \
-                  --arg audit_session_id "${AUDIT_SESSION_ID}" \
-                  '{
-                    audit_mode: $audit_mode,
-                    audit_session_id: $audit_session_id
-                  }'
-              )"
 
               BACKHAUL_OVERRIDE="true"
 
@@ -1925,6 +1910,14 @@ jobs:
 
           echo "Lifecycle state written:"
           cat artifacts/lifecycle_state.json
+          
+          ########################################################
+          # Export lifecycle status for downstream steps
+          ########################################################
+
+          {
+            echo "LIFECYCLE_STATUS=${LIFECYCLE_STATUS}"
+          } >> "$GITHUB_ENV"          
           
       ############################################################
       # Write Lifecycle Event Contract
