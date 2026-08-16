@@ -4179,8 +4179,8 @@ jobs:
               ;;
             post_audit)
               EVENT_STAGE="post_audit"
-              NEXT_STAGE="complete"
-              DISPATCH_REQUIRED="false"
+              NEXT_STAGE="governance_gate"
+              DISPATCH_REQUIRED="true"
               ;;
             *)
               echo "Unsupported AUDIT_MODE: $AUDIT_MODE" >&2
@@ -4289,9 +4289,9 @@ jobs:
 
             post_audit)
               EVENT_STAGE="post_audit"
-              NEXT_STAGE=""
-              DISPATCH_REQUIRED="false"
-              LIFECYCLE_STATUS="complete"
+              NEXT_STAGE="governance_gate"
+              DISPATCH_REQUIRED="true"
+              LIFECYCLE_STATUS="running"
               ;;
 
             *)
