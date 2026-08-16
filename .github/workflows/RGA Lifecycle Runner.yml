@@ -3,232 +3,54 @@ name: RGA Lifecycle Runner
 on:
 
   ##############################################################
-  # Automated Lifecycle Entry Point
-  #
-  # Governance Model
-  #
-  #   Lifecycle Runner
-  #     → owns chronology
-  #
-  #   Runtime Auditor (Bot #1)
-  #     → performs verification
-  #
-  #   Maintenance Executor (Bot #2)
-  #     → performs planning / execution
-  #
-  #   Human
-  #     → owns approval authority
-  #
-  ##############################################################
-  #
-  # Automated Lifecycle Model
-  #
-  #   PowerShell / GitHub Edit
-  #
-  #     ↓
-  #
-  #   Git Commit / Git Push
-  #
-  #     ↓
-  #
-  #   Lifecycle Runner
-  #
-  #     ↓
+  # Canonical Lifecycle
   #
   #   pre_audit
-  #
   #     ↓
-  #
   #   plan
-  #
   #     ↓
-  #
   #   plan_audit
-  #
   #     ↓
-  #
   #   human_approval
-  #
   #     ↓
-  #
   #   execute
-  #
   #     ↓
-  #
   #   post_audit
-  #
   #     ↓
-  #
   #   governance_gate
-  #
   #     ↓
-  #
   #   complete
   #
   ##############################################################
   #
-  # Important:
+  # Ownership
   #
-  #   This push trigger MUST remain enabled.
-  #
-  #   It preserves:
-  #
-  #     - local PowerShell → GitHub push → Lifecycle Runner
-  #     - GitHub Web Edit → commit → Lifecycle Runner
-  #
-  ##############################################################
-  #
-  # Lifecycle Context Model
-  #
-  # Lifecycle Runner records three governance-facing fields:
-  #
-  #   lifecycle_category
-  #     → high-level execution category
-  #
-  #   lifecycle_origin
-  #     → where the lifecycle originally began
-  #
-  #   invocation_mode
-  #     → why this specific Runner invocation occurred
-  #
-  ##############################################################
-  #
-  # These fields are classification / observability metadata only.
-  #
-  # They MUST NOT:
-  #
-  #   - modify lifecycle chronology
-  #   - alter stage sequencing
-  #   - introduce fallback routing
-  #   - bypass governance checks
-  #   - change completed phase behavior
-  #
-  # They MAY:
-  #
-  #   - improve observability
-  #   - improve diagnostics
-  #   - explain execution context
-  #   - assist lifecycle investigation
-  #
-  ##############################################################
-  #
-  # Lifecycle Origin: powershell_auto
-  #
-  # Entry Path:
-  #
-  #   Local PowerShell
-  #     ↓
-  #   Git Commit
-  #     ↓
-  #   Git Push
-  #     ↓
   #   Lifecycle Runner
+  #     → owns lifecycle chronology
   #
-  # Characteristics:
+  #   Runtime Auditor (Bot #1)
+  #     → verification
   #
-  #   - local environment available
-  #   - runtime baseline commonly present
-  #   - full automation path
+  #   Maintenance Executor (Bot #2)
+  #     → planning and execution
   #
-  ##############################################################
-  #
-  # Lifecycle Origin: github_edit_auto
-  #
-  # Entry Path:
-  #
-  #   GitHub Web Editor
-  #     ↓
-  #   Commit
-  #     ↓
-  #   Push Event
-  #     ↓
-  #   Lifecycle Runner
-  #
-  # Characteristics:
-  #
-  #   - no local PowerShell invocation
-  #   - repository-only change source
-  #   - remains Runner-driven
+  #   Human
+  #     → approval authority
   #
   ##############################################################
-  #
-  # Lifecycle Origin: workflow_dispatch_manual
-  #
-  # Entry Path:
-  #
-  #   GitHub Actions
-  #     ↓
-  #   workflow_dispatch
-  #     ↓
-  #   Lifecycle Runner
-  #
-  # Characteristics:
-  #
-  #   - explicit operator initiation
-  #   - approval resume
-  #   - lifecycle recovery
-  #   - manual orchestration
-  #
+
   ##############################################################
+  # Automated Lifecycle Entry
   #
-  # Invocation Mode: push_automation
+  # Supported:
   #
-  # Trigger Source:
+  #   PowerShell
+  #     → Git Commit
+  #     → Git Push
   #
-  #   push
-  #
-  # Meaning:
-  #
-  #   The Runner was invoked by repository push automation.
-  #
-  # Notes:
-  #
-  #   This invocation may originate from either:
-  #
-  #     - powershell_auto
-  #     - github_edit_auto
-  #
-  #   Exact lifecycle_origin attribution must be explicitly
-  #   carried by lifecycle metadata if required.
-  #
-  #   The Runner must not guess.
-  #
-  ##############################################################
-  #
-  # Invocation Mode: workflow_dispatch_manual
-  #
-  # Trigger Source:
-  #
-  #   workflow_dispatch
-  #
-  # Meaning:
-  #
-  #   The Runner was explicitly started by an operator.
-  #
-  ##############################################################
-  #
-  # Invocation Mode: contract_continuation
-  #
-  # Trigger Source:
-  #
-  #   workflow_run
-  #
-  # Produced By:
-  #
-  #   Runtime Auditor
-  #     or
-  #   Maintenance Executor
-  #
-  # Meaning:
-  #
-  #   The Runner was resumed by a completed bot workflow.
-  #
-  # Characteristics:
-  #
-  #   - contract-driven continuation
-  #   - consumes lifecycle_event.json
-  #   - consumes lifecycle_backhaul.json
-  #   - preserves chronology ownership
+  #   GitHub Edit
+  #     → Commit
+  #     → Push
   #
   ##############################################################
 
@@ -238,111 +60,114 @@ on:
       - "runtime-baseline/update-*"
 
   ##############################################################
-  # Manual Runner Control
+  # Manual Lifecycle Operations
   #
-  # This is NOT the normal bot-mode manual workflow.
+  # Only use this panel when:
   #
-  # Used only for:
+  #   1. Starting a lifecycle manually
   #
-  #   - starting an automated lifecycle session manually
-  #   - resuming a lifecycle at human_approval
-  #   - resuming execute after human approval artifact exists
-  #   - recovery from interrupted lifecycle wiring
+  #   2. Continuing an approved lifecycle
   #
-  # Manual bot-mode execution should be performed from:
+  #   3. Recovering a lifecycle session
   #
-  #   - RGA Runtime Auditor
-  #   - RGA Maintenance Executor
+  # Bot workflows should NOT be started from here.
   #
-  # not from this Lifecycle Runner.
+  # Use:
+  #
+  #   RGA Runtime Auditor
+  #   RGA Maintenance Executor
+  #
+  # for manual bot testing.
   #
   ##############################################################
 
-workflow_dispatch:
-  inputs:
+  workflow_dispatch:
+    inputs:
 
-    operator_action:
-      description: >-
-        What do you want to do?
+      operator_action:
+        description: >-
+          Select the action to perform.
 
-        start_lifecycle
-          Start a new lifecycle.
+          start_lifecycle
+            Start a new lifecycle.
 
-        resume_after_approval
-          Continue an approved lifecycle.
-
-        recover_lifecycle
-          Repair lifecycle wiring or session state.
-
-      required: true
-
-      default: start_lifecycle
-
-      type: choice
-
-      options:
-        - start_lifecycle
-        - resume_after_approval
-        - recover_lifecycle
-
-    audit_session_id:
-      description: >-
-        Lifecycle session to continue.
-
-        Leave empty when starting a new lifecycle.
-
-        Required for:
           resume_after_approval
+            Continue an approved lifecycle.
+
           recover_lifecycle
+            Repair lifecycle state.
 
-      required: false
+        required: true
 
-      default: ""
+        default: start_lifecycle
 
-    execution_approval:
-      description: >-
-        Required only when resuming execution.
+        type: choice
 
-        Enter:
+        options:
+          - start_lifecycle
+          - resume_after_approval
+          - recover_lifecycle
 
-        APPROVE_RGA_EXECUTION
+      audit_session_id:
+        description: >-
+          Existing lifecycle session.
 
-      required: false
+          Leave blank for a new lifecycle.
 
-      default: ""
+          Required for:
+            resume_after_approval
+            recover_lifecycle
 
-    ref:
-      description: >-
-        Git ref, branch, or SHA.
+        required: false
 
-      required: false
+        default: ""
 
-      default: main
+      execution_approval:
+        description: >-
+          Required only for:
+
+            resume_after_approval
+
+          Expected value:
+
+            APPROVE_RGA_EXECUTION
+
+        required: false
+
+        default: ""
+
+      ref:
+        description: >-
+          Git ref, branch, or SHA.
+
+        required: false
+
+        default: main
 
   ##############################################################
-  # Contract-Driven Automated Lifecycle Continuation
+  # Lifecycle Continuation
   #
-  # Trigger Source:
+  # Trigger:
   #
   #   workflow_run
   #
   # Produced By:
   #
-  #   RGA Runtime Auditor
-  #   RGA Maintenance Executor
+  #   Runtime Auditor
+  #   Maintenance Executor
   #
-  # Consumed Contracts:
+  # Contracts:
   #
   #   lifecycle_event.json
   #   lifecycle_backhaul.json
   #
-  # Automated rule:
+  # Rule:
   #
-  #   Bot workflows publish contracts.
+  #   Bots publish contracts.
   #
   #   Lifecycle Runner consumes contracts.
   #
-  #   Bot workflows MUST NOT dispatch Lifecycle Runner directly.
+  #   Bots must never dispatch Lifecycle Runner.
   #
   ##############################################################
 
@@ -350,8 +175,10 @@ workflow_dispatch:
     workflows:
       - RGA Runtime Auditor
       - RGA Maintenance Executor
+
     types:
       - completed
+
     branches:
       - main
       - "runtime-baseline/update-*"
