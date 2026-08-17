@@ -797,7 +797,7 @@ jobs:
       ########################################################
 
       - name: Download Triggering Workflow Artifacts
-        if: ${{ github.event_name == 'workflow_run' }}
+        if: github.event_name == 'workflow_run'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.generate-app-token.outputs.token }}
@@ -2834,7 +2834,7 @@ jobs:
       ############################################################
 
       - name: Dispatch next workflow
-        if: ${{ success() }}
+        if: success()
         shell: bash
         env:
           APP_TOKEN: ${{ steps.generate-app-token.outputs.token }}
