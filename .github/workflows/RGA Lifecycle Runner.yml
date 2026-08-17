@@ -2807,7 +2807,6 @@ jobs:
         env:
           APP_TOKEN: ${{ steps.generate-app-token.outputs.token }}
           GH_OWNER_REPO: ${{ github.repository }}
-
         run: |
           set -euo pipefail
 
@@ -2825,7 +2824,6 @@ jobs:
               echo "Current stage: ${RESOLVED_STAGE:-unknown}"
               echo "Lifecycle status: complete"
               echo "Dispatch required: false"
-
 
               jq -n \
                 --arg current "${RESOLVED_STAGE:-unknown}" \
@@ -2881,6 +2879,7 @@ jobs:
               ;;
 
           esac
+
 
           ########################################################
           # Dispatch gate
