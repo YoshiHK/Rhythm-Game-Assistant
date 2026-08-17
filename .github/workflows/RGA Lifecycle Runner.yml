@@ -3188,7 +3188,7 @@ jobs:
 
             exit 1
           fi
-                      
+
           ########################################################
           # Downstream continuation expectations
           #
@@ -3342,7 +3342,7 @@ jobs:
 
           echo "Dispatched workflow '${WORKFLOW_FILE}' successfully."
           echo "Lifecycle dispatch result written:"
-          cat artifacts/lifecycle_dispatch_result.json
+          cat artifacts/lifecycle_dispatch_result.json       
          
       ########################################################
       # Upload Lifecycle Dispatch Result
