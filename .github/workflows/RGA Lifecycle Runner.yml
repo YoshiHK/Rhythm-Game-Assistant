@@ -3318,11 +3318,11 @@ jobs:
           name: rga-lifecycle-dispatch-result
           path: artifacts/lifecycle_dispatch_result.json
           if-no-files-found: warn
-          retention-days: 30          
+          retention-days: 30
 
-      ############################################################
+      ########################################################
       # Upload Lifecycle Event
-      ############################################################
+      ########################################################
 
       - name: Upload Lifecycle Event
         if: always()
@@ -3332,10 +3332,10 @@ jobs:
           path: artifacts/lifecycle_event.json
           if-no-files-found: warn
           retention-days: 30
-          
-      ############################################################
+
+      ########################################################
       # Upload Lifecycle State
-      ############################################################
+      ########################################################
 
       - name: Upload Lifecycle State
         if: always()
@@ -3345,4 +3345,3 @@ jobs:
           path: artifacts/lifecycle_state.json
           if-no-files-found: warn
           retention-days: 30
-
