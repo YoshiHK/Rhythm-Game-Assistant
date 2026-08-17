@@ -3136,7 +3136,6 @@ jobs:
 
           CURL_EXIT_CODE="$?"
 
-
           ########################################################
           # Downstream continuation expectations
           #
@@ -3165,6 +3164,9 @@ jobs:
 
           esac          
 
+          # Parse HTTP status safely to avoid unbound variable errors under set -u
+          HTTP_STATUS="$(cat "${DISPATCH_STATUS}" 2>/dev/null || echo "000")"
+
           # Sanitize variables for jq before building JSON
           NEXT_STAGE_JSON="null"
           if [ -n "${NEXT_STAGE:-}" ]; then
@@ -3185,23 +3187,23 @@ jobs:
           # Dispatch failure
           ########################################################
 
-          if [ "${HTTP_STATUS}" != "204" ]; then
+          if [ "${HTTP_STATUS:-000}" != "204" ]; then
 
-            echo "Workflow dispatch failed (HTTP ${HTTP_STATUS})" >&2
+            echo "Workflow dispatch failed (HTTP ${HTTP_STATUS:-000})" >&2
 
-            if [ "${HTTP_STATUS}" = "401" ]; then
+            if [ "${HTTP_STATUS:-000}" = "401" ]; then
               echo "::error::workflow_dispatch unauthorized. Check token source ${DISPATCH_TOKEN_SOURCE}." >&2
             fi
 
-            if [ "${HTTP_STATUS}" = "403" ]; then
+            if [ "${HTTP_STATUS:-000}" = "403" ]; then
               echo "::error::workflow_dispatch forbidden. Check Actions permission / token scope." >&2
             fi
 
-            if [ "${HTTP_STATUS}" = "404" ]; then
+            if [ "${HTTP_STATUS:-000}" = "404" ]; then
               echo "::error::workflow file or repository not found for token." >&2
             fi
 
-            if [ "${HTTP_STATUS}" = "422" ]; then
+            if [ "${HTTP_STATUS:-000}" = "422" ]; then
               echo "::error::workflow_dispatch is not available or workflow file name is incorrect." >&2
             fi
 
@@ -3218,7 +3220,7 @@ jobs:
               --arg status "${LIFECYCLE_STATUS:-running}" \
               --arg workflow "${WORKFLOW_FILE}" \
               --arg ref "${REF_INPUT}" \
-              --arg http_status "${HTTP_STATUS}" \
+              --arg http_status "${HTTP_STATUS:-000}" \
               --arg token_stage "${TOKEN_STAGE}" \
               --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
               --argjson downstream_contract "${DOWNSTREAM_CONTRACT_JSON}" \
@@ -3303,7 +3305,7 @@ jobs:
 
           echo "Dispatched workflow '${WORKFLOW_FILE}' successfully."
           echo "Lifecycle dispatch result written:"
-          cat artifacts/lifecycle_dispatch_result.json       
+          cat artifacts/lifecycle_dispatch_result.json                       
          
       ########################################################
       # Upload Lifecycle Dispatch Result
