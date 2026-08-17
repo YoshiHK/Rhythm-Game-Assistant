@@ -1,4 +1,4 @@
-name: RGA Runtime Auditor.
+name: RGA Runtime Auditor
 
 on:
   workflow_dispatch:
