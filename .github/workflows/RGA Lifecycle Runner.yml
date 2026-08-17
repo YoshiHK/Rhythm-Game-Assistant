@@ -2991,78 +2991,6 @@ jobs:
           ########################################################
           # Token selection policy
           #
-          # Pre-human_approval:
-          #   pre_audit / plan / plan_audit / human_approval
-          #   → PAT_TOKEN or RGA_Access fallback
-          #
-          # Post-human_approval:
-          #   execute / post_audit / complete / deployment-side
-          #   → github.token
-          ########################################################
-          
-          echo "Dispatch routing diagnostics:"
-          echo "  RESOLVED_STAGE=${RESOLVED_STAGE:-unknown}"
-          echo "  NEXT_STAGE=${NEXT_STAGE:-}"
-          echo "  WORKFLOW_FILE=${WORKFLOW_FILE:-}"
-          echo "  REF_INPUT=${REF_INPUT:-}"
-          echo "  DISPATCH_REQUIRED=${DISPATCH_REQUIRED:-false}"          
-
-          TOKEN_STAGE="${NEXT_STAGE:-${RESOLVED_STAGE:-unknown}}"
-
-          PRE_HUMAN_APPROVAL="false"
-
-          case "${TOKEN_STAGE}" in
-            pre_audit|plan|plan_audit|human_approval)
-              PRE_HUMAN_APPROVAL="true"
-              ;;
-          esac
-
-          if [ "${PRE_HUMAN_APPROVAL}" = "true" ]; then
-
-            if [ -n "${PAT_TOKEN:-}" ]; then
-              DISPATCH_TOKEN="${PAT_TOKEN}"
-              DISPATCH_TOKEN_SOURCE="secrets.PAT_TOKEN"
-
-            elif [ -n "${RGA_ACCESS:-}" ]; then
-              DISPATCH_TOKEN="${RGA_ACCESS}"
-              DISPATCH_TOKEN_SOURCE="secrets.RGA_Access"
-
-            else
-              DISPATCH_TOKEN=""
-              DISPATCH_TOKEN_SOURCE="missing pre-human approval PAT"
-            fi
-
-          else
-
-            DISPATCH_TOKEN="${GITHUB_TOKEN_FALLBACK:-}"
-            DISPATCH_TOKEN_SOURCE="github.token"
-
-          fi
-
-          if [ -z "${DISPATCH_TOKEN}" ]; then
-
-            echo "Dispatch token is missing." >&2
-            echo "Token stage: ${TOKEN_STAGE}" >&2
-            echo "Expected token source: ${DISPATCH_TOKEN_SOURCE}" >&2
-
-            jq -n \
-              --arg current "${RESOLVED_STAGE:-unknown}" \
-              --arg next "${NEXT_STAGE:-}" \
-              --arg status "${LIFECYCLE_STATUS:-running}" \
-              --arg workflow "${WORKFLOW_FILE}" \
-              --arg ref "${REF_INPUT}" \
-              --arg token_stage "${TOKEN_STAGE}" \
-              --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
-              '{
-                schema: "rga.lifecycle_dispatch_result.v1.1",
-                dispatch_performed: false,
-                dispatch_created: false,
-                current_stage: $current,
-                next_stage: (
-                  if $next == ""
-          ########################################################
-          # Token selection policy
-          #
           # Unified GitHub App Installation Token for all stages.
           ########################################################
           
@@ -3081,6 +3009,43 @@ jobs:
           else
             DISPATCH_TOKEN=""
             DISPATCH_TOKEN_SOURCE="missing GitHub App Token"
+          fi
+
+          if [ -z "${DISPATCH_TOKEN}" ]; then
+
+            echo "Dispatch token is missing." >&2
+            echo "Token stage: ${TOKEN_STAGE}" >&2
+            echo "Expected token source: ${DISPATCH_TOKEN_SOURCE}" >&2
+
+            NEXT_STAGE_JSON="null"
+            if [ -n "${NEXT_STAGE:-}" ]; then
+              NEXT_STAGE_JSON="\"${NEXT_STAGE}\""
+            fi
+
+            jq -n \
+              --arg current "${RESOLVED_STAGE:-unknown}" \
+              --argjson next "${NEXT_STAGE_JSON}" \
+              --arg status "${LIFECYCLE_STATUS:-running}" \
+              --arg workflow "${WORKFLOW_FILE}" \
+              --arg ref "${REF_INPUT}" \
+              --arg token_stage "${TOKEN_STAGE}" \
+              --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
+              '{
+                schema: "rga.lifecycle_dispatch_result.v1.1",
+                dispatch_performed: false,
+                dispatch_created: false,
+                current_stage: $current,
+                next_stage: $next,
+                lifecycle_status: $status,
+                target_workflow: $workflow,
+                ref: $ref,
+                token_stage: $token_stage,
+                token_source: $token_source,
+                reason: "missing_dispatch_token"
+              }' \
+              > artifacts/lifecycle_dispatch_result.json
+
+            exit 1
           fi
 
           ########################################################
@@ -3170,24 +3135,6 @@ jobs:
 
           CURL_EXIT_CODE="$?"
 
-          set -e
-
-          HTTP_STATUS="$(
-            cat "${DISPATCH_STATUS}" 2>/dev/null || echo "000"
-          )"
-
-          if [ "${CURL_EXIT_CODE}" != "0" ]; then
-            echo "curl failed before GitHub API status could be trusted." >&2
-            echo "curl_exit_code=${CURL_EXIT_CODE}" >&2
-            echo "http_status=${HTTP_STATUS}" >&2
-
-            if [ -f "${DISPATCH_RESPONSE}" ]; then
-              echo "API response:" >&2
-              sed -n '1,200p' "${DISPATCH_RESPONSE}" >&2 || true
-            fi
-
-            exit 1
-          fi
 
           ########################################################
           # Downstream continuation expectations
