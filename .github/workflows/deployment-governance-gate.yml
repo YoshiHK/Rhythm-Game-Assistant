@@ -1,34 +1,25 @@
-name: Deployment Governance Gate
-
 on:
   workflow_dispatch:
     inputs:
 
       audit_session_id:
-        description: >-
-          Lifecycle session identifier authorized by Lifecycle Runner.
-
+        description: Lifecycle session identifier.
         required: true
-
         default: ""
 
       lifecycle_stage:
-        description: >-
-          Lifecycle stage requested by Lifecycle Runner.
-
-          Expected value:
-
-          governance_gate
-
+        description: Expected lifecycle stage. Use governance_gate.
         required: true
-
         default: governance_gate
 
+      triggering_run_id:
+        description: Lifecycle Runner run ID that produced governance artifacts.
+        required: true
+        default: ""
+
       ref:
-        description: Git ref, branch, or SHA for governance evaluation.
-
+        description: Git ref, branch, or SHA.
         required: false
-
         default: main
 
 permissions:
@@ -70,57 +61,63 @@ jobs:
           gh --version         
 
       ############################################################
-      # Download Artifacts (Triggering Run + Historic Baseline)
+      # Download Lifecycle Runner Artifacts
       ############################################################
 
-      - name: Download All Governance Artifacts via GitHub CLI
+      - name: Download Lifecycle Runner Artifacts
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN != '' && secrets.PAT_TOKEN || github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.inputs.triggering_run_id }}
+          GH_OWNER_REPO: ${{ github.repository }}
         run: |
-          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
-
-          Write-Host "[GOVERNANCE-GATE] Downloading artifacts from triggering run $env:RUN_ID..."
-          cmd.exe /c "gh run download %RUN_ID% --dir .\artifacts 2>nul"
-
-          # Check if early stage contracts are missing (e.g. runtime_baseline.json)
-          $missingContracts = @("runtime_baseline.json", "database_mutation_plan.json", "persistence_contract.json") | 
-            Where-Object { -not (Get-ChildItem .\artifacts -Recurse -Filter $_ -ErrorAction SilentlyContinue) }
-
-          if ($missingContracts) {
-            Write-Host "[GOVERNANCE-GATE][WARN] Missing pre-approval contracts ($($missingContracts -join ', '))."
-            Write-Host "[GOVERNANCE-GATE] Searching recent successful workflow runs for missing contracts..."
-
-            # Query recent successful runs
-            $runs = gh api "repos/:owner/:repo/actions/runs?status=success&per_page=15" | ConvertFrom-Json
-            foreach ($run in $runs.workflow_runs) {
-              if ($run.id -ne $env:RUN_ID) {
-                Write-Host "[GOVERNANCE-GATE] Attempting backhaul download from historic run ID: $($run.id)"
-                
-                # Download into run-specific folder to prevent zip overwrite collisions
-                $targetDir = ".\artifacts\historic_$($run.id)"
-                New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-
-                # Use cmd /c so gh exit code 1 (no valid artifacts) doesn't break PowerShell loop
-                $historicRunId = $run.id
-                cmd.exe /c "gh run download $historicRunId --dir $targetDir 2>nul"
-                $LASTEXITCODE = 0
-                
-                # Re-check if missing contracts exist anywhere inside .\artifacts
-                $stillMissing = $missingContracts | Where-Object { 
-                  $contractName = $_
-                  -not (Get-ChildItem .\artifacts -Recurse -Filter $contractName -ErrorAction SilentlyContinue)
-                }
-
-                if (-not $stillMissing) {
-                  Write-Host "[GOVERNANCE-GATE] All missing contracts successfully backhauled!"
-                  break
-                }
-              }
-            }
+          if ([string]:: {
+            throw "triggering_run_id input is required."
           }
 
+          New-Item -ItemType Directory -Force -Path ".\artifacts" | Out-Null
+
+          Write-Host "[GOVERNANCE-GATE] Downloading Lifecycle Runner artifacts..."
+          Write-Host "  triggering_run_id: $env:RUN_ID"
+
+          gh run download $env:RUN_ID `
+            -R $env:GH_OWNER_REPO `
+            -n rga-lifecycle-event `
+            -D ".\artifacts\rga-lifecycle-event"
+
+          gh run download $env:RUN_ID `
+            -R $env:GH_OWNER_REPO `
+            -n rga-lifecycle-state `
+            -D ".\artifacts\rga-lifecycle-state" `
+            2>$null
+
+          gh run download $env:RUN_ID `
+            -R $env:GH_OWNER_REPO `
+            -n rga-stage-trace `
+            -D ".\artifacts\rga-stage-trace" `
+            2>$null
+
+          gh run download $env:RUN_ID `
+            -R $env:GH_OWNER_REPO `
+            -n rga-contract-trace `
+            -D ".\artifacts\rga-contract-trace" `
+            2>$null
+
+          gh run download $env:RUN_ID `
+            -R $env:GH_OWNER_REPO `
+            -n rga-lifecycle-backhaul-resolution `
+            -D ".\artifacts\rga-lifecycle-backhaul-resolution" `
+            2>$null
+
+          gh run download $env:RUN_ID `
+            -R $env:GH_OWNER_REPO `
+            -n rga-lifecycle-dispatch-result `
+            -D ".\artifacts\rga-lifecycle-dispatch-result" `
+            2>$null
+
+      ############################################################
+      # Verify Downloaded Artifacts
+      ############################################################
 
       - name: Verify Downloaded Artifacts
         shell: pwsh
@@ -176,31 +173,40 @@ jobs:
       - name: Lifecycle Event Validation
         shell: pwsh
         run: |
-          # Search recursively inside .\artifacts excluding historic backhauls
-          $event = Get-ChildItem .\artifacts -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -notmatch "historic_" } |
-            Sort-Object LastWriteTime |
-            Select-Object -Last 1
 
-          # Fallback: Deep search across workspace root
-          if (-not $event) {
-            $event = Get-ChildItem . -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -notmatch "historic_" } |
-              Sort-Object LastWriteTime |
-              Select-Object -Last 1
+          $preferred = ".\artifacts\rga-lifecycle-event\lifecycle_event.json"
+
+          if (Test-Path $preferred) {
+
+            $event = Get-Item $preferred
+
+          }
+          else {
+
+            $event = Get-ChildItem ".\artifacts" `
+              -Recurse `
+              -Filter "lifecycle_event.json" `
+              -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -notmatch "historic_" } |
+                Sort-Object LastWriteTime |
+                Select-Object -Last 1
+
           }
 
           if (-not $event) {
-            throw "lifecycle_event.json not found in triggering run artifacts."
+            throw "lifecycle_event.json not found in downloaded Lifecycle Runner artifacts."
           }
 
-          Write-Host "[GOVERNANCE-GATE] Validating lifecycle event file at: $($event.FullName)"
+          Write-Host ""
+          Write-Host "[GOVERNANCE-GATE] Validating:"
+          Write-Host "  $($event.FullName)"
 
           $json = Get-Content $event.FullName -Raw | ConvertFrom-Json
 
-          # ----------------------------------------------
+          ########################################################
           # Schema Validation
-          # ----------------------------------------------
+          ########################################################
+
           $allowedSchemas = @(
             "rga.lifecycle_event.v1.0",
             "rga.lifecycle_event.v1.1",
@@ -208,41 +214,61 @@ jobs:
           )
 
           if ($allowedSchemas -notcontains $json.schema) {
-            throw "Unsupported lifecycle event schema: '$($json.schema)'. Expected one of: $($allowedSchemas -join ', ')"
+
+            throw "Unsupported lifecycle event schema: '$($json.schema)'"
+
           }
 
-          # ----------------------------------------------
-          # Required Fields Validation
-          # ----------------------------------------------
+          ########################################################
+          # Required Fields
+          ########################################################
+
           $required = @(
             "completed_stage",
-            "next_stage"
+            "next_stage",
+            "dispatch_required"
           )
 
           foreach ($field in $required) {
+
             if (-not $json.PSObject.Properties.Name.Contains($field)) {
-              throw "Missing required lifecycle event field: '$field'"
+
+              throw "Missing required lifecycle event field '$field'"
+
             }
+
           }
 
-          # Check mode field (supports audit_mode, executor_mode, or legacy mode)
-          $hasMode = $json.PSObject.Properties.Name.Contains("audit_mode") -or 
-                     $json.PSObject.Properties.Name.Contains("executor_mode") -or
-                     $json.PSObject.Properties.Name.Contains("mode")
+          ########################################################
+          # Governance Flow Validation
+          ########################################################
 
-          if (-not $hasMode) {
-            throw "Missing lifecycle mode field (expected 'audit_mode' or 'executor_mode')"
+          $completed = [string]$json.completed_stage
+
+          $next = [string]$json.next_stage
+
+          if (
+            ($completed -eq "post_audit" -and $next -eq "governance_gate") -or
+            ($completed -eq "governance_gate" -and $next -eq "complete")
+          ) {
+
+            Write-Host ""
+            Write-Host "[GOVERNANCE-GATE] Transition accepted."
+
           }
+          else {
 
-          $effectiveMode = if ($json.audit_mode) { $json.audit_mode } elseif ($json.executor_mode) { $json.executor_mode } else { $json.mode }
+            throw "Unexpected lifecycle transition. completed_stage='$completed' next_stage='$next'"
+
+          }
 
           Write-Host ""
-          Write-Host "[GOVERNANCE-GATE] [OK] Lifecycle event successfully validated!"
+          Write-Host "[GOVERNANCE-GATE] [OK]"
           Write-Host "  schema          : $($json.schema)"
-          Write-Host "  mode            : $effectiveMode"
-          Write-Host "  completed_stage : $($json.completed_stage)"
-          Write-Host "  next_stage      : $($json.next_stage)"
-            
+          Write-Host "  completed_stage : $completed"
+          Write-Host "  next_stage      : $next"
+          Write-Host "  dispatch_required : $($json.dispatch_required)"
+          
       ############################################################
       # Check Post-Audit Trigger
       ############################################################
