@@ -1,5 +1,3 @@
-name: Governance Gate
-
 on:
   workflow_dispatch:
     inputs:
@@ -60,24 +58,38 @@ jobs:
       - name: Verify GitHub CLI
         shell: pwsh
         run: |
-          gh --version         
+          gh --version     
 
-      #########################
+      ############################################################
+      # Generate GitHub App Token
+      ############################################################
+
+      - name: Generate GitHub App Token
+        id: generate-app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RGA_APP_ID }}
+          private-key: ${{ secrets.RGA_APP_PRIVATE_KEY }}          
+
+      ############################################################
       # Download Lifecycle Runner Artifacts
       ############################################################
 
       - name: Download Lifecycle Runner Artifacts
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.generate-app-token.outputs.token }}
           RUN_ID: ${{ github.event.inputs.triggering_run_id }}
           GH_OWNER_REPO: ${{ github.repository }}
         run: |
+          $ErrorActionPreference = "Stop"
 
           if ([string]:: {
-
             throw "triggering_run_id input is required."
+          }
 
+          if ([string]:: {
+            throw "GH_OWNER_REPO is required."
           }
 
           New-Item `
@@ -90,11 +102,20 @@ jobs:
           Write-Host "[GOVERNANCE-GATE] Downloading Lifecycle Runner artifacts..."
           Write-Host "  triggering_run_id: $env:RUN_ID"
           Write-Host "  repository       : $env:GH_OWNER_REPO"
+          Write-Host "  token source     : GitHub App token"
+
+          ########################################################
+          # Required lifecycle event artifact
+          ########################################################
 
           gh run download $env:RUN_ID `
             -R $env:GH_OWNER_REPO `
             -n rga-lifecycle-event `
             -D ".\artifacts\rga-lifecycle-event"
+
+          ########################################################
+          # Optional observability artifacts
+          ########################################################
 
           gh run download $env:RUN_ID `
             -R $env:GH_OWNER_REPO `
@@ -128,10 +149,16 @@ jobs:
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] Downloaded files:"
-          Get-ChildItem ".\artifacts" -Recurse -File |
-            ForEach-Object {
+          $files = Get-ChildItem ".\artifacts" -Recurse -File -ErrorAction SilentlyContinue
+
+          if ($files) {
+            $files | ForEach-Object {
               Write-Host "  $($_.FullName)"
             }
+          }
+          else {
+            Write-Host "  (none)"
+          }
 
       ############################################################
       # Verify Downloaded Artifacts
