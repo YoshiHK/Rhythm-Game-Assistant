@@ -194,6 +194,33 @@ permissions:
   pull-requests: read
 
 jobs:
+  lifecycle-runner:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Token Generation
+      - name: Generate GitHub App Token
+        id: generate-app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RGA_APP_ID }}
+          private-key: ${{ secrets.RGA_APP_PRIVATE_KEY }}
+
+      # Step 2: Download Artifacts
+      - name: Download Triggering Workflow Artifacts
+        if: github.event_name == 'workflow_run'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.generate-app-token.outputs.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+
+      # Step 3: Dispatch Workflow
+      - name: Dispatch next workflow
+        if: success()
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.generate-app-token.outputs.token }}
+          GH_OWNER_REPO: ${{ github.repository }}
+
 
   determine-origin:
 
