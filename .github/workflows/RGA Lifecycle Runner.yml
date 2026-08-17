@@ -3289,21 +3289,9 @@ jobs:
 
                 workflow_run_continuation_expected: $workflow_run_expected,
 
-                downstream_contract_expected:
-                  (
-                    if $downstream_contract == ""
-                    then null
-                    else $downstream_contract
-                    end
-                  ),
+                downstream_contract_expected: (if $downstream_contract == "" then null else $downstream_contract end),
 
-                downstream_backhaul_expected:
-                  (
-                    if $downstream_backhaul == ""
-                    then null
-                    else $downstream_backhaul
-                    end
-                  ),
+                downstream_backhaul_expected: (if $downstream_backhaul == "" then null else $downstream_backhaul end),
 
                 downstream_resume_model: $downstream_resume_model,
 
@@ -3314,6 +3302,7 @@ jobs:
             exit 1
 
           fi
+         
 
           ########################################################
           # Dispatch success
