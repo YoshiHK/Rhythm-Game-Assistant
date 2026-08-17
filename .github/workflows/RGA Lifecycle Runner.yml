@@ -3269,13 +3269,7 @@ jobs:
 
                 current_stage: $current,
 
-                next_stage:
-                  (
-                    if $next == ""
-                    then null
-                    else $next
-                    end
-                  ),
+                next_stage: (if $next == "" then null else $next end),
 
                 lifecycle_status: $status,
 
