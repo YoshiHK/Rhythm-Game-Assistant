@@ -84,12 +84,12 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          if ([string]:: {
-            throw "triggering_run_id input is required."
-          }
+          Write-Host ""
+          Write-Host "[GOVERNANCE-GATE] Diagnostics"
+          Write-Host "  RUN_ID=$env:RUN_ID"
+          Write-Host "  GH_OWNER_REPO=$env:GH_OWNER_REPO"
 
-          if ([string]:: {
-            throw "GH_OWNER_REPO is required."
+          if ([string]::IsNullOrWhiteSpacegering_run_id input is required."
           }
 
           New-Item `
