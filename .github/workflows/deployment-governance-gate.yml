@@ -1,4 +1,4 @@
-name: Governance Gate
+name: Deployment Governance Gate
 
 on:
   workflow_dispatch:
@@ -10,12 +10,12 @@ on:
         default: ""
 
       lifecycle_stage:
-        description: Expected lifecycle stage. Use governance_gate.
+        description: Expected lifecycle stage.
         required: true
         default: governance_gate
 
       triggering_run_id:
-        description: Lifecycle Runner run ID that produced governance artifacts.
+        description: Lifecycle Runner run ID.
         required: true
         default: ""
 
@@ -92,37 +92,19 @@ jobs:
           Write-Host "  GH_OWNER_REPO=$env:GH_OWNER_REPO"
 
           if ($null -eq $env:RUN_ID -or $env:RUN_ID.Trim() -eq "") {
-              throw "triggering_run_id input is required."
+            throw "triggering_run_id input is required."
           }
 
           if ($null -eq $env:GH_OWNER_REPO -or $env:GH_OWNER_REPO.Trim() -eq "") {
-              throw "GH_OWNER_REPO is required."
+            throw "GH_OWNER_REPO is required."
           }
 
-          New-Item `
-            -ItemType Directory `
-            -Force `
-            -Path ".\artifacts" |
-              Out-Null
-
-          Write-Host ""
-          Write-Host "[GOVERNANCE-GATE] Downloading Lifecycle Runner artifacts..."
-          Write-Host "  triggering_run_id: $env:RUN_ID"
-          Write-Host "  repository       : $env:GH_OWNER_REPO"
-          Write-Host "  token source     : GitHub App token"
-
-          ########################################################
-          # Required lifecycle event artifact
-          ########################################################
+          New-Item -ItemType Directory -Force -Path ".\artifacts" | Out-Null
 
           gh run download $env:RUN_ID `
             -R $env:GH_OWNER_REPO `
             -n rga-lifecycle-event `
             -D ".\artifacts\rga-lifecycle-event"
-
-          ########################################################
-          # Optional observability artifacts
-          ########################################################
 
           gh run download $env:RUN_ID `
             -R $env:GH_OWNER_REPO `
@@ -144,28 +126,12 @@ jobs:
 
           gh run download $env:RUN_ID `
             -R $env:GH_OWNER_REPO `
-            -n rga-lifecycle-backhaul-resolution `
-            -D ".\artifacts\rga-lifecycle-backhaul-resolution" `
-            2>$null
-
-          gh run download $env:RUN_ID `
-            -R $env:GH_OWNER_REPO `
             -n rga-lifecycle-dispatch-result `
             -D ".\artifacts\rga-lifecycle-dispatch-result" `
             2>$null
 
           Write-Host ""
-          Write-Host "[GOVERNANCE-GATE] Downloaded files:"
-          $files = Get-ChildItem ".\artifacts" -Recurse -File -ErrorAction SilentlyContinue
-
-          if ($files) {
-            $files | ForEach-Object {
-              Write-Host "  $($_.FullName)"
-            }
-          }
-          else {
-            Write-Host "  (none)"
-          }
+          Write-Host "[GOVERNANCE-GATE] Download complete."
 
       ############################################################
       # Verify Downloaded Artifacts
