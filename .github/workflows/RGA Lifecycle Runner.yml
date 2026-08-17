@@ -3188,7 +3188,7 @@ jobs:
 
             exit 1
           fi
-          
+                      
           ########################################################
           # Downstream continuation expectations
           #
@@ -3216,6 +3216,22 @@ jobs:
               ;;
 
           esac          
+
+          # Sanitize variables for jq before building JSON
+          NEXT_STAGE_JSON="null"
+          if [ -n "${NEXT_STAGE:-}" ]; then
+            NEXT_STAGE_JSON="\"${NEXT_STAGE}\""
+          fi
+
+          DOWNSTREAM_CONTRACT_JSON="null"
+          if [ -n "${DOWNSTREAM_CONTRACT_EXPECTED:-}" ]; then
+            DOWNSTREAM_CONTRACT_JSON="\"${DOWNSTREAM_CONTRACT_EXPECTED}\""
+          fi
+
+          DOWNSTREAM_BACKHAUL_JSON="null"
+          if [ -n "${DOWNSTREAM_BACKHAUL_EXPECTED:-}" ]; then
+            DOWNSTREAM_BACKHAUL_JSON="\"${DOWNSTREAM_BACKHAUL_EXPECTED}\""
+          fi
 
           ########################################################
           # Dispatch failure
@@ -3247,21 +3263,6 @@ jobs:
               "${DISPATCH_RESPONSE}" \
               >&2 \
               || true
-
-            NEXT_STAGE_JSON="null"
-            if [ -n "${NEXT_STAGE:-}" ]; then
-              NEXT_STAGE_JSON="\"${NEXT_STAGE}\""
-            fi
-
-            DOWNSTREAM_CONTRACT_JSON="null"
-            if [ -n "${DOWNSTREAM_CONTRACT_EXPECTED:-}" ]; then
-              DOWNSTREAM_CONTRACT_JSON="\"${DOWNSTREAM_CONTRACT_EXPECTED}\""
-            fi
-
-            DOWNSTREAM_BACKHAUL_JSON="null"
-            if [ -n "${DOWNSTREAM_BACKHAUL_EXPECTED:-}" ]; then
-              DOWNSTREAM_BACKHAUL_JSON="\"${DOWNSTREAM_BACKHAUL_EXPECTED}\""
-            fi
 
             jq -n \
               --arg current "${RESOLVED_STAGE:-unknown}" \
@@ -3309,64 +3310,32 @@ jobs:
 
           jq -n \
             --arg current "${RESOLVED_STAGE:-unknown}" \
-            --arg next "${NEXT_STAGE:-}" \
+            --argjson next "${NEXT_STAGE_JSON}" \
             --arg status "${LIFECYCLE_STATUS:-running}" \
             --arg workflow "${WORKFLOW_FILE}" \
             --arg ref "${REF_INPUT}" \
             --arg token_stage "${TOKEN_STAGE}" \
             --arg token_source "${DISPATCH_TOKEN_SOURCE}" \
-            --arg downstream_contract "${DOWNSTREAM_CONTRACT_EXPECTED:-}" \
-            --arg downstream_backhaul "${DOWNSTREAM_BACKHAUL_EXPECTED:-}" \
+            --argjson downstream_contract "${DOWNSTREAM_CONTRACT_JSON}" \
+            --argjson downstream_backhaul "${DOWNSTREAM_BACKHAUL_JSON}" \
             --arg downstream_resume_model "${DOWNSTREAM_RESUME_MODEL:-workflow_run_contract_backhaul}" \
             --argjson workflow_run_expected "${WORKFLOW_RUN_CONTINUATION_EXPECTED:-true}" \
             '{
               schema: "rga.lifecycle_dispatch_result.v1.2",
-
               dispatch_performed: true,
               dispatch_created: true,
-
               current_stage: $current,
-
-              next_stage:
-                (
-                  if $next == ""
-                  then null
-                  else $next
-                  end
-                ),
-
+              next_stage: $next,
               lifecycle_status: $status,
-
               target_workflow: $workflow,
-
               ref: $ref,
-
               token_stage: $token_stage,
-
               token_source: $token_source,
-
               chronology_owner: "lifecycle_runner",
-
               workflow_run_continuation_expected: $workflow_run_expected,
-
-              downstream_contract_expected:
-                (
-                  if $downstream_contract == ""
-                  then null
-                  else $downstream_contract
-                  end
-                ),
-
-              downstream_backhaul_expected:
-                (
-                  if $downstream_backhaul == ""
-                  then null
-                  else $downstream_backhaul
-                  end
-                ),
-
+              downstream_contract_expected: $downstream_contract,
+              downstream_backhaul_expected: $downstream_backhaul,
               downstream_resume_model: $downstream_resume_model,
-
               bot_must_not_dispatch_runner: true
             }' \
             > artifacts/lifecycle_dispatch_result.json
@@ -3374,7 +3343,7 @@ jobs:
           echo "Dispatched workflow '${WORKFLOW_FILE}' successfully."
           echo "Lifecycle dispatch result written:"
           cat artifacts/lifecycle_dispatch_result.json
-          
+         
       ########################################################
       # Upload Lifecycle Dispatch Result
       ########################################################
