@@ -749,6 +749,18 @@ jobs:
           } >> "$GITHUB_ENV"
 
       ########################################################
+      # Generate GitHub App Token
+      ########################################################
+
+      - name: Generate GitHub App Token
+        id: generate-app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RGA_APP_ID }}
+          private-key: ${{ secrets.RGA_APP_PRIVATE_KEY }}
+          
+
+      ########################################################
       # Download Triggering Workflow Artifacts
       ########################################################
 
@@ -756,7 +768,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_run' }}
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.generate-app-token.outputs.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
@@ -2793,10 +2805,9 @@ jobs:
         if: ${{ success() }}
         shell: bash
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-          RGA_ACCESS: ${{ secrets.RGA_Access }}
-          GITHUB_TOKEN_FALLBACK: ${{ github.token }}
+          APP_TOKEN: ${{ steps.generate-app-token.outputs.token }}
           GH_OWNER_REPO: ${{ github.repository }}
+
         run: |
           set -euo pipefail
 
@@ -3049,31 +3060,28 @@ jobs:
                 current_stage: $current,
                 next_stage: (
                   if $next == ""
-                  then null
-                  else $next
-                  end
-                ),
-                lifecycle_status: $status,
-                target_workflow: $workflow,
-                ref: $ref,
-                reason: "dispatch token missing",
-                token_stage: $token_stage,
-                token_source: $token_source,
-                chronology_owner: "lifecycle_runner",
-                workflow_run_continuation_expected: true,
-                downstream_contract_expected: "artifacts/lifecycle_event.json",
-                downstream_backhaul_expected: "artifacts/lifecycle_backhaul.json",
-                downstream_resume_model: "workflow_run_contract_backhaul"
-              }' \
-              > artifacts/lifecycle_dispatch_result.json
+          ########################################################
+          # Token selection policy
+          #
+          # Unified GitHub App Installation Token for all stages.
+          ########################################################
+          
+          echo "Dispatch routing diagnostics:"
+          echo "  RESOLVED_STAGE=${RESOLVED_STAGE:-unknown}"
+          echo "  NEXT_STAGE=${NEXT_STAGE:-}"
+          echo "  WORKFLOW_FILE=${WORKFLOW_FILE:-}"
+          echo "  REF_INPUT=${REF_INPUT:-}"
+          echo "  DISPATCH_REQUIRED=${DISPATCH_REQUIRED:-false}"          
 
-            exit 1
+          TOKEN_STAGE="${NEXT_STAGE:-${RESOLVED_STAGE:-unknown}}"
 
+          if [ -n "${APP_TOKEN:-}" ]; then
+            DISPATCH_TOKEN="${APP_TOKEN}"
+            DISPATCH_TOKEN_SOURCE="actions/create-github-app-token"
+          else
+            DISPATCH_TOKEN=""
+            DISPATCH_TOKEN_SOURCE="missing GitHub App Token"
           fi
-
-          echo "Dispatch token source: ${DISPATCH_TOKEN_SOURCE}"
-          echo "Dispatch token stage: ${TOKEN_STAGE}"
-          echo "Dispatch token length: ${#DISPATCH_TOKEN}"
 
           ########################################################
           # Validate dispatch inputs
