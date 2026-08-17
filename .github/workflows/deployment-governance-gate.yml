@@ -86,7 +86,7 @@ jobs:
 
           # Check if early stage contracts are missing (e.g. runtime_baseline.json)
           $missingContracts = @("runtime_baseline.json", "database_mutation_plan.json", "persistence_contract.json") | 
-            Where-Object { -not (Test-Path ".\artifacts\$_") -and -not (Test-Path ".\artifacts\*\$_") }
+            Where-Object { -not (Get-ChildItem .\artifacts -Recurse -Filter $_ -ErrorAction SilentlyContinue) }
 
           if ($missingContracts) {
             Write-Host "[GOVERNANCE-GATE][WARN] Missing pre-approval contracts ($($missingContracts -join ', '))."
@@ -139,64 +139,35 @@ jobs:
       # Governance Artifact Inventory
       #
       # Discovery only.
-      #
-      # Presence
-      # !=
-      # Validation
-      #
-      # Generates:
-      #   governance_artifact_inventory.txt
       # --------------------------------------------------
       - name: Governance Artifact Inventory
         shell: pwsh
         run: |
-          $InventoryPath =
-            ".\artifacts\governance_artifact_inventory.txt"
+          $InventoryPath = ".\artifacts\governance_artifact_inventory.txt"
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] Artifact Inventory"
           Write-Host "----------------------------------------"
 
-          $files = Get-ChildItem `
-            .\artifacts `
-            -Recurse `
-            -File `
-            -ErrorAction SilentlyContinue |
-            Sort-Object FullName
+          $files = Get-ChildItem .\artifacts -Recurse -File -ErrorAction SilentlyContinue | Sort-Object FullName
 
           if (-not $files) {
-
-            Write-Host `
-              "[GOVERNANCE-GATE][WARN] No artifacts found."
-
-            "No governance artifacts discovered." |
-              Set-Content `
-                $InventoryPath `
-                -Encoding UTF8
-
+            Write-Host "[GOVERNANCE-GATE][WARN] No artifacts found."
+            "No governance artifacts discovered." | Set-Content $InventoryPath -Encoding UTF8
             exit 0
           }
 
           $lines = @()
-
           foreach ($file in $files) {
-
             $line = $file.FullName
-
             Write-Host $line
-
             $lines += $line
           }
 
-          $lines |
-            Set-Content `
-              $InventoryPath `
-              -Encoding UTF8
-
+          $lines | Set-Content $InventoryPath -Encoding UTF8
           Write-Host "----------------------------------------"
           Write-Host ""
-          Write-Host `
-            "[GOVERNANCE-GATE] Inventory written: $InventoryPath"
+          Write-Host "[GOVERNANCE-GATE] Inventory written: $InventoryPath"
 
       ############################################################
       # Lifecycle Event Validation
@@ -205,23 +176,16 @@ jobs:
       - name: Lifecycle Event Validation
         shell: pwsh
         run: |
-          # Target triggering run's event specifically (exclude historic backhaul folders)
-          $event = Get-ChildItem .\artifacts -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
+          # Search recursively inside .\artifacts excluding historic backhauls
+          $event = Get-ChildItem .\artifacts -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -notmatch "historic_" } |
             Sort-Object LastWriteTime |
             Select-Object -Last 1
 
-          # Fallback: Deep search excluding historic folders
+          # Fallback: Deep search across workspace root
           if (-not $event) {
-            $event = Get-ChildItem .\artifacts -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
+            $event = Get-ChildItem . -Recurse -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
               Where-Object { $_.FullName -notmatch "historic_" } |
-              Sort-Object LastWriteTime |
-              Select-Object -Last 1
-          }
-
-          # Fallback: Root directory check
-          if (-not $event) {
-            $event = Get-ChildItem . -Filter "lifecycle_event.json" -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime |
               Select-Object -Last 1
           }
@@ -239,7 +203,8 @@ jobs:
           # ----------------------------------------------
           $allowedSchemas = @(
             "rga.lifecycle_event.v1.0",
-            "rga.lifecycle_event.v1.1"
+            "rga.lifecycle_event.v1.1",
+            "rga.lifecycle_event.v1.2"
           )
 
           if ($allowedSchemas -notcontains $json.schema) {
@@ -260,7 +225,7 @@ jobs:
             }
           }
 
-          # Check mode field (supports audit_mode, executor_mode, or legacy execution mode if fallback needed)
+          # Check mode field (supports audit_mode, executor_mode, or legacy mode)
           $hasMode = $json.PSObject.Properties.Name.Contains("audit_mode") -or 
                      $json.PSObject.Properties.Name.Contains("executor_mode") -or
                      $json.PSObject.Properties.Name.Contains("mode")
@@ -309,43 +274,30 @@ jobs:
             "should_run=false" >> $env:GITHUB_OUTPUT
           }
 
-          
       # --------------------------------------------------
       # Governance Preconditions
-      #
-      # Deployment Governance Gate should only run
-      # after post_audit has completed.
       # --------------------------------------------------
       - name: Governance Preconditions
         id: governance_preconditions
         shell: pwsh
         run: |
-          $ShouldRun =
-            "${{ steps.post_audit.outputs.should_run }}"
+          $ShouldRun = "${{ steps.post_audit.outputs.should_run }}"
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] should_run=$ShouldRun"
 
           if ($ShouldRun -eq "true") {
-
             Write-Host ""
             Write-Host "[GOVERNANCE-GATE] Preconditions satisfied."
             Write-Host "[GOVERNANCE-GATE] Governance aggregation enabled."
-
-            "governance_enabled=true" `
-              >> $env:GITHUB_OUTPUT
-
+            "governance_enabled=true" >> $env:GITHUB_OUTPUT
           }
           else {
-
             Write-Host ""
             Write-Host "[GOVERNANCE-GATE] Preconditions not satisfied."
             Write-Host "[GOVERNANCE-GATE] Current lifecycle has not reached post_audit."
             Write-Host "[GOVERNANCE-GATE] Governance aggregation skipped."
-
-            "governance_enabled=false" `
-              >> $env:GITHUB_OUTPUT
-
+            "governance_enabled=false" >> $env:GITHUB_OUTPUT
           }   
 
       - name: Run Deployment Governance Gate
@@ -357,13 +309,11 @@ jobs:
           $args = @(
             ".\deployment_gate.py",
             "--output",
-            ".\deployment_gate_report.json"
+            ".\deployment_gate_report.json",
             "--governance-mode"
           )
 
-          # --------------------------------------------------
           # Policy
-          # --------------------------------------------------
           if (Test-Path ".\config\policy.yml") {
             $args += "--policy-config"
             $args += ".\config\policy.yml"
@@ -373,9 +323,7 @@ jobs:
             $args += ".\config\policy.yaml"
           }
 
-          # --------------------------------------------------
-          # Operational Reports (Search in artifacts directory)
-          # --------------------------------------------------
+          # Operational Reports
           $RepoSmoke = Get-ChildItem .\artifacts -Recurse -Filter "repo_smoke_summary.json" -ErrorAction SilentlyContinue | Select-Object -Last 1
           if ($RepoSmoke) {
             $args += "--repo-smoke-summary"
@@ -394,16 +342,11 @@ jobs:
             $args += $OfflineVal.FullName
           }
 
-          # --------------------------------------------------
-          # Governance Contracts (Stages 1-8)
-          # --------------------------------------------------
+          # Governance Contracts
           $contracts = [ordered]@{
-            # Stage 1-4 Contracts
             "--runtime-baseline"                = "runtime_baseline.json"
             "--database-mutation-plan"          = "database_mutation_plan.json"
             "--persistence-contract"            = "persistence_contract.json"
-            
-            # Stage 5-8 Contracts
             "--runtime-verification-contract"   = "runtime_verification_contract.json"
             "--runtime-verification-acceptance" = "runtime_verification_acceptance.json"
             "--runtime-certification"           = "runtime_certification.json"
@@ -411,7 +354,6 @@ jobs:
           }
 
           foreach ($arg in $contracts.Keys) {
-            # Searches .\artifacts first, then falls back to root if not found in artifacts
             $targetPattern = $contracts[$arg]
             $file = Get-ChildItem .\artifacts -Recurse -Filter $targetPattern -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
 
@@ -429,9 +371,7 @@ jobs:
             }
           }
 
-          # --------------------------------------------------
           # Optional runtime_index
-          # --------------------------------------------------
           $RuntimeIndex = Get-ChildItem .\artifacts -Recurse -Filter "runtime_index.json" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($RuntimeIndex) {
             $args += "--runtime-index"
@@ -456,21 +396,18 @@ jobs:
           always() &&
           steps.governance_preconditions.outputs.governance_enabled == 'true'
         uses: actions/upload-artifact@v4
-
         with:
           name: deployment-governance-gate-report
-
           path: |
             deployment_gate_report.json
             artifacts/governance_artifact_inventory.txt
-            artifacts/runtime_baseline.json
-            artifacts/database_mutation_plan.json
-            artifacts/persistence_contract.json
-            artifacts/runtime_verification_contract.json
-            artifacts/runtime_verification_acceptance.json
-            artifacts/runtime_certification.json
-            artifacts/path_a_operational.json
-            artifacts/runtime_index.json
-            artifacts/lifecycle_event.json
-
-          if-no-files-found: warn    
+            artifacts/**/runtime_baseline.json
+            artifacts/**/database_mutation_plan.json
+            artifacts/**/persistence_contract.json
+            artifacts/**/runtime_verification_contract.json
+            artifacts/**/runtime_verification_acceptance.json
+            artifacts/**/runtime_certification.json
+            artifacts/**/path_a_operational.json
+            artifacts/**/runtime_index.json
+            artifacts/**/lifecycle_event.json
+          if-no-files-found: warn
