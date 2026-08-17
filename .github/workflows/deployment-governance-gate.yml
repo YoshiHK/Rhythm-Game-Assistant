@@ -60,7 +60,7 @@ jobs:
         run: |
           gh --version         
 
-      ############################################################
+      #########################
       # Download Lifecycle Runner Artifacts
       ############################################################
 
@@ -71,14 +71,23 @@ jobs:
           RUN_ID: ${{ github.event.inputs.triggering_run_id }}
           GH_OWNER_REPO: ${{ github.repository }}
         run: |
+
           if ([string]:: {
+
             throw "triggering_run_id input is required."
+
           }
 
-          New-Item -ItemType Directory -Force -Path ".\artifacts" | Out-Null
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path ".\artifacts" |
+              Out-Null
 
+          Write-Host ""
           Write-Host "[GOVERNANCE-GATE] Downloading Lifecycle Runner artifacts..."
           Write-Host "  triggering_run_id: $env:RUN_ID"
+          Write-Host "  repository       : $env:GH_OWNER_REPO"
 
           gh run download $env:RUN_ID `
             -R $env:GH_OWNER_REPO `
@@ -114,6 +123,13 @@ jobs:
             -n rga-lifecycle-dispatch-result `
             -D ".\artifacts\rga-lifecycle-dispatch-result" `
             2>$null
+
+          Write-Host ""
+          Write-Host "[GOVERNANCE-GATE] Downloaded files:"
+          Get-ChildItem ".\artifacts" -Recurse -File |
+            ForEach-Object {
+              Write-Host "  $($_.FullName)"
+            }
 
       ############################################################
       # Verify Downloaded Artifacts
