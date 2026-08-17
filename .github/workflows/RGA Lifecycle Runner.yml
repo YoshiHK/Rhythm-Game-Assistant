@@ -212,6 +212,9 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate-app-token.outputs.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          echo "Downloading artifacts for run $RUN_ID..."
+          gh run download "$RUN_ID"
 
       # Step 3: Dispatch Workflow
       - name: Dispatch next workflow
@@ -220,7 +223,9 @@ jobs:
         env:
           APP_TOKEN: ${{ steps.generate-app-token.outputs.token }}
           GH_OWNER_REPO: ${{ github.repository }}
-
+        run: |
+          # Paste your bash dispatch script logic here
+          echo "Dispatching token using GitHub App..."
 
   determine-origin:
 
