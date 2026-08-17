@@ -1953,13 +1953,15 @@ jobs:
 
               DISPATCH_INPUTS="$(
                 jq -c -n \
-                  --arg session "${AUDIT_SESSION_ID}" \
-                  --arg stage "governance_gate" \
-                  --arg ref "${REF:-main}" \
+                  --arg audit_session_id "${AUDIT_SESSION_ID}" \
+                  --arg lifecycle_stage "governance_gate" \
+                  --arg ref "${REF_INPUT}" \
+                  --arg triggering_run_id "${GITHUB_RUN_ID}" \
                   '{
-                    audit_session_id: $session,
-                    lifecycle_stage: $stage,
-                    ref: $ref
+                    audit_session_id: $audit_session_id,
+                    lifecycle_stage: $lifecycle_stage,
+                    ref: $ref,
+                    triggering_run_id: $triggering_run_id
                   }'
               )"
 
