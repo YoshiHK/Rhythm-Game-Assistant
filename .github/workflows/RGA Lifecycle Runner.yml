@@ -2826,6 +2826,7 @@ jobs:
               echo "Lifecycle status: complete"
               echo "Dispatch required: false"
 
+
               jq -n \
                 --arg current "${RESOLVED_STAGE:-unknown}" \
                 --arg status "complete" \
@@ -3250,6 +3251,19 @@ jobs:
 
           fi
 
+          ########################################################
+          # Ensure lifecycle_event.json contract exists
+          ########################################################
+
+          jq -n \
+            --arg stage "${NEXT_STAGE:-${RESOLVED_STAGE:-unknown}}" \
+            --arg status "${LIFECYCLE_STATUS:-running}" \
+            '{
+              schema: "rga.lifecycle_event.v1.0",
+              stage: $stage,
+              status: $status,
+              source: "lifecycle_runner"
+            }' > artifacts/lifecycle_event.json
 
           ########################################################
           # Dispatch success
