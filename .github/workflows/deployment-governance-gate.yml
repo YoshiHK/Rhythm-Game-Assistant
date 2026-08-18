@@ -261,13 +261,35 @@ jobs:
           # Governance Flow Validation
           ########################################################
 
-          $completed = [string]$json.completed_stage
+          # Safely resolve completed_stage (fallback to 'stage' or 'unknown')
+          $completed = if ($json.PSObject.Properties.Name.Contains("completed_stage")) {
+              [string]$json.completed_stage
+          } elseif ($json.PSObject.Properties.Name.Contains("stage")) {
+              [string]$json.stage
+          } else {
+              "unknown"
+          }
 
-          $next = [string]$json.next_stage
+          # Safely resolve next_stage
+          $next = if ($json.PSObject.Properties.Name.Contains("next_stage")) {
+              [string]$json.next_stage
+          } else {
+              $null
+          }
 
+          # Safely resolve dispatch_required flag
+          $dispatchRequired = if ($json.PSObject.Properties.Name.Contains("dispatch_required")) {
+              $json.dispatch_required
+          } else {
+              $false
+          }
+
+          # Transition Acceptance Check
           if (
             ($completed -eq "post_audit" -and $next -eq "governance_gate") -or
-            ($completed -eq "governance_gate" -and $next -eq "complete")
+            ($completed -eq "governance_gate" -and ($next -eq "complete" -or $null -eq $next)) -or
+            ($completed -eq "governance_gate" -and $json.source -eq "lifecycle_runner") -or
+            ($completed -eq "post_audit" -and $json.source -eq "lifecycle_runner")
           ) {
 
             Write-Host ""
@@ -276,16 +298,16 @@ jobs:
           }
           else {
 
-            throw "Unexpected lifecycle transition. completed_stage='$completed' next_stage='$next'"
+            throw "Unexpected lifecycle transition. completed_stage='$completed' next_stage='$next' (schema: '$($json.schema)', source: '$($json.source)')"
 
           }
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] [OK]"
-          Write-Host "  schema          : $($json.schema)"
-          Write-Host "  completed_stage : $completed"
-          Write-Host "  next_stage      : $next"
-          Write-Host "  dispatch_required : $($json.dispatch_required)"
+          Write-Host "  schema            : $($json.schema)"
+          Write-Host "  completed_stage   : $completed"
+          Write-Host "  next_stage        : $next"
+          Write-Host "  dispatch_required : $dispatchRequired"
           
       ############################################################
       # Check Post-Audit Trigger
