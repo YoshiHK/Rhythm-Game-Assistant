@@ -37,16 +37,41 @@ Supported actions
 --create-pr
     Create PR after committing baseline branch.
 
-Token requirement
------------------
-For any GitHub API mutation, set PAT_TOKEN locally:
+Authentication Model
+--------------------
 
-    $env:PAT_TOKEN = "<fine-grained-token>"
+RGA now uses GitHub App authentication as the
+primary lifecycle automation model.
 
-Recommended token permissions:
-- Contents: Read and write
-- Actions: Read and write, if using --dispatch or --commit-and-dispatch
-- Pull requests: Read and write, if using --create-pr
+Authentication ownership:
+
+    Local Operator
+        ↓
+    GitHub Lifecycle Bridge
+        ↓
+    GitHub App
+        ↓
+    Installation Token
+        ↓
+    GitHub API
+
+Operational policy:
+
+- GitHub App authentication is preferred.
+- PAT_TOKEN is considered a legacy fallback path.
+- Lifecycle Runner, Runtime Auditor,
+  Maintenance Executor and Deployment
+  Governance Gate already operate using
+  GitHub App Tokens generated at runtime.
+- Local bridge authentication should align
+  with the same GitHub App model whenever
+  possible.
+
+Legacy fallback environments:
+
+    PAT_TOKEN
+    GH_TOKEN
+    GITHUB_TOKEN
 
 Recommended local usage
 -----------------------
@@ -258,6 +283,12 @@ def resolve_token(
 
     candidates = [
         token_env,
+
+        # Preferred
+        "RGA_ACCESS",
+        "GITHUB_APP_TOKEN",
+
+        # Legacy fallback
         "PAT_TOKEN",
         "GH_TOKEN",
         "GITHUB_TOKEN",
@@ -1001,8 +1032,11 @@ def parse_args(
 
     parser.add_argument(
         "--token-env",
-        default="PAT_TOKEN",
-        help="Environment variable containing GitHub token",
+        default="RGA_ACCESS",
+        help=(
+            "Environment variable containing "
+            "GitHub App or GitHub API credentials"
+        ),
     )
 
     parser.add_argument(
@@ -1380,6 +1414,10 @@ def main(
                 "reason": "github_token_missing",
                 "checked_env": [
                     config.token_env,
+                    
+                    "RGA_ACCESS",
+                    "GITHUB_APP_TOKEN",
+                    
                     "PAT_TOKEN",
                     "GH_TOKEN",
                     "GITHUB_TOKEN",
@@ -1393,7 +1431,9 @@ def main(
 
             print(
                 "[RGA-BRIDGE][FAIL] "
-                "GitHub token missing. Set PAT_TOKEN."
+                "GitHub credential missing. "
+                "Configure GitHub App authentication "
+                "or provide a supported fallback token."
             )
 
             print(
