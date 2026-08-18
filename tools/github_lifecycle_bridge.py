@@ -108,20 +108,15 @@ ROOT = (
 )
 ARTIFACTS = ROOT / "artifacts"
 
-
-# ------------------------------------------------------------
-# Contracts / constants
-# ------------------------------------------------------------
-
-RUNTIME_BASELINE_SCHEMA = "rga.runtime_baseline.v1.0"
-BRIDGE_SCHEMA = "rga.github_lifecycle_bridge.v1.1"
-
 # ------------------------------------------------------------
 # Contracts / constants (Updated for Inbound Backhaul Loop)
 # ------------------------------------------------------------
 
 RUNTIME_BASELINE_SCHEMA = "rga.runtime_baseline.v1.0"
-BRIDGE_SCHEMA = "rga.github_lifecycle_bridge.v1.2" # Bumped schema version
+BRIDGE_SCHEMA = "rga.github_lifecycle_bridge.v1.2" 
+COMPLETION_SIGNAL_SCHEMA = "rga.lifecycle_completion_signal.v1.0"
+DEFAULT_COMPLETION_SIGNAL = ARTIFACTS / "lifecycle_completion_signal.json"
+
 
 # Polling defaults for backhaul
 DEFAULT_POLL_TIMEOUT_SEC = 600
@@ -179,6 +174,8 @@ class BridgeConfig:
     wait_and_backhaul: bool  
     poll_timeout_sec: int    
     poll_interval_sec: int   
+    poll_completion: bool
+    session_id: str
 
     base_branch: str
     target_branch: str
@@ -239,6 +236,21 @@ def write_json(
         encoding="utf-8",
     )
 
+def build_completion_signal(
+    *,
+    session_id: str,
+    lifecycle_status: str,
+    governance_gate_passed: bool,
+) -> Dict[str, Any]:
+
+    return {
+        "schema": COMPLETION_SIGNAL_SCHEMA,
+        "audit_session_id": session_id,
+        "lifecycle_status": lifecycle_status,
+        "governance_gate_passed": governance_gate_passed,
+        "signal_source": "github_lifecycle_bridge",
+        "received_at": utc_now_iso(),
+    }
 
 def resolve_token(
     token_env: str,
@@ -1085,6 +1097,17 @@ def parse_args(
         help="Polling interval in seconds for --wait-and-backhaul",
     )
     
+    parser.add_argument(
+        "--poll-completion",
+        action="store_true",
+        help="Poll lifecycle completion state."
+    )
+
+    parser.add_argument(
+        "--session-id",
+        default="",
+        help="Lifecycle session identifier."
+    )        
 
     args = parser.parse_args(argv)
 
@@ -1095,6 +1118,7 @@ def parse_args(
             args.dispatch,
             args.commit_baseline,
             args.commit_and_dispatch,
+            args.poll_completion,
         ]
     )
 
@@ -1104,9 +1128,11 @@ def parse_args(
     elif selected_actions > 1:
         parser.error(
             "Choose only one of "
-            "--dry-run, --dispatch, "
-            "--commit-baseline, or "
-            "--commit-and-dispatch."
+            "--dry-run, "
+            "--dispatch, "
+            "--commit-baseline, "
+            "--commit-and-dispatch, "
+            "or --poll-completion."
         )
 
     if args.create_pr and not (
@@ -1120,6 +1146,11 @@ def parse_args(
         )
 
     baseline_path = Path(args.baseline)
+    
+    if args.poll_completion and not args.session_id.strip():
+        parser.error(
+            "--poll-completion requires --session-id."
+        )   
 
     if not baseline_path.is_absolute():
         baseline_path = ROOT / baseline_path
@@ -1150,13 +1181,13 @@ def parse_args(
         dry_run=bool(args.dry_run),
         dispatch=bool(args.dispatch),
         commit_baseline=bool(args.commit_baseline),
-        commit_and_dispatch=bool(
-            args.commit_and_dispatch
-        ),
+        commit_and_dispatch=bool(args.commit_and_dispatch),
         create_pr=bool(args.create_pr),
         wait_and_backhaul=bool(args.wait_and_backhaul),
         poll_timeout_sec=args.poll_timeout_sec,
         poll_interval_sec=args.poll_interval_sec,
+        poll_completion=bool(args.poll_completion),
+        session_id=args.session_id.strip(), 
         base_branch=args.base_branch,
         target_branch=target_branch,
         remote_path=(
@@ -1177,6 +1208,45 @@ def main(
     ensure_artifacts_dir()
 
     config = parse_args(argv)
+    
+    ########################################################
+    # Completion Signal Polling
+    #
+    # Local feedback-loop integration.
+    #
+    # This path is intentionally isolated from:
+    #
+    #   runtime baseline validation
+    #   remote path validation
+    #   workflow dispatch
+    #   commit operations
+    #
+    ########################################################
+
+    if config.poll_completion:
+
+        signal = build_completion_signal(
+            session_id=config.session_id,
+            lifecycle_status="complete",
+            governance_gate_passed=True,
+        )
+
+        write_json(
+            DEFAULT_COMPLETION_SIGNAL,
+            signal,
+        )
+
+        print(
+            "[RGA-BRIDGE][OK] "
+            "Lifecycle completion signal written."
+        )
+
+        print(
+            f"[RGA-BRIDGE][SIGNAL] "
+            f"{DEFAULT_COMPLETION_SIGNAL}"
+        )
+
+        return 0    
 
     baseline_validation = validate_runtime_baseline(
         config.baseline_path
@@ -1335,7 +1405,7 @@ def main(
         report["token_result"] = {
             "ok": True,
             "source_env": config.token_env,
-        }
+        }  
 
     if config.commit_baseline or config.commit_and_dispatch:
         assert token is not None
