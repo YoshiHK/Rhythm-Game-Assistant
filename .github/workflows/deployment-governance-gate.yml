@@ -298,7 +298,7 @@ jobs:
           Write-Host "  dispatch_required : $dispatchRequired"
           
       ############################################################
-      # Check Post-Audit Trigger
+      # Check Post-Audit / Governance Gate Trigger
       ############################################################
           
       - name: Check Post-Audit Trigger
@@ -318,15 +318,21 @@ jobs:
 
           $json = Get-Content $event.FullName -Raw | ConvertFrom-Json
 
-          Write-Host "[GOVERNANCE-GATE] completed_stage=$($json.completed_stage)"
-          Write-Host "[GOVERNANCE-GATE] next_stage=$($json.next_stage)"
+          # Dynamic field resolution for stage tracking
+          $completed = if ($json.completed_stage) { $json.completed_stage } elseif ($json.stage) { $json.stage } else { "" }
+          $next = if ($json.next_stage) { $json.next_stage } else { "" }
 
-          if ($json.completed_stage -eq "post_audit" -or $json.next_stage -eq "complete") {
+          Write-Host "[GOVERNANCE-GATE] completed_stage=$completed"
+          Write-Host "[GOVERNANCE-GATE] next_stage=$next"
+
+          # Allow gate to execute if triggered at post_audit, governance_gate, or when completing
+          if ($completed -eq "post_audit" -or $completed -eq "governance_gate" -or $next -eq "complete" -or $json.dispatch_required -eq $true) {
             "should_run=true" >> $env:GITHUB_OUTPUT
           }
           else {
             "should_run=false" >> $env:GITHUB_OUTPUT
           }
+
 
       # --------------------------------------------------
       # Governance Preconditions
