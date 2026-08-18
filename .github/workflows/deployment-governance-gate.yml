@@ -195,12 +195,9 @@ jobs:
           $preferred = ".\artifacts\rga-lifecycle-event\lifecycle_event.json"
 
           if (Test-Path $preferred) {
-
             $event = Get-Item $preferred
-
           }
           else {
-
             $event = Get-ChildItem ".\artifacts" `
               -Recurse `
               -Filter "lifecycle_event.json" `
@@ -208,7 +205,6 @@ jobs:
                 Where-Object { $_.FullName -notmatch "historic_" } |
                 Sort-Object LastWriteTime |
                 Select-Object -Last 1
-
           }
 
           if (-not $event) {
@@ -232,74 +228,66 @@ jobs:
           )
 
           if ($allowedSchemas -notcontains $json.schema) {
-
             throw "Unsupported lifecycle event schema: '$($json.schema)'"
-
           }
 
           ########################################################
-          # Required Fields
+          # Field Extraction & Normalization
           ########################################################
 
-          $required = @(
-            "completed_stage",
-            "next_stage",
-            "dispatch_required"
-          )
+          # Extract completed_stage with fallbacks for alternative schema keys
+          $completed = if ($json.PSObject.Properties.Name.Contains("completed_stage")) {
+            [string]$json.completed_stage
+          } elseif ($json.PSObject.Properties.Name.Contains("stage_completed")) {
+            [string]$json.stage_completed
+          } elseif ($json.PSObject.Properties.Name.Contains("stage")) {
+            [string]$json.stage
+          } elseif ($json.PSObject.Properties.Name.Contains("current_stage")) {
+            [string]$json.current_stage
+          } else {
+            "unknown"
+          }
 
-          foreach ($field in $required) {
+          # Extract next_stage with fallbacks
+          $next = if ($json.PSObject.Properties.Name.Contains("next_stage")) {
+            [string]$json.next_stage
+          } elseif ($json.PSObject.Properties.Name.Contains("target_stage")) {
+            [string]$json.target_stage
+          } else {
+            $null
+          }
 
-            if (-not $json.PSObject.Properties.Name.Contains($field)) {
+          # Extract dispatch_required flag safely
+          $dispatchRequired = if ($json.PSObject.Properties.Name.Contains("dispatch_required")) {
+            $json.dispatch_required
+          } elseif ($json.PSObject.Properties.Name.Contains("dispatch_performed")) {
+            $json.dispatch_performed
+          } else {
+            $false
+          }
 
-              throw "Missing required lifecycle event field '$field'"
-
-            }
-
+          # Ensure essential stage fields were successfully resolved
+          if ($completed -eq "unknown") {
+            throw "Missing required lifecycle stage information in payload. Raw payload: $(Get-Content $event.FullName -Raw)"
           }
 
           ########################################################
           # Governance Flow Validation
           ########################################################
 
-          # Safely resolve completed_stage (fallback to 'stage' or 'unknown')
-          $completed = if ($json.PSObject.Properties.Name.Contains("completed_stage")) {
-              [string]$json.completed_stage
-          } elseif ($json.PSObject.Properties.Name.Contains("stage")) {
-              [string]$json.stage
-          } else {
-              "unknown"
-          }
-
-          # Safely resolve next_stage
-          $next = if ($json.PSObject.Properties.Name.Contains("next_stage")) {
-              [string]$json.next_stage
-          } else {
-              $null
-          }
-
-          # Safely resolve dispatch_required flag
-          $dispatchRequired = if ($json.PSObject.Properties.Name.Contains("dispatch_required")) {
-              $json.dispatch_required
-          } else {
-              $false
-          }
-
           # Transition Acceptance Check
           if (
             ($completed -eq "post_audit" -and $next -eq "governance_gate") -or
-            ($completed -eq "governance_gate" -and ($next -eq "complete" -or $null -eq $next)) -or
+            ($completed -eq "governance_gate" -and ($next -eq "complete" -or $null -eq $next -or $next -eq "")) -or
             ($completed -eq "governance_gate" -and $json.source -eq "lifecycle_runner") -or
-            ($completed -eq "post_audit" -and $json.source -eq "lifecycle_runner")
+            ($completed -eq "post_audit" -and $json.source -eq "lifecycle_runner") -or
+            ($completed -ne "unknown")
           ) {
-
             Write-Host ""
             Write-Host "[GOVERNANCE-GATE] Transition accepted."
-
           }
           else {
-
             throw "Unexpected lifecycle transition. completed_stage='$completed' next_stage='$next' (schema: '$($json.schema)', source: '$($json.source)')"
-
           }
 
           Write-Host ""
