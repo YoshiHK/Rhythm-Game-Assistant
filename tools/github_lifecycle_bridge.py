@@ -116,6 +116,18 @@ ARTIFACTS = ROOT / "artifacts"
 RUNTIME_BASELINE_SCHEMA = "rga.runtime_baseline.v1.0"
 BRIDGE_SCHEMA = "rga.github_lifecycle_bridge.v1.1"
 
+# ------------------------------------------------------------
+# Contracts / constants (Updated for Inbound Backhaul Loop)
+# ------------------------------------------------------------
+
+RUNTIME_BASELINE_SCHEMA = "rga.runtime_baseline.v1.0"
+BRIDGE_SCHEMA = "rga.github_lifecycle_bridge.v1.2" # Bumped schema version
+
+# Polling defaults for backhaul
+DEFAULT_POLL_TIMEOUT_SEC = 600
+DEFAULT_POLL_INTERVAL_SEC = 15
+GOVERNANCE_GATE_ARTIFACT_NAME = "deployment-governance-gate-report"
+
 DEFAULT_WORKFLOW = "RGA Lifecycle Runner.yml"
 DEFAULT_REF = "main"
 DEFAULT_REMOTE_PATH = "artifacts/runtime_baseline.json"
@@ -164,6 +176,9 @@ class BridgeConfig:
     commit_baseline: bool
     commit_and_dispatch: bool
     create_pr: bool
+    wait_and_backhaul: bool  
+    poll_timeout_sec: int    
+    poll_interval_sec: int   
 
     base_branch: str
     target_branch: str
@@ -804,6 +819,120 @@ def create_pull_request(
         payload=payload,
     )
 
+import io
+import time
+import zipfile
+
+
+def get_latest_workflow_run_id(
+    *,
+    config: BridgeConfig,
+    token: str,
+) -> Optional[int]:
+    """Fetch the most recent workflow run ID triggered by dispatch."""
+    workflow = urllib.parse.quote(config.workflow, safe="")
+    url = f"{repo_api_root(config)}/actions/workflows/{workflow}/runs?per_page=1"
+    
+    res = github_request(method="GET", url=url, token=token)
+    if res.get("ok") and res.get("body", {}).get("workflow_runs"):
+        return res["body"]["workflow_runs"][0]["id"]
+    return None
+
+
+def download_and_extract_artifact(
+    *,
+    download_url: str,
+    token: str,
+    extract_to: Path,
+) -> bool:
+    """Download governance report zip artifact from GitHub and extract locally."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "RGA-GitHub-Lifecycle-Bridge",
+    }
+    req = urllib.request.Request(download_url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            content = resp.read()
+            with zipfile.ZipFile(io.BytesIO(content)) as zip_file:
+                zip_file.extractall(extract_to)
+            return True
+    except Exception as exc:
+        print(f"[RGA-BRIDGE][BACKHAUL-ERR] Failed to extract artifact: {exc}")
+        return False
+
+
+def wait_and_backhaul_governance_report(
+    *,
+    config: BridgeConfig,
+    token: str,
+    run_id: int,
+) -> Dict[str, Any]:
+    """
+    Polls the dispatched workflow run until 'completed', 
+    then backhauls 'deployment-governance-gate-report' to local artifacts/.
+    """
+    start_time = time.time()
+    url = f"{repo_api_root(config)}/actions/runs/{run_id}"
+
+    print(f"[RGA-BRIDGE][LOOP] Waiting for workflow run {run_id} to finish...")
+
+    while time.time() - start_time < config.poll_timeout_sec:
+        res = github_request(method="GET", url=url, token=token)
+        if not res.get("ok"):
+            time.sleep(config.poll_interval_sec)
+            continue
+
+        body = res.get("body", {})
+        status = body.get("status")
+        conclusion = body.get("conclusion")
+
+        print(f"[RGA-BRIDGE][LOOP] Run Status: '{status}' | Conclusion: '{conclusion}'")
+
+        if status == "completed":
+            artifacts_url = body.get("artifacts_url")
+            art_res = github_request(method="GET", url=artifacts_url, token=token)
+            
+            if not art_res.get("ok"):
+                return {
+                    "ok": False,
+                    "reason": "failed_to_list_artifacts",
+                    "conclusion": conclusion,
+                }
+
+            artifacts = art_res.get("body", {}).get("artifacts", [])
+            for art in artifacts:
+                if art.get("name") == GOVERNANCE_GATE_ARTIFACT_NAME:
+                    dl_url = art.get("archive_download_url")
+                    success = download_and_extract_artifact(
+                        download_url=dl_url,
+                        token=token,
+                        extract_to=ARTIFACTS,
+                    )
+                    return {
+                        "ok": success and (conclusion == "success"),
+                        "conclusion": conclusion,
+                        "report_backhauled": success,
+                        "artifact_id": art.get("id"),
+                    }
+
+            return {
+                "ok": conclusion == "success",
+                "conclusion": conclusion,
+                "report_backhauled": False,
+                "reason": "governance_artifact_not_found",
+            }
+
+        time.sleep(config.poll_interval_sec)
+
+    return {
+        "ok": False,
+        "reason": "polling_timeout_exceeded",
+        "elapsed_sec": time.time() - start_time,
+    }
+
+
 
 def parse_args(
     argv: Optional[list[str]] = None,
@@ -936,6 +1065,27 @@ def parse_args(
         help="Create PR after committing baseline branch",
     )
 
+    parser.add_argument(
+        "--wait-and-backhaul",
+        action="store_true",
+        help="Wait for dispatched workflow completion and backhaul governance gate artifact.",
+    )
+
+    parser.add_argument(
+        "--poll-timeout-sec",
+        type=int,
+        default=DEFAULT_POLL_TIMEOUT_SEC,
+        help="Max polling timeout in seconds for --wait-and-backhaul",
+    )
+
+    parser.add_argument(
+        "--poll-interval-sec",
+        type=int,
+        default=DEFAULT_POLL_INTERVAL_SEC,
+        help="Polling interval in seconds for --wait-and-backhaul",
+    )
+    
+
     args = parser.parse_args(argv)
 
     selected_actions = sum(
@@ -1004,6 +1154,9 @@ def parse_args(
             args.commit_and_dispatch
         ),
         create_pr=bool(args.create_pr),
+        wait_and_backhaul=bool(args.wait_and_backhaul),
+        poll_timeout_sec=args.poll_timeout_sec,
+        poll_interval_sec=args.poll_interval_sec,
         base_branch=args.base_branch,
         target_branch=target_branch,
         remote_path=(
@@ -1274,6 +1427,34 @@ def main(
             )
 
             return 4
+
+        if dispatch_result.get("ok") and config.wait_and_backhaul:
+            time.sleep(5)  # Allow GitHub API to register the new run
+            run_id = get_latest_workflow_run_id(config=config, token=token)
+            
+            if run_id:
+                backhaul_result = wait_and_backhaul_governance_report(
+                    config=config,
+                    token=token,
+                    run_id=run_id,
+                )
+                report["backhaul_result"] = backhaul_result
+                
+                if not backhaul_result.get("ok"):
+                    write_json(report_out, report)
+                    print(
+                        "[RGA-BRIDGE][FAIL] "
+                        "Governance gate backhaul failed or gate reported rejection: "
+                        f"{backhaul_result.get('conclusion') or backhaul_result.get('reason')}"
+                    )
+                    return 8
+            else:
+                report["backhaul_result"] = {
+                    "ok": False,
+                    "reason": "could_not_resolve_dispatched_run_id",
+                }
+                write_json(report_out, report)
+                return 9    
 
     if config.dry_run:
         report["dispatch_result"] = {
