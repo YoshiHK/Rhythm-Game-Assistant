@@ -2143,7 +2143,7 @@ def main(
     config = parse_args(argv)
 
     request_out = (
-        AR*IFACTS
+        ARTIFACTS
         / "github_lifecycle_bridge_request.json"
     )
 
