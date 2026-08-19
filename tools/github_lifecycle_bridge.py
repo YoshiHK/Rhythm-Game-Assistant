@@ -33,7 +33,12 @@ Supported actions
     Commit artifacts/runtime_baseline.json to a GitHub branch.
 
 --commit-and-dispatch
-    Commit baseline, then trigger lifecycle.
+    Commit artifacts/runtime_baseline.json to runtime-baseline/update-*,
+    then dispatch RGA Lifecycle Runner with:
+
+        operator_action = start_lifecycle
+        audit_session_id = <generated session>
+        ref = runtime-baseline/update-*
 
 --create-pr
     Create PR after committing baseline branch.
@@ -949,15 +954,9 @@ def build_workflow_dispatch_payload(
     return {
         "ref": dispatch_ref,
         "inputs": {
-            "audit_mode": config.audit_mode,
+            "operator_action": "start_lifecycle",
             "audit_session_id": config.audit_session_id,
-
-            # Repository path, not local Windows path.
-            "runtime_baseline": config.remote_path,
-
-            # Explicit lineage for lifecycle / governance diagnostics.
-            "runtime_baseline_ref": dispatch_ref,
-            "trigger_source": "github_lifecycle_bridge",
+            "ref": dispatch_ref,
         },
     }
 
@@ -1972,6 +1971,14 @@ def main(
             token=token,
             payload=request_payload,
         )
+
+        report["dispatch_result"] = {
+            "attempted": True,
+            "dispatch_ref": resolve_effective_dispatch_ref(
+                config
+            ),
+            **dispatch_result,
+        }
 
         if not dispatch_result.get("ok"):
             write_json(
