@@ -925,6 +925,71 @@ def download_github_actions_artifact_zip(
             "reason": str(exc),
             "redirected": False,
         }
+        
+def collect_json_strings(
+    value: Any,
+) -> list[str]:
+    """
+    Recursively collect string values from a JSON-compatible object.
+    """
+
+    found: list[str] = []
+
+    if isinstance(value, str):
+        found.append( elif isinstance(value, dict):
+        for item in value.values():
+            found.extend(
+                collect_json_strings(item)
+            )
+
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(
+                collect_json_strings(item)
+            )
+
+    return found
+
+
+def collect_candidate_session_ids(
+    value: Any,
+) -> list"""
+    Recursively collect values that look like RGA lifecycle session IDs.
+
+    This is diagnostic only. It helps explain why
+    --require-remote-completion failed.
+    """
+
+    sessions: list[str] = []
+
+    for item in collect_json_strings(value):
+        if item.startswith("rga-session-"):
+            sessions.append(item)
+
+    return sorted(set(sessions))
+
+
+def json_contains_session_id(
+    *,
+    payload: Any,
+    raw: str,
+    session_id: str,
+) -> bool:
+    """
+    Match session ID in either raw JSON text or recursive JSON values.
+    """
+
+    if session_id in raw:
+        return True
+
+    if payload is None:
+        return False
+
+    for item in collect_json_strings(payload):
+        if item == session_id:
+            return True
+
+    return False        
 
 def verify_remote_completion(
     config: BridgeConfig,
@@ -971,31 +1036,50 @@ def verify_remote_completion(
     # List recent GitHub Actions artifacts.
     ############################################################
 
-    artifacts_url = (
-        f"{repo_api_root(config)}/actions/artifacts"
-        "?per_page=100"
-    )
+    artifacts: list[Dict[str, Any]] = []
+    artifact_pages = []
 
-    artifacts_result = github_request_raw(
-        method="GET",
-        url=artifacts_url,
-        token=token,
-    )
+    for page in range(1, 6):
 
-    if not artifacts_result.get("ok"):
-        return {
-            "ok": False,
-            "required": True,
-            "verified": False,
-            "reason": "artifact_listing_failed",
-            "artifact_listing": artifacts_result,
-        }
+        artifacts_url = (
+            f"{repo_api_root(config)}/actions/artifacts"
+            f"?per_page=100&page={page}"
+        )
 
-    artifacts = (
-        artifacts_result
-        .get("body", {})
-        .get("artifacts", [])
-    )
+        artifacts_result = github_request_raw(
+            method="GET",
+            url=artifacts_url,
+            token=token,
+        )
+
+        artifact_pages.append(
+            {
+                "page": page,
+                "ok": artifacts_result.get("ok"),
+                "status": artifacts_result.get("status"),
+            }
+        )
+
+        if not artifacts_result.get("ok"):
+            return {
+                "ok": False,
+                "required": True,
+                "verified": False,
+                "reason": "artifact_listing_failed",
+                "artifact_pages": artifact_pages,
+                "artifact_listing": artifacts_result,
+            }
+
+        page_artifacts = (
+            artifacts_result
+            .get("body", {})
+            .get("artifacts", [])
+        )
+
+        if not page_artifacts:
+            break
+
+        artifacts.extend(page_artifacts)
 
     if not artifacts:
         return {
@@ -1064,6 +1148,8 @@ def verify_remote_completion(
 
     inspected = []
     matched_session = []
+    observed_session_ids: set[str] = set()
+    json_members_seen = []
 
     for artifact in candidates[:50]:
 
@@ -1150,22 +1236,30 @@ def verify_remote_completion(
                     # Session matching
                     ################################################
 
-                    session_match = False
+                    if isinstance(payload, (dict, list)):
+                        for discovered in collect_candidate_session_ids(payload):
+                            observed_session_ids.add(discovered)
 
-                    if isinstance(payload, dict):
-                        payload_session = str(
-                            payload.get("audit_session_id", "")
-                        )
+                    json_members_seen.append(
+                        {
+                            "artifact_name": artifact_name,
+                            "member": member,
+                            "observed_session_ids": (
+                                collect_candidate_session_ids(payload)
+                                if isinstance(payload, (dict, list))
+                                else []
+                            ),
+                        }
+                    )
 
-                        if payload_session == session_id:
-                            session_match = True
-
-                    if not session_match and session_id in raw:
-                        session_match = True
+                    session_match = json_contains_session_id(
+                        payload=payload,
+                        raw=raw,
+                        session_id=session_id,
+                    )
 
                     if not session_match:
                         continue
-
                     matched_session.append(
                         {
                             "artifact_name": artifact_name,
@@ -1325,9 +1419,12 @@ def verify_remote_completion(
         "verified": False,
         "reason": "remote_completion_not_verified",
         "audit_session_id": session_id,
+        "artifact_count": len(artifacts),
         "candidate_artifact_count": len(candidates),
         "matched_session_count": len(matched_session),
         "matched_session": matched_session[:10],
+        "observed_session_ids": sorted(observed_session_ids)[:25],
+        "json_members_seen": json_members_seen[:25],
         "inspected": inspected[:10],
     }
 
