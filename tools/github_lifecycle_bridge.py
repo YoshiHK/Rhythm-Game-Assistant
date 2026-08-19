@@ -219,7 +219,6 @@ PROHIBITED_REMOTE_PATH_FRAGMENTS = (
     "recommendation_logic",
 )
 
-
 @dataclass(frozen=True)
 class BridgeConfig:
     owner: str
@@ -251,9 +250,8 @@ class BridgeConfig:
     poll_timeout_sec: int    
     poll_interval_sec: int   
     poll_completion: bool
-    require_remote_completion: bool = False
-    session_id: str
-    
+    require_remote_completion: bool
+    session_id: str   
 
     base_branch: str
     target_branch: str
@@ -2049,6 +2047,12 @@ def parse_args(
             args.poll_completion,
         ]
     )
+    
+    if args.require_remote_completion and not args.poll_completion:
+        parser.error(
+            "--require-remote-completion requires --poll-completion."
+        )
+    
 
     if selected_actions == 0:
         args.dry_run = True
