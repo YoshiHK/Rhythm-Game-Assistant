@@ -166,9 +166,24 @@ ARTIFACTS = ROOT / "artifacts"
 # ------------------------------------------------------------
 
 RUNTIME_BASELINE_SCHEMA = "rga.runtime_baseline.v1.0"
-BRIDGE_SCHEMA = "rga.github_lifecycle_bridge.v1.2" 
-COMPLETION_SIGNAL_SCHEMA = "rga.lifecycle_completion_signal.v1.0"
-DEFAULT_COMPLETION_SIGNAL = ARTIFACTS / "lifecycle_completion_signal.json"
+BRIDGE_SCHEMA = "rga.github_lifecycle_bridge.v1.2"
+
+############################################################
+# Completion Signal Contract
+#
+# v1.0:
+#   Local completion signal only.
+#
+# v1.1:
+#   Adds optional remote_validation block for
+#   --require-remote-completion.
+############################################################
+
+COMPLETION_SIGNAL_SCHEMA = "rga.lifecycle_completion_signal.v1.1"
+
+DEFAULT_COMPLETION_SIGNAL = (
+    ARTIFACTS / "lifecycle_completion_signal.json"
+)
 
 
 # Polling defaults for backhaul
@@ -236,7 +251,9 @@ class BridgeConfig:
     poll_timeout_sec: int    
     poll_interval_sec: int   
     poll_completion: bool
+    require_remote_completion: bool = False
     session_id: str
+    
 
     base_branch: str
     target_branch: str
@@ -510,9 +527,24 @@ def build_completion_signal(
     session_id: str,
     lifecycle_status: str,
     governance_gate_passed: bool,
+    remote_validation: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """
+    Build the local lifecycle completion signal.
 
-    return {
+    v1.1 adds an optional remote_validation block so the same
+    signal can represent either:
+
+      - local-only completion signal
+      - remote-certified completion signal
+
+    This function is bridge-layer only:
+      - it does not mutate runtime DBs
+      - it does not rewrite lifecycle chronology
+      - it does not modify Completed Phases
+    """
+
+    payload: Dict[str, Any] = {
         "schema": COMPLETION_SIGNAL_SCHEMA,
         "audit_session_id": session_id,
         "lifecycle_status": lifecycle_status,
@@ -520,6 +552,11 @@ def build_completion_signal(
         "signal_source": "github_lifecycle_bridge",
         "received_at": utc_now_iso(),
     }
+
+    if remote_validation is not None:
+        payload["remote_validation"] = remote_validation
+
+    return payload
 
 def resolve_token(
     token_env: str,
@@ -706,7 +743,7 @@ def resolve_github_api_token(
             "GH_TOKEN",
             "GITHUB_TOKEN",
         ],
-    }
+    }    
 
 def repo_api_root(config: BridgeConfig) -> str:
     return (
@@ -714,6 +751,404 @@ def repo_api_root(config: BridgeConfig) -> str:
         f"{config.owner}/{config.repo}"
     )
 
+def verify_remote_completion(
+    config: BridgeConfig,
+    token: str,
+) -> Dict[str, Any]:
+    """
+    Verify lifecycle completion from remote GitHub Actions artifacts.
+
+    This is the remote-certified path for:
+
+        --poll-completion --require-remote-completion
+
+    Strategy:
+      1. List recent GitHub Actions artifacts.
+      2. Select likely lifecycle / governance / deployment artifacts.
+      3. Download artifact ZIPs.
+      4. Inspect JSON files inside each ZIP.
+      5. Match the requested audit_session_id.
+      6. Accept the remote completion only when the evidence
+         indicates completion / governance success.
+
+    This function is intentionally bridge-layer only.
+
+    It does not:
+      - mutate runtime databases
+      - alter Completed Phases
+      - rewrite lifecycle chronology
+      - dispatch new workflows
+    """
+
+    session_id = (
+        getattr(config, "session_id", "") or ""
+    ).strip()
+
+    if not session_id:
+        return {
+            "ok": False,
+            "required": True,
+            "verified": False,
+            "reason": "missing_session_id",
+        }
+
+    ############################################################
+    # List recent GitHub Actions artifacts.
+    ############################################################
+
+    artifacts_url = (
+        f"{repo_api_root(config)}/actions/artifacts"
+        "?per_page=100"
+    )
+
+    artifacts_result = github_request_raw(
+        method="GET",
+        url=artifacts_url,
+        token=token,
+    )
+
+    if not artifacts_result.get("ok"):
+        return {
+            "ok": False,
+            "required": True,
+            "verified": False,
+            "reason": "artifact_listing_failed",
+            "artifact_listing": artifacts_result,
+        }
+
+    artifacts = (
+        artifacts_result
+        .get("body", {})
+        .get("artifacts", [])
+    )
+
+    if not artifacts:
+        return {
+            "ok": False,
+            "required": True,
+            "verified": False,
+            "reason": "no_actions_artifacts_found",
+        }
+
+    ############################################################
+    # Candidate artifact selection.
+    ############################################################
+
+    candidate_keywords = (
+        "lifecycle",
+        "governance",
+        "deployment",
+        "gate",
+        "certification",
+        "runtime-certification",
+        "deployment-governance",
+        "deployment-governance-gate",
+    )
+
+    candidates = []
+
+    for artifact in artifacts:
+        name = str(
+            artifact.get("name", "")
+        )
+
+        expired = bool(
+            artifact.get("expired", False)
+        )
+
+        if expired:
+            continue
+
+        lowered = name.lower()
+
+        if any(
+            keyword in lowered
+            for keyword in candidate_keywords
+        ):
+            candidates.append(artifact)
+
+    if not candidates:
+        return {
+            "ok": False,
+            "required": True,
+            "verified": False,
+            "reason": "no_candidate_completion_artifacts_found",
+            "artifact_count": len(artifacts),
+        }
+
+    ############################################################
+    # Inspect candidate artifact ZIPs.
+    ############################################################
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "RGA-GitHub-Lifecycle-Bridge",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    inspected = []
+    matched_session = []
+
+    for artifact in candidates[:50]:
+
+        artifact_name = str(
+            artifact.get("name", "")
+        )
+
+        download_url = str(
+            artifact.get("archive_download_url", "")
+        )
+
+        if not download_url:
+            inspected.append(
+                {
+                    "artifact_name": artifact_name,
+                    "ok": False,
+                    "reason": "missing_archive_download_url",
+                }
+            )
+            continue
+
+        req = urllib.request.Request(
+            download_url,
+            headers=headers,
+            method="GET",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                content = resp.read()
+
+        except urllib.error.HTTPError as exc:
+            inspected.append(
+                {
+                    "artifact_name": artifact_name,
+                    "ok": False,
+                    "status": exc.code,
+                    "reason": exc.reason,
+                }
+            )
+            continue
+
+        except Exception as exc:
+            inspected.append(
+                {
+                    "artifact_name": artifact_name,
+                    "ok": False,
+                    "reason": str(exc),
+                }
+            )
+            continue
+
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as zip_file:
+
+                for member in zip_file.namelist():
+
+                    member_lower = member.lower()
+
+                    if not member_lower.endswith(".json"):
+                        continue
+
+                    try:
+                        raw = (
+                            zip_file
+                            .read(member)
+                            .decode("utf-8")
+                        )
+                    except Exception:
+                        continue
+
+                    try:
+                        payload = json.loads(raw)
+                    except Exception:
+                        payload = None
+
+                    ################################################
+                    # Session matching
+                    ################################################
+
+                    session_match = False
+
+                    if isinstance(payload, dict):
+                        payload_session = str(
+                            payload.get("audit_session_id", "")
+                        )
+
+                        if payload_session == session_id:
+                            session_match = True
+
+                    if not session_match and session_id in raw:
+                        session_match = True
+
+                    if not session_match:
+                        continue
+
+                    matched_session.append(
+                        {
+                            "artifact_name": artifact_name,
+                            "member": member,
+                        }
+                    )
+
+                    ################################################
+                    # Completion / governance acceptance
+                    ################################################
+
+                    if not isinstance(payload, dict):
+                        continue
+
+                    lifecycle_status = str(
+                        payload.get("lifecycle_status", "")
+                    ).lower()
+
+                    completed_stage = str(
+                        payload.get("completed_stage", "")
+                    ).lower()
+
+                    stage = str(
+                        payload.get("stage", "")
+                    ).lower()
+
+                    next_stage = str(
+                        payload.get("next_stage", "")
+                    ).lower()
+
+                    status = str(
+                        payload.get("status", "")
+                    ).lower()
+
+                    overall_status = str(
+                        payload.get("overall_status", "")
+                    ).lower()
+
+                    governance_gate_passed = payload.get(
+                        "governance_gate_passed",
+                        None,
+                    )
+
+                    governance_passed = payload.get(
+                        "governance_passed",
+                        None,
+                    )
+
+                    accepted_completion = False
+
+                    ################################################
+                    # Strong completion signal evidence.
+                    ################################################
+
+                    if (
+                        lifecycle_status == "complete"
+                        and governance_gate_passed is True
+                    ):
+                        accepted_completion = True
+
+                    if (
+                        lifecycle_status == "complete"
+                        and governance_passed is True
+                    ):
+                        accepted_completion = True
+
+                    ################################################
+                    # Lifecycle event style evidence.
+                    ################################################
+
+                    if completed_stage == "complete":
+                        accepted_completion = True
+
+                    if stage == "complete":
+                        accepted_completion = True
+
+                    if (
+                        completed_stage == "governance_gate"
+                        and next_stage == "complete"
+                    ):
+                        accepted_completion = True
+
+                    ################################################
+                    # Governance / report style evidence.
+                    ################################################
+
+                    if status in {
+                        "complete",
+                        "success",
+                        "succeeded",
+                        "passed",
+                        "pass",
+                        "ok",
+                    }:
+                        accepted_completion = True
+
+                    if overall_status in {
+                        "complete",
+                        "success",
+                        "succeeded",
+                        "passed",
+                        "pass",
+                        "ok",
+                    }:
+                        accepted_completion = True
+
+                    if accepted_completion:
+
+                        evidence = {
+                            "lifecycle_status": lifecycle_status,
+                            "completed_stage": completed_stage,
+                            "stage": stage,
+                            "next_stage": next_stage,
+                            "status": status,
+                            "overall_status": overall_status,
+                            "governance_gate_passed": governance_gate_passed,
+                            "governance_passed": governance_passed,
+                        }
+
+                        return {
+                            "ok": True,
+                            "required": True,
+                            "verified": True,
+                            "source": "github_actions_artifact",
+                            "artifact_name": artifact_name,
+                            "member": member,
+                            "audit_session_id": session_id,
+                            "matched_session_count": len(matched_session),
+                            "evidence": evidence,
+                        }
+
+        except zipfile.BadZipFile:
+            inspected.append(
+                {
+                    "artifact_name": artifact_name,
+                    "ok": False,
+                    "reason": "bad_zip_file",
+                }
+            )
+
+        except Exception as exc:
+            inspected.append(
+                {
+                    "artifact_name": artifact_name,
+                    "ok": False,
+                    "reason": str(exc),
+                }
+            )
+
+    ############################################################
+    # No acceptable completion evidence found.
+    ############################################################
+
+    return {
+        "ok": False,
+        "required": True,
+        "verified": False,
+        "reason": "remote_completion_not_verified",
+        "audit_session_id": session_id,
+        "candidate_artifact_count": len(candidates),
+        "matched_session_count": len(matched_session),
+        "matched_session": matched_session[:10],
+        "inspected": inspected[:10],
+    }
 
 def github_request(
     *,
@@ -1585,12 +2020,22 @@ def parse_args(
         action="store_true",
         help="Poll lifecycle completion state."
     )
+    
+    parser.add_argument(
+        "--require-remote-completion",
+        action="store_true",
+        help=(
+            "Require governance-certified completion "
+            "to be validated from GitHub artifacts "
+            "before writing lifecycle_completion_signal.json."
+        ),
+    )    
 
     parser.add_argument(
         "--session-id",
         default="",
         help="Lifecycle session identifier."
-    )        
+    )
 
     args = parser.parse_args(argv)
 
@@ -1674,6 +2119,7 @@ def parse_args(
         poll_timeout_sec=args.poll_timeout_sec,
         poll_interval_sec=args.poll_interval_sec,
         poll_completion=bool(args.poll_completion),
+        require_remote_completion=bool(args.require_remote_completion),
         session_id=args.session_id.strip(), 
         base_branch=args.base_branch,
         target_branch=target_branch,
@@ -1689,13 +2135,23 @@ def parse_args(
 
 
 def main(
-    argv: Optional[list[str]] = None,
+    argv: Optional[list[str]] = N*ne,
 ) -> int:
 
     ensure_artifacts_dir()
 
     config = parse_args(argv)
-    
+
+    request_out = (
+        AR*IFACTS
+        / "github_lifecycle_bridge_request.json"
+    )
+
+    report_out = (
+        ARTIFACTS
+        / "github_lifecycle_bridge_report.json"
+    )
+
     ########################################################
     # Completion Signal Polling
     #
@@ -1708,19 +2164,158 @@ def main(
     #   workflow dispatch
     #   commit operations
     #
+    # Optional:
+    #
+    #   --require-remote-completion
+    #
+    # verifies GitHub Actions artifacts before writing the
+    # local lifecycle_completion_signal.json.
     ########################################################
 
     if config.poll_completion:
+
+        remote_validation: Optional[Dict[str, Any]] = None
+        safe_token_result: Optional[Dict[str, Any]] = None
+
+        ####################################################
+        # Remote-grounded completion verification.
+        ####################################################
+
+        if config.require_remote_completion:
+
+            token_result = resolve_github_api_token(
+                config,
+            )
+
+            if not token_result.get("ok"):
+
+                report: Dict[str, Any] = {
+                    "schema": BRIDGE_SCHEMA,
+                    "generated_at": utc_now_iso(),
+                    "mode": "poll_completion",
+                    "token_result": token_result,
+                    "completion_result": {
+                        "ok": False,
+                        "reason": "github_credentials_unavailable",
+                        "audit_session_id": config.session_id,
+                    },
+                }
+
+                write_json(
+                    report_out,
+                    report,
+                )
+
+                print(
+                    "[RGA-BRIDGE][FAIL] "
+                    "GitHub credentials unavailable for "
+                    "remote completion verification."
+                )
+
+                print(
+                    f"[RGA-BRIDGE][REPORT] {report_out}"
+                )
+
+                return 3
+
+            token = token_result["token"]
+
+            safe_token_result = dict(token_result)
+            safe_token_result.pop(
+                "token",
+                None,
+            )
+
+            remote_result = verify_remote_completion(
+                config=config,
+                token=token,
+            )
+
+            remote_validation = dict(remote_result)
+
+            if not remote_result.get("ok"):
+
+                report = {
+                    "schema": BRIDGE_SCHEMA,
+                    "generated_at": utc_now_iso(),
+                    "mode": "poll_completion",
+                    "token_result": safe_token_result,
+                    "remote_completion": remote_result,
+                    "completion_result": {
+                        "ok": False,
+                        "reason": "remote_completion_not_verified",
+                        "audit_session_id": config.session_id,
+                    },
+                }
+
+                write_json(
+                    report_out,
+                    report,
+                )
+
+                print(
+                    "[RGA-BRIDGE][FAIL] "
+                    "Remote governance-certified completion "
+                    "was not verified."
+                )
+
+                print(
+                    f"[RGA-BRIDGE][REPORT] {report_out}"
+                )
+
+                return 10
+
+            print(
+                "[RGA-BRIDGE][OK] "
+                "Remote governance completion verified."
+            )
+
+        ####################################################
+        # Local-only completion signal mode.
+        ####################################################
+
+        else:
+
+            remote_validation = {
+                "required": False,
+                "verified": False,
+                "source": "local_signal_only",
+            }
+
+        ####################################################
+        # Write local lifecycle completion signal.
+        ####################################################
 
         signal = build_completion_signal(
             session_id=config.session_id,
             lifecycle_status="complete",
             governance_gate_passed=True,
+            remote_validation=remote_validation,
         )
 
         write_json(
             DEFAULT_COMPLETION_SIGNAL,
             signal,
+        )
+
+        report: Dict[str, Any] = {
+            "schema": BRIDGE_SCHEMA,
+            "generated_at": utc_now_iso(),
+            "mode": "poll_completion",
+            "completion_result": {
+                "ok": True,
+                "audit_session_id": config.session_id,
+                "signal_path": str(DEFAULT_COMPLETION_SIGNAL),
+            },
+            "remote_completion": remote_validation,
+        }
+
+        if safe_token_result is not None:
+            report["token_result"] = safe_token_result
+
+        write_json(
+            report_out,
+            report,
         )
 
         print(
@@ -1733,7 +2328,23 @@ def main(
             f"{DEFAULT_COMPLETION_SIGNAL}"
         )
 
-        return 0    
+        print(
+            f"[RGA-BRIDGE][REPORT] "
+            f"{report_out}"
+        )
+
+        return 0
+
+    ########################################################
+    # Standard bridge path.
+    #
+    # Modes:
+    #   dry-run
+    #   dispatch
+    #   commit-baseline
+    #   commit-and-dispatch
+    #   create-pr
+    ########################################################
 
     baseline_validation = validate_runtime_baseline(
         config.baseline_path
@@ -1786,22 +2397,17 @@ def main(
         },
     }
 
-    request_out = (
-        ARTIFACTS
-        / "github_lifecycle_bridge_request.json"
-    )
-
-    report_out = (
-        ARTIFACTS
-        / "github_lifecycle_bridge_report.json"
-    )
-
     write_json(
         request_out,
         request_payload,
     )
 
+    ########################################################
+    # Runtime baseline validation.
+    ########################################################
+
     if not baseline_validation.get("valid"):
+
         report["dispatch_result"] = {
             "attempted": False,
             "ok": False,
@@ -1825,7 +2431,12 @@ def main(
 
         return 2
 
+    ########################################################
+    # Remote path validation.
+    ########################################################
+
     if not path_validation.get("valid"):
+
         report["commit_result"] = {
             "attempted": False,
             "ok": False,
@@ -1848,6 +2459,10 @@ def main(
         )
 
         return 5
+
+    ########################################################
+    # Token resolution for mutation / dispatch paths.
+    ########################################################
 
     token: Optional[str] = None
 
@@ -1896,7 +2511,12 @@ def main(
 
         report["token_result"] = safe_token_result
 
+    ########################################################
+    # Commit runtime baseline.
+    ########################################################
+
     if config.commit_baseline or config.commit_and_dispatch:
+
         assert token is not None
 
         commit_result = commit_runtime_baseline_to_github(
@@ -1907,6 +2527,7 @@ def main(
         report["commit_result"] = commit_result
 
         if not commit_result.get("ok"):
+
             write_json(
                 report_out,
                 report,
@@ -1924,7 +2545,12 @@ def main(
 
             return 6
 
+        ####################################################
+        # Optional pull request creation.
+        ####################################################
+
         if config.create_pr:
+
             pr_result = create_pull_request(
                 config=config,
                 token=token,
@@ -1936,6 +2562,7 @@ def main(
             }
 
             if not pr_result.get("ok"):
+
                 write_json(
                     report_out,
                     report,
@@ -1954,7 +2581,12 @@ def main(
 
                 return 7
 
+    ########################################################
+    # Workflow dispatch.
+    ########################################################
+
     if config.dispatch or config.commit_and_dispatch:
+
         assert token is not None
 
         request_payload = build_workflow_dispatch_payload(
@@ -1981,6 +2613,7 @@ def main(
         }
 
         if not dispatch_result.get("ok"):
+
             write_json(
                 report_out,
                 report,
@@ -1999,35 +2632,65 @@ def main(
 
             return 4
 
+        ####################################################
+        # Optional governance backhaul.
+        ####################################################
+
         if dispatch_result.get("ok") and config.wait_and_backhaul:
-            time.sleep(5)  # Allow GitHub API to register the new run
-            run_id = get_latest_workflow_run_id(config=config, token=token)
-            
+
+            time.sleep(5)
+
+            run_id = get_latest_workflow_run_id(
+                config=config,
+                token=token,
+            )
+
             if run_id:
+
                 backhaul_result = wait_and_backhaul_governance_report(
                     config=config,
                     token=token,
                     run_id=run_id,
                 )
+
                 report["backhaul_result"] = backhaul_result
-                
+
                 if not backhaul_result.get("ok"):
-                    write_json(report_out, report)
+
+                    write_json(
+                        report_out,
+                        report,
+                    )
+
                     print(
                         "[RGA-BRIDGE][FAIL] "
-                        "Governance gate backhaul failed or gate reported rejection: "
+                        "Governance gate backhaul failed or "
+                        "gate reported rejection: "
                         f"{backhaul_result.get('conclusion') or backhaul_result.get('reason')}"
                     )
+
                     return 8
+
             else:
+
                 report["backhaul_result"] = {
                     "ok": False,
                     "reason": "could_not_resolve_dispatched_run_id",
                 }
-                write_json(report_out, report)
-                return 9    
+
+                write_json(
+                    report_out,
+                    report,
+                )
+
+                return 9
+
+    ########################################################
+    # Dry run reporting.
+    ########################################################
 
     if config.dry_run:
+
         report["dispatch_result"] = {
             "attempted": False,
             "ok": True,
@@ -2042,18 +2705,25 @@ def main(
             "remote_path": config.remote_path,
         }
 
+    ########################################################
+    # Final report write.
+    ########################################################
+
     write_json(
         report_out,
         report,
     )
 
     if config.dry_run:
+
         print(
             "[RGA-BRIDGE][DRY-RUN] "
             "request/report generated; "
             "no GitHub mutation performed."
         )
+
     else:
+
         print(
             "[RGA-BRIDGE][OK] "
             "requested bridge operation completed."
@@ -2068,7 +2738,6 @@ def main(
     )
 
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
