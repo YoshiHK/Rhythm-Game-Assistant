@@ -551,6 +551,157 @@ def resolve_token(
             return value
 
     return None
+    
+def resolve_github_api_token(
+    config: BridgeConfig,
+) -> Dict[str, Any]:
+
+    auth_mode = (
+        getattr(config, "auth_mode", "app") or "app"
+    ).strip().lower()
+
+    if auth_mode not in {
+        "app",
+        "token",
+        "auto",
+    }:
+        return {
+            "ok": False,
+            "reason": "unsupported_auth_mode",
+            "auth_mode": auth_mode,
+        }
+
+    ############################################################
+    # GitHub App authentication
+    ############################################################
+
+    if auth_mode in {
+        "app",
+        "auto",
+    }:
+
+        app_id_env = getattr(
+            config,
+            "github_app_id_env",
+            "RGA_APP_ID",
+        )
+
+        installation_id_env = getattr(
+            config,
+            "github_app_installation_id_env",
+            "RGA_APP_INSTALLATION_ID",
+        )
+
+        private_key_env = getattr(
+            config,
+            "github_app_private_key_env",
+            "RGA_APP_PRIVATE_KEY",
+        )
+
+        app_id = os.environ.get(
+            app_id_env,
+            "",
+        ).strip()
+
+        installation_id = os.environ.get(
+            installation_id_env,
+            "",
+        ).strip()
+
+        private_key = os.environ.get(
+            private_key_env,
+            "",
+        ).strip()
+
+        if app_id and installation_id and private_key:
+
+            app_result = generate_github_app_installation_token(
+                app_id=app_id,
+                installation_id=installation_id,
+                private_key=private_key,
+            )
+
+            if app_result.get("ok"):
+                return {
+                    "ok": True,
+                    "source": "github_app",
+                    "auth_mode": auth_mode,
+                    "token": app_result["token"],
+                    "expires_at": app_result.get("expires_at"),
+                    "app_id_env": app_id_env,
+                    "installation_id_env": installation_id_env,
+                    "private_key_env": private_key_env,
+                }
+
+            if auth_mode == "app":
+                return {
+                    "ok": False,
+                    "reason": "github_app_token_generation_failed",
+                    "auth_mode": auth_mode,
+                    "result": app_result,
+                    "checked_env": [
+                        app_id_env,
+                        installation_id_env,
+                        private_key_env,
+                    ],
+                }
+
+        elif auth_mode == "app":
+            return {
+                "ok": False,
+                "reason": "github_app_credentials_missing",
+                "auth_mode": auth_mode,
+                "checked_env": [
+                    app_id_env,
+                    installation_id_env,
+                    private_key_env,
+                ],
+            }
+
+    ############################################################
+    # Direct token fallback
+    ############################################################
+
+    if auth_mode in {
+        "token",
+        "auto",
+    }:
+
+        token_env = getattr(
+            config,
+            "token_env",
+            "RGA_ACCESS",
+        )
+
+        token = resolve_token(
+            token_env,
+        )
+
+        if token:
+            return {
+                "ok": True,
+                "source": "direct_token",
+                "auth_mode": auth_mode,
+                "token": token,
+                "token_env": token_env,
+            }
+
+    return {
+        "ok": False,
+        "reason": "github_credentials_missing",
+        "auth_mode": auth_mode,
+        "checked_env": [
+            getattr(config, "github_app_id_env", "RGA_APP_ID"),
+            getattr(config, "github_app_installation_id_env", "RGA_APP_INSTALLATION_ID"),
+            getattr(config, "github_app_private_key_env", "RGA_APP_PRIVATE_KEY"),
+            getattr(config, "token_env", "RGA_ACCESS"),
+            "GITHUB_APP_TOKEN",
+            "RGA_ACCESS",
+            "PAT_TOKEN",
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+        ],
+    }
 
 def repo_api_root(config: BridgeConfig) -> str:
     return (
