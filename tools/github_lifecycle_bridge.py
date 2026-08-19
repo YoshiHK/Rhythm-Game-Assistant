@@ -19,6 +19,7 @@ This script is intentionally additive and non-destructive:
 - It targets a branch, not main, by default.
 - It can optionally create a PR.
 - It can optionally dispatch the lifecycle workflow.
+- It can optionally poll lifecycle completion state.
 
 Supported actions
 -----------------
@@ -37,44 +38,49 @@ Supported actions
 --create-pr
     Create PR after committing baseline branch.
 
+--poll-completion
+    Write/receive local lifecycle completion signal.
+
 Authentication Model
 --------------------
 
-RGA now uses GitHub App authentication as the
-primary lifecycle automation model.
+Primary model:
 
-Authentication ownership:
-
-    Local Operator
+    Local PowerShell
         ↓
-    GitHub Lifecycle Bridge
+    github_lifecycle_bridge.py
         ↓
-    GitHub App
+    GitHub App credentials
         ↓
-    Installation Token
+    GitHub App JWT
         ↓
-    GitHub API
+    Installation token
+        ↓
+    GitHub REST API
 
-Operational policy:
+Required local environment variables for GitHub App mode:
 
-- GitHub App authentication is preferred.
-- PAT_TOKEN is considered a legacy fallback path.
-- Lifecycle Runner, Runtime Auditor,
-  Maintenance Executor and Deployment
-  Governance Gate already operate using
-  GitHub App Tokens generated at runtime.
-- Local bridge authentication should align
-  with the same GitHub App model whenever
-  possible.
+    RGA_APP_ID
+    RGA_APP_INSTALLATION_ID
+    RGA_APP_PRIVATE_KEY
 
-Legacy fallback environments:
+RGA_APP_PRIVATE_KEY may be supplied as:
+- raw PEM text
+- PEM text with literal \\n escapes
+- base64-encoded PEM text
 
+Legacy fallback token environments remain supported only when
+--auth-mode token or --auth-mode auto is used:
+
+    RGA_ACCESS
+    GITHUB_APP_TOKEN
     PAT_TOKEN
     GH_TOKEN
     GITHUB_TOKEN
 
 Recommended local usage
 -----------------------
+
 Dry-run first:
 
     python .\\tools\\github_lifecycle_bridge.py `
@@ -103,12 +109,21 @@ Commit baseline, open PR, and dispatch lifecycle:
         --baseline .\\artifacts\\runtime_baseline.json `
         --commit-and-dispatch `
         --create-pr
+
+Receive lifecycle completion signal:
+
+    python .\\tools\\github_lifecycle_bridge.py `
+        --owner YoshiHK `
+        --repo Rhythm-Game-Assistant `
+        --poll-completion `
+        --session-id <AUDIT_SESSION_ID>
 """
 
 import argparse
 import base64
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -116,6 +131,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+try:
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+except ImportError:  # pragma: no cover
+    hashes = None
+    serialization = None
+    padding = None
 
 
 # ------------------------------------------------------------
@@ -189,7 +212,15 @@ class BridgeConfig:
     audit_mode: str
     audit_session_id: str
 
+    auth_mode: str
     token_env: str
+
+    github_app_id_env: str
+    github_app_installation_id_env: str
+    github_app_private_key_env: str
+
+    poll_completion: bool
+    session_id: str
 
     dry_run: bool
     dispatch: bool
@@ -260,6 +291,214 @@ def write_json(
         ),
         encoding="utf-8",
     )
+    
+def b64url_encode(
+    raw: bytes,
+) -> str:
+
+    return (
+        base64.urlsafe_b64encode(raw)
+        .decode("utf-8")
+        .rstrip("=")
+    )
+
+
+def normalize_private_key(
+    raw: str,
+) -> str:
+
+    value = raw.strip()
+
+    if not value:
+        return value
+
+    if "\\n" in value and "BEGIN" in value:
+        value = value.replace("\\n", "\n")
+
+    if "BEGIN" in value and "PRIVATE KEY" in value:
+        return value
+
+    try:
+        decoded = base64.b64decode(value).decode("utf-8")
+        if "BEGIN" in decoded and "PRIVATE KEY" in decoded:
+            return decoded
+    except Exception:
+        pass
+
+    return value
+
+
+def build_github_app_jwt(
+    *,
+    app_id: str,
+    private_key_pem: str,
+) -> str:
+
+    if serialization is None or padding is None or hashes is None:
+        raise RuntimeError(
+            "cryptography package is required for GitHub App "
+            "authentication. Install with: python -m pip install cryptography"
+        )
+
+    now = int(time.time())
+
+    header = {
+        "alg": "RS256",
+        "typ": "JWT",
+    }
+
+    payload = {
+        "iat": now - 60,
+        "exp": now + 540,
+        "iss": app_id,
+    }
+
+    signing_input = (
+        b64url_encode(
+            json.dumps(
+                header,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        + "."
+        + b64url_encode(
+            json.dumps(
+                payload,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+    )
+
+    private_key = serialization.load_pem_private_key(
+        private_key_pem.encode("utf-8"),
+        password=None,
+    )
+
+    signature = private_key.sign(
+        signing_input.encode("utf-8"),
+        padding.PKCS1v15(),
+        hashes.SHA256(),
+    )
+
+    return signing_input + "." + b64url_encode(signature)
+
+
+def github_request_raw(
+    *,
+    method: str,
+    url: str,
+    token: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
+    accept: str = "application/vnd.github+json",
+) -> Dict[str, Any]:
+
+    data = None
+
+    headers = {
+        "Accept": accept,
+        "User-Agent": "RGA-GitHub-Lifecycle-Bridge",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers=headers,
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = resp.read().decode("utf-8")
+            return {
+                "ok": True,
+                "status": resp.status,
+                "body": json.loads(body) if body else {},
+            }
+
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8")
+        try:
+            body = json.loads(raw)
+        except Exception:
+            body = {
+                "raw": raw,
+            }
+
+        return {
+            "ok": False,
+            "status": exc.code,
+            "reason": exc.reason,
+            "body": body,
+        }
+
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": None,
+            "reason": str(exc),
+            "body": {},
+        }
+
+
+def generate_github_app_installation_token(
+    *,
+    app_id: str,
+    installation_id: str,
+    private_key: str,
+) -> Dict[str, Any]:
+
+    private_key_pem = normalize_private_key(private_key)
+
+    jwt_token = build_github_app_jwt(
+        app_id=app_id,
+        private_key_pem=private_key_pem,
+    )
+
+    url = (
+        "https://api.github.com/app/installations/"
+        f"{installation_id}/access_tokens"
+    )
+
+    result = github_request_raw(
+        method="POST",
+        url=url,
+        token=jwt_token,
+        payload={},
+    )
+
+    if not result.get("ok"):
+        return {
+            "ok": False,
+            "stage": "generate_installation_token",
+            "result": result,
+        }
+
+    token = (
+        result.get("body", {})
+        .get("token", "")
+    )
+
+    if not token:
+        return {
+            "ok": False,
+            "stage": "extract_installation_token",
+            "result": result,
+        }
+
+    return {
+        "ok": True,
+        "stage": "generate_installation_token",
+        "token": token,
+        "expires_at": result.get("body", {}).get("expires_at"),
+    }
 
 def build_completion_signal(
     *,
@@ -284,9 +523,9 @@ def resolve_token(
     candidates = [
         token_env,
 
-        # Preferred
-        "RGA_ACCESS",
+        # Directly usable installation token / API token
         "GITHUB_APP_TOKEN",
+        "RGA_ACCESS",
 
         # Legacy fallback
         "PAT_TOKEN",
@@ -295,18 +534,21 @@ def resolve_token(
     ]
 
     seen = set()
-    
-    for name in candidates:
 
-        if not name or name in seen:
+    for candidate in candidates:
+
+        if not candidate:
             continue
 
-        seen.add(name)
+        if candidate in seen:
+            continue
 
-        value = os.environ.get(name)
+        seen.add(candidate)
 
-        if value and value.strip():
-            return value.strip()
+        value = os.environ.get(candidate, "").strip()
+
+        if value:
+            return value
 
     return None
 
@@ -1031,12 +1273,46 @@ def parse_args(
     )
 
     parser.add_argument(
+        "--auth-mode",
+        choices=[
+            "app",
+            "token",
+            "auto",
+        ],
+        default="app",
+        help=(
+            "Authentication mode. "
+            "'app' generates a GitHub App installation token. "
+            "'token' uses a directly supplied bearer token. "
+            "'auto' tries GitHub App first, then token fallback."
+        ),
+    )
+
+    parser.add_argument(
         "--token-env",
         default="RGA_ACCESS",
         help=(
-            "Environment variable containing "
-            "GitHub App or GitHub API credentials"
+            "Legacy/direct token environment variable. "
+            "Used only with --auth-mode token or --auth-mode auto."
         ),
+    )
+
+    parser.add_argument(
+        "--github-app-id-env",
+        default="RGA_APP_ID",
+        help="Environment variable containing GitHub App ID.",
+    )
+
+    parser.add_argument(
+        "--github-app-installation-id-env",
+        default="RGA_APP_INSTALLATION_ID",
+        help="Environment variable containing GitHub App installation ID.",
+    )
+
+    parser.add_argument(
+        "--github-app-private-key-env",
+        default="RGA_APP_PRIVATE_KEY",
+        help="Environment variable containing GitHub App private key PEM.",
     )
 
     parser.add_argument(
@@ -1211,7 +1487,11 @@ def parse_args(
         baseline_path=baseline_path,
         audit_mode=args.audit_mode,
         audit_session_id=audit_session_id,
+        auth_mode=args.auth_mode,
         token_env=args.token_env,
+        github_app_id_env=args.github_app_id_env,
+        github_app_installation_id_env=args.github_app_installation_id_env,
+        github_app_private_key_env=args.github_app_private_key_env,
         dry_run=bool(args.dry_run),
         dispatch=bool(args.dispatch),
         commit_baseline=bool(args.commit_baseline),
@@ -1404,25 +1684,14 @@ def main(
     )
 
     if needs_token:
-        token = resolve_token(
-            config.token_env
+
+        token_result = resolve_github_api_token(
+            config,
         )
 
-        if not token:
-            report["token_result"] = {
-                "ok": False,
-                "reason": "github_token_missing",
-                "checked_env": [
-                    config.token_env,
-                    
-                    "RGA_ACCESS",
-                    "GITHUB_APP_TOKEN",
-                    
-                    "PAT_TOKEN",
-                    "GH_TOKEN",
-                    "GITHUB_TOKEN",
-                ],
-            }
+        if not token_result.get("ok"):
+
+            report["token_result"] = token_result
 
             write_json(
                 report_out,
@@ -1431,9 +1700,9 @@ def main(
 
             print(
                 "[RGA-BRIDGE][FAIL] "
-                "GitHub credential missing. "
-                "Configure GitHub App authentication "
-                "or provide a supported fallback token."
+                "GitHub credentials unavailable. "
+                "Configure GitHub App environment variables "
+                "or use --auth-mode token with a valid fallback token."
             )
 
             print(
@@ -1442,10 +1711,15 @@ def main(
 
             return 3
 
-        report["token_result"] = {
-            "ok": True,
-            "source_env": config.token_env,
-        }  
+        token = token_result["token"]
+
+        safe_token_result = dict(token_result)
+        safe_token_result.pop(
+            "token",
+            None,
+        )
+
+        report["token_result"] = safe_token_result
 
     if config.commit_baseline or config.commit_and_dispatch:
         assert token is not None
