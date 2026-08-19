@@ -742,6 +742,189 @@ def repo_api_root(config: BridgeConfig) -> str:
         "https://api.github.com/repos/"
         f"{config.owner}/{config.repo}"
     )
+    
+class NoRedirectHandler(
+    urllib.request.HTTPRedirectHandler
+):
+    """
+    Prevent urllib from automatically following redirects.
+
+    GitHub artifact archive_download_url usually returns a
+    redirect to a time-limited artifact storage URL.
+
+    The GitHub Authorization header is valid for the GitHub API
+    endpoint, but should not be forwarded to the redirected
+    artifact storage URL.
+    """
+
+    def redirect_request(
+        self,
+        req,
+        fp,
+        code,
+        msg,
+        headers,
+        newurl,
+    ):
+        return None
+        
+def download_github_actions_artifact_zip(
+    *,
+    download_url: str,
+    token: str,
+) -> Dict[str, Any]:
+    """
+    Download a GitHub Actions artifact ZIP.
+
+    Step 1:
+      Request GitHub archive_download_url using GitHub token.
+
+    Step 2:
+      If GitHub returns redirect, follow the redirected URL
+      without the GitHub Authorization header.
+
+    This avoids sending:
+        Authorization: Bearer <GitHub installation token>
+
+    to the redirected artifact storage URL.
+    """
+
+    github_headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "RGA-GitHub-Lifecycle-Bridge",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    opener = urllib.request.build_opener(
+        NoRedirectHandler
+    )
+
+    req = urllib.request.Request(
+        download_url,
+        headers=github_headers,
+        method="GET",
+    )
+
+    try:
+        response = opener.open(
+            req,
+            timeout=60,
+        )
+
+        content = response.read()
+
+        return {
+            "ok": True,
+            "status": getattr(response, "status", None),
+            "redirected": False,
+            "content": content,
+        }
+
+    except urllib.error.HTTPError as exc:
+
+        ####################################################
+        # Expected successful artifact-download path:
+        #
+        # GitHub returns 302 with Location header.
+        ####################################################
+
+        if exc.code in {
+            301,
+            302,
+            303,
+            307,
+            308,
+        }:
+
+            location = exc.headers.get("Location")
+
+            if not location:
+                return {
+                    "ok": False,
+                    "status": exc.code,
+                    "reason": "redirect_without_location",
+                }
+
+            storage_headers = {
+                "User-Agent": "RGA-GitHub-Lifecycle-Bridge",
+            }
+
+            storage_req = urllib.request.Request(
+                location,
+                headers=storage_headers,
+                method="GET",
+            )
+
+            try:
+                with urllib.request.urlopen(
+                    storage_req,
+                    timeout=60,
+                ) as storage_resp:
+
+                    content = storage_resp.read()
+
+                    return {
+                        "ok": True,
+                        "status": getattr(
+                            storage_resp,
+                            "status",
+                            None,
+                        ),
+                        "redirected": True,
+                        "redirect_status": exc.code,
+                        "content": content,
+                    }
+
+            except urllib.error.HTTPError as storage_exc:
+
+                raw = storage_exc.read().decode(
+                    "utf-8",
+                    errors="replace",
+                )
+
+                return {
+                    "ok": False,
+                    "status": storage_exc.code,
+                    "reason": storage_exc.reason,
+                    "redirected": True,
+                    "body": raw[:1000],
+                }
+
+            except Exception as storage_exc:
+
+                return {
+                    "ok": False,
+                    "status": None,
+                    "reason": str(storage_exc),
+                    "redirected": True,
+                }
+
+        ####################################################
+        # Non-redirect GitHub API failure.
+        ####################################################
+
+        raw = exc.read().decode(
+            "utf-8",
+            errors="replace",
+        )
+
+        return {
+            "ok": False,
+            "status": exc.code,
+            "reason": exc.reason,
+            "redirected": False,
+            "body": raw[:1000],
+        }
+
+    except Exception as exc:
+
+        return {
+            "ok": False,
+            "status": None,
+            "reason": str(exc),
+            "redirected": False,
+        }
 
 def verify_remote_completion(
     config: BridgeConfig,
@@ -902,36 +1085,42 @@ def verify_remote_completion(
             )
             continue
 
-        req = urllib.request.Request(
-            download_url,
-            headers=headers,
-            method="GET",
+        download_result = download_github_actions_artifact_zip(
+            download_url=download_url,
+            token=token,
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                content = resp.read()
+        if not download_result.get("ok"):
 
-        except urllib.error.HTTPError as exc:
             inspected.append(
                 {
                     "artifact_name": artifact_name,
                     "ok": False,
-                    "status": exc.code,
-                    "reason": exc.reason,
+                    "status": download_result.get("status"),
+                    "reason": download_result.get("reason"),
+                    "redirected": download_result.get(
+                        "redirected",
+                        False,
+                    ),
+                    "body": download_result.get("body"),
                 }
             )
+
             continue
 
-        except Exception as exc:
-            inspected.append(
-                {
-                    "artifact_name": artifact_name,
-                    "ok": False,
-                    "reason": str(exc),
-                }
-            )
-            continue
+        content = download_result["content"]
+
+        inspected.append(
+            {
+                "artifact_name": artifact_name,
+                "ok": True,
+                "status": download_result.get("status"),
+                "redirected": download_result.get(
+                    "redirected",
+                    False,
+                ),
+            }
+        )
 
         try:
             with zipfile.ZipFile(io.BytesIO(content)) as zip_file:
