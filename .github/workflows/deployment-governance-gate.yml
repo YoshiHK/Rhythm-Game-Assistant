@@ -325,12 +325,28 @@ jobs:
           Write-Host "[GOVERNANCE-GATE] completed_stage=$completed"
           Write-Host "[GOVERNANCE-GATE] next_stage=$next"
 
-          # Allow gate to execute if triggered at post_audit, governance_gate, or when completing
-          if ($completed -eq "post_audit" -or $completed -eq "governance_gate" -or $next -eq "complete" -or $json.dispatch_required -eq $true) {
-            "should_run=true" >> $env:GITHUB_OUTPUT
+          if (
+              $completed -eq "post_audit" -or
+              $completed -eq "governance_gate"
+          ) {
+
+              "should_run=true" >> $env:GITHUB_OUTPUT
+              "governance_terminal=false" >> $env:GITHUB_OUTPUT
+
+          }
+          elseif (
+              $completed -eq "complete"
+          ) {
+
+              "should_run=false" >> $env:GITHUB_OUTPUT
+              "governance_terminal=true" >> $env:GITHUB_OUTPUT
+
           }
           else {
-            "should_run=false" >> $env:GITHUB_OUTPUT
+
+              "should_run=false" >> $env:GITHUB_OUTPUT
+              "governance_terminal=false" >> $env:GITHUB_OUTPUT
+
           }
 
 
@@ -342,23 +358,30 @@ jobs:
         shell: pwsh
         run: |
           $ShouldRun = "${{ steps.post_audit.outputs.should_run }}"
+          $Terminal = "${{ steps.post_audit.outputs.governance_terminal }}"
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] should_run=$ShouldRun"
 
           if ($ShouldRun -eq "true") {
-            Write-Host ""
-            Write-Host "[GOVERNANCE-GATE] Preconditions satisfied."
-            Write-Host "[GOVERNANCE-GATE] Governance aggregation enabled."
-            "governance_enabled=true" >> $env:GITHUB_OUTPUT
+
+              Write-Host "[GOVERNANCE-GATE] Preconditions satisfied."
+              Write-Host "[GOVERNANCE-GATE] Governance aggregation enabled."
+
+          }
+          elseif ($Terminal -eq "true") {
+
+              Write-Host "[GOVERNANCE-GATE] Lifecycle already completed."
+              Write-Host "[GOVERNANCE-GATE] Governance Gate previously satisfied."
+              Write-Host "[GOVERNANCE-GATE] Skipping duplicate aggregation."
+
           }
           else {
-            Write-Host ""
-            Write-Host "[GOVERNANCE-GATE] Preconditions not satisfied."
-            Write-Host "[GOVERNANCE-GATE] Current lifecycle has not reached post_audit."
-            Write-Host "[GOVERNANCE-GATE] Governance aggregation skipped."
-            "governance_enabled=false" >> $env:GITHUB_OUTPUT
-          }   
+
+              Write-Host "[GOVERNANCE-GATE] Current lifecycle has not reached post_audit."
+              Write-Host "[GOVERNANCE-GATE] Governance aggregation skipped."
+
+          }
 
       - name: Run Deployment Governance Gate
         if: ${{ steps.governance_preconditions.outputs.governance_enabled == 'true' }}
