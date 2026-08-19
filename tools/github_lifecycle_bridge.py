@@ -2139,7 +2139,7 @@ def parse_args(
 
 
 def main(
-    argv: Optional[list[str]] = N*ne,
+    argv: Optional[list[str]] = None,
 ) -> int:
 
     ensure_artifacts_dir()
