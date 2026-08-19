@@ -920,23 +920,46 @@ def validate_runtime_baseline(
         "governance": payload.get("governance") or {},
     }
 
+def resolve_effective_dispatch_ref(
+    config: BridgeConfig,
+) -> str:
+    """
+    Resolve the Git ref used for workflow_dispatch.
+
+    For --commit-and-dispatch, the runtime baseline is committed
+    to config.target_branch. Lifecycle Runner must run on that
+    same branch so it can see artifacts/runtime_baseline.json.
+
+    For --dispatch only, use config.ref.
+    """
+
+    if config.commit_and_dispatch:
+        return config.target_branch
+
+    return config.ref
 
 def build_workflow_dispatch_payload(
     config: BridgeConfig,
 ) -> Dict[str, Any]:
 
+    dispatch_ref = resolve_effective_dispatch_ref(
+        config
+    )
+
     return {
-        "ref": config.ref,
+        "ref": dispatch_ref,
         "inputs": {
             "audit_mode": config.audit_mode,
             "audit_session_id": config.audit_session_id,
-            "runtime_baseline": str(
-                config.baseline_path
-            ),
+
+            # Repository path, not local Windows path.
+            "runtime_baseline": config.remote_path,
+
+            # Explicit lineage for lifecycle / governance diagnostics.
+            "runtime_baseline_ref": dispatch_ref,
             "trigger_source": "github_lifecycle_bridge",
         },
     }
-
 
 def workflow_dispatch_url(
     config: BridgeConfig,
@@ -1741,7 +1764,9 @@ def main(
             "owner": config.owner,
             "repo": config.repo,
             "workflow": config.workflow,
-            "dispatch_ref": config.ref,
+            "dispatch_ref": resolve_effective_dispatch_ref(
+                config
+            ),
             "base_branch": config.base_branch,
             "target_branch": config.target_branch,
             "remote_path": config.remote_path,
@@ -1933,16 +1958,20 @@ def main(
     if config.dispatch or config.commit_and_dispatch:
         assert token is not None
 
+        request_payload = build_workflow_dispatch_payload(
+            config
+        )
+
+        report["workflow_dispatch"] = {
+            "url": workflow_dispatch_url(config),
+            "payload": request_payload,
+        }
+
         dispatch_result = dispatch_workflow(
             config=config,
             token=token,
             payload=request_payload,
         )
-
-        report["dispatch_result"] = {
-            "attempted": True,
-            **dispatch_result,
-        }
 
         if not dispatch_result.get("ok"):
             write_json(
