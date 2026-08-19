@@ -371,10 +371,12 @@ jobs:
           }
           elseif ($Terminal -eq "true") {
 
-              Write-Host "[GOVERNANCE-GATE] Lifecycle already completed."
-              Write-Host "[GOVERNANCE-GATE] Governance Gate previously satisfied."
-              Write-Host "[GOVERNANCE-GATE] Skipping duplicate aggregation."
+              Write-Host ""
+              Write-Host "[GOVERNANCE-GATE] Lifecycle terminal state reached."
+              Write-Host "[GOVERNANCE-GATE] Governance already certified."
+              Write-Host "[GOVERNANCE-GATE] No aggregation required."
 
+              "governance_enabled=false" >> $env:GITHUB_OUTPUT
           }
           else {
 
