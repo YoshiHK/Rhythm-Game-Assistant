@@ -226,42 +226,36 @@ class BridgeConfig:
 
     workflow: str
     ref: str
-
     baseline_path: Path
     audit_mode: str
     audit_session_id: str
 
     auth_mode: str
     token_env: str
-
     github_app_id_env: str
     github_app_installation_id_env: str
     github_app_private_key_env: str
-
-    poll_completion: bool
-    session_id: str
 
     dry_run: bool
     dispatch: bool
     commit_baseline: bool
     commit_and_dispatch: bool
     create_pr: bool
-    wait_and_backhaul: bool  
-    poll_timeout_sec: int    
-    poll_interval_sec: int   
+
+    wait_and_backhaul: bool
+    poll_timeout_sec: int
+    poll_interval_sec: int
+
     poll_completion: bool
     require_remote_completion: bool
-    session_id: str   
+    session_id: str
 
     base_branch: str
     target_branch: str
-
     remote_path: str
     commit_message: str
-
     pr_title: str
     pr_body: str
-
 
 def utc_now_iso() -> str:
     return (
@@ -2023,11 +2017,11 @@ def parse_args(
         "--require-remote-completion",
         action="store_true",
         help=(
-            "Require governance-certified completion "
-            "to be validated from GitHub artifacts "
-            "before writing lifecycle_completion_signal.json."
+            "Require governance-certified completion to be "
+            "validated from GitHub Actions artifacts before "
+            "writing lifecycle_completion_signal.json."
         ),
-    )    
+    )  
 
     parser.add_argument(
         "--session-id",
