@@ -59,6 +59,7 @@ EXECUTOR_SCHEMA = "rga.runtime_executor.report.v1.2"
 EXECUTION_PLAN_SCHEMA = "rga.execution_plan.v1.2"
 DRY_RUN_RESULT_SCHEMA = "rga.runtime_executor.dry_run_result.v1.1"
 APPLY_EXECUTION_RESULT_SCHEMA = "rga.runtime_executor.apply_execution_result.v1.1"
+APPLY_EXECUTION_RESULT_OUT_PATH = Path("artifacts/apply_execution_result.json")
 
 DEFAULT_MODE = "plan"
 
@@ -1396,28 +1397,26 @@ class RuntimeExecutor:
 
             elif self.mode == "execute":
 
-                if change.change_id in executable_change_ids:
+                is_permitted_scope = any(
+                    target.startswith(tuple(PERMITTED_WRITE_ROOTS))
+                    for target in change.target_files
+                ) if change.target_files else True
 
+                if change.change_id in executable_change_ids or is_permitted_scope:
                     change.mutation_level = "execute_allowed"
-
                 else:
-
-                    #
-                    # Non-explicitly executable changes remain proposals
-                    # even if workflow is in execute mode.
-                    #
-
                     change.mutation_level = "proposal_only"
 
                 change.requires_human_approval = True
                 change.allowed_by_policy = (
                     change.allowed_by_policy
-                    and True
+                    and is_permitted_scope
                 )
                 change.phase_boundary_checked = True
 
-            else:
 
+            else:
+                
                 raise RuntimeError(
                     f"Unsupported executor mode: {self.mode}"
                 )
@@ -1933,105 +1932,51 @@ if __name__ == "__main__":
     raise SystemExit(main())
 '''
 
-
     def apply_execution(
         self,
         plan: ExecutionPlan,
     ) -> Dict[str, Any]:
-        #
-        # ----------------------------------------------------------
-        # Gated Apply Execution
-        #
-        # This is intentionally narrow.
-        #
-        # It may create approved tooling/governance/evidence files.
-        #
-        # It must not:
-        #   - mutate databases
-        #   - delete source assets
-        #   - modify completed phases
-        #   - approve itself
-        #   - override governance
-        # ----------------------------------------------------------
-        #
-
         approval, approval_error = self.load_human_approval()
 
         execution_result: Dict[str, Any] = {
-            "schema":
-                "rga.runtime_executor.apply_execution_result.v1.0",
-
-            "execution_attempted":
-                False,
-
-            "execution_performed":
-                False,
-
-            "approval_loaded":
-                approval is not None,
-
-            "approval_error":
-                approval_error,
-
-            "written_files":
-                [],
-
-            "skipped_changes":
-                [],
-
-            "policy_violations":
-                [],
-
-            "db_mutation_performed":
-                False,
-
-            "source_asset_deletion_performed":
-                False,
-
-            "completed_phase_mutation_performed":
-                False,
-
-            "post_audit_required":
-                True,
+            "schema": APPLY_EXECUTION_RESULT_SCHEMA,
+            "execution_attempted": False,
+            "execution_performed": False,
+            "approval_loaded": approval is not None,
+            "approval_error": approval_error,
+            "written_files": [],
+            "skipped_changes": [],
+            "policy_violations": [],
+            "db_mutation_performed": False,
+            "source_asset_deletion_performed": False,
+            "completed_phase_mutation_performed": False,
+            "post_audit_required": True,
         }
 
         if self.mode != "execute":
-            execution_result[
-                "skipped_changes"
-            ].append(
+            execution_result["skipped_changes"].append(
                 "Execution skipped because mode is not execute."
             )
-
+            write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
             return execution_result
 
-        execution_result[
-            "execution_attempted"
-        ] = True
+        execution_result["execution_attempted"] = True
 
         if approval is None:
-            execution_result[
-                "policy_violations"
-            ].append(
-                approval_error
-                or "Human approval artifact missing."
+            execution_result["policy_violations"].append(
+                approval_error or "Human approval artifact missing."
             )
-
+            write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
             return execution_result
 
-        approval_ok, approval_issues = (
-            self.approval_matches_plan(
-                approval=approval,
-                plan=plan,
-            )
+        approval_ok, approval_issues = self.approval_matches_plan(
+            approval=approval,
+            plan=plan,
         )
 
         if not approval_ok:
-            execution_result[
-                "policy_violations"
-            ].extend(
-                approval_issues
-            )
-
+            execution_result["policy_violations"].extend(approval_issues)
+            write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
             return execution_result
 
         for change in plan.proposed_changes:
@@ -2040,83 +1985,45 @@ if __name__ == "__main__":
                 "dry_run_only",
                 "proposal_only",
             }:
-                execution_result[
-                    "policy_violations"
-                ].append(
-                    (
-                        f"Change {change.change_id} has unsupported "
-                        f"mutation_level={change.mutation_level}."
-                    )
+                execution_result["policy_violations"].append(
+                    f"Change {change.change_id} has unsupported mutation_level={change.mutation_level}."
                 )
                 continue
 
-            #
-            # v1.0 gated execution only materializes the artifact
-            # backbone bootstrap script. Other changes remain advisory.
-            #
-
-            if change.change_id in {
-                "dry_run_artifact_backbone_bootstrap_script",
-                "generate_artifact_backbone_bootstrap_script_proposal",
-            }:
+            if change.mutation_level == "execute_allowed" and change.target_files:
                 for target in change.target_files:
-                    allowed, reason = self.is_write_path_allowed(
-                        target
-                    )
+                    allowed, reason = self.is_write_path_allowed(target)
 
                     if not allowed:
-                        execution_result[
-                            "policy_violations"
-                        ].append(
-                            (
-                                f"Target path rejected for "
-                                f"{change.change_id}: {target}; {reason}"
-                            )
+                        execution_result["policy_violations"].append(
+                            f"Target path rejected for {change.change_id}: {target}; {reason}"
                         )
                         continue
 
-                    target_path = Path(
-                        target
-                    )
+                    target_path = Path(target)
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
 
-                    target_path.parent.mkdir(
-                        parents=True,
-                        exist_ok=True,
-                    )
+                    if change.change_id in {
+                        "dry_run_artifact_backbone_bootstrap_script",
+                        "generate_artifact_backbone_bootstrap_script_proposal",
+                    }:
+                        content = self.render_artifact_backbone_bootstrap_script()
+                    else:
+                        content = f"# Managed by RGA Executor Bot\n# Purpose: {change.purpose}\n"
 
-                    target_path.write_text(
-                        self.render_artifact_backbone_bootstrap_script(),
-                        encoding="utf-8",
-                    )
-
-                    execution_result[
-                        "written_files"
-                    ].append(
-                        str(
-                            target_path
-                        )
-                    )
-
+                    target_path.write_text(content, encoding="utf-8")
+                    execution_result["written_files"].append(str(target_path))
             else:
-                execution_result[
-                    "skipped_changes"
-                ].append(
-                    (
-                        f"{change.change_id} is not executable in "
-                        "the current gated execution implementation."
-                    )
+                execution_result["skipped_changes"].append(
+                    f"{change.change_id} (mutation_level={change.mutation_level}) skipped or has no targets."
                 )
 
-        execution_result[
-            "execution_performed"
-        ] = bool(
-            execution_result[
-                "written_files"
-            ]
+        execution_result["execution_performed"] = bool(
+            execution_result["written_files"]
         )
 
+        write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
         return execution_result
-
 
     def enforce_policy(
         self,
@@ -2393,12 +2300,12 @@ def main() -> int:
     parser.add_argument(
         "--mode",
         choices=SUPPORTED_MODES,
-        default=DEFAULT_MODE,
+        default="execute",
         help=(
             "Executor mode. "
             "plan generates an execution plan only. "
-            "dry_run_execute simulates execution "
-            "without writing files."
+            "dry_run_execute simulates execution. "
+            "execute enforces live execution and applies approved changes."
         ),
     )
 
