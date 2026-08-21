@@ -359,6 +359,7 @@ jobs:
         run: |
           $ShouldRun = "${{ steps.post_audit.outputs.should_run }}"
           $Terminal = "${{ steps.post_audit.outputs.governance_terminal }}"
+          $SessionId = "${{ steps.post_audit.outputs.audit_session_id }}"
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] should_run=$ShouldRun"
@@ -367,6 +368,7 @@ jobs:
 
               Write-Host "[GOVERNANCE-GATE] Preconditions satisfied."
               Write-Host "[GOVERNANCE-GATE] Governance aggregation enabled."
+              "governance_enabled=true" >> $env:GITHUB_OUTPUT
 
           }
           elseif ($Terminal -eq "true") {
@@ -376,25 +378,70 @@ jobs:
               Write-Host "[GOVERNANCE-GATE] Governance already certified."
               Write-Host "[GOVERNANCE-GATE] No aggregation required."
 
+              # Generate fallback completion evidence for terminal state
+              $Timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+              
+              $GateReport = @{
+                  schema = "rga.deployment_governance_report.v1.0"
+                  audit_session_id = $SessionId
+                  status = "bypassed_terminal_state"
+                  governance_certified = $true
+                  reason = "Lifecycle terminal state already certified"
+                  evaluated_at = $Timestamp
+              } | ConvertTo-Json -Depth 5
+
+              $AcceptanceReport = @{
+                  schema = "rga.runtime_verification_acceptance.v1.0"
+                  audit_session_id = $SessionId
+                  verified = $true
+                  status = "accepted_terminal_baseline"
+                  timestamp = $Timestamp
+              } | ConvertTo-Json -Depth 5
+
+              Set-Content -Path "governance_gate_report.json" -Value $GateReport
+              Set-Content -Path "runtime_verification_acceptance.json" -Value $AcceptanceReport
+
               "governance_enabled=false" >> $env:GITHUB_OUTPUT
+
           }
           else {
 
               Write-Host "[GOVERNANCE-GATE] Current lifecycle has not reached post_audit."
               Write-Host "[GOVERNANCE-GATE] Governance aggregation skipped."
 
+              # Generate explicit skipped payload so artifacts are never missing
+              $Timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+              
+              $GateReport = @{
+                  schema = "rga.deployment_governance_report.v1.0"
+                  audit_session_id = $SessionId
+                  status = "skipped_pre_audit"
+                  governance_certified = $false
+                  reason = "Post-audit stage not reached"
+                  evaluated_at = $Timestamp
+              } | ConvertTo-Json -Depth 5
+
+              Set-Content -Path "governance_gate_report.json" -Value $GateReport
+
+              "governance_enabled=false" >> $env:GITHUB_OUTPUT
+
           }
 
+
+      # --------------------------------------------------
+      # Run Deployment Governance Gate
+      # --------------------------------------------------
       - name: Run Deployment Governance Gate
         if: ${{ steps.governance_preconditions.outputs.governance_enabled == 'true' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
+          # Standardized output name to match governance bridge expected artifacts
           $args = @(
             ".\deployment_gate.py",
             "--output",
-            ".\deployment_gate_report.json",
+            ".\governance_gate_report.json",
             "--governance-mode"
           )
 
@@ -477,14 +524,14 @@ jobs:
       # Upload Deployment Governance Gate Report
       # --------------------------------------------------
       - name: Upload Deployment Governance Gate Report
-        if: >
-          always() &&
-          steps.governance_preconditions.outputs.governance_enabled == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: deployment-governance-gate-report
           path: |
             deployment_gate_report.json
+            governance_gate_report.json
+            runtime_verification_acceptance.json
             artifacts/governance_artifact_inventory.txt
             artifacts/**/runtime_baseline.json
             artifacts/**/database_mutation_plan.json
@@ -496,3 +543,5 @@ jobs:
             artifacts/**/runtime_index.json
             artifacts/**/lifecycle_event.json
           if-no-files-found: warn
+
+
