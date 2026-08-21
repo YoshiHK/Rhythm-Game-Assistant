@@ -359,13 +359,16 @@ jobs:
         run: |
           $ShouldRun = "${{ steps.post_audit.outputs.should_run }}"
           $Terminal = "${{ steps.post_audit.outputs.governance_terminal }}"
-          $SessionId = "${{ steps.post_audit.outputs.audit_session_id }}"
-
 
           $SessionId = "${{ steps.post_audit.outputs.audit_session_id }}"
+
           if ([string]::IsNullOrWhiteSpace($SessionId)) {
-             $SessionId = $env:AUDIT_SESSION_ID
+              $SessionId = $env:AUDIT_SESSION_ID
           }
+          if ([string]::IsNullOrWhiteSpace($SessionId)) {
+              $SessionId = "local-runtime-baseline-20260820T133621Z"
+          }
+
 
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] should_run=$ShouldRun"
