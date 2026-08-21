@@ -361,6 +361,12 @@ jobs:
           $Terminal = "${{ steps.post_audit.outputs.governance_terminal }}"
           $SessionId = "${{ steps.post_audit.outputs.audit_session_id }}"
 
+
+          $SessionId = "${{ steps.post_audit.outputs.audit_session_id }}"
+          if ([string]::IsNullOrWhiteSpace($SessionId)) {
+             $SessionId = $env:AUDIT_SESSION_ID
+          }
+
           Write-Host ""
           Write-Host "[GOVERNANCE-GATE] should_run=$ShouldRun"
 
