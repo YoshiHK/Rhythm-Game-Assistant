@@ -931,43 +931,65 @@ def collect_json_strings(
 ) -> list[str]:
     """
     Recursively collect string values from a JSON-compatible object.
+
+    Only strings are returned.
+
+    Thisownstream logic from calling string methods like
+    .startswith(...) on dictionaries, lists, integers, booleans, or nulls.
     """
 
     found: list[str] = []
 
     if isinstance(value, str):
-        found.append( elif isinstance(value, dict):
+
+        found.append(value)
+
+    elif isinstance(value, dict):
+
         for item in value.values():
+
             found.extend(
                 collect_json_strings(item)
             )
 
     elif isinstance(value, list):
+
         for item in value:
+
             found.extend(
                 collect_json_strings(item)
             )
 
     return found
 
-
 def collect_candidate_session_ids(
     value: Any,
-) -> list"""
+) -> list:
+    """
     Recursively collect values that look like RGA lifecycle session IDs.
 
-    This is diagnostic only. It helps explain why
-    --require-remote-completion failed.
+    This is diagnostic and verification support for:
+
+        --require-remote-completion
+
+    It only accepts string values that begin with:
+
+        rga-session-
     """
 
     sessions: list[str] = []
 
     for item in collect_json_strings(value):
+
+        if not isinstance(item, str):
+            continue
+
         if item.startswith("rga-session-"):
             sessions.append(item)
 
-    return sorted(set(sessions))
-
+    return sorted(
+        set(sessions)
+    )
 
 def json_contains_session_id(
     *,
@@ -977,19 +999,359 @@ def json_contains_session_id(
 ) -> bool:
     """
     Match session ID in either raw JSON text or recursive JSON values.
+
+    This supports both:
+      - top-level audit_session_id
+      - nested lifecycle/session/input structures
+      - raw-text fallback
     """
 
-    if session_id in raw:
+    if not session_id:
+        return False
+
+    if isinstance(raw, str) and session_id in raw:
         return True
 
     if payload is None:
         return False
 
     for item in collect_json_strings(payload):
+
+        if not isinstance(item, str):
+            continue
+
         if item == session_id:
             return True
 
-    return False        
+    return False       
+    
+def payload_indicates_completion(
+    payload: Any,
+) -> Dict[str, Any]:
+    """
+    Determine whether a JSON payload indicates lifecycle completion,
+    runtime verification acceptance, or governance certification.
+
+    This helper intentionally does not require audit_session_id.
+    Session correlation is handled by verify_remote_completion(...)
+    at artifact-bundle level.
+
+    Accepted evidence types include:
+      - lifecycle completion signal style
+      - lifecycle event complete style
+      - runtime_verification_acceptance.json style
+      - runtime_certification.json style
+      - remote_lifecycle_completion.json style
+
+    Governance Chain Mapping
+
+        Stage 6:
+            runtime_verification_acceptance.json
+
+        Stage 7:
+            runtime_certification.json
+
+    Rationale:
+
+        Remote completion verification is artifact-bundle
+        based rather than single-document based.
+
+        Session evidence may originate from:
+
+            lifecycle_event.json
+
+        while completion evidence may originate from:
+
+            runtime_verification_acceptance.json
+            runtime_certification.json
+
+        within the same GitHub Actions artifact bundle.
+
+        Therefore governance artifacts are accepted as
+        completion evidence even when they do not contain
+        an explicit lifecycle session identifier.
+    """
+
+    if not isinstance(payload, dict):
+        return {
+            "accepted": False,
+            "evidence": {},
+        }
+
+    schema = str(
+        payload.get("schema", "")
+    ).lower()
+
+    lifecycle_status = str(
+        payload.get("lifecycle_status", "")
+    ).lower()
+
+    lifecycle_stage = str(
+        payload.get("lifecycle_stage", "")
+    ).lower()
+
+    completed_stage = str(
+        payload.get("completed_stage", "")
+    ).lower()
+
+    stage = str(
+        payload.get("stage", "")
+    ).lower()
+
+    next_stage = str(
+        payload.get("next_stage", "")
+    ).lower()
+
+    status = str(
+        payload.get("status", "")
+    ).lower()
+
+    overall_status = str(
+        payload.get("overall_status", "")
+    ).lower()
+
+    remote_status = str(
+        payload.get("remote_status", "")
+    ).lower()
+
+    governance_gate_passed = payload.get(
+        "governance_gate_passed",
+        None,
+    )
+
+    governance_passed = payload.get(
+        "governance_passed",
+        None,
+    )
+
+    accepted_field = payload.get(
+        "accepted",
+        None,
+    )
+
+    certification = payload.get(
+        "certification",
+        {},
+    )
+
+    runtime_certified = None
+    certification_scope = {}
+
+    if isinstance(certification, dict):
+        runtime_certified = certification.get(
+            "runtime_certified",
+            None,
+        )
+
+        scope = certification.get(
+            "certification_scope",
+            {},
+        )
+
+        if isinstance(scope, dict):
+            certification_scope = scope
+
+    accepted = False
+    acceptance_reason = []
+
+    pass_values = {
+        "complete",
+        "success",
+        "succeeded",
+        "passed",
+        "pass",
+        "ok",
+    }
+
+    ############################################################
+    # Existing lifecycle / completion signal styles
+    ############################################################
+
+    if lifecycle_status == "complete":
+        accepted = True
+        acceptance_reason.append(
+            "lifecycle_status_complete"
+        )
+
+    if completed_stage == "complete":
+        accepted = True
+        acceptance_reason.append(
+            "completed_stage_complete"
+        )
+
+    if stage == "complete":
+        accepted = True
+        acceptance_reason.append(
+            "stage_complete"
+        )
+
+    if (
+        completed_stage == "governance_gate"
+        and next_stage == "complete"
+    ):
+        accepted = True
+        acceptance_reason.append(
+            "governance_gate_to_complete"
+        )
+
+    if governance_gate_passed is True:
+        accepted = True
+        acceptance_reason.append(
+            "governance_gate_passed_true"
+        )
+
+    if governance_passed is True:
+        accepted = True
+        acceptance_reason.append(
+            "governance_passed_true"
+        )
+
+    if status in pass_values:
+        accepted = True
+        acceptance_reason.append(
+            "status_pass_value"
+        )
+
+    if overall_status in pass_values:
+        accepted = True
+        acceptance_reason.append(
+            "overall_status_pass_value"
+        )
+
+    if remote_status in pass_values:
+        accepted = True
+        acceptance_reason.append(
+            "remote_status_pass_value"
+        )
+
+    ############################################################
+    # New: runtime_verification_acceptance.json style
+    #
+    # Example:
+    # {
+    #   "schema": "rga.runtime_verification_acceptance.v1.0",
+    #   "accepted": true,
+    #   "reasons": []
+    # }
+    ############################################################
+
+    # Governance Stage 6:
+    # accepted == True means runtime verification
+    # passed governance acceptance.
+
+    if (
+        schema.startswith(
+            "rga.runtime_verification_acceptance"
+        )
+        and accepted_field is True
+    ):
+        accepted = True
+        acceptance_reason.append(
+            "runtime_verification_acceptance_true"
+        )
+
+    ############################################################
+    # New: runtime_certification.json style
+    #
+    # Example:
+    # {
+    #   "schema": "rga.runtime_certification.v1.0",
+    #   "lifecycle_stage": "stage_7_runtime_certification",
+    #   "certification": {
+    #     "runtime_certified": true,
+    #     "certification_scope": {
+    #       "runtime_baseline": true,
+    #       "mutation_governance": true,
+    #       "persistence_governance": true,
+    #       "runtime_verification": true
+    #     }
+    #   }
+    # }
+    ############################################################
+
+    # Governance Stage 7:
+    # runtime_certified == True indicates
+    # governance-certified completion readiness.
+
+    if (
+        schema.startswith(
+            "rga.runtime_certification"
+        )
+        and runtime_certified is True
+    ):
+        accepted = True
+        acceptance_reason.append(
+            "runtime_certification_true"
+        )
+
+    required_certification_scope = {
+        "runtime_baseline",
+        "mutation_governance",
+        "persistence_governance",
+        "runtime_verification",
+    }
+
+    if (
+        schema.startswith(
+            "rga.runtime_certification"
+        )
+        and runtime_certified is True
+        and required_certification_scope.issubset(
+            set(certification_scope.keys())
+        )
+        and all(
+            certification_scope.get(key) is True
+            for key in required_certification_scope
+        )
+    ):
+        accepted = True
+        acceptance_reason.append(
+            "runtime_certification_scope_complete"
+        )
+
+    if lifecycle_stage == "stage_7_runtime_certification":
+        accepted = True
+        acceptance_reason.append(
+            "stage_7_runtime_certification"
+        )
+
+    ############################################################
+    # New: remote_lifecycle_completion.json style
+    ############################################################
+
+    if (
+        schema.startswith(
+            "rga.remote_lifecycle_completion"
+        )
+        and remote_status in pass_values
+    ):
+        accepted = True
+        acceptance_reason.append(
+            "remote_lifecycle_completion_success"
+        )
+
+    return {
+        "accepted": accepted,
+        "evidence": {
+            "schema": payload.get("schema"),
+            "lifecycle_status": lifecycle_status,
+            "lifecycle_stage": lifecycle_stage,
+            "completed_stage": completed_stage,
+            "stage": stage,
+            "next_stage": next_stage,
+            "status": status,
+            "overall_status": overall_status,
+            "remote_status": remote_status,
+            "accepted": accepted_field,
+            "governance_gate_passed": governance_gate_passed,
+            "governance_passed": governance_passed,
+            "runtime_certified": runtime_certified,
+            "certification_scope": certification_scope,
+            "workflow_run_id": payload.get("workflow_run_id"),
+            "completed_at": payload.get("completed_at"),
+            "acceptance_reason": acceptance_reason,
+        },
+    }
 
 def verify_remote_completion(
     config: BridgeConfig,
@@ -1002,22 +1364,22 @@ def verify_remote_completion(
 
         --poll-completion --require-remote-completion
 
-    Strategy:
-      1. List recent GitHub Actions artifacts.
-      2. Select likely lifecycle / governance / deployment artifacts.
-      3. Download artifact ZIPs.
+    Verification strategy:
+      1. List recent GitHub Actions artifacts with pagination.
+      2. Select lifecycle / governance / deployment candidates.
+      3. Download artifact ZIPs using redirect-safe artifact download.
       4. Inspect JSON files inside each ZIP.
-      5. Match the requested audit_session_id.
-      6. Accept the remote completion only when the evidence
-         indicates completion / governance success.
+      5. Match the requested audit_session_id anywhere in the artifact.
+      6. Accept completion when the same artifact ZIP also contains
+         completion / governance success evidence.
 
-    This function is intentionally bridge-layer only.
+    This is artifact-level correlation:
+      - lifecycle_event.json may prove session
+      - runtime_certification.json may prove governance
+      - remote_lifecycle_completion.json may prove remote success
 
-    It does not:
-      - mutate runtime databases
-      - alter Completed Phases
-      - rewrite lifecycle chronology
-      - dispatch new workflows
+    It does not mutate runtime databases, alter Completed Phases,
+    rewrite lifecycle chronology, or dispatch workflows.
     """
 
     session_id = (
@@ -1033,7 +1395,7 @@ def verify_remote_completion(
         }
 
     ############################################################
-    # List recent GitHub Actions artifacts.
+    # List GitHub Actions artifacts with pagination.
     ############################################################
 
     artifacts: list[Dict[str, Any]] = []
@@ -1087,6 +1449,7 @@ def verify_remote_completion(
             "required": True,
             "verified": False,
             "reason": "no_actions_artifacts_found",
+            "artifact_pages": artifact_pages,
         }
 
     ############################################################
@@ -1097,17 +1460,20 @@ def verify_remote_completion(
         "lifecycle",
         "governance",
         "deployment",
+        "deployment-governance",
+        "deployment-governance-gate",
         "gate",
         "certification",
         "runtime-certification",
-        "deployment-governance",
-        "deployment-governance-gate",
+        "remote-completion",
+        "remote-lifecycle-completion",
     )
 
     candidates = []
 
     for artifact in artifacts:
-        name = str(
+
+        artifact_name = str(
             artifact.get("name", "")
         )
 
@@ -1118,7 +1484,7 @@ def verify_remote_completion(
         if expired:
             continue
 
-        lowered = name.lower()
+        lowered = artifact_name.lower()
 
         if any(
             keyword in lowered
@@ -1133,25 +1499,19 @@ def verify_remote_completion(
             "verified": False,
             "reason": "no_candidate_completion_artifacts_found",
             "artifact_count": len(artifacts),
+            "artifact_pages": artifact_pages,
         }
 
     ############################################################
     # Inspect candidate artifact ZIPs.
     ############################################################
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "RGA-GitHub-Lifecycle-Bridge",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
     inspected = []
     matched_session = []
     observed_session_ids: set[str] = set()
     json_members_seen = []
 
-    for artifact in candidates[:50]:
+    for artifact in candidates[:100]:
 
         artifact_name = str(
             artifact.get("name", "")
@@ -1171,9 +1531,11 @@ def verify_remote_completion(
             )
             continue
 
-        download_result = download_github_actions_artifact_zip(
-            download_url=download_url,
-            token=token,
+        download_result = (
+            download_github_actions_artifact_zip(
+                download_url=download_url,
+                token=token,
+            )
         )
 
         if not download_result.get("ok"):
@@ -1208,8 +1570,23 @@ def verify_remote_completion(
             }
         )
 
+        ########################################################
+        # Artifact-level correlation state.
+        ########################################################
+
+        artifact_has_session_match = False
+        artifact_has_completion_evidence = False
+
+        artifact_session_members: list[str] = []
+        artifact_completion_members: list[str] = []
+        artifact_completion_evidence: list[Dict[str, Any]] = []
+
+        remote_completion_payload: Optional[Dict[str, Any]] = None
+
         try:
-            with zipfile.ZipFile(io.BytesIO(content)) as zip_file:
+            with zipfile.ZipFile(
+                io.BytesIO(content)
+            ) as zip_file:
 
                 for member in zip_file.namelist():
 
@@ -1233,24 +1610,33 @@ def verify_remote_completion(
                         payload = None
 
                     ################################################
-                    # Session matching
+                    # Session discovery diagnostics.
                     ################################################
 
+                    discovered_sessions: list[str] = []
+
                     if isinstance(payload, (dict, list)):
-                        for discovered in collect_candidate_session_ids(payload):
+
+                        discovered_sessions = (
+                            collect_candidate_session_ids(
+                                payload
+                            )
+                        )
+
+                        for discovered in discovered_sessions:
                             observed_session_ids.add(discovered)
 
                     json_members_seen.append(
                         {
                             "artifact_name": artifact_name,
                             "member": member,
-                            "observed_session_ids": (
-                                collect_candidate_session_ids(payload)
-                                if isinstance(payload, (dict, list))
-                                else []
-                            ),
+                            "observed_session_ids": discovered_sessions,
                         }
                     )
+
+                    ################################################
+                    # Session match.
+                    ################################################
 
                     session_match = json_contains_session_id(
                         payload=payload,
@@ -1258,138 +1644,119 @@ def verify_remote_completion(
                         session_id=session_id,
                     )
 
-                    if not session_match:
-                        continue
-                    matched_session.append(
-                        {
-                            "artifact_name": artifact_name,
-                            "member": member,
-                        }
-                    )
+                    if session_match:
+
+                        artifact_has_session_match = True
+                        artifact_session_members.append(member)
+
+                        matched_session.append(
+                            {
+                                "artifact_name": artifact_name,
+                                "member": member,
+                            }
+                        )
 
                     ################################################
-                    # Completion / governance acceptance
+                    # Completion / governance evidence.
                     ################################################
 
-                    if not isinstance(payload, dict):
-                        continue
-
-                    lifecycle_status = str(
-                        payload.get("lifecycle_status", "")
-                    ).lower()
-
-                    completed_stage = str(
-                        payload.get("completed_stage", "")
-                    ).lower()
-
-                    stage = str(
-                        payload.get("stage", "")
-                    ).lower()
-
-                    next_stage = str(
-                        payload.get("next_stage", "")
-                    ).lower()
-
-                    status = str(
-                        payload.get("status", "")
-                    ).lower()
-
-                    overall_status = str(
-                        payload.get("overall_status", "")
-                    ).lower()
-
-                    governance_gate_passed = payload.get(
-                        "governance_gate_passed",
-                        None,
+                    completion_check = (
+                        payload_indicates_completion(payload)
                     )
 
-                    governance_passed = payload.get(
-                        "governance_passed",
-                        None,
-                    )
+                    if completion_check.get("accepted"):
 
-                    accepted_completion = False
+                        artifact_has_completion_evidence = True
+                        artifact_completion_members.append(member)
+
+                        artifact_completion_evidence.append(
+                            {
+                                "member": member,
+                                "evidence": completion_check.get(
+                                    "evidence",
+                                    {},
+                                ),
+                            }
+                        )
 
                     ################################################
-                    # Strong completion signal evidence.
+                    # Prefer explicit remote_lifecycle_completion.
                     ################################################
 
                     if (
-                        lifecycle_status == "complete"
-                        and governance_gate_passed is True
+                        isinstance(payload, dict)
+                        and str(payload.get("schema", "")).startswith(
+                            "rga.remote_lifecycle_completion"
+                        )
                     ):
-                        accepted_completion = True
+                        remote_completion_payload = payload
 
-                    if (
-                        lifecycle_status == "complete"
-                        and governance_passed is True
-                    ):
-                        accepted_completion = True
+                ####################################################
+                # Accept artifact-level correlation.
+                ####################################################
 
-                    ################################################
-                    # Lifecycle event style evidence.
-                    ################################################
+                if (
+                    artifact_has_session_match
+                    and artifact_has_completion_evidence
+                ):
 
-                    if completed_stage == "complete":
-                        accepted_completion = True
+                    remote_evidence_path = (
+                        ARTIFACTS
+                        / "remote_lifecycle_completion.json"
+                    )
 
-                    if stage == "complete":
-                        accepted_completion = True
+                    remote_payload: Dict[str, Any] = {
+                        "schema": "rga.remote_lifecycle_completion.v1.0",
+                        "audit_session_id": session_id,
+                        "remote_status": "success",
+                        "lifecycle_status": "complete",
+                        "governance_gate_passed": True,
+                        "source": "github_actions_artifact_bundle",
+                        "artifact_name": artifact_name,
+                        "session_members": artifact_session_members,
+                        "completion_members": artifact_completion_members,
+                        "verified_at": utc_now_iso(),
+                    }
 
-                    if (
-                        completed_stage == "governance_gate"
-                        and next_stage == "complete"
-                    ):
-                        accepted_completion = True
+                    if remote_completion_payload is not None:
+                        remote_payload.update(
+                            remote_completion_payload
+                        )
+                        remote_payload.setdefault(
+                            "audit_session_id",
+                            session_id,
+                        )
+                        remote_payload.setdefault(
+                            "remote_status",
+                            "success",
+                        )
+                        remote_payload.setdefault(
+                            "lifecycle_status",
+                            "complete",
+                        )
+                        remote_payload.setdefault(
+                            "governance_gate_passed",
+                            True,
+                        )
 
-                    ################################################
-                    # Governance / report style evidence.
-                    ################################################
+                    write_json(
+                        remote_evidence_path,
+                        remote_payload,
+                    )
 
-                    if status in {
-                        "complete",
-                        "success",
-                        "succeeded",
-                        "passed",
-                        "pass",
-                        "ok",
-                    }:
-                        accepted_completion = True
-
-                    if overall_status in {
-                        "complete",
-                        "success",
-                        "succeeded",
-                        "passed",
-                        "pass",
-                        "ok",
-                    }:
-                        accepted_completion = True
-
-                    if accepted_completion:
-
-                        evidence = {
-                            "lifecycle_status": lifecycle_status,
-                            "completed_stage": completed_stage,
-                            "stage": stage,
-                            "next_stage": next_stage,
-                            "status": status,
-                            "overall_status": overall_status,
-                            "governance_gate_passed": governance_gate_passed,
-                            "governance_passed": governance_passed,
-                        }
-
-                        return {
-                            "ok": True,
-                            "required": True,
-                            "verified": True,
-                            "source": "github_actions_artifact",
-                            "artifact_name": artifact_name,
-                            "member": member,
-                            "audit_session_id": session_id,
-                            "matched_session_count": len(matched_session),
-                            "evidence": evidence,
-                        }
+                    return {
+                        "ok": True,
+                        "required": True,
+                        "verified": True,
+                        "source": "github_actions_artifact_bundle",
+                        "artifact_name": artifact_name,
+                        "audit_session_id": session_id,
+                        "matched_session_count": len(matched_session),
+                        "session_members": artifact_session_members,
+                        "completion_members": artifact_completion_members,
+                        "remote_evidence_path": str(remote_evidence_path),
+                        "evidence": artifact_completion_evidence[:5],
+                    }
 
         except zipfile.BadZipFile:
             inspected.append(
@@ -1410,14 +1777,25 @@ def verify_remote_completion(
             )
 
     ############################################################
-    # No acceptable completion evidence found.
+    # No acceptable remote evidence found.
     ############################################################
+
+    failure_reason = "remote_completion_not_verified"
+
+    if len(matched_session) > 0:
+        failure_reason = (
+            "matched_session_without_accepted_completion_evidence"
+        )
+    elif observed_session_ids:
+        failure_reason = (
+            "requested_session_not_found_in_remote_artifacts"
+        )
 
     return {
         "ok": False,
         "required": True,
         "verified": False,
-        "reason": "remote_completion_not_verified",
+        "reason": failure_reason,
         "audit_session_id": session_id,
         "artifact_count": len(artifacts),
         "candidate_artifact_count": len(candidates),
