@@ -2699,6 +2699,86 @@ if __name__ == "__main__":
             "allowed_scope": list(PERMITTED_WRITE_ROOTS),
             "protected_scope": list(PROTECTED_PATH_TOKENS),
         }
+        
+        def finalize_execution_result() -> Dict[str, Any]:
+            """
+            Emit all execution-stage evidence artifacts.
+
+            This is the single artifact-emission boundary for:
+              - apply_execution_result.json
+              - executor_write_manifest.json
+              - execution_provenance.json
+
+            It must be used for success, skipped execution,
+            missing approval, approval mismatch, and policy-blocked paths.
+            """
+
+            executor_write_manifest = (
+                build_executor_write_manifest(
+                    execution_result
+                )
+            )
+
+            repository_changes = read_json_optional(
+                Path(
+                    "artifacts/repository_changes.json"
+                )
+            )
+
+            execution_commit_manifest = read_json_optional(
+                Path(
+                    "artifacts/execution_commit_manifest.json"
+                )
+            )
+
+            execution_git_commit_result = read_json_optional(
+                Path(
+                    "artifacts/execution_git_commit_result.json"
+                )
+            )
+
+            execution_pull_request_candidate = (
+                read_json_optional(
+                    Path(
+                        "artifacts/execution_pull_request_candidate.json"
+                    )
+                )
+            )
+
+            persistence_contract = read_json_optional(
+                Path(
+                    "artifacts/persistence_contract.json"
+                )
+            )
+
+            execution_provenance = (
+                build_execution_provenance(
+                    execution_result=execution_result,
+                    executor_write_manifest=executor_write_manifest,
+                    repository_changes=repository_changes,
+                    execution_commit_manifest=execution_commit_manifest,
+                    execution_git_commit_result=execution_git_commit_result,
+                    execution_pull_request_candidate=execution_pull_request_candidate,
+                    persistence_contract=persistence_contract,
+                )
+            )
+
+            write_json(
+                execution_result,
+                APPLY_EXECUTION_RESULT_OUT_PATH,
+            )
+
+            write_json(
+                executor_write_manifest,
+                EXECUTOR_WRITE_MANIFEST_OUT_PATH,
+            )
+
+            write_json(
+                execution_provenance,
+                EXECUTION_PROVENANCE_OUT_PATH,
+            )
+
+            return execution_result        
 
         ########################################################
         # Always emit a canonical result, even when not executing.
@@ -2724,7 +2804,7 @@ if __name__ == "__main__":
                 APPLY_EXECUTION_RESULT_OUT_PATH,
             )
 
-            return execution_result
+            return finalize_execution_result()
 
         execution_result["execution_attempted"] = True
 
@@ -2748,12 +2828,7 @@ if __name__ == "__main__":
                 }
             )
 
-            write_json(
-                execution_result,
-                APPLY_EXECUTION_RESULT_OUT_PATH,
-            )
-
-            return execution_result
+            return finalize_execution_result()
 
         approval_ok, approval_issues = self.approval_matches_plan(
             approval=approval,
@@ -2776,12 +2851,7 @@ if __name__ == "__main__":
                 }
             )
 
-            write_json(
-                execution_result,
-                APPLY_EXECUTION_RESULT_OUT_PATH,
-            )
-
-            return execution_result
+            return finalize_execution_result()
 
         ########################################################
         # Execute approved, allowed-scope changes only.
@@ -3061,24 +3131,6 @@ if __name__ == "__main__":
             execution_result["execution_verdict"] = (
                 "blocked_by_policy"
             )
-
-        # 1.
-        write_json(
-            execution_result,
-            APPLY_EXECUTION_RESULT_OUT_PATH,
-        )
-
-        # 2.
-        write_json(
-            executor_write_manifest,
-            EXECUTOR_WRITE_MANIFEST_OUT_PATH,
-        )
-
-        # 3.
-        write_json(
-            execution_provenance,
-            EXECUTION_PROVENANCE_OUT_PATH,
-        )
 
         return finalize_execution_result()
 
