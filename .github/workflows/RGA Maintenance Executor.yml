@@ -83,23 +83,68 @@ jobs:
       pull-requests: write
 
     steps:
+      ############################################################
+      # Checkout Repository
+      #
+      # Token policy:
+      #
+      #   - Do not persist github.token credentials into git config.
+      #
+      #   - GitHub write operations in this workflow should use the
+      #     generated GitHub App installation token.
+      ############################################################
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          
+
+      ############################################################
+      # Generate GitHub App Token
+      #
+      # Maintenance Executor lifecycle role:
+      #
+      #   - Bot #2 owns implementation planning and gated execution.
+      #
+      #   - Bot #2 may create approved tooling, workflow,
+      #     governance, and execution evidence artifacts.
+      #
+      #   - Bot #2 must not approve, self-approve, merge, override
+      #     governance, mutate runtime databases, delete source
+      #     assets, or modify Completed Phases 1-7.
+      #
+      # Token policy:
+      #
+      #   - Prefer GitHub App installation token.
+      #
+      #   - Do not use PAT_TOKEN.
+      #
+      #   - Do not fall back to github.token.
+      #
+      #   - Do not print token values.
+      ############################################################
+
+      - name: Generate GitHub App Token
+        id: github_app_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RGA_APP_ID }}
+          private-key: ${{ secrets.RGA_APP_PRIVATE_KEY }}
+
       ############################################################
       # Prepare Artifact Directory
-      ############################################################          
+      ############################################################
 
       - name: Prepare Artifact Directory
+        shell: bash
         run: |
           mkdir -p artifacts
+
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -136,27 +181,38 @@ jobs:
           }
 
           Path("artifacts/maintenance_lifecycle_context.json").write_text(
-              json.dumps(payload, indent=2),
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
               encoding="utf-8",
           )
           PY
-          
+
       ############################################################
-      # Resolve Artifact Token
+      # Resolve GitHub App Artifact Token
+      #
+      # This exposes the generated GitHub App installation token
+      # through one stable step output:
+      #
+      #   steps.artifact_token.outputs.token
+      #
+      # Downstream GitHub operations should use this output.
       ############################################################
 
-      - name: Resolve Artifact Token
+      - name: Resolve GitHub App Artifact Token
         id: artifact_token
         shell: bash
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-          GH_TOKEN_FALLBACK: ${{ github.token }}
+          GENERATED_GITHUB_APP_TOKEN: ${{ steps.github_app_token.outputs.token }}
         run: |
-          if [ -n "$PAT_TOKEN" ]; then
-            echo "token=$PAT_TOKEN" >> "$GITHUB_OUTPUT"
-          else
-            echo "token=$GH_TOKEN_FALLBACK" >> "$GITHUB_OUTPUT"
-          fi          
+          if [ -z "${GENERATED_GITHUB_APP_TOKEN}" ]; then
+            echo "::error::Generated GitHub App token is empty."
+            exit 1
+          fi
+
+          echo "token=${GENERATED_GITHUB_APP_TOKEN}" >> "$GITHUB_OUTPUT"       
           
       ############################################################
       # Execution Gate
@@ -1400,7 +1456,7 @@ jobs:
         if: ${{ always() && inputs.executor_mode == 'execute' }}
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.artifact_token.outputs.token }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set +e

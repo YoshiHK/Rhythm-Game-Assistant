@@ -56,15 +56,37 @@ jobs:
         with:
           python-version: "3.12"
 
+      ############################################################
+      # Generate GitHub App Token
+      #
+      # Runtime Auditor lifecycle role:
+      #
+      #   - Downloads historical lifecycle artifacts.
+      #   - Verifies evidence produced by Maintenance Executor.
+      #
+      # Token policy:
+      #
+      #   - Prefer GitHub App installation token.
+      #   - Do not use PAT_TOKEN.
+      #   - Do not fall back to github.token.
+      #   - Do not print token values.
+      ############################################################
+
+      - name: Generate GitHub App Token
+        id: github_app_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RGA_APP_ID }}
+          private-key: ${{ secrets.RGA_APP_PRIVATE_KEY }}
 
       ############################################################
       # Prepare Artifact Directory
       ############################################################
 
       - name: Prepare Artifact Directory
-        shell: pwsh
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
+          mkdir -p artifacts
 
       ############################################################
       # Resolve GitHub App Artifact Token
@@ -74,14 +96,14 @@ jobs:
         id: artifact_token
         shell: bash
         env:
-          GITHUB_APP_TOKEN: ${{ secrets.GITHUB_APP_TOKEN }}
+          GENERATED_GITHUB_APP_TOKEN: ${{ steps.github_app_token.outputs.token }}
         run: |
-          if [ -z "${GITHUB_APP_TOKEN}" ]; then
-            echo "::error::GITHUB_APP_TOKEN is not configured."
+          if [ -z "${GENERATED_GITHUB_APP_TOKEN}" ]; then
+            echo "::error::Generated GitHub App token is empty."
             exit 1
           fi
 
-          echo "token=${GITHUB_APP_TOKEN}" >> "$GITHUB_OUTPUT"
+          echo "token=${GENERATED_GITHUB_APP_TOKEN}" >> "$GITHUB_OUTPUT"
 
       ############################################################
       # Download Backhaul Stage 1-4 Contracts from History
