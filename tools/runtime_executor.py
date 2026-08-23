@@ -60,6 +60,9 @@ EXECUTION_PLAN_SCHEMA = "rga.execution_plan.v1.2"
 DRY_RUN_RESULT_SCHEMA = "rga.runtime_executor.dry_run_result.v1.1"
 APPLY_EXECUTION_RESULT_SCHEMA = "rga.runtime_executor.apply_execution_result.v1.1"
 APPLY_EXECUTION_RESULT_OUT_PATH = Path("artifacts/apply_execution_result.json")
+EXECUTOR_WRITE_MANIFEST_OUT_PATH = Path("artifacts/executor_write_manifest.json")
+EXECUTION_PROVENANCE_OUT_PATH = Path("artifacts/execution_provenance.json")
+
 
 DEFAULT_MODE = "plan"
 
@@ -316,7 +319,17 @@ def read_json_file(
         )
 
     return data
+    
+def read_json_optional(
+    path: Path,
+) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
 
+    try:
+        return read_json_file(path)
+    except Exception:
+        return {}    
 
 def read_text_optional(
     path: Optional[Path],
@@ -1051,6 +1064,430 @@ def build_executor_write_manifest(
                 True,
             ),
     }        
+    
+def build_execution_provenance(
+    *,
+    execution_result: Dict[str, Any],
+    executor_write_manifest: Dict[str, Any],
+    repository_changes: Optional[Dict[str, Any]] = None,
+    execution_commit_manifest: Optional[Dict[str, Any]] = None,
+    execution_git_commit_result: Optional[Dict[str, Any]] = None,
+    execution_pull_request_candidate: Optional[Dict[str, Any]] = None,
+    persistence_contract: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Build execution-stage provenance evidence.
+
+    Purpose:
+    Bind executor-attributed writes, repository dirty state,
+    commit candidate evidence, git commit result, PR candidate
+    evidence, and persistence policy into one traceable execution
+    chain.
+
+    This artifact does not approve execution and does not certify
+    deployment. It only summarizes provenance for post-audit and
+    deployment governance.
+
+    Important distinction:
+
+        executor_write_manifest.executor_written_files
+            = files attributed to runtime_executor.py
+
+        repository_changes.git_status_short
+            = workspace dirty state and diagnostic signal only
+
+    Therefore, git_status_short must not be treated as patch proof.
+    """
+
+    repository_changes = repository_changes or {}
+    execution_commit_manifest = execution_commit_manifest or {}
+    execution_git_commit_result = execution_git_commit_result or {}
+    execution_pull_request_candidate = (
+        execution_pull_request_candidate or {}
+    )
+    persistence_contract = persistence_contract or {}
+
+    executor_written_files = list(
+        executor_write_manifest.get(
+            "executor_written_files",
+            [],
+        )
+    )
+
+    changed_files_from_executor = list(
+        repository_changes.get(
+            "changed_files_from_executor",
+            [],
+        )
+    )
+
+    commit_candidate_files = list(
+        execution_commit_manifest.get(
+            "commit_candidate_files",
+            [],
+        )
+    )
+
+    git_status_short = list(
+        repository_changes.get(
+            "git_status_short",
+            execution_commit_manifest.get(
+                "git_status_short",
+                [],
+            ),
+        )
+    )
+
+    protected_scopes = list(
+        repository_changes.get(
+            "protected_scopes",
+            PROTECTED_PATH_TOKENS,
+        )
+    )
+
+    protected_workspace_dirty_files: List[str] = []
+
+    for raw_status in git_status_short:
+        status_text = str(raw_status)
+
+        for protected_token in protected_scopes:
+            if protected_token in status_text:
+                protected_workspace_dirty_files.append(
+                    status_text
+                )
+                break
+
+    policy_violations: List[str] = []
+
+    policy_violations.extend(
+        executor_write_manifest.get(
+            "policy_violations",
+            [],
+        )
+    )
+
+    policy_violations.extend(
+        repository_changes.get(
+            "policy_violations",
+            [],
+        )
+    )
+
+    policy_violations.extend(
+        execution_commit_manifest.get(
+            "policy_violations",
+            [],
+        )
+    )
+
+    policy_violations.extend(
+        execution_pull_request_candidate.get(
+            "policy_violations",
+            [],
+        )
+    )
+
+    executor_attempted = bool(
+        executor_write_manifest.get(
+            "execution_attempted",
+            False,
+        )
+    )
+
+    executor_performed = bool(
+        executor_write_manifest.get(
+            "execution_performed",
+            False,
+        )
+    )
+
+    executor_has_writes = bool(
+        executor_written_files
+    )
+
+    commit_required = bool(
+        execution_commit_manifest.get(
+            "commit_required",
+            False,
+        )
+    )
+
+    commit_attempted = bool(
+        execution_git_commit_result.get(
+            "commit_attempted",
+            False,
+        )
+    )
+
+    commit_created = bool(
+        execution_git_commit_result.get(
+            "commit_created",
+            False,
+        )
+    )
+
+    pull_request_required = bool(
+        execution_pull_request_candidate.get(
+            "pull_request_required",
+            False,
+        )
+    )
+
+    protected_scope_touched = bool(
+        executor_write_manifest.get(
+            "protected_scope_touched",
+            False,
+        )
+    )
+
+    completed_phases_modified = bool(
+        executor_write_manifest.get(
+            "completed_phases_modified",
+            False,
+        )
+    )
+
+    database_mutation_performed = bool(
+        executor_write_manifest.get(
+            "database_mutation_performed",
+            False,
+        )
+    )
+
+    source_asset_deletion_performed = bool(
+        executor_write_manifest.get(
+            "source_asset_deletion_performed",
+            False,
+        )
+    )
+
+    persistence_permissions = persistence_contract.get(
+        "permissions",
+        {},
+    )
+
+    executor_may_write_db = persistence_permissions.get(
+        "executor_may_write_db",
+        None,
+    )
+
+    ############################################################
+    # Verdict model
+    ############################################################
+
+    if policy_violations:
+        provenance_verdict = "patch_provenance_blocked"
+
+    elif (
+        protected_scope_touched
+        or completed_phases_modified
+        or database_mutation_performed
+        or source_asset_deletion_performed
+    ):
+        provenance_verdict = "patch_provenance_blocked"
+
+    elif (
+        protected_workspace_dirty_files
+        and not executor_has_writes
+    ):
+        provenance_verdict = (
+            "blocked_by_protected_workspace_dirty_state"
+        )
+
+    elif (
+        executor_attempted
+        and not executor_has_writes
+    ):
+        provenance_verdict = "traceable_no_patch"
+
+    elif (
+        executor_has_writes
+        and set(commit_candidate_files) == set(executor_written_files)
+        and not policy_violations
+        and not protected_scope_touched
+        and not completed_phases_modified
+        and not database_mutation_performed
+        and not source_asset_deletion_performed
+    ):
+        provenance_verdict = "patch_provenance_ready"
+
+    elif executor_has_writes:
+        provenance_verdict = "patch_provenance_incomplete"
+
+    else:
+        provenance_verdict = "incomplete"
+
+    if (
+        provenance_verdict == "patch_provenance_ready"
+        and commit_required
+        and commit_candidate_files
+    ):
+        provenance_verdict = "patch_commit_ready"
+
+    if (
+        provenance_verdict in {
+            "patch_provenance_ready",
+            "patch_commit_ready",
+        }
+        and pull_request_required
+    ):
+        provenance_verdict = "patch_pr_candidate_ready"
+
+    if (
+        provenance_verdict in {
+            "patch_commit_ready",
+            "patch_pr_candidate_ready",
+        }
+        and commit_attempted
+        and commit_created
+    ):
+        provenance_verdict = "patch_committed"
+
+    return {
+        "schema": "rga.execution_provenance.v1.0",
+        "generated_at": (
+            datetime.now(timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+        ),
+        "producer": "runtime_executor.py",
+        "lifecycle_stage": "execute",
+
+        "source_artifacts": {
+            "apply_execution_result":
+                str(APPLY_EXECUTION_RESULT_OUT_PATH),
+            "executor_write_manifest":
+                str(EXECUTOR_WRITE_MANIFEST_OUT_PATH),
+            "repository_changes":
+                "artifacts/repository_changes.json",
+            "execution_commit_manifest":
+                "artifacts/execution_commit_manifest.json",
+            "execution_git_commit_result":
+                "artifacts/execution_git_commit_result.json",
+            "execution_pull_request_candidate":
+                "artifacts/execution_pull_request_candidate.json",
+            "persistence_contract":
+                "artifacts/persistence_contract.json",
+        },
+
+        "executor_provenance": {
+            "execution_attempted": executor_attempted,
+            "execution_performed": executor_performed,
+            "executor_written_files": executor_written_files,
+            "changed_files_from_executor":
+                changed_files_from_executor,
+            "patch_probe_performed":
+                executor_write_manifest.get(
+                    "patch_probe_performed",
+                    False,
+                ),
+            "patch_certifiable":
+                executor_write_manifest.get(
+                    "patch_certifiable",
+                    False,
+                ),
+            "execution_verdict":
+                executor_write_manifest.get(
+                    "execution_verdict",
+                ),
+        },
+
+        "repository_state": {
+            "git_status_short": git_status_short,
+            "workspace_dirty_files": git_status_short,
+            "protected_workspace_dirty_files":
+                protected_workspace_dirty_files,
+            "non_executor_dirty_files": [
+                item
+                for item in git_status_short
+                if item not in changed_files_from_executor
+            ],
+        },
+
+        "commit_provenance": {
+            "commit_required": commit_required,
+            "commit_attempted": commit_attempted,
+            "commit_created": commit_created,
+            "branch_name":
+                execution_commit_manifest.get(
+                    "branch_name",
+                    execution_git_commit_result.get(
+                        "branch_name",
+                    ),
+                ),
+            "commit_message":
+                execution_commit_manifest.get(
+                    "commit_message",
+                    execution_git_commit_result.get(
+                        "commit_message",
+                    ),
+                ),
+            "commit_candidate_files": commit_candidate_files,
+        },
+
+        "pr_provenance": {
+            "pull_request_required": pull_request_required,
+            "branch_name":
+                execution_pull_request_candidate.get(
+                    "branch_name",
+                ),
+            "title":
+                execution_pull_request_candidate.get(
+                    "title",
+                ),
+            "required_reviewers":
+                execution_pull_request_candidate.get(
+                    "required_reviewers",
+                    [],
+                ),
+            "required_gates":
+                execution_pull_request_candidate.get(
+                    "required_gates",
+                    [],
+                ),
+        },
+
+        "persistence_policy": {
+            "executor_may_write_db": executor_may_write_db,
+            "persistence_layer_owns_db_writes":
+                persistence_permissions.get(
+                    "persistence_layer_owns_db_writes",
+                ),
+            "human_approval_required":
+                persistence_permissions.get(
+                    "human_approval_required",
+                ),
+            "deployment_gate_required":
+                persistence_permissions.get(
+                    "deployment_gate_required",
+                ),
+        },
+
+        "policy": {
+            "allowed_scope_only":
+                executor_write_manifest.get(
+                    "allowed_scope_only",
+                    False,
+                ),
+            "protected_scope_touched":
+                protected_scope_touched,
+            "completed_phases_modified":
+                completed_phases_modified,
+            "database_mutation_performed":
+                database_mutation_performed,
+            "source_asset_deletion_performed":
+                source_asset_deletion_performed,
+            "policy_violations": policy_violations,
+        },
+
+        "provenance_verdict": provenance_verdict,
+        "governance_note": (
+            "Execution provenance aggregates executor writes, "
+            "repository state, commit candidate evidence, git commit "
+            "result, PR candidate evidence, and persistence policy. "
+            "It does not approve execution or certify deployment."
+        ),
+    }    
     
 # -----------------------------------------------------------------------------
 # Executor core
@@ -2643,13 +3080,15 @@ if __name__ == "__main__":
             EXECUTION_PROVENANCE_OUT_PATH,
         )
 
-        return execution_result
+        return finalize_execution_result()
 
     def enforce_policy(
         self,
         plan: ExecutionPlan,
         dry_run_result: Dict[str, Any],
         apply_execution_result: Dict[str, Any],
+        executor_write_manifest: Optional[Dict[str, Any]] = None,
+        execution_provenance: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         violations: List[str] = []
 
@@ -2763,11 +3202,156 @@ if __name__ == "__main__":
                     "execute mode must not modify completed phases."
                 )
                 
+            ####################################################
+            # Executor write manifest policy
+            ####################################################
+
+            if not executor_write_manifest:
+                violations.append(
+                    "execute mode requires executor_write_manifest."
+                )
+
+            else:
+                if executor_write_manifest.get(
+                    "policy_violations"
+                ):
+                    violations.extend(
+                        executor_write_manifest.get(
+                            "policy_violations",
+                            [],
+                        )
+                    )
+
+                if not executor_write_manifest.get(
+                    "allowed_scope_only",
+                    False,
+                ):
+                    violations.append(
+                        "executor_write_manifest must confirm allowed_scope_only."
+                    )
+
+                if executor_write_manifest.get(
+                    "protected_scope_touched"
+                ):
+                    violations.append(
+                        "executor_write_manifest indicates protected scope was touched."
+                    )
+
+                if executor_write_manifest.get(
+                    "completed_phases_modified"
+                ):
+                    violations.append(
+                        "executor_write_manifest indicates completed phases were modified."
+                    )
+
+                if executor_write_manifest.get(
+                    "database_mutation_performed"
+                ):
+                    violations.append(
+                        "executor_write_manifest indicates database mutation was performed."
+                    )
+
+                if executor_write_manifest.get(
+                    "source_asset_deletion_performed"
+                ):
+                    violations.append(
+                        "executor_write_manifest indicates source asset deletion was performed."
+                    ) 
+
+            ####################################################
+            # Execution provenance policy
+            ####################################################
+
+            if not execution_provenance:
+                violations.append(
+                    "execute mode requires execution_provenance."
+                )
+
+            else:
+                provenance_verdict = execution_provenance.get(
+                    "provenance_verdict"
+                )
+
+                allowed_provenance_verdicts = {
+                    "traceable_no_patch",
+                    "patch_provenance_ready",
+                    "patch_commit_ready",
+                    "patch_pr_candidate_ready",
+                    "patch_committed",
+                }
+
+                if provenance_verdict not in allowed_provenance_verdicts:
+                    violations.append(
+                        (
+                            "execution_provenance has non-certifiable "
+                            f"verdict: {provenance_verdict}"
+                        )
+                    )
+
+                provenance_policy = execution_provenance.get(
+                    "policy",
+                    {},
+                )
+
+                if provenance_policy.get(
+                    "policy_violations"
+                ):
+                    violations.extend(
+                        provenance_policy.get(
+                            "policy_violations",
+                            [],
+                        )
+                    )
+
+                if provenance_policy.get(
+                    "protected_scope_touched"
+                ):
+                    violations.append(
+                        "execution_provenance indicates protected scope was touched."
+                    )
+
+                if provenance_policy.get(
+                    "completed_phases_modified"
+                ):
+                    violations.append(
+                        "execution_provenance indicates completed phases were modified."
+                    )
+
+                if provenance_policy.get(
+                    "database_mutation_performed"
+                ):
+                    violations.append(
+                        "execution_provenance indicates database mutation was performed."
+                    )
+
+                if provenance_policy.get(
+                    "source_asset_deletion_performed"
+                ):
+                    violations.append(
+                        "execution_provenance indicates source asset deletion was performed."
+                    )                    
+                
             self.diagnostics["execution_gate"] = {
                 "mode": self.mode,
                 "requires_human_approval": True,
                 "approval_phrase_required": True,
-            }                
+                "apply_execution_result_required": True,
+                "executor_write_manifest_required": True,
+                "execution_provenance_required": True,
+            }  
+
+            self.diagnostics["execution_provenance_gate"] = {
+                "executor_write_manifest_present":
+                    bool(executor_write_manifest),
+                "execution_provenance_present":
+                    bool(execution_provenance),
+                "provenance_verdict":
+                    (
+                        execution_provenance or {}
+                    ).get(
+                        "provenance_verdict"
+                    ),
+            }            
 
         policy_result = {
             "policy_passed":
@@ -2831,9 +3415,11 @@ if __name__ == "__main__":
             )
 
         policy_result = self.enforce_policy(
-            plan,
-            dry_run_result,
-            apply_execution_result,
+            plan=plan,
+            dry_run_result=dry_run_result,
+            apply_execution_result=apply_execution_result,
+            executor_write_manifest=executor_write_manifest,
+            execution_provenance=execution_provenance,
         )
 
         result = ExecutorResult(
