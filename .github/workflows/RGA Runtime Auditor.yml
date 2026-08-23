@@ -67,21 +67,21 @@ jobs:
           New-Item -ItemType Directory -Force -Path .\artifacts | Out-Null
 
       ############################################################
-      # Resolve Artifact Download Token
+      # Resolve GitHub App Artifact Token
       ############################################################
 
-      - name: Resolve Artifact Download Token
+      - name: Resolve GitHub App Artifact Token
         id: artifact_token
         shell: bash
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-          GH_TOKEN_FALLBACK: ${{ github.token }}
+          GITHUB_APP_TOKEN: ${{ secrets.GITHUB_APP_TOKEN }}
         run: |
-          if [ -n "$PAT_TOKEN" ]; then
-            echo "token=$PAT_TOKEN" >> "$GITHUB_OUTPUT"
-          else
-            echo "token=$GH_TOKEN_FALLBACK" >> "$GITHUB_OUTPUT"
+          if [ -z "${GITHUB_APP_TOKEN}" ]; then
+            echo "::error::GITHUB_APP_TOKEN is not configured."
+            exit 1
           fi
+
+          echo "token=${GITHUB_APP_TOKEN}" >> "$GITHUB_OUTPUT"
 
       ############################################################
       # Download Backhaul Stage 1-4 Contracts from History

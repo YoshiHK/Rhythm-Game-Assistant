@@ -2793,14 +2793,28 @@ jobs:
       #
       # Token policy:
       #
-      #   - Pre-human_approval phases use PAT_TOKEN.
+      #   - All authenticated lifecycle operations use the
+      #     GitHub App installation token.
       #
-      #   - Post-human_approval phases use github.token.
+      #   - Repository workflows should use the resolved
+      #     GITHUB_APP_TOKEN source.
       #
-      #   - Do not use secrets.GITHUB_TOKEN.
-      #     Use github.token for the built-in token.
+      #   - Do not use PAT_TOKEN.
+      #
+      #   - Do not use github.token unless explicitly required
+      #     for a GitHub platform limitation.
       #
       #   - Do not print token values.
+      #
+      # Lifecycle ownership:
+      #
+      #   - Lifecycle Runner owns chronology.
+      #
+      #   - Runtime Auditor owns verification.
+      #
+      #   - Maintenance Executor owns execution.
+      #
+      #   - Deployment Governance Gate owns certification.
       ############################################################
 
       - name: Dispatch next workflow
