@@ -950,9 +950,11 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
 
-          python - <<'PY'
+          cat > artifacts/build_executor_write_manifest.py <<'PY'
           import json
           from datetime import datetime, timezone
           from pathlib import Path
@@ -1113,7 +1115,9 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY          
+          PY
+
+          python artifacts/build_executor_write_manifest.py
           
       ############################################################
       # Execution Provenance
@@ -1123,9 +1127,11 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
 
-          python - <<'PY'
+          cat > artifacts/build_execution_provenance.py <<'PY'
           import json
           from datetime import datetime, timezone
           from pathlib import Path
@@ -1462,7 +1468,9 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY          
+          PY
+
+          python artifacts/build_execution_provenance.py
           
       ############################################################
       # Apply Repository Changes
