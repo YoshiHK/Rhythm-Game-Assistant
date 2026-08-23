@@ -3118,6 +3118,36 @@ jobs:
           execution_plan = Path(
               "artifacts/execution_plan.json"
           )
+          
+          database_mutation_plan = Path(
+              "artifacts/database_mutation_plan.json"
+          )
+
+          persistence_contract = Path(
+              "artifacts/persistence_contract.json"
+          )
+
+          execution_plan_fingerprint = Path(
+              "artifacts/execution_plan_fingerprint.json"
+          )
+
+          mutation_plan_available = (
+              database_mutation_plan.exists()
+              and database_mutation_plan.is_file()
+              and database_mutation_plan.stat().st_size > 0
+          )
+
+          persistence_contract_available = (
+              persistence_contract.exists()
+              and persistence_contract.is_file()
+              and persistence_contract.stat().st_size > 0
+          )
+
+          fingerprint_available = (
+              execution_plan_fingerprint.exists()
+              and execution_plan_fingerprint.is_file()
+              and execution_plan_fingerprint.stat().st_size > 0
+          )          
 
           plan_available = (
               execution_plan.exists()
@@ -3199,6 +3229,10 @@ jobs:
                   plan_load_error = str(exc)
 
           required_checks = [
+              "execution_plan",
+              "database_mutation_plan",
+              "persistence_contract",
+              "execution_plan_fingerprint",
               "target_root_failures",
               "proposed_changes",
               "rollback",
@@ -3215,6 +3249,21 @@ jobs:
               issues.append(
                   "execution_plan.json is missing or empty."
               )
+              
+          if not mutation_plan_available:
+              issues.append(
+                  "database_mutation_plan.json is missing or empty."
+              )
+
+          if not persistence_contract_available:
+              issues.append(
+                  "persistence_contract.json is missing or empty."
+              )
+
+          if not fingerprint_available:
+              issues.append(
+                  "execution_plan_fingerprint.json is missing or empty."
+              )              
 
           if plan_load_error:
               issues.append(
@@ -3318,6 +3367,36 @@ jobs:
                   "post_audit_required":
                       post_audit_required,
               },
+              
+              "database_mutation_plan": {
+                  "available":
+                      mutation_plan_available,
+
+                  "path":
+                      str(
+                          database_mutation_plan
+                      ),
+              },
+
+              "persistence_contract": {
+                  "available":
+                      persistence_contract_available,
+
+                  "path":
+                      str(
+                          persistence_contract
+                      ),
+              },
+
+              "execution_plan_fingerprint": {
+                  "available":
+                      fingerprint_available,
+
+                  "path":
+                      str(
+                          execution_plan_fingerprint
+                      ),
+              },              
 
               "bot_1_authority": {
                   "approve_execution":
@@ -3368,6 +3447,18 @@ jobs:
                   required_checks,
 
               "check_results": {
+                  "execution_plan_available":
+                      plan_available,
+
+                  "database_mutation_plan_available":
+                      mutation_plan_available,
+
+                  "persistence_contract_available":
+                      persistence_contract_available,
+
+                  "execution_plan_fingerprint_available":
+                      fingerprint_available,
+
                   "forbidden_scope_declared_absent_ok":
                       forbidden_scope_ok,
 

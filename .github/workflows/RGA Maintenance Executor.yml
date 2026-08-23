@@ -2918,6 +2918,15 @@ jobs:
 
       ############################################################
       # Execution Lineage
+      #
+      # Captures the lifecycle relationship between:
+      #
+      #   Plan Contracts
+      #   Audit Contracts
+      #   Approval Contracts
+      #   Execution Evidence
+      #
+      # This artifact is descriptive provenance only.
       ############################################################
 
       - name: Execution Lineage
@@ -2932,28 +2941,93 @@ jobs:
           from pathlib import Path
 
           payload = {
-              "schema": "rga.execution_lineage.v1.1",
-              "generated_at": datetime.now(
-                  timezone.utc
-              ).replace(
-                  microsecond=0
-              ).isoformat(),
+              "schema":
+                  "rga.execution_lineage.v1.2",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "artifact_roles": {
+                  "proposal_contracts": [
+                      "execution_plan",
+                      "database_mutation_plan",
+                  ],
+
+                  "governance_contracts": [
+                      "persistence_contract",
+                  ],
+
+                  "integrity_contracts": [
+                      "execution_plan_fingerprint",
+                  ],
+
+                  "audit_contracts": [
+                      "plan_audit_evidence",
+                  ],
+
+                  "approval_contracts": [
+                      "human_execution_approval",
+                      "approval_artifact_matching",
+                      "execution_gate",
+                  ],
+
+                  "execution_evidence": [
+                      "apply_execution_result",
+                      "executor_write_manifest",
+                      "repository_changes",
+                      "execution_commit_manifest",
+                      "execution_git_commit_result",
+                      "execution_pull_request_candidate",
+                      "execution_pull_request_result",
+                      "execution_provenance",
+                  ],
+              },
+
               "flow": [
                   "runtime_auditor_report",
+
                   "execution_plan",
+                  "database_mutation_plan",
+
+                  "persistence_contract",
+
+                  "execution_plan_fingerprint",
+
+                  "plan_audit_evidence",
+
+                  "human_execution_approval",
+
+                  "approval_artifact_matching",
+
+                  "execution_gate",
+
                   "apply_execution_result",
+
                   "executor_write_manifest",
-                  "execution_provenance",
+
                   "repository_changes",
+
                   "execution_commit_manifest",
+
                   "execution_git_commit_result",
+
                   "execution_pull_request_candidate",
+
                   "execution_pull_request_result",
+
+                  "execution_provenance",
+
                   "post_audit",
               ],
           }
 
-          Path("artifacts/execution_lineage.json").write_text(
+          Path(
+              "artifacts/execution_lineage.json"
+          ).write_text(
               json.dumps(
                   payload,
                   indent=2,
