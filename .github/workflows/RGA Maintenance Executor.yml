@@ -308,6 +308,9 @@ jobs:
       #   runtime_executor_report.json
       #   runtime_executor_report.md
       #   execution_plan.json
+      #   apply_execution_result.json
+      #   executor_write_manifest.json
+      #   execution_provenance.json
       #   runtime_executor_stdout.txt
       #   runtime_executor_stderr.txt
       #   runtime_executor_stderr_summary.json
@@ -396,7 +399,7 @@ jobs:
           ERROR_MARKER_COUNT="$(
             {
               grep -E \
-                'Traceback|Error|Exception|ModuleNotFoundError|RuntimeError|ValueError' \
+                'Traceback|Error|Exception|ModuleNotFoundError|RuntimeError|ValueError|NameError|TypeError|SyntaxError' \
                 artifacts/runtime_executor_stderr.txt \
                 2>/dev/null \
                 || true
@@ -450,6 +453,7 @@ jobs:
           if [ ! -s artifacts/runtime_executor_report.json ]; then
 
             jq -n \
+              --arg mode "${MODE}" \
               --argjson exit_code ${EXECUTOR_EXIT_CODE} \
               --argjson stdout_present ${STDOUT_PRESENT} \
               --argjson stderr_present ${STDERR_PRESENT} \
@@ -457,14 +461,16 @@ jobs:
               --argjson stderr_empty ${STDERR_EMPTY} \
               '{
                 schema: "rga.runtime_executor.report.fallback.v1.0",
-                mode: null,
-                proposal_only: null,
-                dry_run: null,
-                execution_authority: false,
+                mode: $mode,
+                proposal_only: ($mode == "plan"),
+                dry_run: ($mode == "dry_run_execute"),
+                execution_authority: ($mode == "execute"),
                 approval_authority: false,
                 plan: {},
                 dry_run_result: {},
                 apply_execution_result: {},
+                executor_write_manifest: {},
+                execution_provenance: {},
                 diagnostics: {
                   fallback_report_generated: true,
                   executor_exit_code: $exit_code,
@@ -486,6 +492,7 @@ jobs:
           ########################################################
           # Fallback runtime_executor_report.md
           ########################################################
+
           if [ ! -s artifacts/runtime_executor_report.md ]; then
             cat > artifacts/runtime_executor_report.md <<'MD'
           # RGA Runtime Executor Report
@@ -506,7 +513,7 @@ jobs:
 
           echo "Runtime executor exit code: ${EXECUTOR_EXIT_CODE}"
           echo "Runtime executor evidence artifacts generated."
-          
+
           exit 0
           
       ############################################################
@@ -807,6 +814,7 @@ jobs:
 
       - name: Apply Execution Result
         if: always()
+        shell: bash
         run: |
           mkdir -p artifacts
 
@@ -814,16 +822,57 @@ jobs:
           import json
           from pathlib import Path
 
-          executor_report_file = Path(
-              "artifacts/execution_plan.json"
+          apply_path = Path(
+              "artifacts/apply_execution_result.json"
+          )
+
+          report_path = Path(
+              "artifacts/runtime_executor_report.json"
           )
 
           result = {}
 
-          if executor_report_file.exists():
+          #
+          # Prefer canonical artifact emitted directly by runtime_executor.py.
+          #
+
+          if apply_path.exists() and apply_path.stat().st_size > 0:
+              try:
+                  result = json.loads(
+                      apply_path.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+              except Exception as exc:
+                  result = {
+                      "schema":
+                          "rga.apply_execution_result.v1.0",
+
+                      "execution_attempted":
+                          False,
+
+                      "execution_performed":
+                          False,
+
+                      "written_files":
+                          [],
+
+                      "policy_violations": [
+                          f"Could not parse existing apply_execution_result.json: {exc}"
+                      ],
+
+                      "post_audit_required":
+                          True,
+                  }
+
+          #
+          # Fallback: extract from runtime_executor_report.json.
+          #
+
+          if not result and report_path.exists():
               try:
                   executor_report = json.loads(
-                      executor_report_file.read_text(
+                      report_path.read_text(
                           encoding="utf-8",
                       )
                   )
@@ -848,12 +897,16 @@ jobs:
                           [],
 
                       "policy_violations": [
-                          f"Could not parse executor report: {exc}"
+                          f"Could not parse runtime_executor_report.json: {exc}"
                       ],
 
                       "post_audit_required":
                           True,
                   }
+
+          #
+          # Final fallback.
+          #
 
           if not result:
               result = {
@@ -879,9 +932,7 @@ jobs:
                       "No apply_execution_result was emitted by runtime_executor.py."
               }
 
-          Path(
-              "artifacts/apply_execution_result.json"
-          ).write_text(
+          apply_path.write_text(
               json.dumps(
                   result,
                   indent=2,
@@ -890,6 +941,528 @@ jobs:
               encoding="utf-8",
           )
           PY
+          
+      ############################################################
+      # Executor Write Manifest
+      ############################################################
+
+      - name: Executor Write Manifest
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          manifest_path = Path(
+              "artifacts/executor_write_manifest.json"
+          )
+
+          apply_path = Path(
+              "artifacts/apply_execution_result.json"
+          )
+
+          #
+          # Prefer runtime_executor.py emitted artifact.
+          #
+
+          if manifest_path.exists() and manifest_path.stat().st_size > 0:
+              raise SystemExit(0)
+
+          apply_result = {}
+
+          if apply_path.exists() and apply_path.stat().st_size > 0:
+              try:
+                  apply_result = json.loads(
+                      apply_path.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+              except Exception:
+                  apply_result = {}
+
+          policy_violations = list(
+              apply_result.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          executor_written_files = list(
+              apply_result.get(
+                  "executor_written_files",
+                  apply_result.get(
+                      "written_files",
+                      [],
+                  ),
+              )
+          )
+
+          payload = {
+              "schema":
+                  "rga.executor_write_manifest.v1.0",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "producer":
+                  "workflow_fallback",
+
+              "executor":
+                  "runtime_executor.py",
+
+              "executor_mode":
+                  apply_result.get(
+                      "executor_mode",
+                  ),
+
+              "execution_attempted":
+                  apply_result.get(
+                      "execution_attempted",
+                      False,
+                  ),
+
+              "execution_performed":
+                  apply_result.get(
+                      "execution_performed",
+                      False,
+                  ),
+
+              "patch_probe_enabled":
+                  apply_result.get(
+                      "patch_probe_enabled",
+                      False,
+                  ),
+
+              "patch_probe_performed":
+                  apply_result.get(
+                      "patch_probe_performed",
+                      False,
+                  ),
+
+              "patch_certifiable":
+                  apply_result.get(
+                      "patch_certifiable",
+                      False,
+                  ),
+
+              "execution_verdict":
+                  apply_result.get(
+                      "execution_verdict",
+                      "fallback_manifest",
+                  ),
+
+              "executor_written_files":
+                  executor_written_files,
+
+              "allowed_scope_only":
+                  len(policy_violations) == 0,
+
+              "protected_scope_touched":
+                  apply_result.get(
+                      "protected_scope_touched",
+                      False,
+                  ),
+
+              "completed_phases_modified":
+                  apply_result.get(
+                      "completed_phase_mutation_performed",
+                      False,
+                  ),
+
+              "database_mutation_performed":
+                  apply_result.get(
+                      "db_mutation_performed",
+                      False,
+                  ),
+
+              "source_asset_deletion_performed":
+                  apply_result.get(
+                      "source_asset_deletion_performed",
+                      False,
+                  ),
+
+              "policy_violations":
+                  policy_violations,
+
+              "post_audit_required":
+                  apply_result.get(
+                      "post_audit_required",
+                      True,
+                  ),
+
+              "note":
+                  (
+                      "Fallback executor_write_manifest generated by workflow "
+                      "because runtime_executor.py did not emit it."
+                  ),
+          }
+
+          manifest_path.write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY          
+          
+      ############################################################
+      # Execution Provenance
+      ############################################################
+
+      - name: Execution Provenance
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          provenance_path = Path(
+              "artifacts/execution_provenance.json"
+          )
+
+          #
+          # Prefer runtime_executor.py emitted artifact.
+          #
+
+          if provenance_path.exists() and provenance_path.stat().st_size > 0:
+              raise SystemExit(0)
+
+          def read_json(path: Path):
+              if not path.exists() or path.stat().st_size == 0:
+                  return {}
+
+              try:
+                  return json.loads(
+                      path.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+              except Exception:
+                  return {}
+
+          apply_result = read_json(
+              Path("artifacts/apply_execution_result.json")
+          )
+
+          executor_manifest = read_json(
+              Path("artifacts/executor_write_manifest.json")
+          )
+
+          repository_changes = read_json(
+              Path("artifacts/repository_changes.json")
+          )
+
+          execution_commit_manifest = read_json(
+              Path("artifacts/execution_commit_manifest.json")
+          )
+
+          execution_git_commit_result = read_json(
+              Path("artifacts/execution_git_commit_result.json")
+          )
+
+          execution_pull_request_candidate = read_json(
+              Path("artifacts/execution_pull_request_candidate.json")
+          )
+
+          execution_pull_request_result = read_json(
+              Path("artifacts/execution_pull_request_result.json")
+          )
+
+          executor_written_files = list(
+              executor_manifest.get(
+                  "executor_written_files",
+                  [],
+              )
+          )
+
+          changed_files_from_executor = list(
+              repository_changes.get(
+                  "changed_files_from_executor",
+                  [],
+              )
+          )
+
+          commit_candidate_files = list(
+              execution_commit_manifest.get(
+                  "commit_candidate_files",
+                  [],
+              )
+          )
+
+          policy_violations = []
+
+          policy_violations.extend(
+              executor_manifest.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          policy_violations.extend(
+              repository_changes.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          policy_violations.extend(
+              execution_commit_manifest.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          policy_violations.extend(
+              execution_pull_request_candidate.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          protected_scope_touched = bool(
+              executor_manifest.get(
+                  "protected_scope_touched",
+                  False,
+              )
+          )
+
+          completed_phases_modified = bool(
+              executor_manifest.get(
+                  "completed_phases_modified",
+                  False,
+              )
+          )
+
+          database_mutation_performed = bool(
+              executor_manifest.get(
+                  "database_mutation_performed",
+                  False,
+              )
+          )
+
+          source_asset_deletion_performed = bool(
+              executor_manifest.get(
+                  "source_asset_deletion_performed",
+                  False,
+              )
+          )
+
+          if policy_violations:
+              verdict = "patch_provenance_blocked"
+
+          elif (
+              protected_scope_touched
+              or completed_phases_modified
+              or database_mutation_performed
+              or source_asset_deletion_performed
+          ):
+              verdict = "patch_provenance_blocked"
+
+          elif (
+              executor_written_files
+              and set(executor_written_files) == set(commit_candidate_files)
+          ):
+              verdict = "patch_provenance_ready"
+
+          elif executor_written_files:
+              verdict = "patch_provenance_incomplete"
+
+          else:
+              verdict = "traceable_no_patch"
+
+          payload = {
+              "schema":
+                  "rga.execution_provenance.v1.0",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "producer":
+                  "workflow_fallback",
+
+              "lifecycle_stage":
+                  "execute",
+
+              "source_artifacts": {
+                  "apply_execution_result":
+                      "artifacts/apply_execution_result.json",
+                  "executor_write_manifest":
+                      "artifacts/executor_write_manifest.json",
+                  "repository_changes":
+                      "artifacts/repository_changes.json",
+                  "execution_commit_manifest":
+                      "artifacts/execution_commit_manifest.json",
+                  "execution_git_commit_result":
+                      "artifacts/execution_git_commit_result.json",
+                  "execution_pull_request_candidate":
+                      "artifacts/execution_pull_request_candidate.json",
+                  "execution_pull_request_result":
+                      "artifacts/execution_pull_request_result.json",
+              },
+
+              "executor_provenance": {
+                  "execution_attempted":
+                      apply_result.get(
+                          "execution_attempted",
+                          False,
+                      ),
+                  "execution_performed":
+                      apply_result.get(
+                          "execution_performed",
+                          False,
+                      ),
+                  "executor_written_files":
+                      executor_written_files,
+                  "changed_files_from_executor":
+                      changed_files_from_executor,
+                  "patch_probe_performed":
+                      executor_manifest.get(
+                          "patch_probe_performed",
+                          False,
+                      ),
+                  "patch_certifiable":
+                      executor_manifest.get(
+                          "patch_certifiable",
+                          False,
+                      ),
+                  "execution_verdict":
+                      executor_manifest.get(
+                          "execution_verdict",
+                      ),
+              },
+
+              "repository_state": {
+                  "git_status_short":
+                      repository_changes.get(
+                          "git_status_short",
+                          [],
+                      ),
+              },
+
+              "commit_provenance": {
+                  "commit_required":
+                      execution_commit_manifest.get(
+                          "commit_required",
+                          False,
+                      ),
+                  "commit_attempted":
+                      execution_git_commit_result.get(
+                          "commit_attempted",
+                          False,
+                      ),
+                  "commit_created":
+                      execution_git_commit_result.get(
+                          "commit_created",
+                          False,
+                      ),
+                  "branch_name":
+                      execution_commit_manifest.get(
+                          "branch_name",
+                          execution_git_commit_result.get(
+                              "branch_name",
+                          ),
+                      ),
+                  "commit_message":
+                      execution_commit_manifest.get(
+                          "commit_message",
+                          execution_git_commit_result.get(
+                              "commit_message",
+                          ),
+                      ),
+                  "commit_candidate_files":
+                      commit_candidate_files,
+              },
+
+              "pr_provenance": {
+                  "pull_request_required":
+                      execution_pull_request_candidate.get(
+                          "pull_request_required",
+                          False,
+                      ),
+                  "pull_request_attempted":
+                      execution_pull_request_result.get(
+                          "pull_request_attempted",
+                          False,
+                      ),
+                  "pull_request_created":
+                      execution_pull_request_result.get(
+                          "pull_request_created",
+                          False,
+                      ),
+                  "pull_request_url":
+                      execution_pull_request_result.get(
+                          "pull_request_url",
+                      ),
+                  "branch_name":
+                      execution_pull_request_candidate.get(
+                          "branch_name",
+                      ),
+                  "title":
+                      execution_pull_request_candidate.get(
+                          "title",
+                      ),
+                  "required_gates":
+                      execution_pull_request_candidate.get(
+                          "required_gates",
+                          [],
+                      ),
+              },
+
+              "policy": {
+                  "allowed_scope_only":
+                      executor_manifest.get(
+                          "allowed_scope_only",
+                          False,
+                      ),
+                  "protected_scope_touched":
+                      protected_scope_touched,
+                  "completed_phases_modified":
+                      completed_phases_modified,
+                  "database_mutation_performed":
+                      database_mutation_performed,
+                  "source_asset_deletion_performed":
+                      source_asset_deletion_performed,
+                  "policy_violations":
+                      policy_violations,
+              },
+
+              "provenance_verdict":
+                  verdict,
+
+              "note":
+                  (
+                      "Fallback execution_provenance generated by workflow "
+                      "because runtime_executor.py did not emit it."
+                  ),
+          }
+
+          provenance_path.write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY          
           
       ############################################################
       # Apply Repository Changes
@@ -1757,7 +2330,9 @@ jobs:
 
       - name: Execution Manifest
         if: always()
+        shell: bash
         run: |
+          mkdir -p artifacts
           find artifacts -type f | sort > artifacts/execution_manifest.txt
 
       ############################################################
@@ -1766,24 +2341,77 @@ jobs:
 
       - name: Execution Lineage
         if: always()
+        shell: bash
         run: |
+          mkdir -p artifacts
+
           python - <<'PY'
           import json
+          from datetime import datetime, timezone
           from pathlib import Path
+
           payload = {
-              "schema": "rga.execution_lineage.v1.0",
+              "schema": "rga.execution_lineage.v1.1",
+              "generated_at": datetime.now(
+                  timezone.utc
+              ).replace(
+                  microsecond=0
+              ).isoformat(),
               "flow": [
                   "runtime_auditor_report",
                   "execution_plan",
                   "apply_execution_result",
+                  "executor_write_manifest",
+                  "execution_provenance",
+                  "repository_changes",
+                  "execution_commit_manifest",
+                  "execution_git_commit_result",
+                  "execution_pull_request_candidate",
+                  "execution_pull_request_result",
                   "post_audit",
               ],
           }
+
           Path("artifacts/execution_lineage.json").write_text(
-              json.dumps(payload, indent=2),
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
               encoding="utf-8",
           )
           PY
+          
+      ############################################################
+      # Verify Executor Provenance Artifacts
+      ############################################################
+
+      - name: Verify Executor Provenance Artifacts
+        if: always()
+        shell: bash
+        run: |
+          echo "Checking execution provenance artifacts..."
+
+          missing="false"
+
+          for path in \
+            artifacts/apply_execution_result.json \
+            artifacts/executor_write_manifest.json \
+            artifacts/execution_provenance.json
+          do
+            if [ ! -s "$path" ]; then
+              echo "::warning::Missing or empty artifact: $path"
+              missing="true"
+            else
+              echo "Found artifact: $path"
+            fi
+          done
+
+          if [ "$missing" = "true" ]; then
+            echo "::warning::One or more executor provenance artifacts are missing or empty."
+          fi
+
+          echo "Executor provenance artifact check completed."      
 
       ############################################################
       # Automatic Post-Audit Trigger
@@ -2182,12 +2810,38 @@ jobs:
           name: rga-execute-evidence
           path: |
             artifacts/apply_execution_result.json
+            artifacts/executor_write_manifest.json
+            artifacts/execution_provenance.json
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
+            artifacts/runtime_executor_stdout.txt
+            artifacts/runtime_executor_stderr.txt
+            artifacts/runtime_executor_stderr_summary.json
+            artifacts/runtime_executor_exit_code.txt
             artifacts/repository_changes.json
             artifacts/execution_commit_manifest.json
-            artifacts/execution_pull_request_candidate.json
             artifacts/execution_git_commit_result.json
+            artifacts/execution_pull_request_candidate.json
             artifacts/execution_pull_request_result.json
             artifacts/execution_pull_request_url.txt
-          if-no-files-found: warn
+            artifacts/execution_pull_request_stderr.txt
+            artifacts/execution_manifest.txt
+            artifacts/execution_lineage.json
+          if-no-files-found: warn    
+          
+      ############################################################
+      # Upload Execution Provenance Bundle
+      ############################################################
+
+      - name: Upload Execution Provenance Bundle
+        if: ${{ always() && inputs.executor_mode == 'execute' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-provenance-bundle
+          path: |
+            artifacts/apply_execution_result.json
+            artifacts/executor_write_manifest.json
+            artifacts/execution_provenance.json
+            artifacts/execution_manifest.txt
+            artifacts/execution_lineage.json
+          if-no-files-found: warn          
