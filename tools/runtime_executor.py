@@ -45,7 +45,7 @@ from __future__ import annotations
 import argparse
 import json
 import traceback
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -237,6 +237,10 @@ class ExecutionPlan:
 @dataclass
 class ExecutorResult:
 
+    #
+    # Core metadata
+    #
+
     schema: str
 
     generated_at: str
@@ -252,7 +256,7 @@ class ExecutorResult:
     approval_authority: bool
 
     #
-    # generated artifacts
+    # Generated artifacts
     #
 
     plan: Dict[str, Any]
@@ -268,14 +272,16 @@ class ExecutorResult:
     diagnostics: Dict[str, Any]
 
     #
-    # lifecycle metadata
+    # Lifecycle metadata
     #
 
     lifecycle_stage: str = ""
 
     audit_session_id: str = ""
 
-    governance_model: Dict[str, Any] = None
+    governance_model: Dict[str, Any] = field(
+        default_factory=dict
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -3433,86 +3439,148 @@ if __name__ == "__main__":
         return policy_result
 
 
-    def run_all(
-        self,
-    ) -> Dict[str, Any]:
-        analysis = self.analyze_failures()
+def run_all(
+    self,
+) -> Dict[str, Any]:
 
-        repair_dag = self.build_repair_dag(
-            analysis
-        )
+    analysis = self.analyze_failures()
 
-        plan = self.generate_execution_plan(
-            analysis,
-            repair_dag,
-        )
+    repair_dag = self.build_repair_dag(
+        analysis
+    )
 
-        dry_run_result: Dict[str, Any] = {}
+    plan = self.generate_execution_plan(
+        analysis,
+        repair_dag,
+    )
 
-        if self.mode == "dry_run_execute":
-            dry_run_result = self.simulate_dry_run_execution(
+    dry_run_result: Dict[str, Any] = {}
+
+    if self.mode == "dry_run_execute":
+
+        dry_run_result = (
+            self.simulate_dry_run_execution(
                 plan
             )
-
-        apply_execution_result: Dict[str, Any] = {}
-        
-        executor_write_manifest: Dict[str, Any] = {}
-
-        execution_provenance: Dict[str, Any] = {}        
-
-        if self.mode == "execute":
-
-            apply_execution_result = self.apply_execution(
-                plan
-            )
-
-            executor_write_manifest = (
-                read_json_optional(
-                    EXECUTOR_WRITE_MANIFEST_OUT_PATH
-                )
-            )
-
-            execution_provenance = (
-                read_json_optional(
-                    EXECUTION_PROVENANCE_OUT_PATH
-                )
-            )
-
-        policy_result = self.enforce_policy(
-            plan=plan,
-            dry_run_result=dry_run_result,
-            apply_execution_result=apply_execution_result,
-            executor_write_manifest=executor_write_manifest,
-            execution_provenance=execution_provenance,
         )
 
-        result = ExecutorResult(
-            schema=EXECUTOR_SCHEMA,
-            generated_at=datetime.now(
+    #
+    # Execution-stage artifacts
+    #
+
+    apply_execution_result: Dict[str, Any] = {}
+
+    executor_write_manifest: Dict[str, Any] = {}
+
+    execution_provenance: Dict[str, Any] = {}
+
+    if self.mode == "execute":
+
+        apply_execution_result = (
+            self.apply_execution(
+                plan
+            )
+        )
+
+        #
+        # Reload executor-generated artifacts.
+        #
+        # apply_execution() owns artifact production.
+        # run_all() consumes them.
+        #
+
+        executor_write_manifest = (
+            read_json_optional(
+                EXECUTOR_WRITE_MANIFEST_OUT_PATH
+            )
+        )
+
+        execution_provenance = (
+            read_json_optional(
+                EXECUTION_PROVENANCE_OUT_PATH
+            )
+        )
+
+    #
+    # Governance / policy enforcement
+    #
+
+    policy_result = self.enforce_policy(
+        plan=plan,
+        dry_run_result=dry_run_result,
+        apply_execution_result=apply_execution_result,
+        executor_write_manifest=executor_write_manifest,
+        execution_provenance=execution_provenance,
+    )
+
+    #
+    # Final report
+    #
+
+    result = ExecutorResult(
+        schema=EXECUTOR_SCHEMA,
+
+        generated_at=(
+            datetime.now(
                 timezone.utc
-            ).replace(
+            )
+            .replace(
                 microsecond=0,
-            ).isoformat(),
-            mode=self.mode,
-            proposal_only=self.mode == "plan",
-            dry_run=self.mode == "dry_run_execute",
-            execution_authority=self.mode == "execute",
-            approval_authority=False,
-            plan=asdict(plan),
-            dry_run_result=dry_run_result,
-            apply_execution_result=apply_execution_result,
-            executor_write_manifest=executor_write_manifest,
-            execution_provenance=execution_provenance,
-            diagnostics={
-                **self.diagnostics,
-                "policy_result":
-                    policy_result,
-            },
-        )
+            )
+            .isoformat()
+        ),
 
-        return asdict(
-            result
-        )
+        mode=self.mode,
+
+        proposal_only=(
+            self.mode == "plan"
+        ),
+
+        dry_run=(
+            self.mode == "dry_run_execute"
+        ),
+
+        execution_authority=(
+            self.mode == "execute"
+        ),
+
+        approval_authority=False,
+
+        #
+        # generated artifacts
+        #
+
+        plan=asdict(
+            plan
+        ),
+
+        dry_run_result=(
+            dry_run_result
+        ),
+
+        apply_execution_result=(
+            apply_execution_result
+        ),
+
+        executor_write_manifest=(
+            executor_write_manifest
+        ),
+
+        execution_provenance=(
+            execution_provenance
+        ),
+
+        diagnostics={
+            **self.diagnostics,
+
+            "policy_result":
+                policy_result,
+        },
+    )
+
+    return asdict(
+        result
+    )
 
 # -----------------------------------------------------------------------------
 # CLI
