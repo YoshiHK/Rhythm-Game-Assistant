@@ -2799,11 +2799,6 @@ if __name__ == "__main__":
                 }
             )
 
-            write_json(
-                execution_result,
-                APPLY_EXECUTION_RESULT_OUT_PATH,
-            )
-
             return finalize_execution_result()
 
         execution_result["execution_attempted"] = True
@@ -3460,10 +3455,27 @@ if __name__ == "__main__":
             )
 
         apply_execution_result: Dict[str, Any] = {}
+        
+        executor_write_manifest: Dict[str, Any] = {}
+
+        execution_provenance: Dict[str, Any] = {}        
 
         if self.mode == "execute":
+
             apply_execution_result = self.apply_execution(
                 plan
+            )
+
+            executor_write_manifest = (
+                read_json_optional(
+                    EXECUTOR_WRITE_MANIFEST_OUT_PATH
+                )
+            )
+
+            execution_provenance = (
+                read_json_optional(
+                    EXECUTION_PROVENANCE_OUT_PATH
+                )
             )
 
         policy_result = self.enforce_policy(
@@ -3489,6 +3501,8 @@ if __name__ == "__main__":
             plan=asdict(plan),
             dry_run_result=dry_run_result,
             apply_execution_result=apply_execution_result,
+            executor_write_manifest=executor_write_manifest,
+            execution_provenance=execution_provenance,
             diagnostics={
                 **self.diagnostics,
                 "policy_result":
