@@ -233,6 +233,7 @@ class ExecutionPlan:
 
 @dataclass
 class ExecutorResult:
+
     schema: str
 
     generated_at: str
@@ -256,6 +257,10 @@ class ExecutorResult:
     dry_run_result: Dict[str, Any]
 
     apply_execution_result: Dict[str, Any]
+
+    executor_write_manifest: Dict[str, Any]
+
+    execution_provenance: Dict[str, Any]
 
     diagnostics: Dict[str, Any]
 
@@ -764,6 +769,92 @@ def write_markdown(
         )
 
         lines.append("")
+        
+    # -------------------------------------------------------------------------
+    # Executor Write Manifest
+    # -------------------------------------------------------------------------        
+        
+    executor_write_manifest = data.get(
+        "executor_write_manifest",
+        {},
+    )
+
+    lines.append(
+        "## Executor Write Manifest"
+    )
+
+    lines.append("")
+
+    if executor_write_manifest:
+
+        lines.append(
+            f"- Executor written files: `{executor_write_manifest.get('executor_written_files', [])}`"
+        )
+
+        lines.append(
+            f"- Allowed scope only: `{executor_write_manifest.get('allowed_scope_only')}`"
+        )
+
+        lines.append(
+            f"- Protected scope touched: `{executor_write_manifest.get('protected_scope_touched')}`"
+        )
+
+        lines.append("")
+
+        lines.append("```json")
+
+        lines.append(
+            safe_json(
+                executor_write_manifest
+            )
+        )
+
+        lines.append("```")
+
+        lines.append("")    
+
+    # -------------------------------------------------------------------------
+    # Execution Provenance
+    # -------------------------------------------------------------------------        
+
+    execution_provenance = data.get(
+        "execution_provenance",
+        {},
+    )        
+
+    lines.append(
+        "## Execution Provenance"
+    )
+
+    lines.append("")
+
+    if execution_provenance:
+
+        lines.append(
+            f"- Provenance verdict: `{execution_provenance.get('provenance_verdict')}`"
+        )
+
+        lines.append(
+            f"- Audit session: `{execution_provenance.get('audit_session_id')}`"
+        )
+
+        lines.append(
+            f"- Executor mode: `{execution_provenance.get('executor_mode')}`"
+        )
+
+        lines.append("")
+
+        lines.append("```json")
+
+        lines.append(
+            safe_json(
+                execution_provenance
+            )
+        )
+
+        lines.append("```")
+
+        lines.append("")
 
     # -------------------------------------------------------------------------
     # Repair DAG
@@ -860,6 +951,107 @@ def write_markdown(
             f"Markdown report was not written successfully: {out_path}"
         )
 
+# -----------------------------------------------------------------------------
+# Execution Provenance Helpers
+# -----------------------------------------------------------------------------
+
+def build_executor_write_manifest(
+    execution_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Executor attribution artifact.
+
+    Purpose:
+    Distinguish executor-authored writes from
+    generic repository dirty state.
+    """
+
+    executor_written_files = list(
+        execution_result.get(
+            "executor_written_files",
+            execution_result.get(
+                "written_files",
+                [],
+            ),
+        )
+    )
+
+    policy_violations = list(
+        execution_result.get(
+            "policy_violations",
+            [],
+        )
+    )
+
+    return {
+        "schema":
+            "rga.executor_write_manifest.v1.0",
+
+        "generated_at":
+            datetime.now(
+                timezone.utc
+            ).isoformat(),
+
+        "executor":
+            "runtime_executor.py",
+
+        "executor_mode":
+            execution_result.get(
+                "executor_mode"
+            ),
+
+        "execution_attempted":
+            execution_result.get(
+                "execution_attempted",
+                False,
+            ),
+
+        "execution_performed":
+            execution_result.get(
+                "execution_performed",
+                False,
+            ),
+
+        "executor_written_files":
+            executor_written_files,
+
+        "allowed_scope_only":
+            len(policy_violations) == 0,
+
+        "protected_scope_touched":
+            execution_result.get(
+                "protected_scope_touched",
+                False,
+            ),
+
+        "completed_phases_modified":
+            execution_result.get(
+                "completed_phase_mutation_performed",
+                False,
+            ),
+
+        "database_mutation_performed":
+            execution_result.get(
+                "db_mutation_performed",
+                False,
+            ),
+
+        "source_asset_deletion_performed":
+            execution_result.get(
+                "source_asset_deletion_performed",
+                False,
+            ),
+
+        "policy_violations":
+            policy_violations,
+
+        "post_audit_required":
+            execution_result.get(
+                "post_audit_required",
+                True,
+            ),
+    }        
+    
 # -----------------------------------------------------------------------------
 # Executor core
 # -----------------------------------------------------------------------------
@@ -1936,37 +2128,194 @@ if __name__ == "__main__":
         self,
         plan: ExecutionPlan,
     ) -> Dict[str, Any]:
+        """
+        Apply a human-approved execution plan in gated execute mode.
+
+        Patch Probe Contract
+        --------------------
+        This function intentionally treats
+        artifacts/apply_execution_result.json itself as the first
+        safe patch-probe artifact.
+
+        Purpose:
+        - Prove runtime_executor.py actually entered execute mode.
+        - Prove runtime_executor.py can emit canonical execution evidence.
+        - Prove executor-authored writes are distinguishable from dirty
+          workspace state.
+        - Preserve the successful E2E lifecycle loop:
+            PowerShell
+            -> GitHub
+            -> Lifecycle Runner
+            -> Pre-Audit
+            -> Plan
+            -> Plan-Audit
+            -> Human Approval
+            -> Execution
+            -> Post-Audit
+            -> Deployment Governance Gate
+            -> Completion Signal
+            -> Remote Governance Completion Verification
+            -> Local Environment
+
+        Hard Rule:
+        Further changes must not break the successful E2E lifecycle loop.
+        This function may only write allowed-scope evidence/tooling files
+        and must not modify Completed Phases 1-7, runtime DBs, source
+        assets, canonical_row, pattern logic, tips generation,
+        personalization, localization, or recommendation logic.
+        """
+
         approval, approval_error = self.load_human_approval()
+
+        def utc_now_iso() -> str:
+            return (
+                datetime.now(timezone.utc)
+                .replace(microsecond=0)
+                .isoformat()
+            )
+
+        def normalize_path_for_policy(
+            value: Any,
+        ) -> str:
+            return str(value).replace("\\", "/")
+
+        def path_has_protected_token(
+            value: Any,
+        ) -> Tuple[bool, Optional[str]]:
+            normalized = normalize_path_for_policy(value)
+
+            for token in PROTECTED_PATH_TOKENS:
+                if token in normalized:
+                    return True, token
+
+            return False, None
+
+        def append_policy_violation(
+            result: Dict[str, Any],
+            message: str,
+        ) -> None:
+            result.setdefault(
+                "policy_violations",
+                [],
+            ).append(message)
 
         execution_result: Dict[str, Any] = {
             "schema": APPLY_EXECUTION_RESULT_SCHEMA,
+            "generated_at": utc_now_iso(),
+            "executor": "runtime_executor.py",
+            "executor_mode": self.mode,
+
+            ####################################################
+            # Execution / patch-probe state
+            ####################################################
             "execution_attempted": False,
             "execution_performed": False,
+            "patch_probe_enabled": True,
+            "patch_probe_performed": False,
+            "patch_probe_artifact": str(
+                APPLY_EXECUTION_RESULT_OUT_PATH
+            ),
+
+            ####################################################
+            # Approval state
+            ####################################################
             "approval_loaded": approval is not None,
             "approval_error": approval_error,
+
+            ####################################################
+            # Provenance
+            ####################################################
             "written_files": [],
+            "executor_written_files": [],
+            "workspace_dirty_files": [],
+            "non_executor_dirty_files": [],
+            "patch_provenance": [],
+
+            ####################################################
+            # Governance / policy state
+            ####################################################
             "skipped_changes": [],
             "policy_violations": [],
             "db_mutation_performed": False,
             "source_asset_deletion_performed": False,
             "completed_phase_mutation_performed": False,
+            "protected_scope_touched": False,
+            "all_written_files_within_allowed_scope": True,
             "post_audit_required": True,
+
+            ####################################################
+            # E2E lifecycle safety contract
+            ####################################################
+            "lifecycle_safety_contract": {
+                "must_not_break_e2e_loop": True,
+                "maintenance_phase_preserved": True,
+                "operation_phase_preserved": True,
+                "execution_phase_preserved": True,
+                "deployment_phase_preserved": True,
+                "feedback_completion_phase_preserved": True,
+                "completed_phases_1_to_7_immutable": True,
+            },
+
+            ####################################################
+            # Explicit scope contract
+            ####################################################
+            "allowed_scope": list(PERMITTED_WRITE_ROOTS),
+            "protected_scope": list(PROTECTED_PATH_TOKENS),
         }
+
+        ########################################################
+        # Always emit a canonical result, even when not executing.
+        ########################################################
 
         if self.mode != "execute":
             execution_result["skipped_changes"].append(
                 "Execution skipped because mode is not execute."
             )
-            write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
+
+            execution_result["patch_provenance"].append(
+                {
+                    "type": "execution_not_attempted",
+                    "reason": "mode_is_not_execute",
+                    "artifact": str(
+                        APPLY_EXECUTION_RESULT_OUT_PATH
+                    ),
+                }
+            )
+
+            write_json(
+                execution_result,
+                APPLY_EXECUTION_RESULT_OUT_PATH,
+            )
+
             return execution_result
 
         execution_result["execution_attempted"] = True
 
+        ########################################################
+        # Human approval is mandatory.
+        ########################################################
+
         if approval is None:
-            execution_result["policy_violations"].append(
-                approval_error or "Human approval artifact missing."
+            append_policy_violation(
+                execution_result,
+                approval_error or "Human approval artifact missing.",
             )
-            write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
+
+            execution_result["patch_provenance"].append(
+                {
+                    "type": "execution_blocked",
+                    "reason": "human_approval_missing",
+                    "artifact": str(
+                        APPLY_EXECUTION_RESULT_OUT_PATH
+                    ),
+                }
+            )
+
+            write_json(
+                execution_result,
+                APPLY_EXECUTION_RESULT_OUT_PATH,
+            )
+
             return execution_result
 
         approval_ok, approval_issues = self.approval_matches_plan(
@@ -1975,9 +2324,31 @@ if __name__ == "__main__":
         )
 
         if not approval_ok:
-            execution_result["policy_violations"].extend(approval_issues)
-            write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
+            execution_result["policy_violations"].extend(
+                approval_issues
+            )
+
+            execution_result["patch_provenance"].append(
+                {
+                    "type": "execution_blocked",
+                    "reason": "approval_does_not_match_plan",
+                    "issues": approval_issues,
+                    "artifact": str(
+                        APPLY_EXECUTION_RESULT_OUT_PATH
+                    ),
+                }
+            )
+
+            write_json(
+                execution_result,
+                APPLY_EXECUTION_RESULT_OUT_PATH,
+            )
+
             return execution_result
+
+        ########################################################
+        # Execute approved, allowed-scope changes only.
+        ########################################################
 
         for change in plan.proposed_changes:
             if change.mutation_level not in {
@@ -1985,44 +2356,293 @@ if __name__ == "__main__":
                 "dry_run_only",
                 "proposal_only",
             }:
-                execution_result["policy_violations"].append(
-                    f"Change {change.change_id} has unsupported mutation_level={change.mutation_level}."
+                append_policy_violation(
+                    execution_result,
+                    (
+                        f"Change {change.change_id} has unsupported "
+                        f"mutation_level={change.mutation_level}."
+                    ),
                 )
                 continue
 
-            if change.mutation_level == "execute_allowed" and change.target_files:
-                for target in change.target_files:
-                    allowed, reason = self.is_write_path_allowed(target)
-
-                    if not allowed:
-                        execution_result["policy_violations"].append(
-                            f"Target path rejected for {change.change_id}: {target}; {reason}"
-                        )
-                        continue
-
-                    target_path = Path(target)
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    if change.change_id in {
-                        "dry_run_artifact_backbone_bootstrap_script",
-                        "generate_artifact_backbone_bootstrap_script_proposal",
-                    }:
-                        content = self.render_artifact_backbone_bootstrap_script()
-                    else:
-                        content = f"# Managed by RGA Executor Bot\n# Purpose: {change.purpose}\n"
-
-                    target_path.write_text(content, encoding="utf-8")
-                    execution_result["written_files"].append(str(target_path))
-            else:
+            if change.mutation_level != "execute_allowed":
                 execution_result["skipped_changes"].append(
-                    f"{change.change_id} (mutation_level={change.mutation_level}) skipped or has no targets."
+                    (
+                        f"{change.change_id} "
+                        f"(mutation_level={change.mutation_level}) "
+                        "skipped because it is not execute_allowed."
+                    )
+                )
+                continue
+
+            if not change.target_files:
+                execution_result["skipped_changes"].append(
+                    (
+                        f"{change.change_id} "
+                        "(mutation_level=execute_allowed) skipped "
+                        "because it has no target files."
+                    )
+                )
+                continue
+
+            for target in change.target_files:
+                normalized_target = normalize_path_for_policy(
+                    target
                 )
 
-        execution_result["execution_performed"] = bool(
-            execution_result["written_files"]
+                protected, protected_token = (
+                    path_has_protected_token(
+                        normalized_target
+                    )
+                )
+
+                if protected:
+                    execution_result[
+                        "completed_phase_mutation_performed"
+                    ] = True
+                    execution_result[
+                        "protected_scope_touched"
+                    ] = True
+                    execution_result[
+                        "all_written_files_within_allowed_scope"
+                    ] = False
+
+                    append_policy_violation(
+                        execution_result,
+                        (
+                            "Protected scope rejected for "
+                            f"{change.change_id}: "
+                            f"{normalized_target}; "
+                            f"matched protected token: "
+                            f"{protected_token}"
+                        ),
+                    )
+                    continue
+
+                allowed, reason = self.is_write_path_allowed(
+                    normalized_target
+                )
+
+                if not allowed:
+                    execution_result[
+                        "all_written_files_within_allowed_scope"
+                    ] = False
+
+                    append_policy_violation(
+                        execution_result,
+                        (
+                            "Target path rejected for "
+                            f"{change.change_id}: "
+                            f"{normalized_target}; {reason}"
+                        ),
+                    )
+                    continue
+
+                target_path = Path(normalized_target)
+                target_path.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+
+                if change.change_id in {
+                    "dry_run_artifact_backbone_bootstrap_script",
+                    "generate_artifact_backbone_bootstrap_script_proposal",
+                }:
+                    content = (
+                        self.render_artifact_backbone_bootstrap_script()
+                    )
+                else:
+                    content = (
+                        "# Managed by RGA Executor Bot\n"
+                        f"# Change ID: {change.change_id}\n"
+                        f"# Purpose: {change.purpose}\n"
+                        "# Scope: allowed lifecycle wiring/tooling/"
+                        "governance artifact patch\n"
+                        "# Completed Phases 1-7: immutable\n"
+                    )
+
+                target_path.write_text(
+                    content,
+                    encoding="utf-8",
+                )
+
+                path_text = normalize_path_for_policy(
+                    target_path
+                )
+
+                execution_result["written_files"].append(
+                    path_text
+                )
+                execution_result[
+                    "executor_written_files"
+                ].append(path_text)
+
+                execution_result["patch_provenance"].append(
+                    {
+                        "type": "executor_write",
+                        "change_id": change.change_id,
+                        "change_type": change.change_type,
+                        "mutation_level": change.mutation_level,
+                        "path": path_text,
+                        "purpose": change.purpose,
+                        "allowed_scope": True,
+                        "protected_scope_touched": False,
+                    }
+                )
+
+        ########################################################
+        # Patch probe: the canonical apply result itself is
+        # executor-authored evidence.
+        #
+        # This is the first safe proof that execute mode ran and
+        # wrote an allowed-scope artifact.
+        ########################################################
+
+        result_path_text = normalize_path_for_policy(
+            APPLY_EXECUTION_RESULT_OUT_PATH
         )
 
-        write_json(execution_result, APPLY_EXECUTION_RESULT_OUT_PATH)
+        result_protected, result_token = path_has_protected_token(
+            result_path_text
+        )
+
+        if result_protected:
+            execution_result["protected_scope_touched"] = True
+            execution_result[
+                "completed_phase_mutation_performed"
+            ] = True
+            execution_result[
+                "all_written_files_within_allowed_scope"
+            ] = False
+
+            append_policy_violation(
+                execution_result,
+                (
+                    "Patch probe artifact unexpectedly matched "
+                    f"protected scope: {result_path_text}; "
+                    f"token={result_token}"
+                ),
+            )
+        else:
+            result_allowed, result_reason = self.is_write_path_allowed(
+                result_path_text
+            )
+
+            if not result_allowed:
+                execution_result[
+                    "all_written_files_within_allowed_scope"
+                ] = False
+
+                append_policy_violation(
+                    execution_result,
+                    (
+                        "Patch probe artifact rejected by write policy: "
+                        f"{result_path_text}; {result_reason}"
+                    ),
+                )
+            else:
+                execution_result["patch_probe_performed"] = True
+
+                if result_path_text not in execution_result[
+                    "written_files"
+                ]:
+                    execution_result["written_files"].append(
+                        result_path_text
+                    )
+
+                if result_path_text not in execution_result[
+                    "executor_written_files"
+                ]:
+                    execution_result[
+                        "executor_written_files"
+                    ].append(result_path_text)
+
+                execution_result["patch_provenance"].append(
+                    {
+                        "type": "patch_probe",
+                        "path": result_path_text,
+                        "purpose": (
+                            "Canonical executor apply result emitted "
+                            "as the first safe patch-probe artifact."
+                        ),
+                        "allowed_scope": True,
+                        "protected_scope_touched": False,
+                        "completed_phases_modified": False,
+                        "database_mutation_performed": False,
+                        "source_asset_deletion_performed": False,
+                    }
+                )
+
+        ########################################################
+        # Final execution verdict.
+        ########################################################
+
+        execution_result["execution_performed"] = bool(
+            execution_result["executor_written_files"]
+        )
+
+        if execution_result["policy_violations"]:
+            execution_result["patch_certifiable"] = False
+            execution_result["execution_verdict"] = (
+                "blocked_by_policy"
+            )
+        elif execution_result["patch_probe_performed"]:
+            execution_result["patch_certifiable"] = True
+            execution_result["execution_verdict"] = (
+                "patch_probe_passed"
+            )
+        else:
+            execution_result["patch_certifiable"] = False
+            execution_result["execution_verdict"] = (
+                "no_safe_patch_performed"
+            )
+
+        ########################################################
+        # Hard safety assertions.
+        ########################################################
+
+        if execution_result["db_mutation_performed"]:
+            append_policy_violation(
+                execution_result,
+                "Database mutation is not allowed in this executor mode.",
+            )
+
+        if execution_result["source_asset_deletion_performed"]:
+            append_policy_violation(
+                execution_result,
+                "Source asset deletion is not allowed.",
+            )
+
+        if execution_result["completed_phase_mutation_performed"]:
+            append_policy_violation(
+                execution_result,
+                "Completed Phase mutation is not allowed.",
+            )
+
+        if execution_result["policy_violations"]:
+            execution_result["patch_certifiable"] = False
+            execution_result["execution_verdict"] = (
+                "blocked_by_policy"
+            )
+
+        # 1.
+        write_json(
+            execution_result,
+            APPLY_EXECUTION_RESULT_OUT_PATH,
+        )
+
+        # 2.
+        write_json(
+            executor_write_manifest,
+            EXECUTOR_WRITE_MANIFEST_OUT_PATH,
+        )
+
+        # 3.
+        write_json(
+            execution_provenance,
+            EXECUTION_PROVENANCE_OUT_PATH,
+        )
+
         return execution_result
 
     def enforce_policy(
