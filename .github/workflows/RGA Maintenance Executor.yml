@@ -1119,358 +1119,7 @@ jobs:
 
           python artifacts/build_executor_write_manifest.py
           
-      ############################################################
-      # Execution Provenance
-      ############################################################
 
-      - name: Execution Provenance
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p artifacts
-
-          cat > artifacts/build_execution_provenance.py <<'PY'
-          import json
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          provenance_path = Path(
-              "artifacts/execution_provenance.json"
-          )
-
-          #
-          # Prefer runtime_executor.py emitted artifact.
-          #
-
-          if provenance_path.exists() and provenance_path.stat().st_size > 0:
-              raise SystemExit(0)
-
-          def read_json(path: Path):
-              if not path.exists() or path.stat().st_size == 0:
-                  return {}
-
-              try:
-                  return json.loads(
-                      path.read_text(
-                          encoding="utf-8",
-                      )
-                  )
-              except Exception:
-                  return {}
-
-          apply_result = read_json(
-              Path("artifacts/apply_execution_result.json")
-          )
-
-          executor_manifest = read_json(
-              Path("artifacts/executor_write_manifest.json")
-          )
-
-          repository_changes = read_json(
-              Path("artifacts/repository_changes.json")
-          )
-
-          execution_commit_manifest = read_json(
-              Path("artifacts/execution_commit_manifest.json")
-          )
-
-          execution_git_commit_result = read_json(
-              Path("artifacts/execution_git_commit_result.json")
-          )
-
-          execution_pull_request_candidate = read_json(
-              Path("artifacts/execution_pull_request_candidate.json")
-          )
-
-          execution_pull_request_result = read_json(
-              Path("artifacts/execution_pull_request_result.json")
-          )
-
-          executor_written_files = list(
-              executor_manifest.get(
-                  "executor_written_files",
-                  [],
-              )
-          )
-
-          changed_files_from_executor = list(
-              repository_changes.get(
-                  "changed_files_from_executor",
-                  [],
-              )
-          )
-
-          commit_candidate_files = list(
-              execution_commit_manifest.get(
-                  "commit_candidate_files",
-                  [],
-              )
-          )
-
-          policy_violations = []
-
-          policy_violations.extend(
-              executor_manifest.get(
-                  "policy_violations",
-                  [],
-              )
-          )
-
-          policy_violations.extend(
-              repository_changes.get(
-                  "policy_violations",
-                  [],
-              )
-          )
-
-          policy_violations.extend(
-              execution_commit_manifest.get(
-                  "policy_violations",
-                  [],
-              )
-          )
-
-          policy_violations.extend(
-              execution_pull_request_candidate.get(
-                  "policy_violations",
-                  [],
-              )
-          )
-
-          protected_scope_touched = bool(
-              executor_manifest.get(
-                  "protected_scope_touched",
-                  False,
-              )
-          )
-
-          completed_phases_modified = bool(
-              executor_manifest.get(
-                  "completed_phases_modified",
-                  False,
-              )
-          )
-
-          database_mutation_performed = bool(
-              executor_manifest.get(
-                  "database_mutation_performed",
-                  False,
-              )
-          )
-
-          source_asset_deletion_performed = bool(
-              executor_manifest.get(
-                  "source_asset_deletion_performed",
-                  False,
-              )
-          )
-
-          if policy_violations:
-              verdict = "patch_provenance_blocked"
-
-          elif (
-              protected_scope_touched
-              or completed_phases_modified
-              or database_mutation_performed
-              or source_asset_deletion_performed
-          ):
-              verdict = "patch_provenance_blocked"
-
-          elif (
-              executor_written_files
-              and set(executor_written_files) == set(commit_candidate_files)
-          ):
-              verdict = "patch_provenance_ready"
-
-          elif executor_written_files:
-              verdict = "patch_provenance_incomplete"
-
-          else:
-              verdict = "traceable_no_patch"
-
-          payload = {
-              "schema":
-                  "rga.execution_provenance.v1.0",
-
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
-
-              "producer":
-                  "workflow_fallback",
-
-              "lifecycle_stage":
-                  "execute",
-
-              "source_artifacts": {
-                  "apply_execution_result":
-                      "artifacts/apply_execution_result.json",
-                  "executor_write_manifest":
-                      "artifacts/executor_write_manifest.json",
-                  "repository_changes":
-                      "artifacts/repository_changes.json",
-                  "execution_commit_manifest":
-                      "artifacts/execution_commit_manifest.json",
-                  "execution_git_commit_result":
-                      "artifacts/execution_git_commit_result.json",
-                  "execution_pull_request_candidate":
-                      "artifacts/execution_pull_request_candidate.json",
-                  "execution_pull_request_result":
-                      "artifacts/execution_pull_request_result.json",
-              },
-
-              "executor_provenance": {
-                  "execution_attempted":
-                      apply_result.get(
-                          "execution_attempted",
-                          False,
-                      ),
-                  "execution_performed":
-                      apply_result.get(
-                          "execution_performed",
-                          False,
-                      ),
-                  "executor_written_files":
-                      executor_written_files,
-                  "changed_files_from_executor":
-                      changed_files_from_executor,
-                  "patch_probe_performed":
-                      executor_manifest.get(
-                          "patch_probe_performed",
-                          False,
-                      ),
-                  "patch_certifiable":
-                      executor_manifest.get(
-                          "patch_certifiable",
-                          False,
-                      ),
-                  "execution_verdict":
-                      executor_manifest.get(
-                          "execution_verdict",
-                      ),
-              },
-
-              "repository_state": {
-                  "git_status_short":
-                      repository_changes.get(
-                          "git_status_short",
-                          [],
-                      ),
-              },
-
-              "commit_provenance": {
-                  "commit_required":
-                      execution_commit_manifest.get(
-                          "commit_required",
-                          False,
-                      ),
-                  "commit_attempted":
-                      execution_git_commit_result.get(
-                          "commit_attempted",
-                          False,
-                      ),
-                  "commit_created":
-                      execution_git_commit_result.get(
-                          "commit_created",
-                          False,
-                      ),
-                  "branch_name":
-                      execution_commit_manifest.get(
-                          "branch_name",
-                          execution_git_commit_result.get(
-                              "branch_name",
-                          ),
-                      ),
-                  "commit_message":
-                      execution_commit_manifest.get(
-                          "commit_message",
-                          execution_git_commit_result.get(
-                              "commit_message",
-                          ),
-                      ),
-                  "commit_candidate_files":
-                      commit_candidate_files,
-              },
-
-              "pr_provenance": {
-                  "pull_request_required":
-                      execution_pull_request_candidate.get(
-                          "pull_request_required",
-                          False,
-                      ),
-                  "pull_request_attempted":
-                      execution_pull_request_result.get(
-                          "pull_request_attempted",
-                          False,
-                      ),
-                  "pull_request_created":
-                      execution_pull_request_result.get(
-                          "pull_request_created",
-                          False,
-                      ),
-                  "pull_request_url":
-                      execution_pull_request_result.get(
-                          "pull_request_url",
-                      ),
-                  "branch_name":
-                      execution_pull_request_candidate.get(
-                          "branch_name",
-                      ),
-                  "title":
-                      execution_pull_request_candidate.get(
-                          "title",
-                      ),
-                  "required_gates":
-                      execution_pull_request_candidate.get(
-                          "required_gates",
-                          [],
-                      ),
-              },
-
-              "policy": {
-                  "allowed_scope_only":
-                      executor_manifest.get(
-                          "allowed_scope_only",
-                          False,
-                      ),
-                  "protected_scope_touched":
-                      protected_scope_touched,
-                  "completed_phases_modified":
-                      completed_phases_modified,
-                  "database_mutation_performed":
-                      database_mutation_performed,
-                  "source_asset_deletion_performed":
-                      source_asset_deletion_performed,
-                  "policy_violations":
-                      policy_violations,
-              },
-
-              "provenance_verdict":
-                  verdict,
-
-              "note":
-                  (
-                      "Fallback execution_provenance generated by workflow "
-                      "because runtime_executor.py did not emit it."
-                  ),
-          }
-
-          provenance_path.write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          PY
-
-          python artifacts/build_execution_provenance.py
           
       ############################################################
       # Apply Repository Changes
@@ -2332,6 +1981,360 @@ jobs:
           echo "Result artifact: artifacts/execution_pull_request_result.json"
 
           exit 0
+          
+      ############################################################
+      # Execution Provenance
+      ############################################################
+
+      - name: Execution Provenance
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          cat > artifacts/build_execution_provenance.py <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          provenance_path = Path(
+              "artifacts/execution_provenance.json"
+          )
+
+          #
+          # Prefer runtime_executor.py emitted artifact.
+          #
+
+          if provenance_path.exists() and provenance_path.stat().st_size > 0:
+              raise SystemExit(0)
+
+          def read_json(path: Path):
+              if not path.exists() or path.stat().st_size == 0:
+                  return {}
+
+              try:
+                  return json.loads(
+                      path.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+              except Exception:
+                  return {}
+
+          apply_result = read_json(
+              Path("artifacts/apply_execution_result.json")
+          )
+
+          executor_manifest = read_json(
+              Path("artifacts/executor_write_manifest.json")
+          )
+
+          repository_changes = read_json(
+              Path("artifacts/repository_changes.json")
+          )
+
+          execution_commit_manifest = read_json(
+              Path("artifacts/execution_commit_manifest.json")
+          )
+
+          execution_git_commit_result = read_json(
+              Path("artifacts/execution_git_commit_result.json")
+          )
+
+          execution_pull_request_candidate = read_json(
+              Path("artifacts/execution_pull_request_candidate.json")
+          )
+
+          execution_pull_request_result = read_json(
+              Path("artifacts/execution_pull_request_result.json")
+          )
+
+          executor_written_files = list(
+              executor_manifest.get(
+                  "executor_written_files",
+                  [],
+              )
+          )
+
+          changed_files_from_executor = list(
+              repository_changes.get(
+                  "changed_files_from_executor",
+                  [],
+              )
+          )
+
+          commit_candidate_files = list(
+              execution_commit_manifest.get(
+                  "commit_candidate_files",
+                  [],
+              )
+          )
+
+          policy_violations = []
+
+          policy_violations.extend(
+              executor_manifest.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          policy_violations.extend(
+              repository_changes.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          policy_violations.extend(
+              execution_commit_manifest.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          policy_violations.extend(
+              execution_pull_request_candidate.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          protected_scope_touched = bool(
+              executor_manifest.get(
+                  "protected_scope_touched",
+                  False,
+              )
+          )
+
+          completed_phases_modified = bool(
+              executor_manifest.get(
+                  "completed_phases_modified",
+                  False,
+              )
+          )
+
+          database_mutation_performed = bool(
+              executor_manifest.get(
+                  "database_mutation_performed",
+                  False,
+              )
+          )
+
+          source_asset_deletion_performed = bool(
+              executor_manifest.get(
+                  "source_asset_deletion_performed",
+                  False,
+              )
+          )
+
+          if policy_violations:
+              verdict = "patch_provenance_blocked"
+
+          elif (
+              protected_scope_touched
+              or completed_phases_modified
+              or database_mutation_performed
+              or source_asset_deletion_performed
+          ):
+              verdict = "patch_provenance_blocked"
+
+          elif (
+              executor_written_files
+              and set(executor_written_files) == set(commit_candidate_files)
+          ):
+              verdict = "patch_provenance_ready"
+
+          elif executor_written_files:
+              verdict = "patch_provenance_incomplete"
+
+          else:
+              verdict = "traceable_no_patch"
+
+          payload = {
+              "schema":
+                  "rga.execution_provenance.v1.0",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "producer":
+                  "workflow_fallback",
+
+              "lifecycle_stage":
+                  "execute",
+
+              "source_artifacts": {
+                  "apply_execution_result":
+                      "artifacts/apply_execution_result.json",
+                  "executor_write_manifest":
+                      "artifacts/executor_write_manifest.json",
+                  "repository_changes":
+                      "artifacts/repository_changes.json",
+                  "execution_commit_manifest":
+                      "artifacts/execution_commit_manifest.json",
+                  "execution_git_commit_result":
+                      "artifacts/execution_git_commit_result.json",
+                  "execution_pull_request_candidate":
+                      "artifacts/execution_pull_request_candidate.json",
+                  "execution_pull_request_result":
+                      "artifacts/execution_pull_request_result.json",
+              },
+
+              "executor_provenance": {
+                  "execution_attempted":
+                      apply_result.get(
+                          "execution_attempted",
+                          False,
+                      ),
+                  "execution_performed":
+                      apply_result.get(
+                          "execution_performed",
+                          False,
+                      ),
+                  "executor_written_files":
+                      executor_written_files,
+                  "changed_files_from_executor":
+                      changed_files_from_executor,
+                  "patch_probe_performed":
+                      executor_manifest.get(
+                          "patch_probe_performed",
+                          False,
+                      ),
+                  "patch_certifiable":
+                      executor_manifest.get(
+                          "patch_certifiable",
+                          False,
+                      ),
+                  "execution_verdict":
+                      executor_manifest.get(
+                          "execution_verdict",
+                      ),
+              },
+
+              "repository_state": {
+                  "git_status_short":
+                      repository_changes.get(
+                          "git_status_short",
+                          [],
+                      ),
+              },
+
+              "commit_provenance": {
+                  "commit_required":
+                      execution_commit_manifest.get(
+                          "commit_required",
+                          False,
+                      ),
+                  "commit_attempted":
+                      execution_git_commit_result.get(
+                          "commit_attempted",
+                          False,
+                      ),
+                  "commit_created":
+                      execution_git_commit_result.get(
+                          "commit_created",
+                          False,
+                      ),
+                  "branch_name":
+                      execution_commit_manifest.get(
+                          "branch_name",
+                          execution_git_commit_result.get(
+                              "branch_name",
+                          ),
+                      ),
+                  "commit_message":
+                      execution_commit_manifest.get(
+                          "commit_message",
+                          execution_git_commit_result.get(
+                              "commit_message",
+                          ),
+                      ),
+                  "commit_candidate_files":
+                      commit_candidate_files,
+              },
+
+              "pr_provenance": {
+                  "pull_request_required":
+                      execution_pull_request_candidate.get(
+                          "pull_request_required",
+                          False,
+                      ),
+                  "pull_request_attempted":
+                      execution_pull_request_result.get(
+                          "pull_request_attempted",
+                          False,
+                      ),
+                  "pull_request_created":
+                      execution_pull_request_result.get(
+                          "pull_request_created",
+                          False,
+                      ),
+                  "pull_request_url":
+                      execution_pull_request_result.get(
+                          "pull_request_url",
+                      ),
+                  "branch_name":
+                      execution_pull_request_candidate.get(
+                          "branch_name",
+                      ),
+                  "title":
+                      execution_pull_request_candidate.get(
+                          "title",
+                      ),
+                  "required_gates":
+                      execution_pull_request_candidate.get(
+                          "required_gates",
+                          [],
+                      ),
+              },
+
+              "policy": {
+                  "allowed_scope_only":
+                      executor_manifest.get(
+                          "allowed_scope_only",
+                          False,
+                      ),
+                  "protected_scope_touched":
+                      protected_scope_touched,
+                  "completed_phases_modified":
+                      completed_phases_modified,
+                  "database_mutation_performed":
+                      database_mutation_performed,
+                  "source_asset_deletion_performed":
+                      source_asset_deletion_performed,
+                  "policy_violations":
+                      policy_violations,
+              },
+
+              "provenance_verdict":
+                  verdict,
+
+              "note":
+                  (
+                      "Fallback execution_provenance generated by workflow "
+                      "because runtime_executor.py did not emit it."
+                  ),
+          }
+
+          provenance_path.write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+          python artifacts/build_execution_provenance.py
+          
       ############################################################
       # Execution Manifest
       ############################################################
