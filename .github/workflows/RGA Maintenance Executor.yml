@@ -235,6 +235,7 @@ jobs:
           AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
           EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -348,10 +349,11 @@ jobs:
 
       - name: Write Persistence Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
-        shell: python
+        shell: bash
         env:
           AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
         run: |
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -509,7 +511,7 @@ jobs:
       - name: Human Approval Artifact audit
         if: always()
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           from pathlib import Path
      
@@ -531,9 +533,9 @@ jobs:
 
       - name: Execution Scope audit
         if: always()
-        shell: python
+        shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           from pathlib import Path
           payload = {
@@ -560,8 +562,9 @@ jobs:
 
       - name: Execution Policy audit
         if: always()
-        shell: python
+        shell: bash
         run: |
+          python3 - <<'PY'
           import json
           from pathlib import Path
           payload = {
@@ -1219,8 +1222,9 @@ jobs:
 
       - name: Approval Artifact Matching
         if: always()
-        shell: python
+        shell: bash
         run: |
+          python3 - <<'PY'
           import json
           from pathlib import Path
 
