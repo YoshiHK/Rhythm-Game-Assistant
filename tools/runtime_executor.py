@@ -3439,148 +3439,148 @@ if __name__ == "__main__":
         return policy_result
 
 
-def run_all(
-    self,
-) -> Dict[str, Any]:
+    def run_all(
+        self,
+    ) -> Dict[str, Any]:
 
-    analysis = self.analyze_failures()
+        analysis = self.analyze_failures()
 
-    repair_dag = self.build_repair_dag(
-        analysis
-    )
+        repair_dag = self.build_repair_dag(
+            analysis
+        )
 
-    plan = self.generate_execution_plan(
-        analysis,
-        repair_dag,
-    )
+        plan = self.generate_execution_plan(
+            analysis,
+            repair_dag,
+        )
 
-    dry_run_result: Dict[str, Any] = {}
+        dry_run_result: Dict[str, Any] = {}
 
-    if self.mode == "dry_run_execute":
+        if self.mode == "dry_run_execute":
 
-        dry_run_result = (
-            self.simulate_dry_run_execution(
+            dry_run_result = (
+                self.simulate_dry_run_execution(
+                    plan
+                )
+            )
+
+        #
+        # Execution-stage artifacts
+        #
+
+        apply_execution_result: Dict[str, Any] = {}
+
+        executor_write_manifest: Dict[str, Any] = {}
+
+        execution_provenance: Dict[str, Any] = {}
+
+        if self.mode == "execute":
+
+            apply_execution_result = (
+                self.apply_execution(
+                    plan
+                )
+            )
+
+            #
+            # Reload executor-generated artifacts.
+            #
+            # apply_execution() owns artifact production.
+            # run_all() consumes them.
+            #
+
+            executor_write_manifest = (
+                read_json_optional(
+                    EXECUTOR_WRITE_MANIFEST_OUT_PATH
+                )
+            )
+
+            execution_provenance = (
+                read_json_optional(
+                    EXECUTION_PROVENANCE_OUT_PATH
+                )
+            )
+
+        #
+        # Governance / policy enforcement
+        #
+
+        policy_result = self.enforce_policy(
+            plan=plan,
+            dry_run_result=dry_run_result,
+            apply_execution_result=apply_execution_result,
+            executor_write_manifest=executor_write_manifest,
+            execution_provenance=execution_provenance,
+        )
+
+        #
+        # Final report
+        #
+
+        result = ExecutorResult(
+            schema=EXECUTOR_SCHEMA,
+
+            generated_at=(
+                datetime.now(
+                    timezone.utc
+                )
+                .replace(
+                    microsecond=0,
+                )
+                .isoformat()
+            ),
+
+            mode=self.mode,
+
+            proposal_only=(
+                self.mode == "plan"
+            ),
+
+            dry_run=(
+                self.mode == "dry_run_execute"
+            ),
+
+            execution_authority=(
+                self.mode == "execute"
+            ),
+
+            approval_authority=False,
+
+            #
+            # generated artifacts
+            #
+
+            plan=asdict(
                 plan
-            )
+            ),
+
+            dry_run_result=(
+                dry_run_result
+            ),
+
+            apply_execution_result=(
+                apply_execution_result
+            ),
+
+            executor_write_manifest=(
+                executor_write_manifest
+            ),
+
+            execution_provenance=(
+                execution_provenance
+            ),
+
+            diagnostics={
+                **self.diagnostics,
+
+                "policy_result":
+                    policy_result,
+            },
         )
 
-    #
-    # Execution-stage artifacts
-    #
-
-    apply_execution_result: Dict[str, Any] = {}
-
-    executor_write_manifest: Dict[str, Any] = {}
-
-    execution_provenance: Dict[str, Any] = {}
-
-    if self.mode == "execute":
-
-        apply_execution_result = (
-            self.apply_execution(
-                plan
-            )
+        return asdict(
+            result
         )
-
-        #
-        # Reload executor-generated artifacts.
-        #
-        # apply_execution() owns artifact production.
-        # run_all() consumes them.
-        #
-
-        executor_write_manifest = (
-            read_json_optional(
-                EXECUTOR_WRITE_MANIFEST_OUT_PATH
-            )
-        )
-
-        execution_provenance = (
-            read_json_optional(
-                EXECUTION_PROVENANCE_OUT_PATH
-            )
-        )
-
-    #
-    # Governance / policy enforcement
-    #
-
-    policy_result = self.enforce_policy(
-        plan=plan,
-        dry_run_result=dry_run_result,
-        apply_execution_result=apply_execution_result,
-        executor_write_manifest=executor_write_manifest,
-        execution_provenance=execution_provenance,
-    )
-
-    #
-    # Final report
-    #
-
-    result = ExecutorResult(
-        schema=EXECUTOR_SCHEMA,
-
-        generated_at=(
-            datetime.now(
-                timezone.utc
-            )
-            .replace(
-                microsecond=0,
-            )
-            .isoformat()
-        ),
-
-        mode=self.mode,
-
-        proposal_only=(
-            self.mode == "plan"
-        ),
-
-        dry_run=(
-            self.mode == "dry_run_execute"
-        ),
-
-        execution_authority=(
-            self.mode == "execute"
-        ),
-
-        approval_authority=False,
-
-        #
-        # generated artifacts
-        #
-
-        plan=asdict(
-            plan
-        ),
-
-        dry_run_result=(
-            dry_run_result
-        ),
-
-        apply_execution_result=(
-            apply_execution_result
-        ),
-
-        executor_write_manifest=(
-            executor_write_manifest
-        ),
-
-        execution_provenance=(
-            execution_provenance
-        ),
-
-        diagnostics={
-            **self.diagnostics,
-
-            "policy_result":
-                policy_result,
-        },
-    )
-
-    return asdict(
-        result
-    )
 
 # -----------------------------------------------------------------------------
 # CLI
@@ -3794,27 +3794,19 @@ def main() -> int:
             )
         )
 
-        diagnostics = result.get(
-            "diagnostics",
-            {},
-        )
-
-        policy_result = (
-            diagnostics.get(
+        policy_passed = (
+            result.get(
+                "diagnostics",
+                {},
+            )
+            .get(
                 "policy_result",
                 {},
             )
-            if isinstance(diagnostics, dict)
-            else {}
-        )
-
-        policy_passed = (
-            policy_result.get(
+            .get(
                 "policy_passed",
                 False,
             )
-            if isinstance(policy_result, dict)
-            else False
         )
 
         return (
@@ -3892,6 +3884,7 @@ def main() -> int:
         )
 
         return 1
+
 
 if __name__ == "__main__":
 
