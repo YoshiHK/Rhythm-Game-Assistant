@@ -2389,7 +2389,6 @@ class RuntimeExecutor:
                 str(exc),
             )
 
-
     def approval_matches_plan(
         self,
         *,
@@ -2407,11 +2406,6 @@ class RuntimeExecutor:
             "approval_phrase",
         )
 
-        approved_execution_plan = approval.get(
-            "approved_execution_plan",
-            {},
-        )
-
         if approved is not True:
             issues.append(
                 "Approval artifact does not set approved=true."
@@ -2421,6 +2415,111 @@ class RuntimeExecutor:
             issues.append(
                 "Approval artifact does not contain the required approval phrase."
             )
+
+        #
+        # ------------------------------------------------------
+        # v2 Approval Bundle
+        # ------------------------------------------------------
+        #
+
+        approved_bundle = approval.get(
+            "approved_execution_bundle"
+        )
+
+        if isinstance(
+            approved_bundle,
+            dict,
+        ):
+            approved_targets = sorted(
+                approved_bundle.get(
+                    "target_root_failures",
+                    [],
+                )
+            )
+
+            plan_targets = sorted(
+                plan.target_root_failures
+            )
+
+            if approved_targets != plan_targets:
+                issues.append(
+                    "Approval bundle target_root_failures do not match execution plan."
+                )
+
+            approved_plan_schema = (
+                approved_bundle.get(
+                    "execution_plan_schema"
+                )
+            )
+
+            if (
+                approved_plan_schema
+                and approved_plan_schema
+                != plan.schema
+            ):
+                issues.append(
+                    "Approval bundle execution_plan_schema does not match execution plan schema."
+                )
+
+            #
+            # Fingerprint-aware validation
+            #
+            # Optional today.
+            # Can become required once
+            # execution_plan_input_contract.json
+            # and approval_artifact_matching.json
+            # are fully enforced.
+            #
+
+            approved_plan_sha = (
+                approved_bundle.get(
+                    "execution_plan_sha256"
+                )
+            )
+
+            if (
+                approved_plan_sha
+                and not isinstance(
+                    approved_plan_sha,
+                    str,
+                )
+            ):
+                issues.append(
+                    "Approval bundle execution_plan_sha256 must be a string."
+                )
+
+            approved_mutation_sha = (
+                approved_bundle.get(
+                    "database_mutation_plan_sha256"
+                )
+            )
+
+            if (
+                approved_mutation_sha
+                and not isinstance(
+                    approved_mutation_sha,
+                    str,
+                )
+            ):
+                issues.append(
+                    "Approval bundle database_mutation_plan_sha256 must be a string."
+                )
+
+            return (
+                not issues,
+                issues,
+            )
+
+        #
+        # ------------------------------------------------------
+        # Legacy v1 Approval Artifact
+        # ------------------------------------------------------
+        #
+
+        approved_execution_plan = approval.get(
+            "approved_execution_plan",
+            {},
+        )
 
         if not isinstance(
             approved_execution_plan,
@@ -2451,8 +2550,10 @@ class RuntimeExecutor:
                 "Approval artifact target_root_failures do not match the generated execution plan."
             )
 
-        approved_schema = approved_execution_plan.get(
-            "schema",
+        approved_schema = (
+            approved_execution_plan.get(
+                "schema",
+            )
         )
 
         if approved_schema != plan.schema:
