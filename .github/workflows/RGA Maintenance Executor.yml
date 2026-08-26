@@ -137,30 +137,6 @@ jobs:
           private-key: ${{ secrets.RGA_APP_PRIVATE_KEY }}
 
       ############################################################
-      # Resolve GitHub App Artifact Token
-      #
-      # This exposes the generated GitHub App installation token
-      # through one stable step output:
-      #
-      #   steps.artifact_token.outputs.token
-      #
-      # Downstream GitHub operations should use this output.
-      ############################################################
-
-      - name: Resolve GitHub App Artifact Token
-        id: artifact_token
-        shell: bash
-        env:
-          GENERATED_GITHUB_APP_TOKEN: ${{ steps.github_app_token.outputs.token }}
-        run: |
-          if [ -z "${GENERATED_GITHUB_APP_TOKEN}" ]; then
-            echo "::error::Generated GitHub App token is empty."
-            exit 1
-          fi
-
-          echo "token=${GENERATED_GITHUB_APP_TOKEN}" >> "$GITHUB_OUTPUT"    
-
-      ############################################################
       # Prepare Artifact Directory
       ############################################################
 
@@ -214,264 +190,29 @@ jobs:
           )
           PY
 
-      - name: Ingest Pre-Audit Artifacts
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: RGA Runtime Auditor.yml
-          name: runtime-auditor-evidence
-          path: artifacts/
-          check_artifacts: true
-          search_artifacts: true
-        continue-on-error: true
-
-
-      - name: Flatten Artifact Directory
-        run: |
-          # Move files inside subfolders up to artifacts/
-          find artifacts/ -mindepth 2 -type f -exec mv {} artifacts/ \;
-          echo "[RGA] Files in artifacts folder:"
-          ls -la artifacts/
-          
-          
       ############################################################
-      # Write Database Mutation Contract
+      # Resolve GitHub App Artifact Token
       #
-      # Plan-stage artifact.
+      # This exposes the generated GitHub App installation token
+      # through one stable step output:
       #
-      # Runtime Auditor consumes this artifact during:
+      #   steps.artifact_token.outputs.token
       #
-      #   plan_audit
-      #
-      # This artifact is a proposal contract only.
-      #
-      # Execute stage must not modify this artifact.
+      # Downstream GitHub operations should use this output.
       ############################################################
 
-      - name: Write Database Mutation Contract
-        if: ${{ always() && inputs.executor_mode == 'plan' }}
+      - name: Resolve GitHub App Artifact Token
+        id: artifact_token
         shell: bash
         env:
-          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
-          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+          GENERATED_GITHUB_APP_TOKEN: ${{ steps.github_app_token.outputs.token }}
         run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          from datetime import datetime, timezone
+          if [ -z "${GENERATED_GITHUB_APP_TOKEN}" ]; then
+            echo "::error::Generated GitHub App token is empty."
+            exit 1
+          fi
 
-          runtime_baseline = Path(
-              "artifacts/runtime_baseline.json"
-          )
-
-          pre_audit_report = Path(
-              "artifacts/runtime_auditor_report.json"
-          )
-
-          audit_session_id = os.environ.get(
-              "AUDIT_SESSION_ID",
-              "",
-          )
-
-          payload = {
-              "schema":
-                  "rga.database_mutation_plan.v1.1",
-
-              "workflow":
-                  "RGA Maintenance Executor",
-
-              "bot":
-                  "rga_executor_bot",
-
-              "lifecycle_stage":
-                  "bot_2_plan",
-
-              "artifact_role":
-                  "proposal_contract",
-
-              "plan_stage_artifact":
-                  True,
-
-              "runtime_auditor_plan_audit_required":
-                  True,
-
-              "execution_stage_may_mutate_plan":
-                  False,
-
-              "approval_required":
-                  True,
-
-              "audit_session_id":
-                  audit_session_id,
-
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
-
-              "runtime_baseline": {
-                  "path": str(runtime_baseline),
-                  "present": runtime_baseline.exists(),
-              },
-
-              "pre_audit_report": {
-                  "path": str(pre_audit_report),
-                  "present": pre_audit_report.exists(),
-              },
-
-              "approval": {
-                  "required": True,
-                  "approved": False,
-                  "approval_artifact":
-                      "artifacts/human_execution_approval.json",
-              },
-
-              "policy": {
-                  "validation_required": True,
-                  "validated": False,
-                  "phase_boundary_immutable": True,
-              },
-
-              "proposed_mutations": [],
-          }
-
-          Path(
-              "artifacts/database_mutation_plan.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-
-          print(
-              "[RGA] database_mutation_plan.json generated successfully."
-          )
-          PY
-
-      ############################################################
-      # Write Persistence Contract
-      #
-      # Plan-stage governance contract.
-      #
-      # Consumed by:
-      #
-      #   Runtime Auditor plan-audit
-      #   Deployment Governance Gate
-      #
-      # This contract does not authorize execution.
-      ############################################################
-
-      - name: Write Persistence Contract
-        if: ${{ always() && inputs.executor_mode == 'plan' }}
-        shell: bash
-        env:
-          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          from datetime import datetime, timezone
-
-          mutation_plan = Path(
-              "artifacts/database_mutation_plan.json"
-          )
-
-          audit_session_id = os.environ.get(
-              "AUDIT_SESSION_ID",
-              "",
-          )
-
-          payload = {
-              "schema":
-                  "rga.persistence_contract.v1.1",
-
-              "workflow":
-                  "RGA Maintenance Executor",
-
-              "bot":
-                  "rga_executor_bot",
-
-              "lifecycle_stage":
-                  "stage_4_persistence_contract",
-
-              "artifact_role":
-                  "governance_contract",
-
-              "plan_stage_artifact":
-                  True,
-
-              "runtime_auditor_plan_audit_required":
-                  True,
-
-              "deployment_gate_validation_required":
-                  True,
-
-              "execution_authority":
-                  False,
-
-              "audit_session_id":
-                  audit_session_id,
-
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
-
-              "source_contract":
-                  str(mutation_plan),
-
-              "source_contract_present":
-                  mutation_plan.exists(),
-
-              "ownership": {
-                  "planner": "bot_2",
-                  "executor": "persistence_layer",
-                  "approver": "human",
-                  "policy_validator": "deployment_gate",
-              },
-
-              "permissions": {
-                  "executor_may_write_db": False,
-                  "persistence_layer_owns_db_writes": True,
-                  "human_approval_required": True,
-                  "deployment_gate_required": True,
-              },
-
-              "runtime_requirements": {
-                  "runtime_baseline_required": True,
-                  "mutation_validation_required": True,
-              },
-
-              "status": {
-                  "approved": False,
-                  "validated": False,
-                  "executed": False,
-              },
-          }
-
-          Path(
-              "artifacts/persistence_contract.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-
-          print(
-              "[RGA] persistence_contract.json generated successfully."
-          )
-          PY
+          echo "token=${GENERATED_GITHUB_APP_TOKEN}" >> "$GITHUB_OUTPUT"       
           
       ############################################################
       # Execution Gate
@@ -522,6 +263,7 @@ jobs:
           )
           PY
 
+
       ############################################################
       # Human Approval Artifact audit
       ############################################################
@@ -529,7 +271,7 @@ jobs:
       - name: Human Approval Artifact audit
         if: always()
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
           import json
           from pathlib import Path
      
@@ -542,61 +284,6 @@ jobs:
           Path('artifacts/approval_audit.json').write_text(
               json.dumps(payload, indent=2),
               encoding='utf-8'
-          )
-          PY
-
-      ############################################################
-      # Execution Scope audit
-      ############################################################
-
-      - name: Execution Scope audit
-        if: always()
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          payload = {
-              "schema": "rga.execution_scope_audit.v1.0",
-              "protected_scopes": [
-                  "canonical_row",
-                  "pattern_logic",
-                  "tips_generation",
-                  "personalization",
-                  "localization",
-                  "recommendation_logic",
-              ],
-              "completed_phases_immutable": True,
-          }
-          Path("artifacts/execution_scope_audit.json").write_text(
-              json.dumps(payload, indent=2),
-              encoding="utf-8",
-          )
-          PY
-
-      ############################################################
-      # Execution Policy audit
-      ############################################################
-
-      - name: Execution Policy audit
-        if: always()
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          payload = {
-              "schema": "rga.execution_policy_audit.v1.0",
-              "execution_authority": True,
-              "approval_authority": False,
-              "self_approval": False,
-              "human_approval_required": True,
-              "plan_audit_required": True,
-              "post_audit_required": True,
-          }
-          Path("artifacts/execution_policy_audit.json").write_text(
-              json.dumps(payload, indent=2),
-              encoding="utf-8",
           )
           PY
           
@@ -1043,6 +730,243 @@ jobs:
           echo "Execution plan input contract: artifacts/execution_plan_input_contract.json"
 
           exit 0
+          
+      ############################################################
+      # Write Database Mutation Contract
+      #
+      # Plan-stage artifact.
+      #
+      # Runtime Auditor consumes this artifact during:
+      #
+      #   plan_audit
+      #
+      # This artifact is a proposal contract only.
+      #
+      # Execute stage must not modify this artifact.
+      ############################################################
+
+      - name: Write Database Mutation Contract
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
+        env:
+          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          runtime_baseline = Path(
+              "artifacts/runtime_baseline.json"
+          )
+
+          pre_audit_report = Path(
+              "artifacts/runtime_auditor_report.json"
+          )
+
+          audit_session_id = os.environ.get(
+              "AUDIT_SESSION_ID",
+              "",
+          )
+
+          payload = {
+              "schema":
+                  "rga.database_mutation_plan.v1.1",
+
+              "workflow":
+                  "RGA Maintenance Executor",
+
+              "bot":
+                  "rga_executor_bot",
+
+              "lifecycle_stage":
+                  "bot_2_plan",
+
+              "artifact_role":
+                  "proposal_contract",
+
+              "plan_stage_artifact":
+                  True,
+
+              "runtime_auditor_plan_audit_required":
+                  True,
+
+              "execution_stage_may_mutate_plan":
+                  False,
+
+              "approval_required":
+                  True,
+
+              "audit_session_id":
+                  audit_session_id,
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "runtime_baseline": {
+                  "path": str(runtime_baseline),
+                  "present": runtime_baseline.exists(),
+              },
+
+              "pre_audit_report": {
+                  "path": str(pre_audit_report),
+                  "present": pre_audit_report.exists(),
+              },
+
+              "approval": {
+                  "required": True,
+                  "approved": False,
+                  "approval_artifact":
+                      "artifacts/human_execution_approval.json",
+              },
+
+              "policy": {
+                  "validation_required": True,
+                  "validated": False,
+                  "phase_boundary_immutable": True,
+              },
+
+              "proposed_mutations": [],
+          }
+
+          Path(
+              "artifacts/database_mutation_plan.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA] database_mutation_plan.json generated successfully."
+          )
+          PY
+          
+      ############################################################
+      # Write Persistence Contract
+      #
+      # Plan-stage governance contract.
+      #
+      # Consumed by:
+      #
+      #   Runtime Auditor plan-audit
+      #   Deployment Governance Gate
+      #
+      # This contract does not authorize execution.
+      ############################################################
+
+      - name: Write Persistence Contract
+        if: ${{ always() && inputs.executor_mode == 'plan' }}
+        shell: python
+        env:
+          AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          mutation_plan = Path(
+              "artifacts/database_mutation_plan.json"
+          )
+
+          audit_session_id = os.environ.get(
+              "AUDIT_SESSION_ID",
+              "",
+          )
+
+          payload = {
+              "schema":
+                  "rga.persistence_contract.v1.1",
+
+              "workflow":
+                  "RGA Maintenance Executor",
+
+              "bot":
+                  "rga_executor_bot",
+
+              "lifecycle_stage":
+                  "stage_4_persistence_contract",
+
+              "artifact_role":
+                  "governance_contract",
+
+              "plan_stage_artifact":
+                  True,
+
+              "runtime_auditor_plan_audit_required":
+                  True,
+
+              "deployment_gate_validation_required":
+                  True,
+
+              "execution_authority":
+                  False,
+
+              "audit_session_id":
+                  audit_session_id,
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "source_contract":
+                  str(mutation_plan),
+
+              "source_contract_present":
+                  mutation_plan.exists(),
+
+              "ownership": {
+                  "planner": "bot_2",
+                  "executor": "persistence_layer",
+                  "approver": "human",
+                  "policy_validator": "deployment_gate",
+              },
+
+              "permissions": {
+                  "executor_may_write_db": False,
+                  "persistence_layer_owns_db_writes": True,
+                  "human_approval_required": True,
+                  "deployment_gate_required": True,
+              },
+
+              "runtime_requirements": {
+                  "runtime_baseline_required": True,
+                  "mutation_validation_required": True,
+              },
+
+              "status": {
+                  "approved": False,
+                  "validated": False,
+                  "executed": False,
+              },
+          }
+
+          Path(
+              "artifacts/persistence_contract.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA] persistence_contract.json generated successfully."
+          )
 
       ############################################################
       # Execution Plan Fingerprint
@@ -1242,7 +1166,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
           import json
           from pathlib import Path
 
@@ -1397,8 +1321,62 @@ jobs:
                   ensure_ascii=False,
               ),
               encoding="utf-8",
-          ) 
+          )
           PY
+          
+      ############################################################
+      # Execution Scope audit
+      ############################################################
+
+      - name: Execution Scope audit
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_scope_audit.v1.0",
+              "protected_scopes": [
+                  "canonical_row",
+                  "pattern_logic",
+                  "tips_generation",
+                  "personalization",
+                  "localization",
+                  "recommendation_logic",
+              ],
+              "completed_phases_immutable": True,
+          }
+          Path("artifacts/execution_scope_audit.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Execution Policy audit
+      ############################################################
+
+      - name: Execution Policy audit
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_policy_audit.v1.0",
+              "execution_authority": True,
+              "approval_authority": False,
+              "self_approval": False,
+              "human_approval_required": True,
+              "plan_audit_required": True,
+              "post_audit_required": True,
+          }
+          Path("artifacts/execution_policy_audit.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
+          
 
       ############################################################
       # Apply Execution Result
@@ -3417,11 +3395,16 @@ jobs:
       ############################################################
       # Upload Execution Plan Bundle
       #
-      # Plan-stage proposal bundle consumed by:
+      # Plan-stage proposal output produced by Bot #2.
       #
-      #   Runtime Auditor (plan_audit)
+      # Primary consumers:
       #
-      # Execute stage must preserve these artifacts.
+      #   - Runtime Auditor plan_audit
+      #   - Human review
+      #   - Later dry-run / execute stages
+      #
+      # execution_plan.json and execution_plan_fingerprint.json
+      # are immutable inputs after plan-audit and approval.
       ############################################################
 
       - name: Upload Execution Plan Bundle
@@ -3432,6 +3415,7 @@ jobs:
           path: |
             artifacts/execution_plan.json
             artifacts/execution_plan_fingerprint.json
+
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
             artifacts/runtime_executor_stdout.txt
@@ -3444,11 +3428,15 @@ jobs:
       # Stage 2
       # Upload Database Mutation Plan
       #
-      # Plan-stage proposal artifact.
+      # Plan-stage database mutation proposal.
       #
-      # Consumed by:
+      # This artifact does not authorize database mutation.
       #
-      #   Runtime Auditor (plan_audit)
+      # Primary consumers:
+      #
+      #   - Runtime Auditor plan_audit
+      #   - Persistence contract generation
+      #   - Human review
       ############################################################
 
       - name: Upload Database Mutation Plan
@@ -3464,14 +3452,19 @@ jobs:
       # Stage 4
       # Upload Persistence Contract
       #
-      # Governance contract derived from:
+      # Plan-stage governance contract derived from:
       #
-      #   database_mutation_plan.json
+      #   artifacts/database_mutation_plan.json
       #
-      # Consumed by:
+      # This artifact constrains persistence behavior and does not
+      # grant execution authority to Bot #2.
       #
-      #   Runtime Auditor (plan_audit)
-      #   Deployment Governance Gate
+      # Primary consumers:
+      #
+      #   - Runtime Auditor plan_audit
+      #   - Human review
+      #   - Execute-stage provenance
+      #   - Deployment Governance Gate
       ############################################################
 
       - name: Upload Persistence Contract
@@ -3482,9 +3475,21 @@ jobs:
           path: |
             artifacts/persistence_contract.json
           if-no-files-found: warn
-          
+
       ############################################################
       # Upload Plan Audit Input Bundle
+      #
+      # Canonical proposal set reviewed by Runtime Auditor.
+      #
+      # The bundle intentionally contains only plan-stage contracts.
+      #
+      # Execute-stage artifacts such as:
+      #
+      #   approval_artifact_matching.json
+      #   execution_plan_input_contract.json
+      #
+      # do not belong in this bundle because they are generated
+      # after plan publication.
       ############################################################
 
       - name: Upload Plan Audit Input Bundle
@@ -3497,10 +3502,22 @@ jobs:
             artifacts/execution_plan_fingerprint.json
             artifacts/database_mutation_plan.json
             artifacts/persistence_contract.json
-          if-no-files-found: warn          
-          
+          if-no-files-found: warn
+
       ############################################################
       # Upload Dry Run Evidence
+      #
+      # Dry-run mode consumes the preserved plan-stage artifacts.
+      #
+      # It must not overwrite:
+      #
+      #   execution_plan.json
+      #   database_mutation_plan.json
+      #   persistence_contract.json
+      #   execution_plan_fingerprint.json
+      #
+      # runtime_executor_output.json is the mode-specific executor
+      # output for dry_run_execute.
       ############################################################
 
       - name: Upload Dry Run Evidence
@@ -3510,6 +3527,13 @@ jobs:
           name: rga-dry-run-evidence
           path: |
             artifacts/execution_plan.json
+            artifacts/execution_plan_fingerprint.json
+            artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
+
+            artifacts/execution_plan_input_contract.json
+            artifacts/runtime_executor_output.json
+
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
             artifacts/runtime_executor_stdout.txt
@@ -3517,9 +3541,35 @@ jobs:
             artifacts/runtime_executor_stderr_summary.json
             artifacts/runtime_executor_exit_code.txt
           if-no-files-found: warn
-          
+
       ############################################################
       # Upload Execute Evidence
+      #
+      # Complete execute-stage evidence bundle.
+      #
+      # The bundle preserves the entire approved-plan chain:
+      #
+      #   proposal contracts
+      #     ->
+      #   integrity contract
+      #     ->
+      #   plan audit
+      #     ->
+      #   human approval
+      #     ->
+      #   approval matching
+      #     ->
+      #   execution gate
+      #     ->
+      #   executor evidence
+      #     ->
+      #   repository / commit / PR evidence
+      #     ->
+      #   execution provenance
+      #
+      # Including the approval and input contracts is necessary to
+      # diagnose approved-plan identity without reconstructing state
+      # from separate workflow runs.
       ############################################################
 
       - name: Upload Execute Evidence
@@ -3528,39 +3578,85 @@ jobs:
         with:
           name: rga-execute-evidence
           path: |
-            artifacts/apply_execution_result.json
-            artifacts/executor_write_manifest.json
-            artifacts/execution_provenance.json
+            artifacts/execution_plan.json
+            artifacts/execution_plan_fingerprint.json
+            artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
+
+            artifacts/plan_audit_evidence.json
+            artifacts/human_execution_approval.json
+            artifacts/execution_plan_input_contract.json
+            artifacts/approval_artifact_matching.json
+            artifacts/approval_audit.json
+            artifacts/execution_gate.json
+            artifacts/execution_scope_audit.json
+            artifacts/execution_policy_audit.json
+
+            artifacts/runtime_executor_output.json
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
             artifacts/runtime_executor_stdout.txt
             artifacts/runtime_executor_stderr.txt
             artifacts/runtime_executor_stderr_summary.json
             artifacts/runtime_executor_exit_code.txt
+
+            artifacts/apply_execution_result.json
+            artifacts/executor_write_manifest.json
+            artifacts/execution_provenance.json
+
             artifacts/repository_changes.json
             artifacts/execution_commit_manifest.json
             artifacts/execution_git_commit_result.json
+
             artifacts/execution_pull_request_candidate.json
             artifacts/execution_pull_request_result.json
             artifacts/execution_pull_request_url.txt
             artifacts/execution_pull_request_stderr.txt
+
             artifacts/execution_manifest.txt
             artifacts/execution_lineage.json
-          if-no-files-found: warn    
-          
+          if-no-files-found: warn
+
       ############################################################
       # Upload Execution Provenance Bundle
+      #
+      # Focused provenance subset for:
+      #
+      #   - Runtime Auditor post_audit
+      #   - Deployment Governance Gate
+      #   - Human governance review
+      #
+      # This bundle includes plan identity and approval identity,
+      # not only executor write evidence.
       ############################################################
 
       - name: Upload Execution Provenance Bundle
         if: ${{ always() && inputs.executor_mode == 'execute' }}
         uses: actions/upload-artifact@v4
         with:
-          name: execution-provenance-bundle
+          name: rga-execution-provenance
           path: |
+            artifacts/execution_plan.json
+            artifacts/execution_plan_fingerprint.json
+            artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
+
+            artifacts/plan_audit_evidence.json
+            artifacts/human_execution_approval.json
+            artifacts/execution_plan_input_contract.json
+            artifacts/approval_artifact_matching.json
+            artifacts/execution_gate.json
+
             artifacts/apply_execution_result.json
             artifacts/executor_write_manifest.json
             artifacts/execution_provenance.json
+
+            artifacts/repository_changes.json
+            artifacts/execution_commit_manifest.json
+            artifacts/execution_git_commit_result.json
+            artifacts/execution_pull_request_candidate.json
+            artifacts/execution_pull_request_result.json
+
             artifacts/execution_manifest.txt
             artifacts/execution_lineage.json
-          if-no-files-found: warn          
+          if-no-files-found: warn     
