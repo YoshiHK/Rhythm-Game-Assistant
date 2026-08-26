@@ -213,6 +213,13 @@ jobs:
               encoding="utf-8",
           )
           PY
+
+      - name: Ingest Pre-Audit Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-auditor-report
+          path: artifacts/
+        continue-on-error: false          
           
       ############################################################
       # Write Database Mutation Contract
