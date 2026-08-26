@@ -219,7 +219,15 @@ jobs:
         with:
           workflow: RGA Runtime Auditor.yml
           name: runtime-auditor-evidence
-          path: artifacts/          
+          path: artifacts/
+
+      - name: Flatten Artifact Directory
+        run: |
+          # Move files inside subfolders up to artifacts/
+          find artifacts/ -mindepth 2 -type f -exec mv {} artifacts/ \;
+          echo "[RGA] Files in artifacts folder:"
+          ls -la artifacts/
+          
           
       ############################################################
       # Write Database Mutation Contract
