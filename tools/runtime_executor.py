@@ -3794,19 +3794,27 @@ def main() -> int:
             )
         )
 
-        policy_passed = (
-            result.get(
-                "diagnostics",
-                {},
-            )
-            .get(
+        diagnostics = result.get(
+            "diagnostics",
+            {},
+        )
+
+        policy_result = (
+            diagnostics.get(
                 "policy_result",
                 {},
             )
-            .get(
+            if isinstance(diagnostics, dict)
+            else {}
+        )
+
+        policy_passed = (
+            policy_result.get(
                 "policy_passed",
                 False,
             )
+            if isinstance(policy_result, dict)
+            else False
         )
 
         return (
