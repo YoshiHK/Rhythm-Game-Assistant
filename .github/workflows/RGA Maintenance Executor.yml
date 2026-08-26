@@ -217,10 +217,9 @@ jobs:
       - name: Ingest Pre-Audit Artifacts
         uses: dawidd6/action-download-artifact@v6
         with:
-          workflow: RGA Runtime Auditor.yml 
-          name: runtime-auditor-report-zip
-          path: artifacts/
-          
+          workflow: RGA Runtime Auditor.yml
+          name: runtime-auditor-evidence
+          path: artifacts/          
           
       ############################################################
       # Write Database Mutation Contract
