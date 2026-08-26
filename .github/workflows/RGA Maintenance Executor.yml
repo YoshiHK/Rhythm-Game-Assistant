@@ -523,6 +523,59 @@ jobs:
               encoding='utf-8'
           )
           PY
+
+      ############################################################
+      # Execution Scope audit
+      ############################################################
+
+      - name: Execution Scope audit
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_scope_audit.v1.0",
+              "protected_scopes": [
+                  "canonical_row",
+                  "pattern_logic",
+                  "tips_generation",
+                  "personalization",
+                  "localization",
+                  "recommendation_logic",
+              ],
+              "completed_phases_immutable": True,
+          }
+          Path("artifacts/execution_scope_audit.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Execution Policy audit
+      ############################################################
+
+      - name: Execution Policy audit
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_policy_audit.v1.0",
+              "execution_authority": True,
+              "approval_authority": False,
+              "self_approval": False,
+              "human_approval_required": True,
+              "plan_audit_required": True,
+              "post_audit_required": True,
+          }
+          Path("artifacts/execution_policy_audit.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY          
           
       ############################################################
       # Run Runtime Executor
@@ -1322,61 +1375,7 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY
-          
-      ############################################################
-      # Execution Scope audit
-      ############################################################
-
-      - name: Execution Scope audit
-        if: always()
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          payload = {
-              "schema": "rga.execution_scope_audit.v1.0",
-              "protected_scopes": [
-                  "canonical_row",
-                  "pattern_logic",
-                  "tips_generation",
-                  "personalization",
-                  "localization",
-                  "recommendation_logic",
-              ],
-              "completed_phases_immutable": True,
-          }
-          Path("artifacts/execution_scope_audit.json").write_text(
-              json.dumps(payload, indent=2),
-              encoding="utf-8",
-          )
-          PY
-
-      ############################################################
-      # Execution Policy audit
-      ############################################################
-
-      - name: Execution Policy audit
-        if: always()
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          payload = {
-              "schema": "rga.execution_policy_audit.v1.0",
-              "execution_authority": True,
-              "approval_authority": False,
-              "self_approval": False,
-              "human_approval_required": True,
-              "plan_audit_required": True,
-              "post_audit_required": True,
-          }
-          Path("artifacts/execution_policy_audit.json").write_text(
-              json.dumps(payload, indent=2),
-              encoding="utf-8",
-          )
-          PY
-          
+          PY         
 
       ############################################################
       # Apply Execution Result
