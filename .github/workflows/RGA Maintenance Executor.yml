@@ -230,11 +230,11 @@ jobs:
 
       - name: Write Database Mutation Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
+        shell: python
         env:
           AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
           EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
-          python - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -331,6 +331,7 @@ jobs:
           print(
               "[RGA] database_mutation_plan.json generated successfully."
           )
+          PY
 
       ############################################################
       # Write Persistence Contract
@@ -549,7 +550,7 @@ jobs:
               json.dumps(payload, indent=2),
               encoding="utf-8",
           )
-          
+          PY
 
       ############################################################
       # Execution Policy audit
@@ -557,8 +558,8 @@ jobs:
 
       - name: Execution Policy audit
         if: always()
+        shell: python
         run: |
-          python - <<'PY'
           import json
           from pathlib import Path
           payload = {
@@ -573,7 +574,8 @@ jobs:
           Path("artifacts/execution_policy_audit.json").write_text(
               json.dumps(payload, indent=2),
               encoding="utf-8",
-          )        
+          )
+          PY
           
       ############################################################
       # Run Runtime Executor
@@ -1215,9 +1217,8 @@ jobs:
 
       - name: Approval Artifact Matching
         if: always()
-        shell: bash
+        shell: python
         run: |
-          python - <<'PY'
           import json
           from pathlib import Path
 
@@ -1373,6 +1374,7 @@ jobs:
               ),
               encoding="utf-8",
           ) 
+          PY
 
       ############################################################
       # Apply Execution Result
