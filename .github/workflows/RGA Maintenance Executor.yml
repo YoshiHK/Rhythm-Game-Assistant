@@ -218,7 +218,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: RGA Runtime Auditor.yml 
-          name: runtime-auditor-report       # Replace with the exact artifact name
+          name: runtime-auditor-report-zip
           path: artifacts/
           
           
