@@ -230,7 +230,7 @@ jobs:
 
       - name: Write Database Mutation Contract
         if: ${{ always() && inputs.executor_mode == 'plan' }}
-        shell: python
+        shell: bash
         env:
           AUDIT_SESSION_ID: ${{ inputs.audit_session_id }}
           EXECUTOR_MODE: ${{ inputs.executor_mode }}
