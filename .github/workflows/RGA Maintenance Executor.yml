@@ -212,8 +212,8 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY        
-
+          PY
+          
       ############################################################
       # Write Database Mutation Contract
       #
