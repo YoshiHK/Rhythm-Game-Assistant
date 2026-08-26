@@ -549,7 +549,7 @@ jobs:
               json.dumps(payload, indent=2),
               encoding="utf-8",
           )
-          PY
+          
 
       ############################################################
       # Execution Policy audit
@@ -1372,8 +1372,7 @@ jobs:
                   ensure_ascii=False,
               ),
               encoding="utf-8",
-          )
-          PY         
+          ) 
 
       ############################################################
       # Apply Execution Result
