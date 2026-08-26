@@ -1,11 +1,50 @@
 {
+  "schema": "rga.human_execution_approval.v2.1",
   "approved": true,
   "approval_phrase": "APPROVE_RGA_EXECUTION",
-  "approved_execution_plan": {
-    "schema": "rga.execution_plan.v1.2",
-    "target_root_failures": [],
-    "policy_config": "config/policy.yml",
-    "target_scope": "local_storage_governed_execution",
-    "allow_untracked_local_storage": true
+  "approval_scope": "maintenance_executor",
+  
+  "approved_execution_bundle": {
+    "execution_plan_schema":
+      "rga.execution_plan.v1.2",
+    
+    "database_mutation_plan_schema":
+      "rga.database_mutation_plan.v1.1",
+
+    "persistence_contract_schema":
+      "rga.persistence_contract.v1.1",
+
+    "execution_plan_fingerprint_schema":
+      "rga.execution_plan_fingerprint.v1.1",
+
+    "target_root_failures": [
+      "artifact_database_policy",
+      "deletion_readiness",
+      "runtime_wiring"
+    ],
+
+    "execution_plan_sha256":
+      "a91acf1208ba1249a4b4ddbc30ddeb872fd1fd577448d38c6d915a74d85cd16f",
+
+    "database_mutation_plan_sha256":
+      "f2a787793d79ebc3251f86fb7edab90f00828f89f3a91d7b9b1cfb9d543f3781"
+  },
+
+  "governance": {
+    "human_review_completed": true,
+    "plan_audit_completed": true,
+    "post_audit_required": true,
+    "bot_2_may_execute": true,
+    "bot_2_may_self_approve": false
+  },
+
+  "phase_boundary_contract": {
+    "completed_phases_immutable": true,
+    "canonical_row_immutable": true,
+    "pattern_logic_immutable": true,
+    "tips_generation_immutable": true,
+    "personalization_immutable": true,
+    "localization_immutable": true,
+    "recommendation_logic_immutable": true
   }
 }
