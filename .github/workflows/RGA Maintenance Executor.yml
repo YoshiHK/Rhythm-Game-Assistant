@@ -215,11 +215,12 @@ jobs:
           PY
 
       - name: Ingest Pre-Audit Artifacts
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v6
         with:
-          name: runtime-auditor-report
+          workflow: RGA Runtime Auditor.yml 
+          name: runtime-auditor-report       # Replace with the exact artifact name
           path: artifacts/
-        continue-on-error: false          
+          
           
       ############################################################
       # Write Database Mutation Contract
