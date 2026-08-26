@@ -449,7 +449,8 @@ jobs:
 
           print(
               "[RGA] persistence_contract.json generated successfully."
-          )          
+          )
+          PY
           
       ############################################################
       # Execution Gate
@@ -530,6 +531,7 @@ jobs:
 
       - name: Execution Scope audit
         if: always()
+        shell: python
         run: |
           python - <<'PY'
           import json
