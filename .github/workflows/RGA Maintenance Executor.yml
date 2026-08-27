@@ -1584,6 +1584,7 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           import json
+          import os
           from pathlib import Path
           mode = os.environ["EXECUTOR_MODE"]
           payload = {
