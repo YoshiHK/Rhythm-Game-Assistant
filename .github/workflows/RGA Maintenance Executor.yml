@@ -222,7 +222,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: RGA Runtime Auditor.yml
-          name: runtime-auditor-evidence
+          name: runtime-auditor-evidence.zip
           path: artifacts/
           
       ############################################################
