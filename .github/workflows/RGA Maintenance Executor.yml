@@ -472,7 +472,6 @@ jobs:
           print(
               "[RGA] persistence_contract.json generated successfully."
           )
-          PY
 
       ############################################################
       # Human Approval Artifact audit
@@ -1578,14 +1577,15 @@ jobs:
 
       - name: Execution Policy audit
         if: always()
-        shell: bash
+        shell: bash   
         env:
-          EXECUTOR_MODE: ${{ inputs.executor_mode }}        
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
           set -euo pipefail
           python3 <<'PY'
           import json
           from pathlib import Path
+          mode = os.environ["EXECUTOR_MODE"]
           payload = {
               "schema": "rga.execution_policy_audit.v1.0",
               "execution_authority": mode == "execute",
