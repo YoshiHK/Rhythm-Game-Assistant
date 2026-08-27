@@ -472,56 +472,7 @@ jobs:
           print(
               "[RGA] persistence_contract.json generated successfully."
           )
-          
-      ############################################################
-      # Execution Gate
-      ############################################################
-
-      - name: Execution Gate
-        id: execution_gate
-        env:
-          EXECUTOR_MODE: ${{ inputs.executor_mode }}
-          APPROVAL_ARTIFACT: ${{ inputs.approval_artifact }}
-        run: |
-          set -euo pipefail
-
-          MODE="${EXECUTOR_MODE:-plan}"
-          if [ -z "$MODE" ]; then
-            MODE="plan"
-          fi
-
-          APPROVAL="${APPROVAL_ARTIFACT:-artifacts/human_execution_approval.json}"
-          if [ -z "$APPROVAL" ]; then
-            APPROVAL="artifacts/human_execution_approval.json"
-          fi
-
-          STATUS="allowed"
-          REASON="Mode accepted"
-
-          if [ "$MODE" = "execute" ] && [ ! -f "$APPROVAL" ]; then
-            STATUS="blocked"
-            REASON="Approval artifact missing"
-          fi
-
-          export MODE STATUS REASON
-
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          payload = {
-              "schema": "rga.execution_gate.v1.0",
-              "requested_mode": os.environ.get("MODE", ""),
-              "status": os.environ.get("STATUS", ""),
-              "reason": os.environ.get("REASON", ""),
-          }
-          Path("artifacts/execution_gate.json").write_text(
-              json.dumps(payload, indent=2),
-              encoding="utf-8",
-          )
           PY
-
 
       ############################################################
       # Human Approval Artifact audit
@@ -545,59 +496,6 @@ jobs:
               encoding='utf-8'
           )
           PY
-          
-      ############################################################
-      # Execution Scope audit
-      ############################################################
-
-      - name: Execution Scope audit
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          payload = {
-              "schema": "rga.execution_scope_audit.v1.0",
-              "protected_scopes": [
-                  "canonical_row",
-                  "pattern_logic",
-                  "tips_generation",
-                  "personalization",
-                  "localization",
-                  "recommendation_logic",
-              ],
-              "completed_phases_immutable": True,
-          }
-          Path("artifacts/execution_scope_audit.json").write_text(
-              json.dumps(payload, indent=2),
-              encoding="utf-8",
-          )
-          PY
-
-      ############################################################
-      # Execution Policy audit
-      ############################################################
-
-      - name: Execution Policy audit
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          payload = {
-              "schema": "rga.execution_policy_audit.v1.0",
-              "execution_authority": True,
-              "approval_authority": False,
-              "self_approval": False,
-              "human_approval_required": True,
-              "plan_audit_required": True,
-              "post_audit_required": True,
-          }
-          Path("artifacts/execution_policy_audit.json").write_text(
-              json.dumps(payload, indent=2),
-              encoding="utf-8",
-          )
-          PY            
           
       ############################################################
       # Run Runtime Executor
@@ -660,6 +558,14 @@ jobs:
 
       - name: Run Runtime Executor
         id: run_runtime_executor
+        if: >-
+          ${{
+            always()
+            && (
+              inputs.executor_mode != 'execute'
+              || steps.execution_gate.outputs.allowed == 'true'
+            )
+          }}
         continue-on-error: true
         shell: bash
         env:
@@ -1219,30 +1125,199 @@ jobs:
           PY
           
       ############################################################
+      # Execution Plan Input Contract
+      #
+      # Protects the approved plan-stage artifact from being
+      # regenerated or overwritten during:
+      #
+      #   dry_run_execute
+      #   execute
+      #
+      # This is a contract artifact.
+      #
+      # It does NOT grant execution authority.
+      ############################################################
+
+      - name: Execution Plan Input Contract
+        if: always()
+        shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          cat > artifacts/build_execution_plan_input_contract.py <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          plan_file = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          mode = (
+              os.environ.get(
+                  "EXECUTOR_MODE",
+                  "plan",
+              ).strip()
+              or "plan"
+          )
+
+          payload = {
+              "schema":
+                  "rga.execution_plan_input_contract.v1.0",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "mode":
+                  mode,
+
+              "execution_plan_path":
+                  str(plan_file),
+
+              "execution_plan_present":
+                  False,
+
+              "execution_plan_parseable":
+                  False,
+
+              "execution_plan_sha256":
+                  None,
+
+              "execution_plan_schema":
+                  None,
+
+              "execution_plan_mode":
+                  None,
+
+              "plan_stage_artifact":
+                  True,
+
+              "execute_stage_may_overwrite_execution_plan":
+                  False,
+
+              "runtime_executor_cli_argument_supported":
+                  False,
+
+              "runtime_executor_cli_argument":
+                  "--execution-plan",
+
+              "required_for_modes": [
+                  "dry_run_execute",
+                  "execute",
+              ],
+
+              "policy_violations": [],
+          }
+
+          if not plan_file.exists():
+              payload[
+                  "policy_violations"
+              ].append(
+                  "execution_plan.json is missing."
+              )
+
+          else:
+              payload[
+                  "execution_plan_present"
+              ] = True
+
+              try:
+                  raw = plan_file.read_bytes()
+
+                  payload[
+                      "execution_plan_sha256"
+                  ] = hashlib.sha256(
+                      raw
+                  ).hexdigest()
+
+                  plan = json.loads(
+                      raw.decode(
+                          "utf-8"
+                      )
+                  )
+
+                  payload[
+                      "execution_plan_parseable"
+                  ] = True
+
+                  payload[
+                      "execution_plan_schema"
+                  ] = plan.get(
+                      "schema"
+                  )
+
+                  payload[
+                      "execution_plan_mode"
+                  ] = plan.get(
+                      "mode"
+                  )
+
+                  if (
+                      plan.get("mode")
+                      != "plan"
+                  ):
+                      payload[
+                          "policy_violations"
+                      ].append(
+                          "execution_plan.json must remain a plan-stage artifact with mode=plan."
+                      )
+
+              except Exception as exc:
+                  payload[
+                      "policy_violations"
+                  ].append(
+                      f"Could not parse execution_plan.json: {exc}"
+                  )
+
+          Path(
+              "artifacts/execution_plan_input_contract.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+          python3 artifacts/build_execution_plan_input_contract.py
+
+          rm -f artifacts/build_execution_plan_input_contract          
+          
+      ############################################################
       # Approval Artifact Matching
       #
-      # Verifies that:
+      # Verifies:
       #
-      #   - execution_plan.json
-      #   - database_mutation_plan.json
+      #   human_execution_approval.json
+      #       ↓
+      #   execution_plan_fingerprint.json
       #
-      # match the artifacts reviewed during:
+      # using the approval bundle fingerprints.
       #
-      #   Bot #1 plan_audit
-      #
-      # and approved during:
-      #
-      #   human_approval
-      #
-      # Execute stage must not execute an unapproved
-      # or modified proposal set.
+      # This step does NOT approve execution.
+      # It only verifies that the approved bundle matches
+      # the generated proposal artifacts.
       ############################################################
 
       - name: Approval Artifact Matching
         if: always()
         shell: bash
         run: |
-          python3 - <<'PY'
+          set -euo pipefail
+
+          python3 <<'PY'
           import json
           from pathlib import Path
 
@@ -1297,17 +1372,34 @@ jobs:
                       f"Could not parse execution plan fingerprint: {exc}"
                   )
 
+          #
+          # ------------------------------------------------------
+          # v2.1 approval bundle
+          # ------------------------------------------------------
+          #
+
+          approved_bundle = approval.get(
+              "approved_execution_bundle",
+              {},
+          )
+
           approved_plan_sha = (
-              approval.get(
-                  "approved_execution_plan_fingerprint"
+              approved_bundle.get(
+                  "execution_plan_sha256"
               )
           )
 
           approved_mutation_sha = (
-              approval.get(
-                  "approved_database_mutation_plan_fingerprint"
+              approved_bundle.get(
+                  "database_mutation_plan_sha256"
               )
           )
+
+          #
+          # ------------------------------------------------------
+          # Fingerprint artifact
+          # ------------------------------------------------------
+          #
 
           plan_sha = (
               fingerprint.get(
@@ -1345,6 +1437,12 @@ jobs:
                   == mutation_sha
               )
 
+          #
+          # ------------------------------------------------------
+          # Validation messages
+          # ------------------------------------------------------
+          #
+
           if not approval_present:
               violations.append(
                   "human_execution_approval.json is missing."
@@ -1355,9 +1453,43 @@ jobs:
                   "execution_plan_fingerprint.json is missing."
               )
 
+          if (
+              approval_present
+              and not approved_plan_sha
+          ):
+              violations.append(
+                  "Approval bundle is missing execution_plan_sha256."
+              )
+
+          if (
+              approval_present
+              and not approved_mutation_sha
+          ):
+              violations.append(
+                  "Approval bundle is missing database_mutation_plan_sha256."
+              )
+
+          if (
+              approved_plan_sha
+              and plan_sha
+              and not approval_matches_plan
+          ):
+              violations.append(
+                  "Approval bundle execution_plan_sha256 does not match execution_plan_fingerprint."
+              )
+
+          if (
+              approved_mutation_sha
+              and mutation_sha
+              and not approval_matches_mutation_plan
+          ):
+              violations.append(
+                  "Approval bundle database_mutation_plan_sha256 does not match execution_plan_fingerprint."
+              )
+
           payload = {
               "schema":
-                  "rga.approval_artifact_matching.v1.1",
+                  "rga.approval_artifact_matching.v1.2",
 
               "approval_artifact_present":
                   approval_present,
@@ -1370,6 +1502,18 @@ jobs:
 
               "database_mutation_plan_present":
                   mutation_file.exists(),
+
+              "approved_execution_plan_sha256":
+                  approved_plan_sha,
+
+              "fingerprint_execution_plan_sha256":
+                  plan_sha,
+
+              "approved_database_mutation_plan_sha256":
+                  approved_mutation_sha,
+
+              "fingerprint_database_mutation_plan_sha256":
+                  mutation_sha,
 
               "approval_matches_execution_plan":
                   approval_matches_plan,
@@ -1398,7 +1542,947 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY        
+          PY
+          
+      ############################################################
+      # Execution Scope audit
+      ############################################################
+
+      - name: Execution Scope audit
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_scope_audit.v1.0",
+              "protected_scopes": [
+                  "canonical_row",
+                  "pattern_logic",
+                  "tips_generation",
+                  "personalization",
+                  "localization",
+                  "recommendation_logic",
+              ],
+              "completed_phases_immutable": True,
+          }
+          Path("artifacts/execution_scope_audit.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          PY
+
+      ############################################################
+      # Execution Policy audit
+      ############################################################
+
+      - name: Execution Policy audit
+        if: always()
+        shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}        
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "schema": "rga.execution_policy_audit.v1.0",
+              "execution_authority": mode == "execute",
+              "approval_authority": False,
+              "self_approval": False,
+              "human_approval_required": True,
+              "plan_audit_required": True,
+              "post_audit_required": True,
+              "mode": mode,
+          }
+          Path(
+              "artifacts/execution_policy_audit.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+              ),
+              encoding="utf-8",
+          )
+          PY
+          
+      ############################################################
+      # Execution Gate
+      #
+      # Final workflow-side admission gate for Bot #2 execution.
+      #
+      # plan:
+      #   Planning mode is allowed without execution approval.
+      #
+      # dry_run_execute:
+      #   Non-mutating simulation is allowed when the execution plan
+      #   input contract is present and valid.
+      #
+      # execute:
+      #   Live execution is allowed only when:
+      #
+      #     - Runtime Auditor pre-audit evidence exists.
+      #     - The plan-stage execution plan exists and is parseable.
+      #     - The execution plan input contract has no violations.
+      #     - Human approval exists and is structurally valid.
+      #     - The approval phrase is correct.
+      #     - Human review and Bot #1 plan-audit are complete.
+      #     - Approval fingerprints match the plan bundle.
+      #     - Completed Phases remain immutable.
+      #
+      # This gate does not approve execution.
+      # Human approval remains the approval authority.
+      #
+      # Canonical output:
+      #
+      #   artifacts/execution_gate.json
+      #
+      # Step outputs:
+      #
+      #   status
+      #   allowed
+      #   reason
+      ############################################################
+
+      - name: Execution Gate
+        id: execution_gate
+        if: always()
+        shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+          APPROVAL_ARTIFACT: ${{ inputs.approval_artifact }}
+          PRE_AUDIT_REPORT: ${{ inputs.pre_audit_report }}
+          REQUIRED_APPROVAL_PHRASE: APPROVE_RGA_EXECUTION
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          cat > artifacts/evaluate_execution_gate.py <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from typing import Any, Dict, List, Tuple
+
+          mode = (
+              os.environ.get(
+                  "EXECUTOR_MODE",
+                  "plan",
+              ).strip()
+              or "plan"
+          )
+
+          approval_path = Path(
+              os.environ.get(
+                  "APPROVAL_ARTIFACT",
+                  "artifacts/human_execution_approval.json",
+              ).strip()
+              or "artifacts/human_execution_approval.json"
+          )
+
+          pre_audit_path = Path(
+              os.environ.get(
+                  "PRE_AUDIT_REPORT",
+                  "artifacts/runtime_auditor_report.json",
+              ).strip()
+              or "artifacts/runtime_auditor_report.json"
+          )
+
+          required_approval_phrase = os.environ.get(
+              "REQUIRED_APPROVAL_PHRASE",
+              "APPROVE_RGA_EXECUTION",
+          )
+
+          execution_plan_path = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          mutation_plan_path = Path(
+              "artifacts/database_mutation_plan.json"
+          )
+
+          persistence_contract_path = Path(
+              "artifacts/persistence_contract.json"
+          )
+
+          fingerprint_path = Path(
+              "artifacts/execution_plan_fingerprint.json"
+          )
+
+          input_contract_path = Path(
+              "artifacts/execution_plan_input_contract.json"
+          )
+
+          approval_matching_path = Path(
+              "artifacts/approval_artifact_matching.json"
+          )
+
+          plan_audit_path = Path(
+              "artifacts/plan_audit_evidence.json"
+          )
+
+          execution_policy_path = Path(
+              "artifacts/execution_policy_audit.json"
+          )
+
+          output_path = Path(
+              "artifacts/execution_gate.json"
+          )
+
+          def load_json(
+              path: Path,
+          ) -> Tuple[Dict[str, Any], str | None]:
+              if not path.exists():
+                  return (
+                      {},
+                      f"{path} is missing.",
+                  )
+
+              if not path.is_file():
+                  return (
+                      {},
+                      f"{path} is not a file.",
+                  )
+
+              if path.stat().st_size == 0:
+                  return (
+                      {},
+                      f"{path} is empty.",
+                  )
+
+              try:
+                  value = json.loads(
+                      path.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+
+                  if not isinstance(
+                      value,
+                      dict,
+                  ):
+                      return (
+                          {},
+                          f"{path} is not a JSON object.",
+                      )
+
+                  return (
+                      value,
+                      None,
+                  )
+
+              except Exception as exc:
+                  return (
+                      {},
+                      f"Could not parse {path}: {exc}",
+                  )
+
+          checks: Dict[str, Any] = {}
+          violations: List[str] = []
+          warnings: List[str] = []
+
+          supported_modes = {
+              "plan",
+              "dry_run_execute",
+              "execute",
+          }
+
+          mode_supported = mode in supported_modes
+
+          checks[
+              "mode_supported"
+          ] = mode_supported
+
+          if not mode_supported:
+              violations.append(
+                  f"Unsupported executor mode: {mode}"
+              )
+
+          #
+          # ------------------------------------------------------
+          # Plan mode
+          # ------------------------------------------------------
+          #
+
+          if mode == "plan":
+              status = (
+                  "allowed"
+                  if not violations
+                  else "blocked"
+              )
+
+              reason = (
+                  "Plan mode accepted."
+                  if status == "allowed"
+                  else "Plan mode blocked by gate violations."
+              )
+
+          #
+          # ------------------------------------------------------
+          # Dry-run / execute shared plan-input checks
+          # ------------------------------------------------------
+          #
+
+          else:
+              execution_plan, execution_plan_error = (
+                  load_json(
+                      execution_plan_path
+                  )
+              )
+
+              input_contract, input_contract_error = (
+                  load_json(
+                      input_contract_path
+                  )
+              )
+
+              checks[
+                  "execution_plan_present"
+              ] = execution_plan_error is None
+
+              checks[
+                  "execution_plan_parseable"
+              ] = execution_plan_error is None
+
+              checks[
+                  "execution_plan_mode_is_plan"
+              ] = (
+                  execution_plan.get(
+                      "mode"
+                  )
+                  == "plan"
+              )
+
+              checks[
+                  "execution_plan_input_contract_present"
+              ] = input_contract_error is None
+
+              checks[
+                  "execution_plan_input_contract_mode_matches"
+              ] = (
+                  input_contract.get(
+                      "mode"
+                  )
+                  == mode
+              )
+
+              checks[
+                  "execution_plan_input_contract_has_no_violations"
+              ] = (
+                  input_contract_error is None
+                  and not input_contract.get(
+                      "policy_violations",
+                      [],
+                  )
+              )
+
+              checks[
+                  "execute_stage_may_overwrite_execution_plan"
+              ] = input_contract.get(
+                  "execute_stage_may_overwrite_execution_plan"
+              )
+
+              if execution_plan_error:
+                  violations.append(
+                      execution_plan_error
+                  )
+
+              elif execution_plan.get(
+                  "mode"
+              ) != "plan":
+                  violations.append(
+                      "execution_plan.json must remain a plan-stage artifact with mode=plan."
+                  )
+
+              if input_contract_error:
+                  violations.append(
+                      input_contract_error
+                  )
+
+              else:
+                  if input_contract.get(
+                      "mode"
+                  ) != mode:
+                      violations.append(
+                          "execution_plan_input_contract mode does not match the requested executor mode."
+                      )
+
+                  input_contract_violations = (
+                      input_contract.get(
+                          "policy_violations",
+                          [],
+                      )
+                  )
+
+                  if input_contract_violations:
+                      violations.extend(
+                          str(item)
+                          for item
+                          in input_contract_violations
+                      )
+
+                  if input_contract.get(
+                      "execute_stage_may_overwrite_execution_plan"
+                  ) is not False:
+                      violations.append(
+                          "execution_plan_input_contract must forbid execute-stage plan overwrite."
+                      )
+
+              #
+              # Dry run requires the plan contract but not human
+              # execution approval.
+              #
+
+              if mode == "dry_run_execute":
+                  status = (
+                      "allowed"
+                      if not violations
+                      else "blocked"
+                  )
+
+                  reason = (
+                      "Dry-run execution prerequisites satisfied."
+                      if status == "allowed"
+                      else "Dry-run execution prerequisites failed."
+                  )
+
+              #
+              # --------------------------------------------------
+              # Execute-only checks
+              # --------------------------------------------------
+              #
+
+              else:
+                  approval, approval_error = load_json(
+                      approval_path
+                  )
+
+                  approval_matching, matching_error = (
+                      load_json(
+                          approval_matching_path
+                      )
+                  )
+
+                  fingerprint, fingerprint_error = (
+                      load_json(
+                          fingerprint_path
+                      )
+                  )
+
+                  plan_audit, plan_audit_error = (
+                      load_json(
+                          plan_audit_path
+                      )
+                  )
+
+                  mutation_plan, mutation_error = (
+                      load_json(
+                          mutation_plan_path
+                      )
+                  )
+
+                  persistence_contract, persistence_error = (
+                      load_json(
+                          persistence_contract_path
+                      )
+                  )
+
+                  pre_audit, pre_audit_error = (
+                      load_json(
+                          pre_audit_path
+                      )
+                  )
+
+                  execution_policy, policy_error = (
+                      load_json(
+                          execution_policy_path
+                      )
+                  )
+
+                  approved_bundle = approval.get(
+                      "approved_execution_bundle",
+                      {},
+                  )
+
+                  approval_governance = approval.get(
+                      "governance",
+                      {},
+                  )
+
+                  phase_boundary_contract = approval.get(
+                      "phase_boundary_contract",
+                      {},
+                  )
+
+                  checks.update(
+                      {
+                          "pre_audit_report_present":
+                              pre_audit_error is None,
+
+                          "approval_artifact_present":
+                              approval_error is None,
+
+                          "approval_schema_supported":
+                              approval.get(
+                                  "schema"
+                              )
+                              == "rga.human_execution_approval.v2.1",
+
+                          "approved_true":
+                              approval.get(
+                                  "approved"
+                              )
+                              is True,
+
+                          "approval_phrase_valid":
+                              approval.get(
+                                  "approval_phrase"
+                              )
+                              == required_approval_phrase,
+
+                          "approval_scope_valid":
+                              approval.get(
+                                  "approval_scope"
+                              )
+                              == "maintenance_executor",
+
+                          "human_review_completed":
+                              approval_governance.get(
+                                  "human_review_completed"
+                              )
+                              is True,
+
+                          "plan_audit_completed":
+                              approval_governance.get(
+                                  "plan_audit_completed"
+                              )
+                              is True,
+
+                          "bot_2_may_execute":
+                              approval_governance.get(
+                                  "bot_2_may_execute"
+                              )
+                              is True,
+
+                          "bot_2_may_self_approve":
+                              approval_governance.get(
+                                  "bot_2_may_self_approve"
+                              ),
+
+                          "post_audit_required":
+                              approval_governance.get(
+                                  "post_audit_required"
+                              )
+                              is True,
+
+                          "completed_phases_immutable":
+                              phase_boundary_contract.get(
+                                  "completed_phases_immutable"
+                              )
+                              is True,
+
+                          "fingerprint_artifact_present":
+                              fingerprint_error is None,
+
+                          "database_mutation_plan_present":
+                              mutation_error is None,
+
+                          "persistence_contract_present":
+                              persistence_error is None,
+
+                          "approval_matching_artifact_present":
+                              matching_error is None,
+
+                          "approval_matches_execution_plan":
+                              approval_matching.get(
+                                  "approval_matches_execution_plan"
+                              )
+                              is True,
+
+                          "approval_matches_database_mutation_plan":
+                              approval_matching.get(
+                                  "approval_matches_database_mutation_plan"
+                              )
+                              is True,
+
+                          "all_required_matches_passed":
+                              approval_matching.get(
+                                  "all_required_matches_passed"
+                              )
+                              is True,
+
+                          "plan_audit_evidence_present":
+                              plan_audit_error is None,
+
+                          "plan_audit_ready_for_human_review":
+                              plan_audit.get(
+                                  "verdict"
+                              )
+                              == "ready_for_human_review",
+
+                          "execution_policy_audit_present":
+                              policy_error is None,
+
+                          "execution_policy_execution_authority":
+                              execution_policy.get(
+                                  "execution_authority"
+                              )
+                              is True,
+
+                          "execution_policy_approval_authority":
+                              execution_policy.get(
+                                  "approval_authority"
+                              ),
+
+                          "execution_policy_self_approval":
+                              execution_policy.get(
+                                  "self_approval"
+                              ),
+                      }
+                  )
+
+                  required_files = [
+                      (
+                          pre_audit_error,
+                          "Runtime Auditor pre-audit report",
+                      ),
+                      (
+                          approval_error,
+                          "human execution approval",
+                      ),
+                      (
+                          fingerprint_error,
+                          "execution plan fingerprint",
+                      ),
+                      (
+                          mutation_error,
+                          "database mutation plan",
+                      ),
+                      (
+                          persistence_error,
+                          "persistence contract",
+                      ),
+                      (
+                          matching_error,
+                          "approval artifact matching",
+                      ),
+                      (
+                          plan_audit_error,
+                          "plan audit evidence",
+                      ),
+                      (
+                          policy_error,
+                          "execution policy audit",
+                      ),
+                  ]
+
+                  for error, label in required_files:
+                      if error:
+                          violations.append(
+                              f"Required {label} is unavailable: {error}"
+                          )
+
+                  if approval_error is None:
+                      if approval.get(
+                          "schema"
+                      ) != "rga.human_execution_approval.v2.1":
+                          violations.append(
+                              "Unsupported human execution approval schema."
+                          )
+
+                      if approval.get(
+                          "approved"
+                      ) is not True:
+                          violations.append(
+                              "Human execution approval does not set approved=true."
+                          )
+
+                      if approval.get(
+                          "approval_phrase"
+                      ) != required_approval_phrase:
+                          violations.append(
+                              "Human execution approval phrase is invalid."
+                          )
+
+                      if approval.get(
+                          "approval_scope"
+                      ) != "maintenance_executor":
+                          violations.append(
+                              "Human execution approval scope is invalid."
+                          )
+
+                      if not isinstance(
+                          approved_bundle,
+                          dict,
+                      ):
+                          violations.append(
+                              "approved_execution_bundle must be an object."
+                          )
+
+                      if approval_governance.get(
+                          "human_review_completed"
+                      ) is not True:
+                          violations.append(
+                              "Human review is not marked complete."
+                          )
+
+                      if approval_governance.get(
+                          "plan_audit_completed"
+                      ) is not True:
+                          violations.append(
+                              "Bot #1 plan-audit is not marked complete."
+                          )
+
+                      if approval_governance.get(
+                          "bot_2_may_execute"
+                      ) is not True:
+                          violations.append(
+                              "Human approval does not authorize Bot #2 execution."
+                          )
+
+                      if approval_governance.get(
+                          "bot_2_may_self_approve"
+                      ) is not False:
+                          violations.append(
+                              "Bot #2 self-approval must be false."
+                          )
+
+                      if approval_governance.get(
+                          "post_audit_required"
+                      ) is not True:
+                          violations.append(
+                              "Bot #1 post-audit must remain required."
+                          )
+
+                      if phase_boundary_contract.get(
+                          "completed_phases_immutable"
+                      ) is not True:
+                          violations.append(
+                              "Human approval must preserve Completed Phases as immutable."
+                          )
+
+                  if matching_error is None:
+                      if approval_matching.get(
+                          "all_required_matches_passed"
+                      ) is not True:
+                          violations.append(
+                              "Approval artifact matching did not pass all required matches."
+                          )
+
+                      matching_violations = (
+                          approval_matching.get(
+                              "policy_violations",
+                              [],
+                          )
+                      )
+
+                      if matching_violations:
+                          violations.extend(
+                              str(item)
+                              for item
+                              in matching_violations
+                          )
+
+                  if plan_audit_error is None:
+                      if plan_audit.get(
+                          "verdict"
+                      ) != "ready_for_human_review":
+                          violations.append(
+                              "Plan audit evidence is not ready_for_human_review."
+                          )
+
+                  if policy_error is None:
+                      if execution_policy.get(
+                          "execution_authority"
+                      ) is not True:
+                          violations.append(
+                              "Execution policy audit does not grant execution authority for execute mode."
+                          )
+
+                      if execution_policy.get(
+                          "approval_authority"
+                      ) is not False:
+                          violations.append(
+                              "Execution policy audit must deny Bot #2 approval authority."
+                          )
+
+                      if execution_policy.get(
+                          "self_approval"
+                      ) is not False:
+                          violations.append(
+                              "Execution policy audit must deny self-approval."
+                          )
+
+                  status = (
+                      "allowed"
+                      if not violations
+                      else "blocked"
+                  )
+
+                  reason = (
+                      "All execute-stage prerequisites satisfied."
+                      if status == "allowed"
+                      else "One or more execute-stage prerequisites failed."
+                  )
+
+          #
+          # Keep diagnostic messages deterministic.
+          #
+
+          violations = list(
+              dict.fromkeys(
+                  violations
+              )
+          )
+
+          warnings = list(
+              dict.fromkeys(
+                  warnings
+              )
+          )
+
+          payload = {
+              "schema":
+                  "rga.execution_gate.v1.1",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "requested_mode":
+                  mode,
+
+              "status":
+                  status,
+
+              "allowed":
+                  status == "allowed",
+
+              "reason":
+                  reason,
+
+              "approval_authority":
+                  "human",
+
+              "execution_authority":
+                  (
+                      "bot_2"
+                      if (
+                          mode == "execute"
+                          and status == "allowed"
+                      )
+                      else None
+                  ),
+
+              "checks":
+                  checks,
+
+              "policy_violations":
+                  violations,
+
+              "warnings":
+                  warnings,
+
+              "source_artifacts": {
+                  "pre_audit_report":
+                      str(
+                          pre_audit_path
+                      ),
+
+                  "execution_plan":
+                      str(
+                          execution_plan_path
+                      ),
+
+                  "execution_plan_input_contract":
+                      str(
+                          input_contract_path
+                      ),
+
+                  "execution_plan_fingerprint":
+                      str(
+                          fingerprint_path
+                      ),
+
+                  "database_mutation_plan":
+                      str(
+                          mutation_plan_path
+                      ),
+
+                  "persistence_contract":
+                      str(
+                          persistence_contract_path
+                      ),
+
+                  "plan_audit_evidence":
+                      str(
+                          plan_audit_path
+                      ),
+
+                  "human_execution_approval":
+                      str(
+                          approval_path
+                      ),
+
+                  "approval_artifact_matching":
+                      str(
+                          approval_matching_path
+                      ),
+
+                  "execution_policy_audit":
+                      str(
+                          execution_policy_path
+                      ),
+              },
+          }
+
+          output_path.write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          github_output = os.environ.get(
+              "GITHUB_OUTPUT"
+          )
+
+          if github_output:
+              with open(
+                  github_output,
+                  "a",
+                  encoding="utf-8",
+              ) as output:
+                  output.write(
+                      f"status={status}\n"
+                  )
+                  output.write(
+                      "allowed="
+                      f"{str(status == 'allowed').lower()}\n"
+                  )
+                  output.write(
+                      f"reason={reason}\n"
+                  )
+
+          print(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+          )
+          PY
+
+          python3 artifacts/evaluate_execution_gate.py
+
+          rm -f artifacts/evaluate_execution_gate.py           
 
       ############################################################
       # Apply Execution Result
