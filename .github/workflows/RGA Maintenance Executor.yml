@@ -222,8 +222,11 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: RGA Runtime Auditor.yml
-          name: runtime-auditor-evidence.zip
+          name: runtime-auditor-evidence
           path: artifacts/
+          check_artifacts: true
+          search_artifacts: true
+        continue-on-error: true
           
       ############################################################
       # Flatten Artifact Directory
