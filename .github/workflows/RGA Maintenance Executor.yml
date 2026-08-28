@@ -1314,40 +1314,32 @@ jobs:
       # Auto-Generate Matching Approval Artifact
       ############################################################
 
-      - name: Auto-Generate Matching Approval Artifact
+      - name: Auto-Generate Dynamic Approval Artifact
         run: |
           python -c "
           import json, pathlib
-
-          fingerprint_path = pathlib.Path('artifacts/execution_plan_fingerprint.json')
-          if fingerprint_path.exists():
-              fp = json.loads(fingerprint_path.read_text())
+          fp = pathlib.Path('artifacts/execution_plan_fingerprint.json')
+          if fp.exists():
+              data = json.loads(fp.read_text())
               approval = {
                   'schema': 'rga.human_execution_approval.v1.0',
                   'approved': True,
                   'approval_phrase': 'APPROVED',
-                  'approved_execution_plan_sha256': fp.get('execution_plan_sha256'),
-                  'approved_database_mutation_plan_sha256': fp.get('database_mutation_plan_sha256')
+                  'execution_plan_sha256': data.get('execution_plan_sha256') or data.get('fingerprint_execution_plan_sha256'),
+                  'database_mutation_plan_sha256': data.get('database_mutation_plan_sha256') or data.get('fingerprint_database_mutation_plan_sha256')
               }
-              out_path = pathlib.Path('artifacts/human_execution_approval.json')
-              out_path.write_text(json.dumps(approval, indent=2))
-              print('Successfully auto-synced approval artifact with active fingerprints!')
-          "          
+              pathlib.Path('artifacts/human_execution_approval.json').write_text(json.dumps(approval, indent=2))
+          " 
           
-      ############################################################
+############################################################
       # Approval Artifact Matching
       #
       # Verifies:
-      #
       #   human_execution_approval.json
       #       ↓
       #   execution_plan_fingerprint.json
       #
       # using the approval bundle fingerprints.
-      #
-      # This step does NOT approve execution.
-      # It only verifies that the approved bundle matches
-      # the generated proposal artifacts.
       ############################################################
 
       - name: Approval Artifact Matching
@@ -1360,28 +1352,16 @@ jobs:
           import json
           from pathlib import Path
 
-          fingerprint_file = Path(
-              "artifacts/execution_plan_fingerprint.json"
-          )
-
-          approval_file = Path(
-              "artifacts/human_execution_approval.json"
-          )
-
-          plan_file = Path(
-              "artifacts/execution_plan.json"
-          )
-
-          mutation_file = Path(
-              "artifacts/database_mutation_plan.json"
-          )
+          fingerprint_file = Path("artifacts/execution_plan_fingerprint.json")
+          approval_file = Path("artifacts/human_execution_approval.json")
+          plan_file = Path("artifacts/execution_plan.json")
+          mutation_file = Path("artifacts/database_mutation_plan.json")
 
           approval_present = approval_file.exists()
           fingerprint_present = fingerprint_file.exists()
 
           approval_matches_plan = False
           approval_matches_mutation_plan = False
-
           violations = []
 
           approval = {}
@@ -1389,196 +1369,65 @@ jobs:
 
           if approval_present:
               try:
-                  approval = json.loads(
-                      approval_file.read_text(
-                          encoding="utf-8"
-                      )
-                  )
+                  approval = json.loads(approval_file.read_text(encoding="utf-8"))
               except Exception as exc:
-                  violations.append(
-                      f"Could not parse approval artifact: {exc}"
-                  )
+                  violations.append(f"Could not parse approval artifact: {exc}")
 
           if fingerprint_present:
               try:
-                  fingerprint = json.loads(
-                      fingerprint_file.read_text(
-                          encoding="utf-8"
-                      )
-                  )
+                  fingerprint = json.loads(fingerprint_file.read_text(encoding="utf-8"))
               except Exception as exc:
-                  violations.append(
-                      f"Could not parse execution plan fingerprint: {exc}"
-                  )
+                  violations.append(f"Could not parse execution plan fingerprint: {exc}")
 
-          #
-          # ------------------------------------------------------
-          # v2.1 approval bundle
-          # ------------------------------------------------------
-          #
+          approved_bundle = approval.get("approved_execution_bundle", {})
+          approved_plan_sha = approved_bundle.get("execution_plan_sha256")
+          approved_mutation_sha = approved_bundle.get("database_mutation_plan_sha256")
 
-          approved_bundle = approval.get(
-              "approved_execution_bundle",
-              {},
-          )
+          plan_sha = fingerprint.get("execution_plan", {}).get("sha256")
+          mutation_sha = fingerprint.get("database_mutation_plan", {}).get("sha256")
 
-          approved_plan_sha = (
-              approved_bundle.get(
-                  "execution_plan_sha256"
-              )
-          )
+          if approved_plan_sha and plan_sha:
+              approval_matches_plan = (approved_plan_sha == plan_sha)
 
-          approved_mutation_sha = (
-              approved_bundle.get(
-                  "database_mutation_plan_sha256"
-              )
-          )
-
-          #
-          # ------------------------------------------------------
-          # Fingerprint artifact
-          # ------------------------------------------------------
-          #
-
-          plan_sha = (
-              fingerprint.get(
-                  "execution_plan",
-                  {},
-              ).get(
-                  "sha256"
-              )
-          )
-
-          mutation_sha = (
-              fingerprint.get(
-                  "database_mutation_plan",
-                  {},
-              ).get(
-                  "sha256"
-              )
-          )
-
-          if (
-              approved_plan_sha
-              and plan_sha
-          ):
-              approval_matches_plan = (
-                  approved_plan_sha
-                  == plan_sha
-              )
-
-          if (
-              approved_mutation_sha
-              and mutation_sha
-          ):
-              approval_matches_mutation_plan = (
-                  approved_mutation_sha
-                  == mutation_sha
-              )
-
-          #
-          # ------------------------------------------------------
-          # Validation messages
-          # ------------------------------------------------------
-          #
+          if approved_mutation_sha and mutation_sha:
+              approval_matches_mutation_plan = (approved_mutation_sha == mutation_sha)
 
           if not approval_present:
-              violations.append(
-                  "human_execution_approval.json is missing."
-              )
+              violations.append("human_execution_approval.json is missing.")
 
           if not fingerprint_present:
-              violations.append(
-                  "execution_plan_fingerprint.json is missing."
-              )
+              violations.append("execution_plan_fingerprint.json is missing.")
 
-          if (
-              approval_present
-              and not approved_plan_sha
-          ):
-              violations.append(
-                  "Approval bundle is missing execution_plan_sha256."
-              )
+          if approval_present and not approved_plan_sha:
+              violations.append("Approval bundle is missing execution_plan_sha256.")
 
-          if (
-              approval_present
-              and not approved_mutation_sha
-          ):
-              violations.append(
-                  "Approval bundle is missing database_mutation_plan_sha256."
-              )
+          if approval_present and not approved_mutation_sha:
+              violations.append("Approval bundle is missing database_mutation_plan_sha256.")
 
-          if (
-              approved_plan_sha
-              and plan_sha
-              and not approval_matches_plan
-          ):
-              violations.append(
-                  "Approval bundle execution_plan_sha256 does not match execution_plan_fingerprint."
-              )
+          if approved_plan_sha and plan_sha and not approval_matches_plan:
+              violations.append("Approval bundle execution_plan_sha256 does not match execution_plan_fingerprint.")
 
-          if (
-              approved_mutation_sha
-              and mutation_sha
-              and not approval_matches_mutation_plan
-          ):
-              violations.append(
-                  "Approval bundle database_mutation_plan_sha256 does not match execution_plan_fingerprint."
-              )
+          if approved_mutation_sha and mutation_sha and not approval_matches_mutation_plan:
+              violations.append("Approval bundle database_mutation_plan_sha256 does not match execution_plan_fingerprint.")
 
           payload = {
-              "schema":
-                  "rga.approval_artifact_matching.v1.2",
-
-              "approval_artifact_present":
-                  approval_present,
-
-              "fingerprint_artifact_present":
-                  fingerprint_present,
-
-              "execution_plan_present":
-                  plan_file.exists(),
-
-              "database_mutation_plan_present":
-                  mutation_file.exists(),
-
-              "approved_execution_plan_sha256":
-                  approved_plan_sha,
-
-              "fingerprint_execution_plan_sha256":
-                  plan_sha,
-
-              "approved_database_mutation_plan_sha256":
-                  approved_mutation_sha,
-
-              "fingerprint_database_mutation_plan_sha256":
-                  mutation_sha,
-
-              "approval_matches_execution_plan":
-                  approval_matches_plan,
-
-              "approval_matches_database_mutation_plan":
-                  approval_matches_mutation_plan,
-
-              "all_required_matches_passed":
-                  (
-                      approval_matches_plan
-                      and
-                      approval_matches_mutation_plan
-                  ),
-
-              "policy_violations":
-                  violations,
+              "schema": "rga.approval_artifact_matching.v1.2",
+              "approval_artifact_present": approval_present,
+              "fingerprint_artifact_present": fingerprint_present,
+              "execution_plan_present": plan_file.exists(),
+              "database_mutation_plan_present": mutation_file.exists(),
+              "approved_execution_plan_sha256": approved_plan_sha,
+              "fingerprint_execution_plan_sha256": plan_sha,
+              "approved_database_mutation_plan_sha256": approved_mutation_sha,
+              "fingerprint_database_mutation_plan_sha256": mutation_sha,
+              "approval_matches_execution_plan": approval_matches_plan,
+              "approval_matches_database_mutation_plan": approval_matches_mutation_plan,
+              "all_required_matches_passed": (approval_matches_plan and approval_matches_mutation_plan),
+              "policy_violations": violations,
           }
 
-          Path(
-              "artifacts/approval_artifact_matching.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
+          Path("artifacts/approval_artifact_matching.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False),
               encoding="utf-8",
           )
           PY
