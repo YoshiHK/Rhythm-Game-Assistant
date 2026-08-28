@@ -61,15 +61,24 @@ on:
         required: false
         default: "artifacts/human_execution_approval.json"
 
-      execution_approval:
+      approval_phrase:
         description: >-
-          Optional approval phrase for execute mode.
+          Safety approval phrase for execute mode.
 
           Expected value:
           APPROVE_RGA_EXECUTION
+        required: false
+        default: ""
 
-          This does not replace the approval artifact; it is an additional
-          safety signal for gated execution.
+      execution_plan_sha256:
+        description: >-
+          Target Execution Plan SHA256 checksum for v2.1 approval generation.
+        required: false
+        default: ""
+
+      database_mutation_plan_sha256:
+        description: >-
+          Target Database Mutation Plan SHA256 checksum for v2.1 approval generation.
         required: false
         default: ""
 
@@ -1286,25 +1295,38 @@ jobs:
           )
           PY
 
-      ############################################################
-      # Auto-Generate Matching Approval Artifact
+############################################################
+      # Generate Dynamic Approval Artifact from Dispatch Inputs
       ############################################################
 
-      - name: Auto-Generate Dynamic Approval Artifact
+      - name: Generate Dynamic Approval Artifact
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CONFIRMATION_PHRASE: ${{ inputs.approval_phrase }}
+          EXECUTION_PLAN_SHA: ${{ inputs.execution_plan_sha256 }}
+          MUTATION_PLAN_SHA: ${{ inputs.database_mutation_plan_sha256 }}
         run: |
           python -c "
-          import json, pathlib
-          fp = pathlib.Path('artifacts/execution_plan_fingerprint.json')
-          if fp.exists():
-              data = json.loads(fp.read_text())
-              approval = {
-                  'schema': 'rga.human_execution_approval.v1.0',
-                  'approved': True,
-                  'approval_phrase': 'APPROVED',
-                  'execution_plan_sha256': data.get('execution_plan_sha256') or data.get('fingerprint_execution_plan_sha256'),
-                  'database_mutation_plan_sha256': data.get('database_mutation_plan_sha256') or data.get('fingerprint_database_mutation_plan_sha256')
+          import os, json, pathlib
+
+          phrase = os.getenv('CONFIRMATION_PHRASE', '')
+          exec_sha = os.getenv('EXECUTION_PLAN_SHA', '')
+          mut_sha = os.getenv('MUTATION_PLAN_SHA', '')
+
+          artifacts_dir = pathlib.Path('artifacts')
+          artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+          approval = {
+              'schema': 'rga.human_execution_approval.v2.1',
+              'approved': True,
+              'approval_phrase': phrase,
+              'approved_execution_bundle': {
+                  'execution_plan_sha256': exec_sha,
+                  'database_mutation_plan_sha256': mut_sha
               }
-              pathlib.Path('artifacts/human_execution_approval.json').write_text(json.dumps(approval, indent=2))
+          }
+
+          pathlib.Path('artifacts/human_execution_approval.json').write_text(json.dumps(approval, indent=2))
           "
 
       ############################################################
