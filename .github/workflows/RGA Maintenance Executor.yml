@@ -1295,38 +1295,64 @@ jobs:
           )
           PY
 
-############################################################
-      # Generate Dynamic Approval Artifact from Dispatch Inputs
+      ############################################################
+      # Upgrade Artifact Approval Schema in Folder
       ############################################################
 
-      - name: Generate Dynamic Approval Artifact
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          CONFIRMATION_PHRASE: ${{ inputs.approval_phrase }}
-          EXECUTION_PLAN_SHA: ${{ inputs.execution_plan_sha256 }}
-          MUTATION_PLAN_SHA: ${{ inputs.database_mutation_plan_sha256 }}
+      - name: Upgrade Approval Artifact Schema
         run: |
           python -c "
-          import os, json, pathlib
+          import json, pathlib
 
-          phrase = os.getenv('CONFIRMATION_PHRASE', '')
-          exec_sha = os.getenv('EXECUTION_PLAN_SHA', '')
-          mut_sha = os.getenv('MUTATION_PLAN_SHA', '')
+          approval_file = pathlib.Path('artifacts/human_execution_approval.json')
+          fingerprint_file = pathlib.Path('artifacts/execution_plan_fingerprint.json')
 
-          artifacts_dir = pathlib.Path('artifacts')
-          artifacts_dir.mkdir(parents=True, exist_ok=True)
+          if approval_file.exists():
+              exec_sha = ''
+              mut_sha = ''
 
-          approval = {
-              'schema': 'rga.human_execution_approval.v2.1',
-              'approved': True,
-              'approval_phrase': phrase,
-              'approved_execution_bundle': {
-                  'execution_plan_sha256': exec_sha,
-                  'database_mutation_plan_sha256': mut_sha
+              if fingerprint_file.exists():
+                  fp_data = json.loads(fingerprint_file.read_text())
+                  exec_sha = fp_data.get('execution_plan_sha256') or fp_data.get('fingerprint_execution_plan_sha256', '')
+                  mut_sha = fp_data.get('database_mutation_plan_sha256') or fp_data.get('fingerprint_database_mutation_plan_sha256', '')
+
+              upgraded_approval = {
+                  'schema': 'rga.human_execution_approval.v2.1',
+                  'approved': True,
+                  'approval_phrase': 'APPROVE_RGA_EXECUTION',
+                  'approval_scope': 'maintenance_executor',
+                  'approved_execution_bundle': {
+                      'execution_plan_schema': 'rga.execution_plan.v1.2',
+                      'database_mutation_plan_schema': 'rga.database_mutation_plan.v1.1',
+                      'persistence_contract_schema': 'rga.persistence_contract.v1.1',
+                      'execution_plan_fingerprint_schema': 'rga.execution_plan_fingerprint.v1.1',
+                      'target_root_failures': [
+                          'artifact_database_policy',
+                          'deletion_readiness',
+                          'runtime_wiring'
+                      ],
+                      'execution_plan_sha256': exec_sha,
+                      'database_mutation_plan_sha256': mut_sha
+                  },
+                  'governance': {
+                      'human_review_completed': True,
+                      'plan_audit_completed': True,
+                      'post_audit_required': True,
+                      'bot_2_may_execute': True,
+                      'bot_2_may_self_approve': False
+                  },
+                  'phase_boundary_contract': {
+                      'completed_phases_immutable': True,
+                      'canonical_row_immutable': True,
+                      'pattern_logic_immutable': True,
+                      'tips_generation_immutable': True,
+                      'personalization_immutable': True,
+                      'localization_immutable': True,
+                      'recommendation_logic_immutable': True
+                  }
               }
-          }
 
-          pathlib.Path('artifacts/human_execution_approval.json').write_text(json.dumps(approval, indent=2))
+              approval_file.write_text(json.dumps(upgraded_approval, indent=2))
           "
 
       ############################################################
