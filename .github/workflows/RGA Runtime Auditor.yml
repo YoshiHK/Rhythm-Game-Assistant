@@ -29,6 +29,21 @@ on:
         required: false
         default: "artifacts/execution_plan.json"
 
+      approval_artifact:
+        description: "Path to human execution approval artifact"
+        required: false
+        default: "artifacts/human_execution_approval.json"
+
+      execution_plan_sha256:
+        description: "Target Execution Plan SHA256 checksum for v2.1 verification"
+        required: false
+        default: ""
+
+      database_mutation_plan_sha256:
+        description: "Target Database Mutation Plan SHA256 checksum for v2.1 verification"
+        required: false
+        default: ""
+
       pre_audit_report:
         description: "Path to pre-audit report artifact"
         required: false

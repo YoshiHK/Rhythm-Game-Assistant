@@ -136,6 +136,22 @@ on:
 
         default: ""
 
+      execution_plan_sha256:
+        description: >-
+          Target Execution Plan SHA256 checksum for v2.1 approval generation.
+
+        required: false
+
+        default: ""
+
+      database_mutation_plan_sha256:
+        description: >-
+          Target Database Mutation Plan SHA256 checksum for v2.1 approval generation.
+
+        required: false
+
+        default: ""
+
       ref:
         description: >-
           Git ref, branch, or SHA.
