@@ -61,7 +61,7 @@ on:
         required: false
         default: "artifacts/human_execution_approval.json"
 
-      approval_phrase:
+      execution_approval:
         description: >-
           Safety approval phrase for execute mode.
 
