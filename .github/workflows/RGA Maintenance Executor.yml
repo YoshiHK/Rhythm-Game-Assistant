@@ -235,9 +235,11 @@ jobs:
       - name: Download Plan Audit Evidence
         uses: actions/download-artifact@v4
         with:
-          name: plan-audit-evidence
           path: artifacts/
-        continue-on-error: true        
+          pattern: "*audit*"
+          merge-multiple: true
+        continue-on-error: true
+
           
       ############################################################
       # Flatten Artifact Directory
