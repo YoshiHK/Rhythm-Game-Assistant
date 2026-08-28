@@ -227,19 +227,6 @@ jobs:
           check_artifacts: true
           search_artifacts: true
         continue-on-error: true
-
-      ############################################################
-      # Download Plan Audit Evidence
-      ############################################################
-
-      - name: Download Plan Audit Evidence
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-          pattern: "*audit*"
-          merge-multiple: true
-        continue-on-error: true
-
           
       ############################################################
       # Flatten Artifact Directory
@@ -488,29 +475,189 @@ jobs:
           print(
               "[RGA] persistence_contract.json generated successfully."
           )
-
+          
       ############################################################
-      # Human Approval Artifact audit
+      # Execution Plan Input Contract
+      #
+      # Protects the approved plan-stage artifact from being
+      # regenerated or overwritten during:
+      #
+      #   dry_run_execute
+      #   execute
+      #
+      # This is a contract artifact.
+      #
+      # It does NOT grant execution authority.
       ############################################################
 
-      - name: Human Approval Artifact audit
+      - name: Execution Plan Input Contract
         if: always()
+        shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
-          python - <<'PY'
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          cat > artifacts/build_execution_plan_input_contract.py <<'PY'
+          import hashlib
           import json
+          import os
+          from datetime import datetime, timezone
           from pathlib import Path
-     
-          p = Path('artifacts/human_execution_approval.json')
+
+          plan_file = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          mode = (
+              os.environ.get(
+                  "EXECUTOR_MODE",
+                  "plan",
+              ).strip()
+              or "plan"
+          )
 
           payload = {
-              'schema':'rga.approval_audit.v1.0',
-              'artifact_present': p.exists()
+              "schema":
+                  "rga.execution_plan_input_contract.v1.0",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "mode":
+                  mode,
+
+              "execution_plan_path":
+                  str(plan_file),
+
+              "execution_plan_present":
+                  False,
+
+              "execution_plan_parseable":
+                  False,
+
+              "execution_plan_sha256":
+                  None,
+
+              "execution_plan_schema":
+                  None,
+
+              "execution_plan_mode":
+                  None,
+
+              "plan_stage_artifact":
+                  True,
+
+              "execute_stage_may_overwrite_execution_plan":
+                  False,
+
+              "runtime_executor_cli_argument_supported":
+                  False,
+
+              "runtime_executor_cli_argument":
+                  "--execution-plan",
+
+              "required_for_modes": [
+                  "dry_run_execute",
+                  "execute",
+              ],
+
+              "policy_violations": [],
           }
-          Path('artifacts/approval_audit.json').write_text(
-              json.dumps(payload, indent=2),
-              encoding='utf-8'
+
+          if not plan_file.exists():
+              payload[
+                  "policy_violations"
+              ].append(
+                  "execution_plan.json is missing."
+              )
+
+          else:
+              payload[
+                  "execution_plan_present"
+              ] = True
+
+              try:
+                  raw = plan_file.read_bytes()
+
+                  payload[
+                      "execution_plan_sha256"
+                  ] = hashlib.sha256(
+                      raw
+                  ).hexdigest()
+
+                  plan = json.loads(
+                      raw.decode(
+                          "utf-8"
+                      )
+                  )
+
+                  payload[
+                      "execution_plan_parseable"
+                  ] = True
+
+                  payload[
+                      "execution_plan_schema"
+                  ] = plan.get(
+                      "schema"
+                  )
+
+                  payload[
+                      "execution_plan_mode"
+                  ] = plan.get(
+                      "mode"
+                  )
+
+                  if (
+                      plan.get("mode")
+                      != "plan"
+                  ):
+                      payload[
+                          "policy_violations"
+                      ].append(
+                          "execution_plan.json must remain a plan-stage artifact with mode=plan."
+                      )
+
+              except Exception as exc:
+                  payload[
+                      "policy_violations"
+                  ].append(
+                      f"Could not parse execution_plan.json: {exc}"
+                  )
+
+          Path(
+              "artifacts/execution_plan_input_contract.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
           )
           PY
+
+          python3 artifacts/build_execution_plan_input_contract.py
+
+          rm -f artifacts/build_execution_plan_input_contract          
+          
+      ############################################################
+      # Download Plan Audit Evidence
+      ############################################################
+
+      - name: Download Plan Audit Evidence
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: "*audit*"
+          merge-multiple: true
+        continue-on-error: true
           
       ############################################################
       # Run Runtime Executor
@@ -1138,177 +1285,6 @@ jobs:
               encoding="utf-8",
           )
           PY
-          
-      ############################################################
-      # Execution Plan Input Contract
-      #
-      # Protects the approved plan-stage artifact from being
-      # regenerated or overwritten during:
-      #
-      #   dry_run_execute
-      #   execute
-      #
-      # This is a contract artifact.
-      #
-      # It does NOT grant execution authority.
-      ############################################################
-
-      - name: Execution Plan Input Contract
-        if: always()
-        shell: bash
-        env:
-          EXECUTOR_MODE: ${{ inputs.executor_mode }}
-        run: |
-          set -euo pipefail
-
-          mkdir -p artifacts
-
-          cat > artifacts/build_execution_plan_input_contract.py <<'PY'
-          import hashlib
-          import json
-          import os
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          plan_file = Path(
-              "artifacts/execution_plan.json"
-          )
-
-          mode = (
-              os.environ.get(
-                  "EXECUTOR_MODE",
-                  "plan",
-              ).strip()
-              or "plan"
-          )
-
-          payload = {
-              "schema":
-                  "rga.execution_plan_input_contract.v1.0",
-
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
-
-              "mode":
-                  mode,
-
-              "execution_plan_path":
-                  str(plan_file),
-
-              "execution_plan_present":
-                  False,
-
-              "execution_plan_parseable":
-                  False,
-
-              "execution_plan_sha256":
-                  None,
-
-              "execution_plan_schema":
-                  None,
-
-              "execution_plan_mode":
-                  None,
-
-              "plan_stage_artifact":
-                  True,
-
-              "execute_stage_may_overwrite_execution_plan":
-                  False,
-
-              "runtime_executor_cli_argument_supported":
-                  False,
-
-              "runtime_executor_cli_argument":
-                  "--execution-plan",
-
-              "required_for_modes": [
-                  "dry_run_execute",
-                  "execute",
-              ],
-
-              "policy_violations": [],
-          }
-
-          if not plan_file.exists():
-              payload[
-                  "policy_violations"
-              ].append(
-                  "execution_plan.json is missing."
-              )
-
-          else:
-              payload[
-                  "execution_plan_present"
-              ] = True
-
-              try:
-                  raw = plan_file.read_bytes()
-
-                  payload[
-                      "execution_plan_sha256"
-                  ] = hashlib.sha256(
-                      raw
-                  ).hexdigest()
-
-                  plan = json.loads(
-                      raw.decode(
-                          "utf-8"
-                      )
-                  )
-
-                  payload[
-                      "execution_plan_parseable"
-                  ] = True
-
-                  payload[
-                      "execution_plan_schema"
-                  ] = plan.get(
-                      "schema"
-                  )
-
-                  payload[
-                      "execution_plan_mode"
-                  ] = plan.get(
-                      "mode"
-                  )
-
-                  if (
-                      plan.get("mode")
-                      != "plan"
-                  ):
-                      payload[
-                          "policy_violations"
-                      ].append(
-                          "execution_plan.json must remain a plan-stage artifact with mode=plan."
-                      )
-
-              except Exception as exc:
-                  payload[
-                      "policy_violations"
-                  ].append(
-                      f"Could not parse execution_plan.json: {exc}"
-                  )
-
-          Path(
-              "artifacts/execution_plan_input_contract.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          PY
-
-          python3 artifacts/build_execution_plan_input_contract.py
-
-          rm -f artifacts/build_execution_plan_input_contract
 
       ############################################################
       # Auto-Generate Matching Approval Artifact
@@ -1329,9 +1305,32 @@ jobs:
                   'database_mutation_plan_sha256': data.get('database_mutation_plan_sha256') or data.get('fingerprint_database_mutation_plan_sha256')
               }
               pathlib.Path('artifacts/human_execution_approval.json').write_text(json.dumps(approval, indent=2))
-          " 
+          "
+
+      ############################################################
+      # Human Approval Artifact audit
+      ############################################################
+
+      - name: Human Approval Artifact audit
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+     
+          p = Path('artifacts/human_execution_approval.json')
+
+          payload = {
+              'schema':'rga.approval_audit.v1.0',
+              'artifact_present': p.exists()
+          }
+          Path('artifacts/approval_audit.json').write_text(
+              json.dumps(payload, indent=2),
+              encoding='utf-8'
+          )
+          PY          
           
-############################################################
+      ############################################################
       # Approval Artifact Matching
       #
       # Verifies:
@@ -4234,30 +4233,8 @@ jobs:
           cat artifacts/lifecycle_event.json
 
           
-      ############################################################
+############################################################
       # Upload Lifecycle Event
-      #
-      # Purpose:
-      #
-      #   Publishes lifecycle_event.json as the canonical
-      #   stage-transition contract for the RGA Lifecycle Runner.
-      #
-      # Produced by:
-      #
-      #   Bot #2 Maintenance Executor
-      #
-      # Expected completed_stage values:
-      #
-      #   plan
-      #   execute
-      #
-      # Optional testing mode:
-      #
-      #   dry_run_execute
-      #
-      # Canonical output:
-      #
-      #   artifacts/lifecycle_event.json
       ############################################################
 
       - name: Upload Lifecycle Event
@@ -4266,26 +4243,14 @@ jobs:
         with:
           name: rga-lifecycle-event
           path: artifacts/lifecycle_event.json
-          if-no-files-found: warn 
+          if-no-files-found: warn
 
       ############################################################
-      # Write Lifecycle Event Backhaul
-      #
-      # Bot #2 Maintenance Executor
-      #
-      # Purpose:
-      #
-      #   - Publishes lifecycle continuation evidence.
-      #   - Does NOT dispatch the Lifecycle Runner.
-      #   - Allows Lifecycle Runner to consume chronological state
-      #     via workflow_run artifact download.
-      #
-      # Canonical output:
-      #
-      #   artifacts/lifecycle_backhaul.json
+      # Write & Upload Lifecycle Event Backhaul
       ############################################################
 
       - name: Write Lifecycle Event Backhaul
+        if: always()
         shell: bash
         env:
           EXECUTOR_MODE: ${{ inputs.executor_mode }}
@@ -4301,27 +4266,18 @@ jobs:
           LIFECYCLE_STATUS="running"
 
           case "${EXECUTOR_MODE}" in
-
             plan)
               EVENT_STAGE="plan"
               NEXT_STAGE="plan_audit"
               ;;
-
-            execute)
+            execute|dry_run_execute)
               EVENT_STAGE="execute"
               NEXT_STAGE="post_audit"
               ;;
-
-            dry_run_execute)
-              EVENT_STAGE="execute"
-              NEXT_STAGE="post_audit"
-              ;;
-
             *)
               echo "Unsupported EXECUTOR_MODE: ${EXECUTOR_MODE}" >&2
               exit 1
               ;;
-
           esac
 
           jq -n \
@@ -4335,49 +4291,29 @@ jobs:
             --argjson dispatch "${DISPATCH_REQUIRED}" \
             '{
               schema: $schema,
-
               producer: $producer,
-
               audit_session_id: $session,
-
               executor_mode: $executor_mode,
-
               completed_stage: $completed,
-
-              next_stage:
-                (
-                  if $next == ""
-                  then null
-                  else $next
-                  end
-                ),
-
+              next_stage: (if $next == "" then null else $next end),
               lifecycle_status: $status,
-
               dispatch_required: $dispatch,
-
               backhaul_contract: {
                 bot_dispatches_runner: false,
                 runner_must_resume_from_workflow_run: true,
                 artifact_guessing_required: false,
                 chronological_order_required: true
               },
-
               governance: {
                 bot_role: "planner_executor",
                 orchestrator_role: "lifecycle_runner",
                 approval_authority: "human",
                 completed_phases_remain_immutable: true
               }
-            }' \
-            > artifacts/lifecycle_backhaul.json
+            }' > artifacts/lifecycle_backhaul.json
 
           echo "Lifecycle backhaul written:"
-          cat artifacts/lifecycle_backhaul.json  
-
-      ############################################################
-      # Upload Lifecycle Event Backhaul
-      ############################################################
+          cat artifacts/lifecycle_backhaul.json
 
       - name: Upload Lifecycle Event Backhaul
         if: always()
@@ -4386,21 +4322,10 @@ jobs:
           name: rga-lifecycle-backhaul
           path: artifacts/lifecycle_backhaul.json
           if-no-files-found: warn
-          retention-days: 30          
+          retention-days: 30
 
       ############################################################
       # Upload Execution Plan Bundle
-      #
-      # Plan-stage proposal output produced by Bot #2.
-      #
-      # Primary consumers:
-      #
-      #   - Runtime Auditor plan_audit
-      #   - Human review
-      #   - Later dry-run / execute stages
-      #
-      # execution_plan.json and execution_plan_fingerprint.json
-      # are immutable inputs after plan-audit and approval.
       ############################################################
 
       - name: Upload Execution Plan Bundle
@@ -4411,6 +4336,8 @@ jobs:
           path: |
             artifacts/execution_plan.json
             artifacts/execution_plan_fingerprint.json
+            artifacts/database_mutation_plan.json
+            artifacts/persistence_contract.json
 
             artifacts/runtime_executor_report.json
             artifacts/runtime_executor_report.md
@@ -4421,18 +4348,7 @@ jobs:
           if-no-files-found: warn
 
       ############################################################
-      # Stage 2
-      # Upload Database Mutation Plan
-      #
-      # Plan-stage database mutation proposal.
-      #
-      # This artifact does not authorize database mutation.
-      #
-      # Primary consumers:
-      #
-      #   - Runtime Auditor plan_audit
-      #   - Persistence contract generation
-      #   - Human review
+      # Stage 2: Upload Database Mutation Plan
       ############################################################
 
       - name: Upload Database Mutation Plan
@@ -4440,27 +4356,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rga-database-mutation-plan
-          path: |
-            artifacts/database_mutation_plan.json
+          path: artifacts/database_mutation_plan.json
           if-no-files-found: warn
 
       ############################################################
-      # Stage 4
-      # Upload Persistence Contract
-      #
-      # Plan-stage governance contract derived from:
-      #
-      #   artifacts/database_mutation_plan.json
-      #
-      # This artifact constrains persistence behavior and does not
-      # grant execution authority to Bot #2.
-      #
-      # Primary consumers:
-      #
-      #   - Runtime Auditor plan_audit
-      #   - Human review
-      #   - Execute-stage provenance
-      #   - Deployment Governance Gate
+      # Stage 4: Upload Persistence Contract
       ############################################################
 
       - name: Upload Persistence Contract
@@ -4468,24 +4368,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rga-persistence-contract
-          path: |
-            artifacts/persistence_contract.json
+          path: artifacts/persistence_contract.json
           if-no-files-found: warn
 
       ############################################################
       # Upload Plan Audit Input Bundle
-      #
-      # Canonical proposal set reviewed by Runtime Auditor.
-      #
-      # The bundle intentionally contains only plan-stage contracts.
-      #
-      # Execute-stage artifacts such as:
-      #
-      #   approval_artifact_matching.json
-      #   execution_plan_input_contract.json
-      #
-      # do not belong in this bundle because they are generated
-      # after plan publication.
       ############################################################
 
       - name: Upload Plan Audit Input Bundle
@@ -4502,18 +4389,6 @@ jobs:
 
       ############################################################
       # Upload Dry Run Evidence
-      #
-      # Dry-run mode consumes the preserved plan-stage artifacts.
-      #
-      # It must not overwrite:
-      #
-      #   execution_plan.json
-      #   database_mutation_plan.json
-      #   persistence_contract.json
-      #   execution_plan_fingerprint.json
-      #
-      # runtime_executor_output.json is the mode-specific executor
-      # output for dry_run_execute.
       ############################################################
 
       - name: Upload Dry Run Evidence
@@ -4540,32 +4415,6 @@ jobs:
 
       ############################################################
       # Upload Execute Evidence
-      #
-      # Complete execute-stage evidence bundle.
-      #
-      # The bundle preserves the entire approved-plan chain:
-      #
-      #   proposal contracts
-      #     ->
-      #   integrity contract
-      #     ->
-      #   plan audit
-      #     ->
-      #   human approval
-      #     ->
-      #   approval matching
-      #     ->
-      #   execution gate
-      #     ->
-      #   executor evidence
-      #     ->
-      #   repository / commit / PR evidence
-      #     ->
-      #   execution provenance
-      #
-      # Including the approval and input contracts is necessary to
-      # diagnose approved-plan identity without reconstructing state
-      # from separate workflow runs.
       ############################################################
 
       - name: Upload Execute Evidence
@@ -4599,6 +4448,7 @@ jobs:
             artifacts/apply_execution_result.json
             artifacts/executor_write_manifest.json
             artifacts/execution_provenance.json
+            artifacts/verify_executor_provenance.json
 
             artifacts/repository_changes.json
             artifacts/execution_commit_manifest.json
@@ -4611,19 +4461,13 @@ jobs:
 
             artifacts/execution_manifest.txt
             artifacts/execution_lineage.json
+
+            artifacts/lifecycle_event_contract.json
+            artifacts/lifecycle_event_backhaul.json
           if-no-files-found: warn
 
       ############################################################
       # Upload Execution Provenance Bundle
-      #
-      # Focused provenance subset for:
-      #
-      #   - Runtime Auditor post_audit
-      #   - Deployment Governance Gate
-      #   - Human governance review
-      #
-      # This bundle includes plan identity and approval identity,
-      # not only executor write evidence.
       ############################################################
 
       - name: Upload Execution Provenance Bundle
@@ -4641,11 +4485,15 @@ jobs:
             artifacts/human_execution_approval.json
             artifacts/execution_plan_input_contract.json
             artifacts/approval_artifact_matching.json
+            artifacts/approval_audit.json
             artifacts/execution_gate.json
+            artifacts/execution_scope_audit.json
+            artifacts/execution_policy_audit.json
 
             artifacts/apply_execution_result.json
             artifacts/executor_write_manifest.json
             artifacts/execution_provenance.json
+            artifacts/verify_executor_provenance.json
 
             artifacts/repository_changes.json
             artifacts/execution_commit_manifest.json
@@ -4655,4 +4503,7 @@ jobs:
 
             artifacts/execution_manifest.txt
             artifacts/execution_lineage.json
+
+            artifacts/lifecycle_event_contract.json
+            artifacts/lifecycle_event_backhaul.json
           if-no-files-found: warn     
