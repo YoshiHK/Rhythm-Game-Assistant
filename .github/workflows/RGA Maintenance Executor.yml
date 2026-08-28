@@ -227,6 +227,17 @@ jobs:
           check_artifacts: true
           search_artifacts: true
         continue-on-error: true
+
+      ############################################################
+      # Download Plan Audit Evidence
+      ############################################################
+
+      - name: Download Plan Audit Evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: plan-audit-evidence
+          path: artifacts/
+        continue-on-error: true        
           
       ############################################################
       # Flatten Artifact Directory
