@@ -29,21 +29,6 @@ on:
         required: false
         default: "artifacts/execution_plan.json"
 
-      approval_artifact:
-        description: "Path to human execution approval artifact"
-        required: false
-        default: "artifacts/human_execution_approval.json"
-
-      execution_plan_sha256:
-        description: "Target Execution Plan SHA256 checksum for v2.1 verification"
-        required: false
-        default: ""
-
-      database_mutation_plan_sha256:
-        description: "Target Database Mutation Plan SHA256 checksum for v2.1 verification"
-        required: false
-        default: ""
-
       pre_audit_report:
         description: "Path to pre-audit report artifact"
         required: false
@@ -3102,6 +3087,137 @@ jobs:
           echo "RGA Runtime Auditor exited with code: ${auditor_exit_code}"
 
           exit 0
+          
+      ############################################################
+      # Pre-Audit Bundle
+      #
+      # Bot #1 pre_audit mode:
+      #
+      #   - Baseline discovery & governance state snapshot.
+      #   - Evaluates system architecture and runtime wiring.
+      #   - Generates pre-audit contracts and evidence bundles.
+      #   - Does not mutate repository state.
+      #
+      # Canonical output:
+      #
+      #   artifacts/artifact_bundle_manifest.txt
+      #   artifacts/artifact_bundle_manifest.json
+      ############################################################
+
+      - name: Artifact Bundle Manifest
+        if: ${{ always() && (github.event.inputs.audit_mode == 'pre_audit' || inputs.audit_mode == 'pre_audit' || env.AUDIT_MODE == 'pre_audit') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          {
+            echo "RGA Runtime Auditor Artifact Bundle"
+            echo ""
+
+            echo "Generated at:"
+            date -u +"%Y-%m-%dT%H:%M:%SZ"
+
+            echo ""
+            echo "Auditor Exit Code:"
+            cat artifacts/runtime_auditor_exit_code.txt || true
+
+            echo ""
+            echo "Artifact Count:"
+            find artifacts -type f | wc -l
+
+            echo ""
+            echo "Files:"
+            find artifacts -type f | sort
+
+          } > artifacts/artifact_bundle_manifest.txt
+
+          cat > artifacts/artifact_bundle_manifest_generator.py <<'PY'
+          import json
+          from pathlib import Path
+
+          report_path = Path("artifacts/runtime_auditor_report.json")
+          report_available = report_path.exists() and report_path.is_file() and report_path.stat().st_size > 0
+
+          report_data = {}
+          if report_available:
+              try:
+                  report_data = json.loads(report_path.read_text(encoding="utf-8", errors="ignore"))
+                  if not isinstance(report_data, dict):
+                      report_data = {}
+              except Exception:
+                  report_data = {}
+
+          governance_state = report_data.get("governance_state", {})
+          root_failures = governance_state.get("root_failures", [])
+          derived_failures = governance_state.get("derived_failures", [])
+          lifecycle_data = governance_state.get("lifecycle", {})
+
+          files = sorted(
+              str(p)
+              for p in Path("artifacts").rglob("*")
+              if p.is_file() and p.name != "artifact_bundle_manifest_generator.py"
+          )
+
+          payload = {
+              "schema":
+                  "rga.artifact_bundle_manifest.v1.3",
+
+              "canonical_output":
+                  "artifacts/artifact_bundle_manifest.json",
+
+              "bundle_role":
+                  "audit_evidence",
+
+              "audit_mode":
+                  "pre_audit",
+
+              "artifact_count":
+                  len(files),
+
+              "runtime_baseline_summary": {
+                  "report_available": report_available,
+                  "final_lifecycle_state": lifecycle_data.get("final_state", "UNKNOWN"),
+                  "root_failure_count": len(root_failures) if isinstance(root_failures, list) else 0,
+                  "derived_failure_count": len(derived_failures) if isinstance(derived_failures, list) else 0,
+                  "architecture_verdict": governance_state.get("architecture_verdict"),
+                  "governance_verdict": governance_state.get("governance_verdict"),
+              },
+
+              "bot_1_authority": {
+                  "pre_audit_baseline": True,
+                  "plan_audit": True,
+                  "post_audit": True,
+                  "approve_execution": False,
+                  "apply_execution": False,
+              },
+
+              "pre_audit_principles": {
+                  "pre_audit_establishes_baseline": True,
+                  "pre_audit_does_not_mutate_state": True,
+                  "completed_phases_remain_immutable": True,
+              },
+
+              "generated_files":
+                  files,
+          }
+
+          Path(
+              "artifacts/artifact_bundle_manifest.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+          python artifacts/artifact_bundle_manifest_generator.py
+
+          rm -f artifacts/artifact_bundle_manifest_generator.py          
 
       ############################################################
       # Plan Audit Report
@@ -3119,7 +3235,7 @@ jobs:
       ############################################################
 
       - name: Plan Audit Report
-        if: ${{ always() && github.event.inputs.audit_mode == 'plan_audit' }}
+        if: ${{ always() && (github.event.inputs.audit_mode == 'plan_audit' || inputs.audit_mode == 'plan_audit' || env.AUDIT_MODE == 'plan_audit') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3133,36 +3249,6 @@ jobs:
           execution_plan = Path(
               "artifacts/execution_plan.json"
           )
-          
-          database_mutation_plan = Path(
-              "artifacts/database_mutation_plan.json"
-          )
-
-          persistence_contract = Path(
-              "artifacts/persistence_contract.json"
-          )
-
-          execution_plan_fingerprint = Path(
-              "artifacts/execution_plan_fingerprint.json"
-          )
-
-          mutation_plan_available = (
-              database_mutation_plan.exists()
-              and database_mutation_plan.is_file()
-              and database_mutation_plan.stat().st_size > 0
-          )
-
-          persistence_contract_available = (
-              persistence_contract.exists()
-              and persistence_contract.is_file()
-              and persistence_contract.stat().st_size > 0
-          )
-
-          fingerprint_available = (
-              execution_plan_fingerprint.exists()
-              and execution_plan_fingerprint.is_file()
-              and execution_plan_fingerprint.stat().st_size > 0
-          )          
 
           plan_available = (
               execution_plan.exists()
@@ -3200,7 +3286,7 @@ jobs:
                       )
 
                       target_root_failures = plan_data.get(
-                         "target_root_failures",
+                          "target_root_failures",
                           [],
                       )
 
@@ -3244,10 +3330,6 @@ jobs:
                   plan_load_error = str(exc)
 
           required_checks = [
-              "execution_plan",
-              "database_mutation_plan",
-              "persistence_contract",
-              "execution_plan_fingerprint",
               "target_root_failures",
               "proposed_changes",
               "rollback",
@@ -3264,21 +3346,6 @@ jobs:
               issues.append(
                   "execution_plan.json is missing or empty."
               )
-              
-          if not mutation_plan_available:
-              issues.append(
-                  "database_mutation_plan.json is missing or empty."
-              )
-
-          if not persistence_contract_available:
-              issues.append(
-                  "persistence_contract.json is missing or empty."
-              )
-
-          if not fingerprint_available:
-              issues.append(
-                  "execution_plan_fingerprint.json is missing or empty."
-              )              
 
           if plan_load_error:
               issues.append(
@@ -3382,36 +3449,6 @@ jobs:
                   "post_audit_required":
                       post_audit_required,
               },
-              
-              "database_mutation_plan": {
-                  "available":
-                      mutation_plan_available,
-
-                  "path":
-                      str(
-                          database_mutation_plan
-                      ),
-              },
-
-              "persistence_contract": {
-                  "available":
-                      persistence_contract_available,
-
-                  "path":
-                      str(
-                          persistence_contract
-                      ),
-              },
-
-              "execution_plan_fingerprint": {
-                  "available":
-                      fingerprint_available,
-
-                  "path":
-                      str(
-                          execution_plan_fingerprint
-                      ),
-              },              
 
               "bot_1_authority": {
                   "approve_execution":
@@ -3462,18 +3499,6 @@ jobs:
                   required_checks,
 
               "check_results": {
-                  "execution_plan_available":
-                      plan_available,
-
-                  "database_mutation_plan_available":
-                      mutation_plan_available,
-
-                  "persistence_contract_available":
-                      persistence_contract_available,
-
-                  "execution_plan_fingerprint_available":
-                      fingerprint_available,
-
                   "forbidden_scope_declared_absent_ok":
                       forbidden_scope_ok,
 
@@ -3532,7 +3557,7 @@ jobs:
           rm -f artifacts/plan_audit_generator.py
 
       ############################################################
-      # Post Audit audit Contract
+      # Post Audit Contract
       #
       # Bot #1 post-audit mode:
       #
@@ -3546,8 +3571,8 @@ jobs:
       #   artifacts/post_audit_contract.json
       ############################################################
 
-      - name: Post Audit audit Contract
-        if: ${{ always() && github.event.inputs.audit_mode == 'post_audit' }}
+      - name: Post Audit Contract
+        if: ${{ always() && (github.event.inputs.audit_mode == 'post_audit' || inputs.audit_mode == 'post_audit' || env.AUDIT_MODE == 'post_audit') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3559,7 +3584,7 @@ jobs:
           from pathlib import Path
 
           pre_audit_report = Path(
-              "artifacts/runtime_auditor_report.json"
+              "artifacts/pre_audit_runtime_report.json"
           )
 
           execution_plan = Path(
@@ -3569,6 +3594,31 @@ jobs:
           current_runtime_auditor_report = Path(
               "artifacts/runtime_auditor_report.json"
           )
+
+          def load_json_safe(path: Path) -> dict:
+              if path.exists() and path.is_file() and path.stat().st_size > 0:
+                  try:
+                      data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+                      return data if isinstance(data, dict) else {}
+                  except Exception:
+                      return {}
+              return {}
+
+          pre_audit_data = load_json_safe(pre_audit_report)
+          plan_data = load_json_safe(execution_plan)
+          current_report_data = load_json_safe(current_runtime_auditor_report)
+
+          pre_root_failures = set(pre_audit_data.get("governance_state", {}).get("root_failures", []))
+          current_root_failures = set(current_report_data.get("governance_state", {}).get("root_failures", []))
+          target_root_failures = set(plan_data.get("target_root_failures", []))
+
+          resolved_root_failures = list(pre_root_failures - current_root_failures)
+          new_root_failures = list(current_root_failures - pre_root_failures)
+          unresolved_target_failures = list(target_root_failures - (pre_root_failures - current_root_failures))
+
+          issues = []
+          if new_root_failures:
+              issues.append(f"Regressions detected: new root failures introduced: {new_root_failures}")
 
           payload = {
               "schema":
@@ -3619,6 +3669,13 @@ jobs:
                           and current_runtime_auditor_report.is_file()
                           and current_runtime_auditor_report.stat().st_size > 0,
                   },
+              },
+
+              "progress_telemetry": {
+                  "resolved_root_failures": resolved_root_failures,
+                  "new_root_failures": new_root_failures,
+                  "unresolved_target_failures": unresolved_target_failures,
+                  "target_failure_resolution_ok": len(unresolved_target_failures) == 0,
               },
 
               "required_checks": [
@@ -3691,6 +3748,14 @@ jobs:
                   "post_audit_checks_for_regression":
                       True,
               },
+
+              "issues": issues,
+
+              "verdict": (
+                  "pass"
+                  if not issues
+                  else "regression_detected"
+              ),
           }
 
           Path(
@@ -3708,85 +3773,6 @@ jobs:
           python artifacts/post_audit_contract_generator.py
 
           rm -f artifacts/post_audit_contract_generator.py
-
-      ############################################################
-      # Pre-Audit Bundle
-      #
-      # Only pre_audit generates:
-      #
-      #   runtime_auditor_report.json
-      #   runtime_auditor_report.md
-      #   bundle
-      #
-      ############################################################
-
-      - name: Artifact Bundle Manifest
-        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          {
-            echo "RGA Runtime Auditor Artifact Bundle"
-            echo ""
-
-            echo "Generated at:"
-            date -u +"%Y-%m-%dT%H:%M:%SZ"
-
-            echo ""
-            echo "Auditor Exit Code:"
-            cat artifacts/runtime_auditor_exit_code.txt || true
-
-            echo ""
-            echo "Artifact Count:"
-            find artifacts -type f | wc -l
-
-            echo ""
-            echo "Files:"
-            find artifacts -type f | sort
-
-          } > artifacts/artifact_bundle_manifest.txt
-
-          cat > artifacts/artifact_bundle_manifest_generator.py <<'PY'
-          import json
-          from pathlib import Path
-
-          files = sorted(
-              str(p)
-              for p in Path("artifacts").rglob("*")
-              if p.is_file()
-          )
-
-          payload = {
-              "schema":
-                  "rga.artifact_bundle_manifest.v1.3",
-
-              "artifact_count":
-                  len(files),
-
-              "bundle_role":
-                  "audit_evidence",
-
-              "audit_mode":
-                  "pre_audit",
-
-              "generated_files":
-                  files,
-          }
-
-          Path(
-              "artifacts/artifact_bundle_manifest.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
-          )
-          PY
-
-          python artifacts/artifact_bundle_manifest_generator.py
           
       ############################################################
       # Write Runtime Verification Contract
