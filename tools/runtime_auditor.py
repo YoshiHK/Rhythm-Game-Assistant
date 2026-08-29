@@ -1399,6 +1399,22 @@ def classify_governance_failure_lineage(
     return root_failures, derived_failures
 
 # -----------------------------------------------------------------------------
+# Lifecycle State Enum
+# -----------------------------------------------------------------------------
+
+class AuditorState(Enum):
+    UNINITIALIZED = auto()
+    ENVIRONMENT_DISCOVERY = auto()
+    REPOSITORY_AUDIT = auto()
+    DEPENDENCY_AUDIT = auto()
+    ARTIFACT_BACKBONE_AUDIT = auto()
+    RUNTIME_WIRING_AUDIT = auto()
+    GOVERNANCE_EVALUATION = auto()
+    COMPLETED = auto()
+    HALTED = auto()
+
+
+# -----------------------------------------------------------------------------
 # Auditor
 # -----------------------------------------------------------------------------
 
@@ -1512,9 +1528,17 @@ class RuntimeAuditor:
 
         #
         # ----------------------------------------------------------
-        # Result State
+        # Lifecycle & Result State
         # ----------------------------------------------------------
         #
+
+        self.current_state: AuditorState = (
+            AuditorState.UNINITIALIZED
+        )
+
+        self.state_history: List[
+            Dict[str, Any]
+        ] = []
 
         self.results: List[
             CheckResult
@@ -1571,18 +1595,18 @@ class RuntimeAuditor:
         #
         # ----------------------------------------------------------
         # Governance State
-        #
+        # 
         # Governance must distinguish:
         #
-        #   hint
-        #       != suspicion
-        #       != evidence
+        #    hint
+        #        != suspicion
+        #        != evidence
         #
         # Dependency blockers
-        #       != governance blockers
+        #        != governance blockers
         #
         # Runtime blockers
-        #       != governance blockers
+        #        != governance blockers
         #
         # Completed phases remain immutable.
         # Auditor remains read-only.
@@ -1593,6 +1617,15 @@ class RuntimeAuditor:
             str,
             Any,
         ] = {
+
+            #
+            # Lifecycle Telemetry
+            #
+
+            "lifecycle": {
+                "final_state": self.current_state.name,
+                "history": self.state_history,
+            },
 
             #
             # Top-level verdicts
@@ -1742,6 +1775,45 @@ class RuntimeAuditor:
                 },
             },
         }
+
+    # -----------------------------------------------------------------------------
+    # Lifecycle Transitions
+    # -----------------------------------------------------------------------------
+
+    def transition_to(self, new_state: AuditorState) -> bool:
+        """Executes lightweight state transitions and syncs final telemetry."""
+        valid_transitions = {
+            AuditorState.UNINITIALIZED: {AuditorState.ENVIRONMENT_DISCOVERY, AuditorState.HALTED},
+            AuditorState.ENVIRONMENT_DISCOVERY: {AuditorState.REPOSITORY_AUDIT, AuditorState.HALTED},
+            AuditorState.REPOSITORY_AUDIT: {AuditorState.DEPENDENCY_AUDIT, AuditorState.HALTED},
+            AuditorState.DEPENDENCY_AUDIT: {AuditorState.ARTIFACT_BACKBONE_AUDIT, AuditorState.HALTED},
+            AuditorState.ARTIFACT_BACKBONE_AUDIT: {AuditorState.RUNTIME_WIRING_AUDIT, AuditorState.HALTED},
+            AuditorState.RUNTIME_WIRING_AUDIT: {AuditorState.GOVERNANCE_EVALUATION, AuditorState.HALTED},
+            AuditorState.GOVERNANCE_EVALUATION: {AuditorState.COMPLETED, AuditorState.HALTED},
+            AuditorState.HALTED: set(),
+            AuditorState.COMPLETED: set(),
+        }
+
+        if new_state not in valid_transitions[self.current_state]:
+            self.state_history.append({
+                "from": self.current_state.name,
+                "to": new_state.name,
+                "ts": int(datetime.now(timezone.utc).timestamp()),
+                "ok": False,
+            })
+            self.current_state = AuditorState.HALTED
+            self.governance_state["lifecycle"]["final_state"] = self.current_state.name
+            return False
+
+        self.state_history.append({
+            "from": self.current_state.name,
+            "to": new_state.name,
+            "ts": int(datetime.now(timezone.utc).timestamp()),
+            "ok": True,
+        })
+        self.current_state = new_state
+        self.governance_state["lifecycle"]["final_state"] = self.current_state.name
+        return True
 
     # ------------------------------------------------------------------
     # Result helpers
