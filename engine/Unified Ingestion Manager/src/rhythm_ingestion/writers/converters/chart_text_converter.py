@@ -28,6 +28,7 @@ import json
 import re
 import email
 from email import policy
+from urllib.parse import urlparse
 from typing import Any, Dict, Optional
 
 # --------------------------------------------------
@@ -79,7 +80,8 @@ def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
 def classify_asset_subtype(path_or_ref: str | Path) -> str:
     s = _to_text(path_or_ref)
     if s.startswith("http://") or s.startswith("https://"):
-        if "youtube.com" in s or "youtu.be" in s:
+        host = (urlparse(s).hostname or "").lower()
+        if host in {"youtube.com", "youtu.be"} or host.endswith(".youtube.com"):
             return AssetSubtype.YOUTUBE.value
         return AssetSubtype.EXTERNAL_URL.value
 
