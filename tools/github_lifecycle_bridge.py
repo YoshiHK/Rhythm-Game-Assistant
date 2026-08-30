@@ -300,22 +300,13 @@ _SENSITIVE_FIELD_NAMES = {
 }
 
 
-def _is_sensitive_field_name(
-    key: str,
-) -> bool:
-    lowered = key.lower()
-    return (
-        lowered in _SENSITIVE_FIELD_NAMES
-        or "token" in lowered
-        or "password" in lowered
-        or "secret" in lowered
-        or "private_key" in lowered
-    )
+from typing import Any, Dict
 
+def _is_sensitive_field_name(field_name: str) -> bool:
+    sensitive_keys = {"token", "private_key", "authorization", "secret", "password"}
+    return field_name.lower() in sensitive_keys
 
-def _redact_sensitive_data(
-    value: Any,
-) -> Any:
+def _redact_sensitive_data(value: Any) -> Any:
     if isinstance(value, dict):
         redacted: Dict[str, Any] = {}
         for k, v in value.items():
@@ -330,26 +321,15 @@ def _redact_sensitive_data(
 
     return value
 
-
-def write_json(
-    path: Path,
-    payload: Dict[str, Any],
-) -> None:
+# Update write_json to ensure all local artifacts are scrubbed
+def write_json(path: Path, payload: Dict[str, Any]) -> None:
     ensure_artifacts_dir()
-
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    redacted_payload = _redact_sensitive_data(payload)
-
+    path.parent.mkdir(parents=True, exist_ok=True)
+    
+    clean_payload = _redact_sensitive_data(payload)
+    
     path.write_text(
-        json.dumps(
-            redacted_payload,
-            indent=2,
-            ensure_ascii=False,
-        ),
+        json.dumps(clean_payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     
