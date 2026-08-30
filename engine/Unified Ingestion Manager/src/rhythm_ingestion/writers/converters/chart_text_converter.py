@@ -28,6 +28,7 @@ import json
 import re
 import email
 from email import policy
+from html.parser import HTMLParser
 from urllib.parse import urlparse
 from typing import Any, Dict, Optional
 
@@ -127,11 +128,33 @@ def _strip_trailing_space(text: str) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+class _VisibleTextHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self._skip_depth = 0
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() in {"script", "style"}:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in {"script", "style"} and self._skip_depth > 0:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0 and data:
+            self._parts.append(data)
+
+    def get_text(self) -> str:
+        return " ".join(self._parts)
+
+
 def _extract_text_from_html(raw_html: str) -> str:
-    text = re.sub(r"<script.*?>.*?</script>", " ", raw_html, flags=re.I | re.S)
-    text = re.sub(r"<style.*?>.*?</style>", " ", text, flags=re.I | re.S)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = html_lib.unescape(text)
+    parser = _VisibleTextHTMLParser()
+    parser.feed(raw_html)
+    parser.close()
+    text = html_lib.unescape(parser.get_text())
     text = re.sub(r"\s+", " ", text).strip()
     return text + "\n" if text else ""
 
