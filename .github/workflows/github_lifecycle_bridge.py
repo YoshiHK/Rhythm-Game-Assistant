@@ -286,6 +286,33 @@ def read_json(path: Path) -> Dict[str, Any]:
     )
 
 
+def _redact_sensitive_fields(value: Any) -> Any:
+    sensitive_keys = {
+        "token",
+        "access_token",
+        "refresh_token",
+        "password",
+        "secret",
+        "private_key",
+        "client_secret",
+        "authorization",
+    }
+
+    if isinstance(value, dict):
+        redacted: Dict[str, Any] = {}
+        for key, item in value.items():
+            if key.lower() in sensitive_keys:
+                redacted[key] = "***REDACTED***"
+            else:
+                redacted[key] = _redact_sensitive_fields(item)
+        return redacted
+
+    if isinstance(value, list):
+        return [_redact_sensitive_fields(item) for item in value]
+
+    return value
+
+
 def write_json(
     path: Path,
     payload: Dict[str, Any],
@@ -297,9 +324,11 @@ def write_json(
         exist_ok=True,
     )
 
+    sanitized_payload = _redact_sensitive_fields(payload)
+
     path.write_text(
         json.dumps(
-            payload,
+            sanitized_payload,
             indent=2,
             ensure_ascii=False,
         ),
