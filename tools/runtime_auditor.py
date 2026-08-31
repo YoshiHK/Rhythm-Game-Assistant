@@ -1441,9 +1441,7 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         #
 
-        self.repo_root = (
-            repo_root.resolve()
-        )
+        self.repo_root = repo_root.resolve()
 
         (
             self.backend_root,
@@ -1456,20 +1454,11 @@ class RuntimeAuditor:
 
         self.api_url = api_url
 
-        self.token = (
-            token
-            or os.getenv(
-                "SOFTR_API_TOKEN"
-            )
-        )
+        self.token = token or os.getenv("SOFTR_API_TOKEN")
 
-        self.mcp_config = (
-            mcp_config
-        )
+        self.mcp_config = mcp_config
 
-        self.run_rest = (
-            run_rest
-        )
+        self.run_rest = run_rest
 
         #
         # ----------------------------------------------------------
@@ -1477,30 +1466,13 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         #
 
-        #
         # v0.6 compatibility
-        #
+        self.asset_db = asset_db
 
-        self.asset_db = (
-            asset_db
-        )
-
-        #
         # v0.7+ explicit DB support
-        #
-
-        self.file_scan_inventory_db = (
-            file_scan_inventory_db
-        )
-
-        self.chart_assets_db = (
-            chart_assets_db
-            or asset_db
-        )
-
-        self.chart_patterns_db = (
-            chart_patterns_db
-        )
+        self.file_scan_inventory_db = file_scan_inventory_db
+        self.chart_assets_db = chart_assets_db or asset_db
+        self.chart_patterns_db = chart_patterns_db
 
         #
         # ----------------------------------------------------------
@@ -1508,23 +1480,9 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         #
 
-        self.discovered_files = (
-            discover_files(
-                self.repo_root
-            )
-        )
-
-        self.discovered_packages = (
-            discover_package_dirs(
-                self.repo_root
-            )
-        )
-
-        self.discovered_assets = (
-            discover_asset_files(
-                self.repo_root
-            )
-        )
+        self.discovered_files = discover_files(self.repo_root)
+        self.discovered_packages = discover_package_dirs(self.repo_root)
+        self.discovered_assets = discover_asset_files(self.repo_root)
 
         #
         # ----------------------------------------------------------
@@ -1532,17 +1490,9 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         #
 
-        self.current_state: AuditorState = (
-            AuditorState.UNINITIALIZED
-        )
-
-        self.state_history: List[
-            Dict[str, Any]
-        ] = []
-
-        self.results: List[
-            CheckResult
-        ] = []
+        self.current_state: AuditorState = AuditorState.UNINITIALIZED
+        self.state_history: List[Dict[str, Any]] = []
+        self.results: List[CheckResult] = []
 
         #
         # ----------------------------------------------------------
@@ -1550,31 +1500,12 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         #
 
-        #
         # v0.6 compatibility
-        #
+        self.asset_db_snapshots: List[Dict[str, Any]] = []
 
-        self.asset_db_snapshots: List[
-            Dict[str, Any]
-        ] = []
-
-        #
         # v0.7+
-        #
-
-        self.artifact_db_snapshots: Dict[
-            str,
-            List[
-                Dict[str, Any]
-            ],
-        ] = {}
-
-        self.artifact_db_records: Dict[
-            str,
-            List[
-                Dict[str, Any]
-            ],
-        ] = {}
+        self.artifact_db_snapshots: Dict[str, List[Dict[str, Any]]] = {}
+        self.artifact_db_records: Dict[str, List[Dict[str, Any]]] = {}
 
         #
         # ----------------------------------------------------------
@@ -1582,195 +1513,65 @@ class RuntimeAuditor:
         # ----------------------------------------------------------
         #
 
-        self.repository_asset_hashes: Dict[
-            str,
-            str,
-        ] = {}
-
-        self.repository_file_hashes: Dict[
-            str,
-            str,
-        ] = {}
+        self.repository_asset_hashes: Dict[str, str] = {}
+        self.repository_file_hashes: Dict[str, str] = {}
 
         #
         # ----------------------------------------------------------
         # Governance State
-        # 
-        # Governance must distinguish:
-        #
-        #    hint
-        #        != suspicion
-        #        != evidence
-        #
-        # Dependency blockers
-        #        != governance blockers
-        #
-        # Runtime blockers
-        #        != governance blockers
-        #
-        # Completed phases remain immutable.
-        # Auditor remains read-only.
         # ----------------------------------------------------------
         #
 
-        self.governance_state: Dict[
-            str,
-            Any,
-        ] = {
-
-            #
-            # Lifecycle Telemetry
-            #
-
+        self.governance_state: Dict[str, Any] = {
             "lifecycle": {
                 "final_state": self.current_state.name,
                 "history": self.state_history,
             },
-
-            #
-            # Top-level verdicts
-            #
-
-            "architecture_verdict":
-                None,
-
-            "runtime_verdict":
-                None,
-
-            "artifact_backbone_verdict":
-                None,
-
-            "flow_contract_verdict":
-                None,
-
-            "layer_boundary_verdict":
-                None,
-
-            "mcp_contract_verdict":
-                None,
-
-            "deletion_verdict":
-                None,
-
-            "governance_verdict":
-                None,
-
-            #
-            # Failure lineage
-            #
-
-            "root_failures":
-                [],
-
-            "derived_failures":
-                [],
-
-            #
-            # Runtime reality
-            #
-
-            "dependency_failures":
-                [],
-
-            "governance_failures":
-                [],
-
-            #
-            # Layer boundary telemetry
-            #
-
+            "architecture_verdict": None,
+            "runtime_verdict": None,
+            "artifact_backbone_verdict": None,
+            "flow_contract_verdict": None,
+            "layer_boundary_verdict": None,
+            "mcp_contract_verdict": None,
+            "deletion_verdict": None,
+            "governance_verdict": None,
+            "root_failures": [],
+            "derived_failures": [],
+            "dependency_failures": [],
+            "governance_failures": [],
             "layer_boundary_risk": {
-
-                "status":
-                    None,
-
-                "highest_confidence":
-                    "none",
-
-                "evidence_count":
-                    0,
-
-                "suspicion_count":
-                    0,
-
-                "hint_count":
-                    0,
-
-                "governance_blocking":
-                    False,
+                "status": None,
+                "highest_confidence": "none",
+                "evidence_count": 0,
+                "suspicion_count": 0,
+                "hint_count": 0,
+                "governance_blocking": False,
             },
-
-            #
-            # Accounting
-            #
-
-            "blocking_reasons":
-                [],
-
-            "warnings":
-                [],
-
-            #
-            # Confidence model
-            #
-
+            "blocking_reasons": [],
+            "warnings": [],
             "confidence_summary": {
-
-                "evidence":
-                    0,
-
-                "suspicion":
-                    0,
-
-                "hint":
-                    0,
+                "evidence": 0,
+                "suspicion": 0,
+                "hint": 0,
             },
-
-            #
-            # Audit Policy
-            #
-
             "policy": {
-
-                "completed_phases":
-                    "immutable",
-
-                "auditor_mode":
-                    "read_only",
-
-                "false_positive_isolation":
-                    True,
-
-                "dependency_failures_are_not_governance_failures":
-                    True,
-
-                "runtime_failures_are_not_governance_failures":
-                    True,
-
+                "completed_phases": "immutable",
+                "auditor_mode": "read_only",
+                "false_positive_isolation": True,
+                "dependency_failures_are_not_governance_failures": True,
+                "runtime_failures_are_not_governance_failures": True,
                 "boundary_confidence_model": {
-
                     "hint": {
-                        "severity":
-                            "info",
-
-                        "governance_blocking":
-                            False,
+                        "severity": "info",
+                        "governance_blocking": False,
                     },
-
                     "suspicion": {
-                        "severity":
-                            "warning",
-
-                        "governance_blocking":
-                            False,
+                        "severity": "warning",
+                        "governance_blocking": False,
                     },
-
                     "evidence": {
-                        "severity":
-                            "critical",
-
-                        "governance_blocking":
-                            True,
+                        "severity": "critical",
+                        "governance_blocking": True,
                     },
                 },
             },
@@ -9650,98 +9451,65 @@ class RuntimeAuditor:
         )
 
 
-    def classify_governance_failure_lineage(
-        self,
-        *,
-        governance_failures: List[Dict[str, Any]],
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        #
-        # ----------------------------------------------------------
-        # Root vs Derived Failure Classification
-        #
-        # Root failures are independently actionable blockers.
-        #
-        # Derived failures are downstream consequences of an upstream
-        # root failure and should be re-evaluated after the root
-        # contract passes.
-        # ----------------------------------------------------------
-        #
+def classify_governance_failure_lineage(
+    *,
+    governance_failures: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    #
+    # ----------------------------------------------------------
+    # Root vs Derived Failure Classification
+    #
+    # Root failures are independently actionable blockers.
+    #
+    # Derived failures are downstream consequences of an upstream
+    # root failure and should be re-evaluated after the root
+    # contract passes.
+    # ----------------------------------------------------------
+    #
 
-        root_failures: List[Dict[str, Any]] = []
-        derived_failures: List[Dict[str, Any]] = []
+    root_failures: List[Dict[str, Any]] = []
+    derived_failures: List[Dict[str, Any]] = []
 
-        failed_contract_types: Set[str] = {
-            item.get(
-                "contract_type"
-            )
-            for item in governance_failures
-            if item.get(
-                "contract_type"
-            )
-        }
+    failed_contract_types: Set[str] = {
+        item.get("contract_type")
+        for item in governance_failures
+        if item.get("contract_type")
+    }
 
-        for item in governance_failures:
-            contract_type = item.get(
-                "contract_type"
-            )
+    for item in governance_failures:
+        contract_type = item.get("contract_type")
 
-            if not contract_type:
-                continue
+        if not contract_type:
+            continue
 
-            if contract_type in GOVERNANCE_META_CONTRACT_TYPES:
-                continue
+        if contract_type in GOVERNANCE_META_CONTRACT_TYPES:
+            continue
 
-            dependency_of = DERIVED_FAILURE_POLICY.get(
-                contract_type
-            )
+        dependency_of = DERIVED_FAILURE_POLICY.get(contract_type)
 
-            if (
-                dependency_of
-                and dependency_of in failed_contract_types
-            ):
-                derived_item = dict(
-                    item
-                )
+        if (
+            dependency_of
+            and dependency_of in failed_contract_types
+        ):
+            derived_item = dict(item)
+            derived_item["failure_class"] = "derived"
+            derived_item["dependency_of"] = dependency_of
+            derived_failures.append(derived_item)
+            continue
 
-                derived_item[
-                    "failure_class"
-                ] = "derived"
+        root_item = dict(item)
+        root_item["failure_class"] = "root"
 
-                derived_item[
-                    "dependency_of"
-                ] = dependency_of
-
-                derived_failures.append(
-                    derived_item
-                )
-
-                continue
-
-            root_item = dict(
-                item
+        if dependency_of:
+            root_item["expected_dependency_of"] = dependency_of
+            root_item["lineage_note"] = (
+                "This contract is normally derived, but its upstream "
+                "root contract was not present in the current failure set."
             )
 
-            root_item[
-                "failure_class"
-            ] = "root"
+        root_failures.append(root_item)
 
-            if dependency_of:
-                root_item[
-                    "expected_dependency_of"
-                ] = dependency_of
-
-                root_item[
-                    "lineage_note"
-                ] = (
-                    "This contract is normally derived, but its upstream "
-                    "root contract was not present in the current failure set."
-                )
-
-            root_failures.append(
-                root_item
-            )
-
-        return root_failures, derived_failures
+    return root_failures, derived_failures
 
     def check_governance_verdict(self) -> None:
         blocking_reasons = list(
