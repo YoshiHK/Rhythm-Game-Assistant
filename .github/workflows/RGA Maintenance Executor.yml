@@ -230,7 +230,7 @@ jobs:
       - name: Ingest Pre-Audit Artifacts
         uses: dawidd6/action-download-artifact@v6
         with:
-          github_token: ${{ steps.resolve_artifact_token.outputs.token }}
+          github_token: ${{ steps.artifact_token.outputs.token }}
           workflow: "RGA Runtime Auditor.yml"
           name: "runtime-auditor-evidence"
           path: artifacts/
@@ -245,13 +245,13 @@ jobs:
       - name: Download Plan Audit Evidence
         uses: dawidd6/action-download-artifact@v6
         with:
-          github_token: ${{ steps.resolve_artifact_token.outputs.token }}
+          github_token: ${{ steps.artifact_token.outputs.token }}
           workflow: "RGA Runtime Auditor.yml"
           name: "plan-audit-evidence"
           path: artifacts/
           check_artifacts: true
           search_artifacts: true
-        continue-on-error: true        
+        continue-on-error: true
 
       ############################################################
       # Ingest Post-Audit Backhaul Contracts
@@ -260,7 +260,7 @@ jobs:
       - name: Ingest Post-Audit Backhaul Contracts
         uses: dawidd6/action-download-artifact@v6
         with:
-          github_token: ${{ steps.resolve_artifact_token.outputs.token }}
+          github_token: ${{ steps.artifact_token.outputs.token }}
           workflow: "RGA Runtime Auditor.yml"
           name: "lifecycle-event-backhaul"
           path: artifacts/
@@ -278,7 +278,8 @@ jobs:
           find artifacts/ -mindepth 2 -type f -exec mv {} artifacts/ \;
           find artifacts/ -mindepth 1 -type d -empty -delete
           echo "[RGA] Files in artifacts folder:"
-          ls -la artifacts/        
+          ls -la artifacts/
+        
 
       ############################################################
       # Ensure Audit Artifacts Present
