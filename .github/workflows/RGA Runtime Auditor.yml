@@ -3089,13 +3089,13 @@ jobs:
           exit 0
           
       ############################################################
-      # Pre-Audit Bundle
+      # Pre-Audit Bundle / Artifact Bundle Manifest
       #
-      # Bot #1 pre_audit mode:
+      # Bot #1 pre_audit / post_audit mode:
       #
       #   - Baseline discovery & governance state snapshot.
       #   - Evaluates system architecture and runtime wiring.
-      #   - Generates pre-audit contracts and evidence bundles.
+      #   - Generates audit contracts and evidence bundles.
       #   - Does not mutate repository state.
       #
       # Canonical output:
@@ -3105,7 +3105,7 @@ jobs:
       ############################################################
 
       - name: Artifact Bundle Manifest
-        if: ${{ always() && (github.event.inputs.audit_mode == 'pre_audit' || inputs.audit_mode == 'pre_audit' || env.AUDIT_MODE == 'pre_audit') }}
+        if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3135,6 +3135,7 @@ jobs:
 
           cat > artifacts/artifact_bundle_manifest_generator.py <<'PY'
           import json
+          import os
           from pathlib import Path
 
           report_path = Path("artifacts/runtime_auditor_report.json")
@@ -3160,6 +3161,8 @@ jobs:
               if p.is_file() and p.name != "artifact_bundle_manifest_generator.py"
           )
 
+          current_mode = os.environ.get("AUDIT_MODE", "pre_audit")
+
           payload = {
               "schema":
                   "rga.artifact_bundle_manifest.v1.3",
@@ -3171,7 +3174,7 @@ jobs:
                   "audit_evidence",
 
               "audit_mode":
-                  "pre_audit",
+                  current_mode,
 
               "artifact_count":
                   len(files),
@@ -4199,7 +4202,7 @@ jobs:
       ############################################################
 
       - name: Verify Generated Reports
-        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
+        if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
@@ -4227,7 +4230,7 @@ jobs:
       ############################################################
 
       - name: Runtime Auditor Job Summary
-        if: ${{ always() && github.event.inputs.audit_mode == 'pre_audit' }}
+        if: ${{ always() }}
         shell: bash
         run: |
           {
@@ -4236,7 +4239,7 @@ jobs:
 
             echo "### Mode"
             echo ""
-            echo "- pre_audit"
+            echo "- ${AUDIT_MODE:-pre_audit}"
             echo ""
 
             echo "### Canonical Outputs"
