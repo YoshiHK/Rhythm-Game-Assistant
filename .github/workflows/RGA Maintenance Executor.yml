@@ -254,21 +254,6 @@ jobs:
         continue-on-error: true
 
       ############################################################
-      # Ingest Post-Audit Backhaul Contracts
-      ############################################################
-
-      - name: Ingest Post-Audit Backhaul Contracts
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          github_token: ${{ steps.artifact_token.outputs.token }}
-          workflow: "RGA Runtime Auditor.yml"
-          name: "lifecycle-event-backhaul"
-          path: artifacts/
-          check_artifacts: true
-          search_artifacts: true
-        continue-on-error: true
-
-      ############################################################
       # Flatten Artifact Directory
       ############################################################
 
