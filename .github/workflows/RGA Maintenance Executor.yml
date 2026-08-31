@@ -848,9 +848,9 @@ jobs:
 
       - name: Resolve Hashes and Upgrade Approval Schema
         env:
-          INPUT_EXEC_SHA: ${{ inputs.execution_plan_sha256 }}
-          INPUT_MUT_SHA: ${{ inputs.database_mutation_plan_sha256 }}
-          APPROVAL_PHRASE: ${{ inputs.execution_approval || inputs.approval_phrase }}
+          INPUT_EXEC_SHA: '${{ github.event.inputs.execution_plan_sha256 || inputs.execution_plan_sha256 }}'
+          INPUT_MUT_SHA: '${{ github.event.inputs.database_mutation_plan_sha256 || inputs.database_mutation_plan_sha256 }}'
+          APPROVAL_PHRASE: '${{ github.event.inputs.execution_approval || inputs.execution_approval }}'
         run: |
           python -c "
           import os, json, hashlib, pathlib
