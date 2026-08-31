@@ -853,7 +853,7 @@ jobs:
           APPROVAL_PHRASE: '${{ github.event.inputs.execution_approval || inputs.execution_approval }}'
         run: |
           python -c "
-          import os, json, hashlib, pathlib
+          import json, hashlib, os, pathlib
 
           def get_sha256(path_str):
               p = pathlib.Path(path_str)
@@ -861,10 +861,11 @@ jobs:
                   return hashlib.sha256(p.read_bytes()).hexdigest()
               return ''
 
-          # 1. Fallback priority for Execution Plan SHA: UI Input -> Fingerprint File -> File Hash
+          # 1. Read environment inputs
           exec_sha = os.getenv('INPUT_EXEC_SHA', '').strip()
           mut_sha = os.getenv('INPUT_MUT_SHA', '').strip()
 
+          # 2. Try extracting from fingerprint artifact first
           fingerprint_file = pathlib.Path('artifacts/execution_plan_fingerprint.json')
           if fingerprint_file.exists():
               try:
@@ -876,9 +877,12 @@ jobs:
               except Exception:
                   pass
 
-          # Fallback directly to calculating file hash if still empty
+          # 3. Direct file hash fallback if UI input or fingerprint key was missing
           if not exec_sha:
               exec_sha = get_sha256('artifacts/execution_plan.json')
+
+          if not mut_sha:
+              mut_sha = get_sha256('artifacts/database_mutation_plan.json')
 
           phrase = os.getenv('APPROVAL_PHRASE', '').strip() or 'APPROVE_RGA_EXECUTION'
           approval_file = pathlib.Path('artifacts/human_execution_approval.json')
@@ -921,7 +925,7 @@ jobs:
 
           approval_file.parent.mkdir(parents=True, exist_ok=True)
           approval_file.write_text(json.dumps(upgraded_approval, indent=2))
-          print(f'Approval generated with Execution SHA: {exec_sha}')
+          print(f'Approval generated with Execution SHA: {exec_sha} | Mutation SHA: {mut_sha}')
           "
 
       ############################################################
