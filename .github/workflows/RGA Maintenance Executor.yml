@@ -246,7 +246,19 @@ jobs:
           # Move files inside subfolders up to artifacts/
           find artifacts/ -mindepth 2 -type f -exec mv {} artifacts/ \;
           echo "[RGA] Files in artifacts folder:"
-          ls -la artifacts/          
+          ls -la artifacts/
+
+      ############################################################
+      # Download Plan Audit Evidence
+      ############################################################
+
+      - name: Download Plan Audit Evidence
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: "*audit*"
+          merge-multiple: true
+        continue-on-error: true          
 
       ############################################################
       # Write Database Mutation Contract
@@ -654,19 +666,7 @@ jobs:
 
           python3 artifacts/build_execution_plan_input_contract.py
 
-          rm -f artifacts/build_execution_plan_input_contract          
-          
-      ############################################################
-      # Download Plan Audit Evidence
-      ############################################################
-
-      - name: Download Plan Audit Evidence
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-          pattern: "*audit*"
-          merge-multiple: true
-        continue-on-error: true
+          rm -f artifacts/build_execution_plan_input_contract
           
       ############################################################
       # Run Runtime Executor
