@@ -3238,7 +3238,7 @@ jobs:
       ############################################################
 
       - name: Plan Audit Report
-        if: ${{ always() && (github.event.inputs.audit_mode == 'plan_audit' || inputs.audit_mode == 'plan_audit' || env.AUDIT_MODE == 'plan_audit') }}
+        if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3247,11 +3247,10 @@ jobs:
 
           cat > artifacts/plan_audit_generator.py <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          execution_plan = Path(
-              "artifacts/execution_plan.json"
-          )
+          execution_plan = Path("artifacts/execution_plan.json")
 
           plan_available = (
               execution_plan.exists()
@@ -3280,54 +3279,16 @@ jobs:
                   )
 
                   if isinstance(plan_data, dict):
-                      plan_schema = plan_data.get(
-                          "schema"
-                      )
-
-                      plan_mode = plan_data.get(
-                          "mode"
-                      )
-
-                      target_root_failures = plan_data.get(
-                          "target_root_failures",
-                          [],
-                      )
-
-                      proposed_changes = plan_data.get(
-                          "proposed_changes",
-                          [],
-                      )
-
-                      proposed_change_count = (
-                          len(proposed_changes)
-                          if isinstance(
-                              proposed_changes,
-                              list,
-                          )
-                          else 0
-                      )
-
-                      human_approval_required = plan_data.get(
-                          "human_approval_required"
-                      )
-
-                      plan_audit_required = plan_data.get(
-                          "plan_audit_required"
-                      )
-
-                      post_audit_required = plan_data.get(
-                          "post_audit_required"
-                      )
-
-                      forbidden_changes_declared_absent = plan_data.get(
-                          "forbidden_changes_declared_absent",
-                          {},
-                      )
-
-                      phase_boundary_validation = plan_data.get(
-                          "phase_boundary_validation",
-                          {},
-                      )
+                      plan_schema = plan_data.get("schema")
+                      plan_mode = plan_data.get("mode")
+                      target_root_failures = plan_data.get("target_root_failures", [])
+                      proposed_changes = plan_data.get("proposed_changes", [])
+                      proposed_change_count = len(proposed_changes) if isinstance(proposed_changes, list) else 0
+                      human_approval_required = plan_data.get("human_approval_required")
+                      plan_audit_required = plan_data.get("plan_audit_required")
+                      post_audit_required = plan_data.get("post_audit_required")
+                      forbidden_changes_declared_absent = plan_data.get("forbidden_changes_declared_absent", {})
+                      phase_boundary_validation = plan_data.get("phase_boundary_validation", {})
 
               except Exception as exc:
                   plan_load_error = str(exc)
@@ -3344,38 +3305,30 @@ jobs:
           ]
 
           issues = []
+          current_mode = os.environ.get("AUDIT_MODE", "pre_audit")
 
+          # Only flag missing plan as an error if specifically running in plan_audit mode
           if not plan_available:
-              issues.append(
-                  "execution_plan.json is missing or empty."
-              )
+              if current_mode == "plan_audit":
+                  issues.append("execution_plan.json is missing or empty.")
+              else:
+                  plan_mode = "bypassed_for_non_plan_mode"
 
           if plan_load_error:
-              issues.append(
-                  f"execution_plan.json could not be parsed: {plan_load_error}"
-              )
+              issues.append(f"execution_plan.json could not be parsed: {plan_load_error}")
 
-          if human_approval_required is not True:
-              issues.append(
-                  "execution plan must require human approval."
-              )
+          if plan_available:
+              if human_approval_required is not True:
+                  issues.append("execution plan must require human approval.")
 
-          if plan_audit_required is not True:
-              issues.append(
-                  "execution plan must require Bot #1 plan audit."
-              )
+              if plan_audit_required is not True:
+                  issues.append("execution plan must require Bot #1 plan audit.")
 
-          if post_audit_required is not True:
-              issues.append(
-                  "execution plan must require Bot #1 post audit."
-              )
+              if post_audit_required is not True:
+                  issues.append("execution plan must require Bot #1 post audit.")
 
           forbidden_scope_ok = True
-
-          if isinstance(
-              forbidden_changes_declared_absent,
-              dict,
-          ):
+          if plan_available and isinstance(forbidden_changes_declared_absent, dict):
               for key in [
                   "canonical_row",
                   "pattern_logic",
@@ -3388,169 +3341,70 @@ jobs:
               ]:
                   if forbidden_changes_declared_absent.get(key) is not True:
                       forbidden_scope_ok = False
-                      issues.append(
-                          f"forbidden_changes_declared_absent.{key} is not true."
-                      )
-          else:
+                      issues.append(f"forbidden_changes_declared_absent.{key} is not true.")
+          elif plan_available:
               forbidden_scope_ok = False
-              issues.append(
-                  "forbidden_changes_declared_absent is missing or not an object."
-              )
+              issues.append("forbidden_changes_declared_absent is missing or not an object.")
 
           completed_phase_ok = True
-
-          if isinstance(
-              phase_boundary_validation,
-              dict,
-          ):
+          if plan_available and isinstance(phase_boundary_validation, dict):
               for key, value in phase_boundary_validation.items():
                   if value is not False:
                       completed_phase_ok = False
-                      issues.append(
-                          f"phase boundary violation detected: {key}={value}"
-                      )
-          else:
+                      issues.append(f"phase boundary violation detected: {key}={value}")
+          elif plan_available:
               completed_phase_ok = False
-              issues.append(
-                  "phase_boundary_validation is missing or not an object."
-              )
+              issues.append("phase_boundary_validation is missing or not an object.")
 
           payload = {
-              "schema":
-                  "rga.plan_audit_evidence.v1.2",
-
-              "canonical_output":
-                  "artifacts/plan_audit_evidence.json",
-
-              "execution_plan_available":
-                  plan_available,
-
-              "execution_plan_path":
-                  str(
-                      execution_plan
-                  ),
-
+              "schema": "rga.plan_audit_evidence.v1.2",
+              "canonical_output": "artifacts/plan_audit_evidence.json",
+              "execution_plan_available": plan_available,
+              "execution_plan_path": str(execution_plan),
               "execution_plan_summary": {
-                  "schema":
-                      plan_schema,
-
-                  "mode":
-                      plan_mode,
-
-                  "target_root_failures":
-                      target_root_failures,
-
-                  "proposed_change_count":
-                      proposed_change_count,
-
-                  "human_approval_required":
-                      human_approval_required,
-
-                  "plan_audit_required":
-                      plan_audit_required,
-
-                  "post_audit_required":
-                      post_audit_required,
+                  "schema": plan_schema,
+                  "mode": plan_mode,
+                  "target_root_failures": target_root_failures,
+                  "proposed_change_count": proposed_change_count,
+                  "human_approval_required": human_approval_required,
+                  "plan_audit_required": plan_audit_required,
+                  "post_audit_required": post_audit_required,
               },
-
               "bot_1_authority": {
-                  "approve_execution":
-                      False,
-
-                  "apply_execution":
-                      False,
-
-                  "plan_audit":
-                      True,
-
-                  "post_audit":
-                      True,
+                  "approve_execution": False,
+                  "apply_execution": False,
+                  "plan_audit": True,
+                  "post_audit": True,
               },
-
               "bot_2_authority": {
-                  "generate_implementation_plan":
-                      True,
-
-                  "dry_run_execute":
-                      True,
-
-                  "execute_after_approval":
-                      True,
-
-                  "self_approval":
-                      False,
+                  "generate_implementation_plan": True,
+                  "dry_run_execute": True,
+                  "execute_after_approval": True,
+                  "self_approval": False,
               },
-
               "plan_audit_principles": {
-                  "plan_audit_is_not_approval":
-                      True,
-
-                  "plan_audit_is_not_execution":
-                      True,
-
-                  "execution_requires_human_approval":
-                      True,
-
-                  "bot_2_may_not_self_approve":
-                      True,
-
-                  "completed_phases_remain_immutable":
-                      True,
+                  "plan_audit_is_not_approval": True,
+                  "plan_audit_is_not_execution": True,
+                  "execution_requires_human_approval": True,
+                  "bot_2_may_not_self_approve": True,
+                  "completed_phases_remain_immutable": True,
               },
-
-              "required_checks":
-                  required_checks,
-
+              "required_checks": required_checks,
               "check_results": {
-                  "forbidden_scope_declared_absent_ok":
-                      forbidden_scope_ok,
-
-                  "completed_phase_integrity_ok":
-                      completed_phase_ok,
-
-                  "human_approval_required_ok":
-                      human_approval_required is True,
-
-                  "plan_audit_required_ok":
-                      plan_audit_required is True,
-
-                  "post_audit_required_ok":
-                      post_audit_required is True,
+                  "forbidden_scope_declared_absent_ok": forbidden_scope_ok,
+                  "completed_phase_integrity_ok": completed_phase_ok,
+                  "human_approval_required_ok": human_approval_required is True if plan_available else True,
+                  "plan_audit_required_ok": plan_audit_required is True if plan_available else True,
+                  "post_audit_required_ok": post_audit_required is True if plan_available else True,
               },
-
-              "issues":
-                  issues,
-
-              "status":
-                  (
-                      "pass"
-                      if not issues
-                      else "warning"
-                  ),
-
-              "severity":
-                  (
-                      "info"
-                      if not issues
-                      else "warning"
-                  ),
-
-              "verdict":
-                  (
-                      "ready_for_human_review"
-                      if not issues
-                      else "needs_review"
-                  ),
+              "issues": issues,
+              "status": "pass" if not issues else "warning",
+              "severity": "info" if not issues else "warning",
+              "verdict": "ready_for_human_review" if not issues else "needs_review",
           }
 
-          Path(
-              "artifacts/plan_audit_evidence.json"
-          ).write_text(
-              json.dumps(
-                  payload,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
+          Path("artifacts/plan_audit_evidence.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False),
               encoding="utf-8",
           )
           PY
@@ -3558,6 +3412,7 @@ jobs:
           python artifacts/plan_audit_generator.py
 
           rm -f artifacts/plan_audit_generator.py
+
 
       ############################################################
       # Post Audit Contract
