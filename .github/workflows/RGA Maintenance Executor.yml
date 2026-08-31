@@ -225,28 +225,18 @@ jobs:
           
       ############################################################
       # Ingest Pre-Audit Artifacts
-      ############################################################          
-          
+      ############################################################
+
       - name: Ingest Pre-Audit Artifacts
         uses: dawidd6/action-download-artifact@v6
         with:
-          workflow: RGA Runtime Auditor.yml
-          name: runtime-auditor-evidence
+          github_token: ${{ steps.resolve_artifact_token.outputs.token }}
+          workflow: "RGA Runtime Auditor.yml"
+          name: "runtime-auditor-evidence"
           path: artifacts/
           check_artifacts: true
           search_artifacts: true
         continue-on-error: true
-          
-      ############################################################
-      # Flatten Artifact Directory
-      ############################################################          
-
-      - name: Flatten Artifact Directory
-        run: |
-          # Move files inside subfolders up to artifacts/
-          find artifacts/ -mindepth 2 -type f -exec mv {} artifacts/ \;
-          echo "[RGA] Files in artifacts folder:"
-          ls -la artifacts/
 
       ############################################################
       # Download Plan Audit Evidence
@@ -255,13 +245,40 @@ jobs:
       - name: Download Plan Audit Evidence
         uses: dawidd6/action-download-artifact@v6
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.resolve_artifact_token.outputs.token }}
           workflow: "RGA Runtime Auditor.yml"
           name: "plan-audit-evidence"
           path: artifacts/
           check_artifacts: true
           search_artifacts: true
+        continue-on-error: true        
+
+      ############################################################
+      # Ingest Post-Audit Backhaul Contracts
+      ############################################################
+
+      - name: Ingest Post-Audit Backhaul Contracts
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ steps.resolve_artifact_token.outputs.token }}
+          workflow: "RGA Runtime Auditor.yml"
+          name: "lifecycle-event-backhaul"
+          path: artifacts/
+          check_artifacts: true
+          search_artifacts: true
         continue-on-error: true
+
+      ############################################################
+      # Flatten Artifact Directory
+      ############################################################
+
+      - name: Flatten Artifact Directory
+        run: |
+          mkdir -p artifacts
+          find artifacts/ -mindepth 2 -type f -exec mv {} artifacts/ \;
+          find artifacts/ -mindepth 1 -type d -empty -delete
+          echo "[RGA] Files in artifacts folder:"
+          ls -la artifacts/        
 
       ############################################################
       # Ensure Audit Artifacts Present
