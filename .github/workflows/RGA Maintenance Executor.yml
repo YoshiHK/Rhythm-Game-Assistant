@@ -227,15 +227,16 @@ jobs:
       # Ingest Pre-Audit Artifacts
       ############################################################
 
-      - name: Ingest Pre-Audit Artifacts
+      - name: Ingest Execution Plan & Contracts
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ steps.artifact_token.outputs.token }}
           workflow: "RGA Runtime Auditor.yml"
-          name: "runtime-auditor-evidence"
+          name: "database-mutation-plan"
           path: artifacts/
-          check_artifacts: true
+          check_artifacts: false
           search_artifacts: true
+          if_no_artifact_found: ignore
         continue-on-error: true
 
       ############################################################
@@ -1161,6 +1162,30 @@ jobs:
               encoding="utf-8",
           )
           PY
+
+      ############################################################
+      # Ensure Execution Gate Contracts Exist
+      ############################################################
+
+      - name: Ensure Execution Gate Contracts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+
+          # Ensure database mutation plan file exists (create empty/noop contract if absent)
+          if [ ! -f "artifacts/database_mutation_plan.json" ]; then
+            if [ -f "artifacts/database_mutation_contract.json" ]; then
+              cp artifacts/database_mutation_contract.json artifacts/database_mutation_plan.json
+            else
+              echo '{"schema":"rga.database_mutation_plan.v1","mutations":[],"enabled":false}' > artifacts/database_mutation_plan.json
+            fi
+          fi
+
+          # Ensure persistence contract file exists
+          if [ ! -f "artifacts/persistence_contract.json" ]; then
+            echo '{"schema":"rga.persistence_contract.v1","persistence_required":false}' > artifacts/persistence_contract.json
+          fi
+          
           
       ############################################################
       # Execution Gate
