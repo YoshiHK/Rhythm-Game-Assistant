@@ -224,20 +224,35 @@ jobs:
           PY
           
       ############################################################
-      # Ingest Pre-Audit Artifacts
+      # Ingest Approved Execution Plan & Contracts
+      #
+      # Execute mode must consume the original plan-stage bundle.
+      #
+      # Required preserved artifacts:
+      #
+      #   execution_plan.json
+      #   execution_plan_fingerprint.json
+      #   database_mutation_plan.json
+      #   persistence_contract.json
+      #
+      # Do not download these files independently from unrelated
+      # runs because their identity must remain bound together.
       ############################################################
 
       - name: Ingest Execution Plan & Contracts
+        if: >-
+          ${{
+            inputs.executor_mode == 'execute'
+            || inputs.executor_mode == 'dry_run_execute'
+          }}
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ steps.artifact_token.outputs.token }}
-          workflow: "RGA Runtime Auditor.yml"
-          name: "database-mutation-plan"
-          path: artifacts/
-          check_artifacts: false
+          workflow: "RGA Maintenance Executor.yml"
+          name: "rga-execution-plan"
+          path: artifacts_staging/plan
+          check_artifacts: true
           search_artifacts: true
-          if_no_artifact_found: ignore
-        continue-on-error: true
 
       ############################################################
       # Download Plan Audit Evidence
@@ -256,16 +271,147 @@ jobs:
 
       ############################################################
       # Flatten Artifact Directory
+      #
+      # The plan-stage bundle is restored explicitly and must not
+      # be silently overwritten by another downloaded artifact.
       ############################################################
 
       - name: Flatten Artifact Directory
+        shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
-          find artifacts/ -mindepth 2 -type f -exec mv {} artifacts/ \;
-          find artifacts/ -mindepth 1 -type d -empty -delete
-          echo "[RGA] Files in artifacts folder:"
-          ls -la artifacts/
-        
+          mkdir -p artifacts_staging/plan
+
+          copy_preserved_plan_artifact() {
+            local filename="$1"
+            local destination="artifacts/${filename}"
+
+            mapfile -t matches < <(
+              find artifacts_staging/plan \
+                -type f \
+                -name "${filename}" \
+                -print
+            )
+
+            if [ "${#matches[@]}" -eq 0 ]; then
+              echo "::error::Required plan-stage artifact is missing: ${filename}"
+              return 1
+            fi
+
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one ${filename}; found ${#matches[@]}."
+              printf '  %s\n' "${matches[@]}"
+              return 1
+            fi
+
+            local source="${matches[0]}"
+
+            if [ -f "${destination}" ]; then
+              if cmp -s "${source}" "${destination}"; then
+                echo "[RGA] Identical canonical artifact already exists: ${filename}"
+                return 0
+              fi
+
+              echo "::error::Refusing to overwrite conflicting canonical artifact: ${destination}"
+              echo "Existing: ${destination}"
+              echo "Incoming: ${source}"
+              return 1
+            fi
+
+            cp "${source}" "${destination}"
+            echo "[RGA] Restored preserved plan artifact: ${filename}"
+          }
+
+          if {
+            [ "${EXECUTOR_MODE}" = "execute" ] \
+              || [ "${EXECUTOR_MODE}" = "dry_run_execute" ];
+          }; then
+            copy_preserved_plan_artifact "execution_plan.json"
+            copy_preserved_plan_artifact "execution_plan_fingerprint.json"
+            copy_preserved_plan_artifact "database_mutation_plan.json"
+            copy_preserved_plan_artifact "persistence_contract.json"
+          fi
+
+          ########################################################
+          # Collision-safe flattening for other downloaded bundles
+          ########################################################
+
+          while IFS= read -r -d '' source; do
+            filename="$(basename "${source}")"
+            destination="artifacts/${filename}"
+
+            if [ "${source}" = "${destination}" ]; then
+              continue
+            fi
+
+            if [ -f "${destination}" ]; then
+              if cmp -s "${source}" "${destination}"; then
+                echo "[RGA] Removing duplicate identical artifact: ${source}"
+                rm -f "${source}"
+              else
+                echo "::error::Artifact flattening collision for ${filename}"
+                echo "Existing: ${destination}"
+                echo "Incoming: ${source}"
+                exit 1
+              fi
+            else
+              mv "${source}" "${destination}"
+              echo "[RGA] Flattened artifact: ${filename}"
+            fi
+          done < <(
+            find artifacts \
+              -mindepth 2 \
+              -type f \
+              -print0
+          )
+
+          find artifacts \
+            -mindepth 1 \
+            -type d \
+            -empty \
+            -delete
+
+          ########################################################
+          # Execute-mode invariant
+          ########################################################
+
+          if {
+            [ "${EXECUTOR_MODE}" = "execute" ] \
+              || [ "${EXECUTOR_MODE}" = "dry_run_execute" ];
+          }; then
+            required=(
+              "artifacts/execution_plan.json"
+              "artifacts/execution_plan_fingerprint.json"
+              "artifacts/database_mutation_plan.json"
+              "artifacts/persistence_contract.json"
+            )
+
+            missing=()
+
+            for path in "${required[@]}"; do
+              if [ ! -f "${path}" ]; then
+                missing+=("${path}")
+              fi
+            done
+
+            if [ "${#missing[@]}" -gt 0 ]; then
+              echo "::error::Approved plan bundle ingestion is incomplete."
+              printf 'Missing: %s\n' "${missing[@]}"
+              exit 1
+            fi
+          fi
+
+          echo ""
+          echo "[RGA] Files in canonical artifacts folder:"
+          find artifacts \
+            -maxdepth 1 \
+            -type f \
+            -print \
+            | sort
 
       ############################################################
       # Ensure Audit Artifacts Present
@@ -715,22 +861,567 @@ jobs:
           rm -f artifacts/build_execution_plan_input_contract          
 
       ############################################################
-      # Execution Plan Fingerprint
+      # Verify Preserved Execution Plan Fingerprint
       #
-      # execution_plan.json is a plan-stage proposal artifact.
+      # Plan mode creates the fingerprint after Bot #2 generates
+      # execution_plan.json.
       #
-      # Runtime Auditor plan-audit reviews:
-      #
-      #   - execution_plan.json
-      #   - database_mutation_plan.json
-      #
-      # Human approval is expected to approve the reviewed plan.
-      #
-      # Execute stage must preserve the approved plan and should
-      # verify that the approved artifact has not changed.
+      # Execute mode consumes and verifies that preserved
+      # fingerprint without modifying it.
       ############################################################
 
       - name: Execution Plan Fingerprint
+        if: >-
+          ${{
+            inputs.executor_mode == 'execute'
+            || inputs.executor_mode == 'dry_run_execute'
+          }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          cat > verify_preserved_execution_plan_fingerprint.py <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+
+          def require_file(path: Path) -> bytes:
+              if not path.exists() or not path.is_file():
+                  raise SystemExit(
+                      f"[RGA-FINGERPRINT][FAIL] Missing required file: {path}"
+                  )
+              return path.read_bytes()
+
+
+          def sha256(raw: bytes) -> str:
+              return hashlib.sha256(raw).hexdigest()
+
+
+          plan_path = Path("artifacts/execution_plan.json")
+          mutation_path = Path(
+              "artifacts/database_mutation_plan.json"
+          )
+          fingerprint_path = Path(
+              "artifacts/execution_plan_fingerprint.json"
+          )
+
+          plan_raw = require_file(plan_path)
+          mutation_raw = require_file(mutation_path)
+          fingerprint_raw = require_file(fingerprint_path)
+
+          try:
+              plan = json.loads(plan_raw.decode("utf-8"))
+          except Exception as exc:
+              raise SystemExit(
+                  "[RGA-FINGERPRINT][FAIL] "
+                  f"execution_plan.json is not parseable: {exc}"
+              )
+
+          try:
+              fingerprint = json.loads(
+                  fingerprint_raw.decode("utf-8")
+              )
+          except Exception as exc:
+              raise SystemExit(
+                  "[RGA-FINGERPRINT][FAIL] "
+                  f"execution_plan_fingerprint.json is not parseable: {exc}"
+              )
+
+          violations = []
+
+          if (
+              fingerprint.get("schema")
+              != "rga.execution_plan_fingerprint.v1.1"
+          ):
+              violations.append(
+                  "Unsupported execution plan fingerprint schema."
+              )
+
+          if fingerprint.get("plan_stage_artifact") is not True:
+              violations.append(
+                  "Fingerprint is not marked as a plan-stage artifact."
+              )
+
+          if (
+              fingerprint.get(
+                  "execution_stage_may_modify_plan"
+              )
+              is not False
+          ):
+              violations.append(
+                  "Fingerprint does not prohibit execute-stage plan modification."
+              )
+
+          if (
+              fingerprint.get(
+                  "execution_stage_may_modify_mutation_plan"
+              )
+              is not False
+          ):
+              violations.append(
+                  "Fingerprint does not prohibit execute-stage mutation-plan modification."
+              )
+
+          if plan.get("schema") != "rga.execution_plan.v1.2":
+              violations.append(
+                  "execution_plan.json has an unsupported schema."
+              )
+
+          if plan.get("mode") != "plan":
+              violations.append(
+                  "The preserved execution plan mode is not 'plan'."
+              )
+
+          actual_plan_sha = sha256(plan_raw)
+          actual_mutation_sha = sha256(mutation_raw)
+
+          fingerprint_plan = fingerprint.get(
+              "execution_plan",
+              {},
+          )
+          fingerprint_mutation = fingerprint.get(
+              "database_mutation_plan",
+              {},
+          )
+
+          expected_plan_sha = (
+              fingerprint_plan.get("sha256") or ""
+          ).strip()
+
+          expected_mutation_sha = (
+              fingerprint_mutation.get("sha256") or ""
+          ).strip()
+
+          if not expected_plan_sha:
+              violations.append(
+                  "Fingerprint is missing execution_plan.sha256."
+              )
+          elif expected_plan_sha != actual_plan_sha:
+              violations.append(
+                  "execution_plan.json does not match the preserved fingerprint."
+              )
+
+          if not expected_mutation_sha:
+              violations.append(
+                  "Fingerprint is missing database_mutation_plan.sha256."
+              )
+          elif expected_mutation_sha != actual_mutation_sha:
+              violations.append(
+                  "database_mutation_plan.json does not match the preserved fingerprint."
+              )
+
+          if violations:
+              print("[RGA-FINGERPRINT][FAIL]")
+              for violation in violations:
+                  print(f" - {violation}")
+              raise SystemExit(1)
+
+          print("[RGA-FINGERPRINT][OK]")
+          print(
+              "Preserved execution plan and mutation plan "
+              "match the approved plan-stage fingerprint."
+          )
+          PY
+
+          python3 verify_preserved_execution_plan_fingerprint.py
+          rm -f verify_preserved_execution_plan_fingerprint.py
+
+      ############################################################
+      # Resolve Hashes and Preserve Approval Schema
+      #
+      # Execute mode must not backfill a missing hash into an
+      # approval that already exists.
+      #
+      # Existing approval:
+      #   validate only
+      #
+      # Missing approval:
+      #   create only from an explicit approval phrase and the
+      #   already-preserved plan-stage fingerprint
+      ############################################################
+
+      - name: Resolve Hashes and Upgrade Approval Schema
+        if: >-
+          ${{
+            inputs.executor_mode == 'execute'
+            || inputs.executor_mode == 'dry_run_execute'
+          }}
+        shell: bash
+        env:
+          INPUT_EXEC_SHA: >-
+            ${{ github.event.inputs.execution_plan_sha256
+                || inputs.execution_plan_sha256 }}
+          INPUT_MUT_SHA: >-
+            ${{ github.event.inputs.database_mutation_plan_sha256
+                || inputs.database_mutation_plan_sha256 }}
+          APPROVAL_PHRASE: >-
+            ${{ github.event.inputs.execution_approval
+                || inputs.execution_approval }}
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
+        run: |
+          set -euo pipefail
+
+          cat > resolve_and_validate_approval.py <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+
+          EXPECTED_PHRASE = "APPROVE_RGA_EXECUTION"
+
+
+          def require_json(path: Path) -> tuple[dict, bytes]:
+              if not path.exists() or not path.is_file():
+                  raise SystemExit(
+                      f"[RGA-APPROVAL][FAIL] Missing required file: {path}"
+                  )
+
+              raw = path.read_bytes()
+
+              try:
+                  return json.loads(
+                      raw.decode("utf-8")
+                  ), raw
+              except Exception as exc:
+                  raise SystemExit(
+                      "[RGA-APPROVAL][FAIL] "
+                      f"Could not parse {path}: {exc}"
+                  )
+
+
+          def digest(raw: bytes) -> str:
+              return hashlib.sha256(raw).hexdigest()
+
+
+          plan_path = Path("artifacts/execution_plan.json")
+          mutation_path = Path(
+              "artifacts/database_mutation_plan.json"
+          )
+          persistence_path = Path(
+              "artifacts/persistence_contract.json"
+          )
+          fingerprint_path = Path(
+              "artifacts/execution_plan_fingerprint.json"
+          )
+          approval_path = Path(
+              "artifacts/human_execution_approval.json"
+          )
+
+          plan, plan_raw = require_json(plan_path)
+          mutation, mutation_raw = require_json(
+              mutation_path
+          )
+          persistence, _ = require_json(
+              persistence_path
+          )
+          fingerprint, _ = require_json(
+              fingerprint_path
+          )
+
+          actual_plan_sha = digest(plan_raw)
+          actual_mutation_sha = digest(mutation_raw)
+
+          fingerprint_plan_sha = str(
+              fingerprint.get(
+                  "execution_plan",
+                  {},
+              ).get(
+                  "sha256",
+                  "",
+              )
+              or ""
+          ).strip()
+
+          fingerprint_mutation_sha = str(
+              fingerprint.get(
+                  "database_mutation_plan",
+                  {},
+              ).get(
+                  "sha256",
+                  "",
+              )
+              or ""
+          ).strip()
+
+          violations = []
+
+          if not fingerprint_plan_sha:
+              violations.append(
+                  "Preserved fingerprint is missing execution_plan.sha256."
+              )
+          elif fingerprint_plan_sha != actual_plan_sha:
+              violations.append(
+                  "Preserved execution plan fingerprint does not match the file."
+              )
+
+          if not fingerprint_mutation_sha:
+              violations.append(
+                  "Preserved fingerprint is missing database_mutation_plan.sha256."
+              )
+          elif fingerprint_mutation_sha != actual_mutation_sha:
+              violations.append(
+                  "Preserved mutation-plan fingerprint does not match the file."
+              )
+
+          input_plan_sha = os.getenv(
+              "INPUT_EXEC_SHA",
+              "",
+          ).strip()
+
+          input_mutation_sha = os.getenv(
+              "INPUT_MUT_SHA",
+              "",
+          ).strip()
+
+          if (
+              input_plan_sha
+              and input_plan_sha != actual_plan_sha
+          ):
+              violations.append(
+                  "Submitted execution_plan_sha256 does not match the preserved plan."
+              )
+
+          if (
+              input_mutation_sha
+              and input_mutation_sha != actual_mutation_sha
+          ):
+              violations.append(
+                  "Submitted database_mutation_plan_sha256 does not match the preserved mutation plan."
+              )
+
+          phrase = os.getenv(
+              "APPROVAL_PHRASE",
+              "",
+          ).strip()
+
+          if phrase != EXPECTED_PHRASE:
+              violations.append(
+                  "Explicit execution approval phrase is missing or invalid."
+              )
+
+          if violations:
+              print("[RGA-APPROVAL][FAIL]")
+              for violation in violations:
+                  print(f" - {violation}")
+              raise SystemExit(1)
+
+          ########################################################
+          # Existing approval is immutable during execute mode
+          ########################################################
+
+          if approval_path.exists():
+              approval, _ = require_json(
+                  approval_path
+              )
+
+              bundle = approval.get(
+                  "approved_execution_bundle",
+                  {},
+              )
+
+              approved_plan_sha = str(
+                  bundle.get(
+                      "execution_plan_sha256",
+                      "",
+                  )
+                  or ""
+              ).strip()
+
+              approved_mutation_sha = str(
+                  bundle.get(
+                      "database_mutation_plan_sha256",
+                      "",
+                  )
+                  or ""
+              ).strip()
+
+              validation_errors = []
+
+              if (
+                  approval.get("schema")
+                  != "rga.human_execution_approval.v2.1"
+              ):
+                  validation_errors.append(
+                      "Existing approval schema is not v2.1."
+                  )
+
+              if approval.get("approved") is not True:
+                  validation_errors.append(
+                      "Existing approval is not approved."
+                  )
+
+              if (
+                  approval.get("approval_phrase")
+                  != EXPECTED_PHRASE
+              ):
+                  validation_errors.append(
+                      "Existing approval phrase is invalid."
+                  )
+
+              if not approved_plan_sha:
+                  validation_errors.append(
+                      "Existing approval is missing execution_plan_sha256."
+                  )
+              elif approved_plan_sha != actual_plan_sha:
+                  validation_errors.append(
+                      "Existing approval does not match execution_plan.json."
+                  )
+
+              if not approved_mutation_sha:
+                  validation_errors.append(
+                      "Existing approval is missing database_mutation_plan_sha256."
+                  )
+              elif (
+                  approved_mutation_sha
+                  != actual_mutation_sha
+              ):
+                  validation_errors.append(
+                      "Existing approval does not match database_mutation_plan.json."
+                  )
+
+              if validation_errors:
+                  print("[RGA-APPROVAL][FAIL]")
+                  print(
+                      "Existing approval was preserved and was not modified."
+                  )
+                  for error in validation_errors:
+                      print(f" - {error}")
+                  raise SystemExit(1)
+
+              print(
+                  "[RGA-APPROVAL][OK] Existing v2.1 approval "
+                  "preserved and verified."
+              )
+              raise SystemExit(0)
+
+          ########################################################
+          # Create approval only from explicit current approval
+          ########################################################
+
+          target_root_failures = plan.get(
+              "target_root_failures",
+              [],
+          )
+
+          if not isinstance(
+              target_root_failures,
+              list,
+          ):
+              raise SystemExit(
+                  "[RGA-APPROVAL][FAIL] "
+                  "execution_plan.target_root_failures is not a list."
+              )
+
+          approval = {
+              "schema":
+                  "rga.human_execution_approval.v2.1",
+
+              "approved":
+                  True,
+
+              "approval_phrase":
+                  EXPECTED_PHRASE,
+
+              "approval_scope":
+                  "maintenance_executor",
+
+              "approved_execution_bundle": {
+                  "execution_plan_schema":
+                      plan.get("schema"),
+
+                  "database_mutation_plan_schema":
+                      mutation.get("schema"),
+
+                  "persistence_contract_schema":
+                      persistence.get("schema"),
+
+                  "execution_plan_fingerprint_schema":
+                      fingerprint.get("schema"),
+
+                  "target_root_failures":
+                      target_root_failures,
+
+                  "execution_plan_sha256":
+                      actual_plan_sha,
+
+                  "database_mutation_plan_sha256":
+                      actual_mutation_sha,
+              },
+
+              "governance": {
+                  "human_review_completed":
+                      True,
+
+                  "plan_audit_completed":
+                      True,
+
+                  "post_audit_required":
+                      True,
+
+                  "bot_2_may_execute":
+                      True,
+
+                  "bot_2_may_self_approve":
+                      False,
+              },
+
+              "phase_boundary_contract": {
+                  "completed_phases_immutable":
+                      True,
+
+                  "canonical_row_immutable":
+                      True,
+
+                  "pattern_logic_immutable":
+                      True,
+
+                  "tips_generation_immutable":
+                      True,
+
+                  "personalization_immutable":
+                      True,
+
+                  "localization_immutable":
+                      True,
+
+                  "recommendation_logic_immutable":
+                      True,
+              },
+          }
+
+          approval_path.parent.mkdir(
+              parents=True,
+              exist_ok=True,
+          )
+
+          approval_path.write_text(
+              json.dumps(
+                  approval,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print(
+              "[RGA-APPROVAL][OK] Created v2.1 approval "
+              "bound to the preserved approved plan bundle."
+          )
+          PY
+
+          python3 resolve_and_validate_approval.py
+          rm -f resolve_and_validate_approval.py
+
+
+      ############################################################
+      # Human Approval Artifact Audit
+      ############################################################
+
+      - name: Human Approval Artifact audit
         if: always()
         shell: bash
         run: |
@@ -738,146 +1429,318 @@ jobs:
 
           mkdir -p artifacts
 
-          python - <<'PY'
+          cat > build_approval_audit.py <<'PY'
           import hashlib
           import json
           from pathlib import Path
-          from datetime import datetime, timezone
 
+
+          EXPECTED_PHRASE = "APPROVE_RGA_EXECUTION"
+
+          approval_path = Path(
+              "artifacts/human_execution_approval.json"
+          )
           plan_path = Path(
               "artifacts/execution_plan.json"
           )
-
-          mutation_plan_path = Path(
+          mutation_path = Path(
               "artifacts/database_mutation_plan.json"
           )
+          fingerprint_path = Path(
+              "artifacts/execution_plan_fingerprint.json"
+          )
 
-          fingerprint = None
-          plan_schema = None
-          plan_mode = None
-          plan_parseable = False
+          violations = []
 
-          if plan_path.exists() and plan_path.is_file():
+          approval_present = approval_path.is_file()
+          plan_present = plan_path.is_file()
+          mutation_present = mutation_path.is_file()
+          fingerprint_present = fingerprint_path.is_file()
 
-              raw = plan_path.read_bytes()
+          approved = False
+          phrase = ""
+          approval_schema_supported = False
+          approved_bundle_present = False
 
-              fingerprint = hashlib.sha256(
-                  raw
+          approved_plan_sha = ""
+          approved_mutation_sha = ""
+
+          fingerprint_plan_sha = ""
+          fingerprint_mutation_sha = ""
+
+          actual_plan_sha = ""
+          actual_mutation_sha = ""
+
+          if plan_present:
+              actual_plan_sha = hashlib.sha256(
+                  plan_path.read_bytes()
               ).hexdigest()
 
+          if mutation_present:
+              actual_mutation_sha = hashlib.sha256(
+                  mutation_path.read_bytes()
+              ).hexdigest()
+
+          if fingerprint_present:
               try:
-                  plan_data = json.loads(
-                      raw.decode(
-                          "utf-8"
+                  fingerprint = json.loads(
+                      fingerprint_path.read_text(
+                          encoding="utf-8"
                       )
                   )
 
-                  plan_parseable = True
+                  fingerprint_plan_sha = str(
+                      fingerprint.get(
+                          "execution_plan",
+                          {},
+                      ).get(
+                          "sha256",
+                          "",
+                      )
+                      or ""
+                  ).strip()
 
-                  plan_schema = plan_data.get(
-                      "schema"
+                  fingerprint_mutation_sha = str(
+                      fingerprint.get(
+                          "database_mutation_plan",
+                          {},
+                      ).get(
+                          "sha256",
+                          "",
+                      )
+                      or ""
+                  ).strip()
+
+              except Exception as exc:
+                  violations.append(
+                      "Could not parse execution_plan_fingerprint.json: "
+                      f"{exc}"
                   )
 
-                  plan_mode = plan_data.get(
-                      "mode"
+          if approval_present:
+              try:
+                  approval = json.loads(
+                      approval_path.read_text(
+                          encoding="utf-8"
+                      )
                   )
 
-              except Exception:
-                  pass
+                  approved = (
+                      approval.get("approved") is True
+                  )
 
-          mutation_fingerprint = None
+                  phrase = str(
+                      approval.get(
+                          "approval_phrase",
+                          "",
+                      )
+                      or ""
+                  )
+
+                  approval_schema_supported = (
+                      approval.get("schema")
+                      == "rga.human_execution_approval.v2.1"
+                  )
+
+                  bundle = approval.get(
+                      "approved_execution_bundle"
+                  )
+
+                  approved_bundle_present = isinstance(
+                      bundle,
+                      dict,
+                  )
+
+                  if approved_bundle_present:
+                      approved_plan_sha = str(
+                          bundle.get(
+                              "execution_plan_sha256",
+                              "",
+                          )
+                          or ""
+                      ).strip()
+
+                      approved_mutation_sha = str(
+                          bundle.get(
+                              "database_mutation_plan_sha256",
+                              "",
+                          )
+                          or ""
+                      ).strip()
+
+              except Exception as exc:
+                  violations.append(
+                      "Could not parse human_execution_approval.json: "
+                      f"{exc}"
+                  )
+
+          execution_plan_hash_present = bool(
+              approved_plan_sha
+          )
+
+          mutation_plan_hash_present = bool(
+              approved_mutation_sha
+          )
+
+          fingerprint_hashes_present = bool(
+              fingerprint_plan_sha
+              and fingerprint_mutation_sha
+          )
+
+          approval_matches_execution_plan = bool(
+              approved_plan_sha
+              and fingerprint_plan_sha
+              and actual_plan_sha
+              and approved_plan_sha
+                  == fingerprint_plan_sha
+                  == actual_plan_sha
+          )
+
+          approval_matches_mutation_plan = bool(
+              approved_mutation_sha
+              and fingerprint_mutation_sha
+              and actual_mutation_sha
+              and approved_mutation_sha
+                  == fingerprint_mutation_sha
+                  == actual_mutation_sha
+          )
+
+          if not approval_present:
+              violations.append(
+                  "human_execution_approval.json is missing."
+              )
+
+          if approval_present and not approval_schema_supported:
+              violations.append(
+                  "Human approval schema is unsupported."
+              )
+
+          if approval_present and not approved:
+              violations.append(
+                  "Human approval does not contain approved=true."
+              )
 
           if (
-              mutation_plan_path.exists()
-              and mutation_plan_path.is_file()
+              approval_present
+              and phrase != EXPECTED_PHRASE
           ):
-              mutation_fingerprint = hashlib.sha256(
-                  mutation_plan_path.read_bytes()
-              ).hexdigest()
+              violations.append(
+                  "Human approval phrase is invalid."
+              )
+
+          if (
+              approval_present
+              and not approved_bundle_present
+          ):
+              violations.append(
+                  "approved_execution_bundle is missing."
+              )
+
+          if not execution_plan_hash_present:
+              violations.append(
+                  "Approved bundle is missing execution_plan_sha256."
+              )
+
+          if not mutation_plan_hash_present:
+              violations.append(
+                  "Approved bundle is missing database_mutation_plan_sha256."
+              )
+
+          if not fingerprint_hashes_present:
+              violations.append(
+                  "Preserved fingerprint is missing required hashes."
+              )
+
+          if (
+              execution_plan_hash_present
+              and not approval_matches_execution_plan
+          ):
+              violations.append(
+                  "Approval does not match the preserved execution plan."
+              )
+
+          if (
+              mutation_plan_hash_present
+              and not approval_matches_mutation_plan
+          ):
+              violations.append(
+                  "Approval does not match the preserved mutation plan."
+              )
+
+          ready_for_human_review = bool(
+              plan_present
+              and mutation_present
+              and fingerprint_present
+              and fingerprint_hashes_present
+          )
+
+          ready_for_execution = bool(
+              ready_for_human_review
+              and approval_present
+              and approval_schema_supported
+              and approved
+              and phrase == EXPECTED_PHRASE
+              and approved_bundle_present
+              and approval_matches_execution_plan
+              and approval_matches_mutation_plan
+              and not violations
+          )
 
           payload = {
               "schema":
-                  "rga.execution_plan_fingerprint.v1.1",
+                  "rga.approval_audit.v1.2",
 
-              "generated_at":
-                  datetime.now(
-                      timezone.utc
-                  ).replace(
-                      microsecond=0
-                  ).isoformat(),
+              "artifact_present":
+                  approval_present,
 
-              "artifact_role":
-                  "plan_fingerprint",
+              "approved":
+                  approved,
 
-              "plan_stage_artifact":
-                  True,
+              "approval_phrase":
+                  phrase,
 
-              "runtime_auditor_plan_audit_required":
-                  True,
+              "approval_schema_supported":
+                  approval_schema_supported,
 
-              "human_approval_required":
-                  True,
+              "approved_execution_bundle_present":
+                  approved_bundle_present,
 
-              "execution_stage_may_modify_plan":
-                  False,
+              "execution_plan_present":
+                  plan_present,
 
-              "execution_stage_may_modify_mutation_plan":
-                  False,
+              "database_mutation_plan_present":
+                  mutation_present,
 
-              "execution_plan": {
-                  "path":
-                      str(plan_path),
+              "fingerprint_present":
+                  fingerprint_present,
 
-                  "present":
-                      plan_path.exists()
-                      and plan_path.is_file(),
+              "execution_plan_sha256_present":
+                  execution_plan_hash_present,
 
-                  "parseable":
-                      plan_parseable,
+              "database_mutation_plan_sha256_present":
+                  mutation_plan_hash_present,
 
-                  "schema":
-                      plan_schema,
+              "fingerprint_hashes_present":
+                  fingerprint_hashes_present,
 
-                  "mode":
-                      plan_mode,
+              "approval_matches_execution_plan":
+                  approval_matches_execution_plan,
 
-                  "sha256":
-                      fingerprint,
-              },
+              "approval_matches_database_mutation_plan":
+                  approval_matches_mutation_plan,
 
-              "database_mutation_plan": {
-                  "path":
-                      str(mutation_plan_path),
+              "ready_for_human_review":
+                  ready_for_human_review,
 
-                  "present":
-                      mutation_plan_path.exists()
-                      and mutation_plan_path.is_file(),
+              "ready_for_execution":
+                  ready_for_execution,
 
-                  "sha256":
-                      mutation_fingerprint,
-              },
-
-              "approval_matching_contract": {
-                  "artifact":
-                      "artifacts/approval_artifact_matching.json",
-
-                  "expected_inputs": [
-                      "execution_plan.json",
-                      "database_mutation_plan.json",
-                  ],
-              },
-
-              "lifecycle_sequence": [
-                  "bot_2_plan",
-                  "bot_1_plan_audit",
-                  "human_approval",
-                  "bot_2_execute",
-                  "bot_1_post_audit",
-              ],
+              "policy_violations":
+                  violations,
           }
 
           Path(
-              "artifacts/execution_plan_fingerprint.json"
+              "artifacts/approval_audit.json"
           ).write_text(
               json.dumps(
                   payload,
@@ -886,149 +1749,22 @@ jobs:
               ),
               encoding="utf-8",
           )
-          PY
 
-      ############################################################
-      # Auto-Resolve SHA Checksums & Upgrade Approval Schema
-      ############################################################
-
-      - name: Resolve Hashes and Upgrade Approval Schema
-        env:
-          INPUT_EXEC_SHA: '${{ github.event.inputs.execution_plan_sha256 || inputs.execution_plan_sha256 }}'
-          INPUT_MUT_SHA: '${{ github.event.inputs.database_mutation_plan_sha256 || inputs.database_mutation_plan_sha256 }}'
-          APPROVAL_PHRASE: '${{ github.event.inputs.execution_approval || inputs.execution_approval }}'
-        run: |
-          python3 -c "
-          import json, hashlib, os, pathlib
-
-          def get_sha256(path_str):
-              p = pathlib.Path(path_str)
-              if p.exists():
-                  return hashlib.sha256(p.read_bytes()).hexdigest()
-              return ''
-
-          # 1. Read environment inputs
-          exec_sha = os.getenv('INPUT_EXEC_SHA', '').strip()
-          mut_sha = os.getenv('INPUT_MUT_SHA', '').strip()
-
-          # 2. Try extracting from fingerprint artifact (handles nested & flat schemas)
-          fingerprint_file = pathlib.Path('artifacts/execution_plan_fingerprint.json')
-          if fingerprint_file.exists():
-              try:
-                  fp_data = json.loads(fingerprint_file.read_text())
-                  if not exec_sha:
-                      exec_sha = (
-                          fp_data.get('execution_plan', {}).get('sha256') or
-                          fp_data.get('execution_plan_sha256') or
-                          fp_data.get('fingerprint_execution_plan_sha256', '')
-                      )
-                  if not mut_sha:
-                      mut_sha = (
-                          fp_data.get('database_mutation_plan', {}).get('sha256') or
-                          fp_data.get('database_mutation_plan_sha256') or
-                          fp_data.get('fingerprint_database_mutation_plan_sha256', '')
-                      )
-              except Exception:
-                  pass
-
-          # 3. Direct file hash fallback for execution plan
-          if not exec_sha:
-              exec_sha = get_sha256('artifacts/execution_plan.json')
-
-          # 4. Ensure database mutation plan file exists, create stub if absent
-          mutation_file = pathlib.Path('artifacts/database_mutation_plan.json')
-          if not mutation_file.exists():
-              mutation_file.parent.mkdir(parents=True, exist_ok=True)
-              mutation_file.write_text('{\"schema\":\"rga.database_mutation_plan.v1\",\"mutations\":[],\"enabled\":false}', encoding='utf-8')
-
-          # 5. Direct file hash fallback for database mutation plan
-          if not mut_sha:
-              mut_sha = get_sha256('artifacts/database_mutation_plan.json')
-
-          phrase = os.getenv('APPROVAL_PHRASE', '').strip() or 'APPROVE_RGA_EXECUTION'
-          approval_file = pathlib.Path('artifacts/human_execution_approval.json')
-
-          upgraded_approval = {
-              'schema': 'rga.human_execution_approval.v2.1',
-              'approved': True,
-              'approval_phrase': phrase,
-              'approval_scope': 'maintenance_executor',
-              'approved_execution_bundle': {
-                  'execution_plan_schema': 'rga.execution_plan.v1.2',
-                  'database_mutation_plan_schema': 'rga.database_mutation_plan.v1.1',
-                  'persistence_contract_schema': 'rga.persistence_contract.v1.1',
-                  'execution_plan_fingerprint_schema': 'rga.execution_plan_fingerprint.v1.1',
-                  'target_root_failures': [
-                      'artifact_database_policy',
-                      'deletion_readiness',
-                      'runtime_wiring'
-                  ],
-                  'execution_plan_sha256': exec_sha,
-                  'database_mutation_plan_sha256': mut_sha
-              },
-              'governance': {
-                  'human_review_completed': True,
-                  'plan_audit_completed': True,
-                  'post_audit_required': True,
-                  'bot_2_may_execute': True,
-                  'bot_2_may_self_approve': False
-              },
-              'phase_boundary_contract': {
-                  'completed_phases_immutable': True,
-                  'canonical_row_immutable': True,
-                  'pattern_logic_immutable': True,
-                  'tips_generation_immutable': True,
-                  'personalization_immutable': True,
-                  'localization_immutable': True,
-                  'recommendation_logic_immutable': True
-              }
-          }
-
-          approval_file.parent.mkdir(parents=True, exist_ok=True)
-          approval_file.write_text(json.dumps(upgraded_approval, indent=2))
-          print(f'Approval generated with Execution SHA: {exec_sha} | Mutation SHA: {mut_sha}')
-          "
-
-
-      ############################################################
-      # Human Approval Artifact audit
-      ############################################################
-
-      - name: Human Approval Artifact audit
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          p = Path('artifacts/human_execution_approval.json')
-          present = p.exists()
-          approved = False
-          approval_phrase = ""
-          schema_version = "rga.approval_audit.v1.1"
-
-          if present:
-              try:
-                  data = json.loads(p.read_text(encoding='utf-8'))
-                  approved = data.get('approved', False)
-                  approval_phrase = data.get('approval_phrase', '')
-              except Exception as exc:
-                  print(f"[RGA Audit Warning] Could not parse human_execution_approval.json: {exc}")
-
-          payload = {
-              'schema': schema_version,
-              'artifact_present': present,
-              'approved': approved,
-              'approval_phrase': approval_phrase,
-              'ready_for_human_review': True
-          }
-
-          Path('artifacts/approval_audit.json').write_text(
-              json.dumps(payload, indent=2, ensure_ascii=False),
-              encoding='utf-8'
+          print(
+              "[RGA-AUDIT] approval_audit.json generated."
           )
-          print(f"[RGA Audit] Generated approval_audit.json (present={present}, approved={approved})")
+          print(
+              "[RGA-AUDIT] "
+              f"ready_for_human_review={ready_for_human_review}"
+          )
+          print(
+              "[RGA-AUDIT] "
+              f"ready_for_execution={ready_for_execution}"
+          )
           PY
+
+          python3 build_approval_audit.py
+          rm -f build_approval
           
       ############################################################
       # Approval Artifact Matching
@@ -4510,11 +5246,194 @@ jobs:
           retention-days: 30
 
       ############################################################
+      # Build Plan-Stage Fingerprint
+      #
+      # This step must appear after Run Runtime Executor and before
+      # Upload Execution Plan Bundle.
+      ############################################################
+
+      - name: Build Plan-Stage Fingerprint
+        if: >-
+          ${{
+            inputs.executor_mode == 'plan'
+            && success()
+          }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          cat > build_plan_stage_fingerprint.py <<'PY'
+          import hashlib
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+
+          def require_json(path: Path) -> tuple[dict, bytes]:
+              if not path.exists() or not path.is_file():
+                  raise SystemExit(
+                      f"[RGA-PLAN][FAIL] Missing required file: {path}"
+                  )
+
+              raw = path.read_bytes()
+
+              try:
+                  return json.loads(
+                      raw.decode("utf-8")
+                  ), raw
+              except Exception as exc:
+                  raise SystemExit(
+                      f"[RGA-PLAN][FAIL] Could not parse {path}: {exc}"
+                  )
+
+
+          plan_path = Path(
+              "artifacts/execution_plan.json"
+          )
+          mutation_path = Path(
+              "artifacts/database_mutation_plan.json"
+          )
+          persistence_path = Path(
+              "artifacts/persistence_contract.json"
+          )
+
+          plan, plan_raw = require_json(plan_path)
+          mutation, mutation_raw = require_json(
+              mutation_path
+          )
+          require_json(persistence_path)
+
+          if plan.get("schema") != "rga.execution_plan.v1.2":
+              raise SystemExit(
+                  "[RGA-PLAN][FAIL] Unsupported execution plan schema."
+              )
+
+          if plan.get("mode") != "plan":
+              raise SystemExit(
+                  "[RGA-PLAN][FAIL] execution_plan.mode must be 'plan'."
+              )
+
+          plan_sha = hashlib.sha256(
+              plan_raw
+          ).hexdigest()
+
+          mutation_sha = hashlib.sha256(
+              mutation_raw
+          ).hexdigest()
+
+          payload = {
+              "schema":
+                  "rga.execution_plan_fingerprint.v1.1",
+
+              "generated_at":
+                  datetime.now(
+                      timezone.utc
+                  ).replace(
+                      microsecond=0
+                  ).isoformat(),
+
+              "artifact_role":
+                  "plan_fingerprint",
+
+              "plan_stage_artifact":
+                  True,
+
+              "runtime_auditor_plan_audit_required":
+                  True,
+
+              "human_approval_required":
+                  True,
+
+              "execution_stage_may_modify_plan":
+                  False,
+
+              "execution_stage_may_modify_mutation_plan":
+                  False,
+
+              "execution_plan": {
+                  "path":
+                      str(plan_path),
+
+                  "present":
+                      True,
+
+                  "parseable":
+                      True,
+
+                  "schema":
+                      plan.get("schema"),
+
+                  "mode":
+                      plan.get("mode"),
+
+                  "sha256":
+                      plan_sha,
+              },
+
+              "database_mutation_plan": {
+                  "path":
+                      str(mutation_path),
+
+                  "present":
+                      True,
+
+                  "sha256":
+                      mutation_sha,
+              },
+
+              "approval_matching_contract": {
+                  "artifact":
+                      "artifacts/approval_artifact_matching.json",
+
+                  "expected_inputs": [
+                      "execution_plan.json",
+                      "database_mutation_plan.json",
+                  ],
+              },
+
+              "lifecycle_sequence": [
+                  "bot_2_plan",
+                  "bot_1_plan_audit",
+                  "human_approval",
+                  "bot_2_execute",
+                  "bot_1_post_audit",
+              ],
+          }
+
+          Path(
+              "artifacts/execution_plan_fingerprint.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          print("[RGA-PLAN][OK] Plan-stage fingerprint created.")
+          print(f"[RGA-PLAN] execution_plan_sha256={plan_sha}")
+          print(
+              "[RGA-PLAN] "
+              f"database_mutation_plan_sha256={mutation_sha}"
+          )
+          PY
+
+          python3 build_plan_stage_fingerprint.py
+          rm -f build_plan_stage_fingerprint.py
+
+      ############################################################
       # Upload Execution Plan Bundle
       ############################################################
 
       - name: Upload Execution Plan Bundle
-        if: ${{ always() && inputs.executor_mode == 'plan' }}
+        if: >-
+          ${{
+            inputs.executor_mode == 'plan'
+            && success()
+          }}
         uses: actions/upload-artifact@v4
         with:
           name: rga-execution-plan
@@ -4530,7 +5449,7 @@ jobs:
             artifacts/runtime_executor_stderr.txt
             artifacts/runtime_executor_stderr_summary.json
             artifacts/runtime_executor_exit_code.txt
-          if-no-files-found: warn
+          if-no-files-found: error
 
       ############################################################
       # Stage 2: Upload Database Mutation Plan
@@ -4692,3 +5611,102 @@ jobs:
             artifacts/lifecycle_event_contract.json
             artifacts/lifecycle_event_backhaul.json
           if-no-files-found: warn     
+
+      ############################################################
+      # Fail Blocked Execute Request
+      #
+      # Diagnostic evidence has already been uploaded before this
+      # step. A blocked execute request must not leave the workflow
+      # with a misleading successful status.
+      ############################################################
+
+      - name: Fail Blocked Execute Request
+        if: >-
+          ${{
+            always()
+            && inputs.executor_mode == 'execute'
+          }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > fail_blocked_execute_request.py <<'PY'
+          import json
+          from pathlib import Path
+
+
+          gate_path = Path(
+              "artifacts/execution_gate.json"
+          )
+
+          if not gate_path.exists() or not gate_path.is_file():
+              print(
+                  "::error::Execute mode completed without execution_gate.json."
+              )
+              raise SystemExit(1)
+
+          try:
+              gate = json.loads(
+                  gate_path.read_text(
+                      encoding="utf-8"
+                  )
+              )
+          except Exception as exc:
+              print(
+                  "::error::Could not parse execution_gate.json: "
+                  f"{exc}"
+              )
+              raise SystemExit(1)
+
+          allowed = gate.get("allowed") is True
+          status = str(
+              gate.get(
+                  "status",
+                  "",
+              )
+              or ""
+          )
+          reason = str(
+              gate.get(
+                  "reason",
+                  "",
+              )
+              or ""
+          )
+
+          violations = gate.get(
+              "policy_violations",
+              [],
+          )
+
+          if not isinstance(
+              violations,
+              list,
+          ):
+              violations = [
+                  str(violations)
+              ]
+
+          if not allowed or status != "allowed":
+              print(
+                  "::error::Execute request was blocked by execution_gate.json."
+              )
+              print(f"status={status}")
+              print(f"allowed={allowed}")
+              print(f"reason={reason}")
+
+              if violations:
+                  print("policy_violations:")
+                  for violation in violations:
+                      print(f" - {violation}")
+
+              raise SystemExit(1)
+
+          print(
+              "[RGA-EXECUTION-GATE][OK] "
+              "Execute request was allowed."
+          )
+          PY
+
+          python3 fail_blocked_execute_request.py
+          rm -f fail_blocked_execute_request.py
