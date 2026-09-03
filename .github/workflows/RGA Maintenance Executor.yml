@@ -4955,34 +4955,365 @@ jobs:
           
       ############################################################
       # Verify Executor Provenance Artifacts
+      #
+      # Verify:
+      #
+      #   1. Required artifacts exist
+      #   2. Executor write manifest exists
+      #   3. Execution provenance exists
+      #   4. Provenance reflects executor results
+      #
       ############################################################
 
       - name: Verify Executor Provenance Artifacts
         if: always()
         shell: bash
         run: |
-          echo "Checking execution provenance artifacts..."
+          set -euo pipefail
 
-          missing="false"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
 
-          for path in \
-            artifacts/apply_execution_result.json \
-            artifacts/executor_write_manifest.json \
-            artifacts/execution_provenance.json
-          do
-            if [ ! -s "$path" ]; then
-              echo "::warning::Missing or empty artifact: $path"
-              missing="true"
-            else
-              echo "Found artifact: $path"
-            fi
-          done
+          REQUIRED = [
+              "artifacts/apply_execution_result.json",
+              "artifacts/executor_write_manifest.json",
+              "artifacts/execution_provenance.json",
+          ]
 
-          if [ "$missing" = "true" ]; then
-            echo "::warning::One or more executor provenance artifacts are missing or empty."
-          fi
+          violations = []
 
-          echo "Executor provenance artifact check completed."      
+          ########################################################
+          # Required artifact checks
+          ########################################################
+
+          for path_str in REQUIRED:
+              path = Path(path_str)
+
+              if not path.exists():
+                  violations.append(
+                      f"Missing artifact: {path_str}"
+                  )
+                  continue
+
+              if path.stat().st_size == 0:
+                  violations.append(
+                      f"Empty artifact: {path_str}"
+                  )
+
+          if violations:
+              payload = {
+                  "schema":
+                      "rga.verify_executor_provenance.v1.1",
+
+                  "ok":
+                      False,
+
+                  "violations":
+                      violations,
+              }
+
+              Path(
+                  "artifacts/verify_executor_provenance.json"
+              ).write_text(
+                  json.dumps(
+                      payload,
+                      indent=2,
+                      ensure_ascii=False,
+                  ),
+                  encoding="utf-8",
+              )
+
+              print("[RGA][FAIL]")
+
+              for violation in violations:
+                  print(
+                      f" - {violation}"
+                  )
+
+              raise SystemExit(1)
+
+          ########################################################
+          # Load artifacts
+          ########################################################
+
+          apply_result = json.loads(
+              Path(
+                  "artifacts/apply_execution_result.json"
+              ).read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          provenance = json.loads(
+              Path(
+                  "artifacts/execution_provenance.json"
+              ).read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          executor_write_manifest = json.loads(
+              Path(
+                  "artifacts/executor_write_manifest.json"
+              ).read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          executor_provenance = (
+              provenance.get(
+                  "executor_provenance",
+                  {}
+              )
+          )
+
+          ########################################################
+          # Extract authoritative executor state
+          ########################################################
+
+          apply_patch_probe = (
+              apply_result.get(
+                  "patch_probe_performed"
+              )
+          )
+
+          apply_certifiable = (
+              apply_result.get(
+                  "patch_certifiable"
+              )
+          )
+
+          apply_verdict = (
+              apply_result.get(
+                  "execution_verdict"
+              )
+          )
+
+          apply_execution_attempted = (
+              apply_result.get(
+                  "execution_attempted"
+              )
+          )
+
+          apply_execution_performed = (
+              apply_result.get(
+                  "execution_performed"
+              )
+          )
+
+          ########################################################
+          # Extract provenance state
+          ########################################################
+
+          provenance_patch_probe = (
+              executor_provenance.get(
+                  "patch_probe_performed"
+              )
+          )
+
+          provenance_certifiable = (
+              executor_provenance.get(
+                  "patch_certifiable"
+              )
+          )
+
+          provenance_verdict = (
+              executor_provenance.get(
+                  "execution_verdict"
+              )
+          )
+
+          provenance_execution_attempted = (
+              executor_provenance.get(
+                  "execution_attempted"
+              )
+          )
+
+          provenance_execution_performed = (
+              executor_provenance.get(
+                  "execution_performed"
+              )
+          )
+
+          ########################################################
+          # Cross-artifact consistency checks
+          ########################################################
+
+          if (
+              apply_execution_attempted
+              != provenance_execution_attempted
+          ):
+              violations.append(
+                  "execution_attempted mismatch "
+                  f"(apply={apply_execution_attempted}, "
+                  f"provenance={provenance_execution_attempted})"
+              )
+
+          if (
+              apply_execution_performed
+              != provenance_execution_performed
+          ):
+              violations.append(
+                  "execution_performed mismatch "
+                  f"(apply={apply_execution_performed}, "
+                  f"provenance={provenance_execution_performed})"
+              )
+
+          if (
+              apply_patch_probe
+              != provenance_patch_probe
+          ):
+              violations.append(
+                  "patch_probe_performed mismatch "
+                  f"(apply={apply_patch_probe}, "
+                  f"provenance={provenance_patch_probe})"
+              )
+
+          if (
+              apply_certifiable
+              != provenance_certifiable
+          ):
+              violations.append(
+                  "patch_certifiable mismatch "
+                  f"(apply={apply_certifiable}, "
+                  f"provenance={provenance_certifiable})"
+              )
+
+          if (
+              apply_verdict
+              != provenance_verdict
+          ):
+              violations.append(
+                  "execution_verdict mismatch "
+                  f"(apply={apply_verdict}, "
+                  f"provenance={provenance_verdict})"
+              )
+
+          ########################################################
+          # Write manifest sanity checks
+          ########################################################
+
+          manifest_execution_attempted = (
+              executor_write_manifest.get(
+                  "execution_attempted"
+              )
+          )
+
+          manifest_execution_performed = (
+              executor_write_manifest.get(
+                  "execution_performed"
+              )
+          )
+
+          if (
+              apply_execution_attempted
+              != manifest_execution_attempted
+          ):
+              violations.append(
+                  "execution_attempted mismatch "
+                  f"(apply={apply_execution_attempted}, "
+                  f"manifest={manifest_execution_attempted})"
+              )
+
+          if (
+              apply_execution_performed
+              != manifest_execution_performed
+          ):
+              violations.append(
+                  "execution_performed mismatch "
+                  f"(apply={apply_execution_performed}, "
+                  f"manifest={manifest_execution_performed})"
+              )
+
+          ########################################################
+          # Final audit artifact
+          ########################################################
+
+          payload = {
+              "schema":
+                  "rga.verify_executor_provenance.v1.1",
+
+              "executor_result": {
+                  "execution_attempted":
+                      apply_execution_attempted,
+
+                  "execution_performed":
+                      apply_execution_performed,
+
+                  "patch_probe_performed":
+                      apply_patch_probe,
+
+                  "patch_certifiable":
+                      apply_certifiable,
+
+                  "execution_verdict":
+                      apply_verdict,
+              },
+
+              "execution_provenance": {
+                  "execution_attempted":
+                      provenance_execution_attempted,
+
+                  "execution_performed":
+                      provenance_execution_performed,
+
+                  "patch_probe_performed":
+                      provenance_patch_probe,
+
+                  "patch_certifiable":
+                      provenance_certifiable,
+
+                  "execution_verdict":
+                      provenance_verdict,
+              },
+
+              "executor_write_manifest": {
+                  "execution_attempted":
+                      manifest_execution_attempted,
+
+                  "execution_performed":
+                      manifest_execution_performed,
+              },
+
+              "violations":
+                  violations,
+
+              "ok":
+                  len(violations) == 0,
+          }
+
+          Path(
+              "artifacts/verify_executor_provenance.json"
+          ).write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          ########################################################
+          # Fail if provenance is inconsistent
+          ########################################################
+
+          if violations:
+              print(
+                  "[RGA][FAIL] Executor provenance mismatch detected."
+              )
+
+              for violation in violations:
+                  print(
+                      f" - {violation}"
+                  )
+
+              raise SystemExit(1)
+
+          print(
+              "[RGA][OK] Executor provenance matches executor output."
+          )
+          PY
 
       ############################################################
       # Automatic Post-Audit Trigger
@@ -5610,7 +5941,7 @@ jobs:
 
             artifacts/lifecycle_event_contract.json
             artifacts/lifecycle_event_backhaul.json
-          if-no-files-found: warn     
+          if-no-files-found: error     
 
       ############################################################
       # Fail Blocked Execute Request
