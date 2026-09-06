@@ -3,6 +3,10 @@ name: RGA Maintenance Executor
 on:
   workflow_dispatch:
     inputs:
+        executor_test_mode:
+          description: 'Enable controlled executor write test'
+          required: false
+          default: 'false'    
       executor_mode:
         description: >-
           Bot #2 executor mode.
@@ -2841,6 +2845,83 @@ jobs:
           python3 artifacts/evaluate_execution_gate.py
 
           rm -f artifacts/evaluate_execution_gate.py
+          
+      ########################################################
+      # Inject Controlled Executor Write Test
+      ########################################################
+
+      - name: Inject Controlled Executor Write Test
+        if: ${{ inputs.executor_test_mode == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          plan = json.loads(
+              path.read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          plan["proposed_changes"] = [
+              {
+                  "change_id":
+                      "executor_controlled_write_test",
+                  "change_type":
+                      "controlled_evidence_write",
+                  "target_files": [
+                      "artifacts/executor_smoke_test.txt"
+                  ],
+                  "purpose":
+                      "Executor capability certification.",
+                  "mutation_level":
+                      "execute_allowed",
+                  "requires_human_approval":
+                      True,
+                  "allowed_by_policy":
+                      True,
+                  "governance_scope":
+                      "maintenance",
+                  "phase_boundary_checked":
+                      True,
+              }
+          ]
+
+          path.write_text(
+              json.dumps(
+                  plan,
+                  indent=2,
+              ),
+              encoding="utf-8",
+          )
+          PY       
+          
+      ########################################################
+      # Verify Controlled Executor Write
+      ########################################################
+
+      - name: Verify Controlled Executor Write
+        if: ${{ inputs.executor_test_mode == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test_file="artifacts/executor_smoke_test.txt"
+
+          if [ ! -f "${test_file}" ]; then
+            echo "::error::Controlled write missing."
+            exit 1
+          fi
+
+          echo "[RGA-PASS]"
+          echo "Controlled write detected."          
 
       ############################################################
       # Run Runtime Executor
@@ -6318,6 +6399,1086 @@ jobs:
           python artifacts/build_execution_provenance.py
           
       ############################################################
+      # Verify Substantive Executor Write
+      #
+      # Stage 1 controlled-write certification.
+      #
+      # This step verifies that Runtime Executor performed a real,
+      # allowed-scope write in addition to its canonical patch
+      # probe.
+      #
+      # Required evidence:
+      #
+      #   artifacts/apply_execution_result.json
+      #   artifacts/executor_write_manifest.json
+      #   artifacts/execution_provenance.json
+      #   the controlled target file
+      #
+      # This step is verification-only. It must not modify:
+      #
+      #   execution_plan.json
+      #   execution_plan_fingerprint.json
+      #   human_execution_approval.json
+      #   Completed Phases 1-7
+      ############################################################
+
+      - name: Verify Substantive Executor Write
+        if: >-
+          ${{
+            always()
+            && inputs.executor_mode == 'execute'
+            && inputs.executor_test_mode == 'true'
+          }}
+        shell: bash
+        env:
+          EXPECTED_STAGE1_FILE: >-
+            artifacts/executor_smoke_test.txt
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          python3 - <<'PY'
+          import json
+          import os
+
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from typing import Any, Dict, List, Tuple
+
+
+          APPLY_RESULT_PATH = Path(
+              "artifacts/apply_execution_result.json"
+          )
+
+          WRITE_MANIFEST_PATH = Path(
+              "artifacts/executor_write_manifest.json"
+          )
+
+          EXECUTION_PROVENANCE_PATH = Path(
+              "artifacts/execution_provenance.json"
+          )
+
+          EXECUTION_PLAN_PATH = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          OUTPUT_PATH = Path(
+              "artifacts/"
+              "verify_substantive_executor_write.json"
+          )
+
+          expected_path_text = os.getenv(
+              "EXPECTED_STAGE1_FILE",
+              "artifacts/executor_smoke_test.txt",
+          ).strip()
+
+          EXPECTED_PATH = Path(
+              expected_path_text
+          )
+
+
+          def utc_now() -> str:
+              return (
+                  datetime.now(
+                      timezone.utc
+                  )
+                  .replace(
+                      microsecond=0
+                  )
+                  .isoformat()
+              )
+
+
+          def normalize_path(
+              value: Any,
+          ) -> str:
+              return str(
+                  value
+              ).replace(
+                  "\\",
+                  "/",
+              ).strip()
+
+
+          def normalize_path_list(
+              value: Any,
+          ) -> List[str]:
+              if not isinstance(
+                  value,
+                  list,
+              ):
+                  return []
+
+              normalized: List[str] = []
+
+              for item in value:
+                  path = normalize_path(
+                      item
+                  )
+
+                  if (
+                      path
+                      and path not in normalized
+                  ):
+                      normalized.append(
+                          path
+                      )
+
+              return normalized
+
+
+          def read_json_object(
+              path: Path,
+          ) -> Tuple[
+              Dict[str, Any],
+              List[str],
+          ]:
+              problems: List[str] = []
+
+              if not path.exists():
+                  return (
+                      {},
+                      [
+                          f"Missing required artifact: {path}"
+                      ],
+                  )
+
+              if not path.is_file():
+                  return (
+                      {},
+                      [
+                          f"Required artifact is not a file: {path}"
+                      ],
+                  )
+
+              if path.stat().st_size == 0:
+                  return (
+                      {},
+                      [
+                          f"Required artifact is empty: {path}"
+                      ],
+                  )
+
+              try:
+                  value = json.loads(
+                      path.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+              except Exception as exc:
+                  return (
+                      {},
+                      [
+                          (
+                              "Could not parse required "
+                              f"artifact {path}: {exc}"
+                          )
+                      ],
+                  )
+
+              if not isinstance(
+                  value,
+                  dict,
+              ):
+                  problems.append(
+                      (
+                          "Required artifact must contain "
+                          f"a JSON object: {path}"
+                      )
+                  )
+
+                  return (
+                      {},
+                      problems,
+                  )
+
+              return (
+                  value,
+                  problems,
+              )
+
+
+          violations: List[str] = []
+          warnings: List[str] = []
+
+          ########################################################
+          # Load canonical evidence
+          ########################################################
+
+          execution_plan, plan_problems = (
+              read_json_object(
+                  EXECUTION_PLAN_PATH
+              )
+          )
+
+          apply_result, apply_problems = (
+              read_json_object(
+                  APPLY_RESULT_PATH
+              )
+          )
+
+          write_manifest, manifest_problems = (
+              read_json_object(
+                  WRITE_MANIFEST_PATH
+              )
+          )
+
+          execution_provenance, provenance_problems = (
+              read_json_object(
+                  EXECUTION_PROVENANCE_PATH
+              )
+          )
+
+          violations.extend(
+              plan_problems
+          )
+
+          violations.extend(
+              apply_problems
+          )
+
+          violations.extend(
+              manifest_problems
+          )
+
+          violations.extend(
+              provenance_problems
+          )
+
+          expected_normalized = normalize_path(
+              EXPECTED_PATH
+          )
+
+          ########################################################
+          # Confirm that the controlled target was part of the
+          # approved plan-stage proposal
+          ########################################################
+
+          planned_target_files: List[str] = []
+
+          proposed_changes = execution_plan.get(
+              "proposed_changes",
+              [],
+          )
+
+          if not isinstance(
+              proposed_changes,
+              list,
+          ):
+              violations.append(
+                  (
+                      "execution_plan.proposed_changes "
+                      "must be a list."
+                  )
+              )
+              proposed_changes = []
+
+          for change in proposed_changes:
+              if not isinstance(
+                  change,
+                  dict,
+              ):
+                  continue
+
+              for target in normalize_path_list(
+                  change.get(
+                      "target_files",
+                      [],
+                  )
+              ):
+                  if target not in planned_target_files:
+                      planned_target_files.append(
+                          target
+                      )
+
+          if expected_normalized not in planned_target_files:
+              violations.append(
+                  (
+                      "Controlled target was not declared "
+                      "in execution_plan.proposed_changes."
+                      "target_files: "
+                      f"{expected_normalized}"
+                  )
+              )
+
+          ########################################################
+          # Physical target-file verification
+          ########################################################
+
+          target_exists = (
+              EXPECTED_PATH.exists()
+              and EXPECTED_PATH.is_file()
+          )
+
+          target_size = (
+              EXPECTED_PATH.stat().st_size
+              if target_exists
+              else None
+          )
+
+          if not target_exists:
+              violations.append(
+                  (
+                      "Controlled executor target file "
+                      f"does not exist: {expected_normalized}"
+                  )
+              )
+
+          elif target_size == 0:
+              violations.append(
+                  (
+                      "Controlled executor target file "
+                      f"is empty: {expected_normalized}"
+                  )
+              )
+
+          ########################################################
+          # Apply-result verification
+          ########################################################
+
+          apply_written_files = normalize_path_list(
+              apply_result.get(
+                  "written_files",
+                  [],
+              )
+          )
+
+          apply_executor_written_files = (
+              normalize_path_list(
+                  apply_result.get(
+                      "executor_written_files",
+                      [],
+                  )
+              )
+          )
+
+          if (
+              apply_result.get(
+                  "executor"
+              )
+              != "runtime_executor.py"
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result was not "
+                      "produced by runtime_executor.py."
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "executor_mode"
+              )
+              != "execute"
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result.executor_mode "
+                      "is not execute."
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "execution_attempted"
+              )
+              is not True
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result does not "
+                      "confirm execution_attempted=true."
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "execution_performed"
+              )
+              is not True
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result does not "
+                      "confirm execution_performed=true."
+                  )
+              )
+
+          if (
+              expected_normalized
+              not in apply_written_files
+          ):
+              violations.append(
+                  (
+                      "Controlled target is missing from "
+                      "apply_execution_result."
+                      "written_files: "
+                      f"{expected_normalized}"
+                  )
+              )
+
+          if (
+              expected_normalized
+              not in apply_executor_written_files
+          ):
+              violations.append(
+                  (
+                      "Controlled target is missing from "
+                      "apply_execution_result."
+                      "executor_written_files: "
+                      f"{expected_normalized}"
+                  )
+              )
+
+          apply_policy_violations = (
+              apply_result.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          if apply_policy_violations:
+              violations.append(
+                  (
+                      "apply_execution_result contains "
+                      "policy violations: "
+                      f"{apply_policy_violations}"
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "all_written_files_within_allowed_scope"
+              )
+              is not True
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result does not "
+                      "confirm all writes were within "
+                      "allowed scope."
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "protected_scope_touched"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result indicates "
+                      "protected scope was touched."
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "completed_phase_mutation_performed"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result indicates "
+                      "a Completed Phase mutation."
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "db_mutation_performed"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result indicates "
+                      "a database mutation."
+                  )
+              )
+
+          if (
+              apply_result.get(
+                  "source_asset_deletion_performed"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "apply_execution_result indicates "
+                      "source-asset deletion."
+                  )
+              )
+
+          ########################################################
+          # Write-manifest verification
+          ########################################################
+
+          manifest_executor_written_files = (
+              normalize_path_list(
+                  write_manifest.get(
+                      "executor_written_files",
+                      [],
+                  )
+              )
+          )
+
+          if (
+              write_manifest.get(
+                  "executor"
+              )
+              != "runtime_executor.py"
+          ):
+              violations.append(
+                  (
+                      "executor_write_manifest was not "
+                      "produced by runtime_executor.py."
+                  )
+              )
+
+          if (
+              expected_normalized
+              not in manifest_executor_written_files
+          ):
+              violations.append(
+                  (
+                      "Controlled target is missing from "
+                      "executor_write_manifest."
+                      "executor_written_files: "
+                      f"{expected_normalized}"
+                  )
+              )
+
+          if (
+              write_manifest.get(
+                  "allowed_scope_only"
+              )
+              is not True
+          ):
+              violations.append(
+                  (
+                      "executor_write_manifest does not "
+                      "confirm allowed_scope_only=true."
+                  )
+              )
+
+          if (
+              write_manifest.get(
+                  "protected_scope_touched"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "executor_write_manifest indicates "
+                      "protected scope was touched."
+                  )
+              )
+
+          if (
+              write_manifest.get(
+                  "completed_phases_modified"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "executor_write_manifest indicates "
+                      "Completed Phases were modified."
+                  )
+              )
+
+          if (
+              write_manifest.get(
+                  "database_mutation_performed"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "executor_write_manifest indicates "
+                      "database mutation."
+                  )
+              )
+
+          if (
+              write_manifest.get(
+                  "source_asset_deletion_performed"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "executor_write_manifest indicates "
+                      "source-asset deletion."
+                  )
+              )
+
+          manifest_policy_violations = (
+              write_manifest.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          if manifest_policy_violations:
+              violations.append(
+                  (
+                      "executor_write_manifest contains "
+                      "policy violations: "
+                      f"{manifest_policy_violations}"
+                  )
+              )
+
+          ########################################################
+          # Execution-provenance verification
+          ########################################################
+
+          executor_provenance = (
+              execution_provenance.get(
+                  "executor_provenance",
+                  {},
+              )
+          )
+
+          if not isinstance(
+              executor_provenance,
+              dict,
+          ):
+              violations.append(
+                  (
+                      "execution_provenance."
+                      "executor_provenance must be "
+                      "an object."
+                  )
+              )
+              executor_provenance = {}
+
+          provenance_executor_written_files = (
+              normalize_path_list(
+                  executor_provenance.get(
+                      "executor_written_files",
+                      [],
+                  )
+              )
+          )
+
+          substantive_written_files = (
+              normalize_path_list(
+                  executor_provenance.get(
+                      "substantive_executor_written_files",
+                      [],
+                  )
+              )
+          )
+
+          changed_files_from_executor = (
+              normalize_path_list(
+                  executor_provenance.get(
+                      "changed_files_from_executor",
+                      [],
+                  )
+              )
+          )
+
+          if (
+              execution_provenance.get(
+                  "producer"
+              )
+              != "runtime_executor.py"
+          ):
+              violations.append(
+                  (
+                      "execution_provenance was not "
+                      "produced by runtime_executor.py."
+                  )
+              )
+
+          if (
+              expected_normalized
+              not in provenance_executor_written_files
+          ):
+              violations.append(
+                  (
+                      "Controlled target is missing from "
+                      "execution_provenance."
+                      "executor_written_files: "
+                      f"{expected_normalized}"
+                  )
+              )
+
+          if (
+              expected_normalized
+              not in substantive_written_files
+          ):
+              violations.append(
+                  (
+                      "Controlled target is not classified "
+                      "as a substantive executor write: "
+                      f"{expected_normalized}"
+                  )
+              )
+
+          if (
+              expected_normalized
+              not in changed_files_from_executor
+          ):
+              violations.append(
+                  (
+                      "Controlled target is not attributed "
+                      "as a repository change from the "
+                      "executor: "
+                      f"{expected_normalized}"
+                  )
+              )
+
+          provenance_policy = (
+              execution_provenance.get(
+                  "policy",
+                  {},
+              )
+          )
+
+          if not isinstance(
+              provenance_policy,
+              dict,
+          ):
+              violations.append(
+                  (
+                      "execution_provenance.policy must "
+                      "be an object."
+                  )
+              )
+              provenance_policy = {}
+
+          if (
+              provenance_policy.get(
+                  "allowed_scope_only"
+              )
+              is not True
+          ):
+              violations.append(
+                  (
+                      "execution_provenance does not "
+                      "confirm allowed_scope_only=true."
+                  )
+              )
+
+          if (
+              provenance_policy.get(
+                  "protected_scope_touched"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "execution_provenance indicates "
+                      "protected scope was touched."
+                  )
+              )
+
+          if (
+              provenance_policy.get(
+                  "completed_phases_modified"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "execution_provenance indicates "
+                      "Completed Phases were modified."
+                  )
+              )
+
+          if (
+              provenance_policy.get(
+                  "database_mutation_performed"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "execution_provenance indicates "
+                      "database mutation."
+                  )
+              )
+
+          if (
+              provenance_policy.get(
+                  "source_asset_deletion_performed"
+              )
+              is not False
+          ):
+              violations.append(
+                  (
+                      "execution_provenance indicates "
+                      "source-asset deletion."
+                  )
+              )
+
+          provenance_policy_violations = (
+              provenance_policy.get(
+                  "policy_violations",
+                  [],
+              )
+          )
+
+          if provenance_policy_violations:
+              violations.append(
+                  (
+                      "execution_provenance contains "
+                      "policy violations: "
+                      f"{provenance_policy_violations}"
+                  )
+              )
+
+          allowed_provenance_verdicts = {
+              "patch_provenance_ready",
+              "patch_commit_ready",
+              "patch_pr_candidate_ready",
+              "patch_committed",
+          }
+
+          provenance_verdict = (
+              execution_provenance.get(
+                  "provenance_verdict"
+              )
+          )
+
+          if (
+              provenance_verdict
+              not in allowed_provenance_verdicts
+          ):
+              violations.append(
+                  (
+                      "execution_provenance has a "
+                      "non-certifiable substantive-write "
+                      f"verdict: {provenance_verdict}"
+                  )
+              )
+
+          ########################################################
+          # Cross-artifact consistency
+          ########################################################
+
+          evidence_sets = {
+              "apply_execution_result":
+                  set(
+                      apply_executor_written_files
+                  ),
+
+              "executor_write_manifest":
+                  set(
+                      manifest_executor_written_files
+                  ),
+
+              "execution_provenance":
+                  set(
+                      provenance_executor_written_files
+                  ),
+
+              "substantive_executor_written_files":
+                  set(
+                      substantive_written_files
+                  ),
+
+              "changed_files_from_executor":
+                  set(
+                      changed_files_from_executor
+                  ),
+          }
+
+          for evidence_name, evidence_paths in (
+              evidence_sets.items()
+          ):
+              if expected_normalized not in evidence_paths:
+                  continue
+
+              print(
+                  "[RGA-STAGE1] "
+                  f"{evidence_name} contains "
+                  f"{expected_normalized}"
+              )
+
+          ########################################################
+          # Final structured Stage 1 verification artifact
+          ########################################################
+
+          payload = {
+              "schema":
+                  "rga.verify_substantive_executor_write.v1.0",
+
+              "generated_at":
+                  utc_now(),
+
+              "test_stage":
+                  "stage_1_controlled_write",
+
+              "expected_target":
+                  expected_normalized,
+
+              "target_file": {
+                  "exists":
+                      target_exists,
+
+                  "non_empty":
+                      bool(
+                          target_exists
+                          and target_size
+                          and target_size > 0
+                      ),
+
+                  "size_bytes":
+                      target_size,
+              },
+
+              "execution_plan": {
+                  "mode":
+                      execution_plan.get(
+                          "mode"
+                      ),
+
+                  "target_declared":
+                      (
+                          expected_normalized
+                          in planned_target_files
+                      ),
+
+                  "planned_target_files":
+                      planned_target_files,
+              },
+
+              "apply_execution_result": {
+                  "execution_attempted":
+                      apply_result.get(
+                          "execution_attempted"
+                      ),
+
+                  "execution_performed":
+                      apply_result.get(
+                          "execution_performed"
+                      ),
+
+                  "target_in_written_files":
+                      (
+                          expected_normalized
+                          in apply_written_files
+                      ),
+
+                  "target_in_executor_written_files":
+                      (
+                          expected_normalized
+                          in apply_executor_written_files
+                      ),
+              },
+
+              "executor_write_manifest": {
+                  "target_recorded":
+                      (
+                          expected_normalized
+                          in manifest_executor_written_files
+                      ),
+
+                  "allowed_scope_only":
+                      write_manifest.get(
+                          "allowed_scope_only"
+                      ),
+              },
+
+              "execution_provenance": {
+                  "target_recorded":
+                      (
+                          expected_normalized
+                          in provenance_executor_written_files
+                      ),
+
+                  "target_substantive":
+                      (
+                          expected_normalized
+                          in substantive_written_files
+                      ),
+
+                  "target_attributed_as_repository_change":
+                      (
+                          expected_normalized
+                          in changed_files_from_executor
+                      ),
+
+                  "provenance_verdict":
+                      provenance_verdict,
+              },
+
+              "safety": {
+                  "protected_scope_touched":
+                      provenance_policy.get(
+                          "protected_scope_touched"
+                      ),
+
+                  "completed_phases_modified":
+                      provenance_policy.get(
+                          "completed_phases_modified"
+                      ),
+
+                  "database_mutation_performed":
+                      provenance_policy.get(
+                          "database_mutation_performed"
+                      ),
+
+                  "source_asset_deletion_performed":
+                      provenance_policy.get(
+                          "source_asset_deletion_performed"
+                      ),
+              },
+
+              "warnings":
+                  warnings,
+
+              "violations":
+                  violations,
+
+              "ok":
+                  len(violations) == 0,
+          }
+
+          OUTPUT_PATH.write_text(
+              json.dumps(
+                  payload,
+                  indent=2,
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+
+          ########################################################
+          # Final verdict
+          ########################################################
+
+          if violations:
+              print(
+                  "[RGA-STAGE1][FAIL] "
+                  "Substantive executor-write "
+                  "verification failed."
+              )
+
+              for violation in violations:
+                  print(
+                      f" - {violation}"
+                  )
+
+              raise SystemExit(1)
+
+          print(
+              "[RGA-STAGE1][PASS] "
+              "Controlled target was planned, written, "
+              "recorded, attributed, and verified without "
+              "touching protected scopes."
+          )
+          PY          
+          
+      ############################################################
       # Execution Manifest
       ############################################################
 
@@ -7394,7 +8555,8 @@ jobs:
             artifacts/execution_pull_request_result.json
             artifacts/execution_pull_request_url.txt
             artifacts/execution_pull_request_stderr.txt
-
+            
+            artifacts/verify_substantive_executor_write.json
             artifacts/execution_manifest.txt
             artifacts/execution_lineage.json
 
