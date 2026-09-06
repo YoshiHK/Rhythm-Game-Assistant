@@ -3179,10 +3179,7 @@ jobs:
               >> artifacts/runtime_executor_preflight_stderr.txt
           fi
 
-          if (
-            [ "${PREFLIGHT_EXIT_CODE}" = "0" ]
-            && [ ! -f tools/runtime_executor.py ]
-          ); then
+          if [ "${PREFLIGHT_EXIT_CODE}" = "0" ] && [ ! -f tools/runtime_executor.py ]; then
             PREFLIGHT_EXIT_CODE="1"
             PREFLIGHT_STAGE="script_presence"
 
