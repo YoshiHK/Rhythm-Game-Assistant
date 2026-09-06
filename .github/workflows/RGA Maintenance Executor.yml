@@ -3154,6 +3154,26 @@ jobs:
           set -e
 
           echo "${EXECUTOR_EXIT_CODE}" > artifacts/runtime_executor_exit_code.txt
+          
+          echo "========== EXIT CODE =========="
+          cat artifacts/runtime_executor_exit_code.txt
+
+          echo "========== STDERR =========="
+          if [ -f artifacts/runtime_executor_stderr.txt ]; then
+            cat artifacts/runtime_executor_stderr.txt
+          else
+            echo "[missing]"
+          fi
+
+          echo "========== STDOUT =========="
+          if [ -f artifacts/runtime_executor_stdout.txt ]; then
+            cat artifacts/runtime_executor_stdout.txt
+          else
+            echo "[missing]"
+          fi
+
+          echo "========== ARTIFACTS =========="
+          find artifacts -maxdepth 1 -type f | sort
 
           ########################################################
           # Ensure stdout / stderr artifacts exist
