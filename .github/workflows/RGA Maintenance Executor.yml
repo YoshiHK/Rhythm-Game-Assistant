@@ -2902,13 +2902,9 @@ jobs:
 
           MODE="${EXECUTOR_MODE:-dry_run_execute}"
 
-          EXECUTION_PLAN="${
-            EXECUTION_PLAN_IN:-artifacts/execution_plan.json
-          }"
+          EXECUTION_PLAN="${EXECUTION_PLAN_IN:-artifacts/execution_plan.json}"
 
-          PRE_AUDIT_REPORT="${
-            PRE_AUDIT_REPORT_IN:-artifacts/runtime_auditor_report.json
-          }"
+          PRE_AUDIT_REPORT="${PRE_AUDIT_REPORT_IN:-artifacts/runtime_auditor_report.json}"
 
           ########################################################
           # Validate executor mode
