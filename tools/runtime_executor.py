@@ -3613,31 +3613,482 @@ if __name__ == "__main__":
     def run_all(
         self,
     ) -> Dict[str, Any]:
+        """
+        Run the Runtime Executor lifecycle for one executor mode.
+
+        Plan-stage contract
+        -------------------
+        In plan mode:
+
+        - Generate a canonical ExecutionPlan.
+        - Validate the serialized plan before policy enforcement.
+        - Persist the canonical plan to:
+              artifacts/execution_plan.json
+        - Read the artifact back and verify that persisted content
+          matches the generated plan.
+        - Return the same plan in the Runtime Executor report.
+
+        Preserved-plan contract
+        -----------------------
+        In dry_run_execute and execute modes:
+
+        - Do not write or replace artifacts/execution_plan.json.
+        - Treat the preserved plan-stage artifact as workflow-owned
+          lifecycle evidence.
+        - Continue producing only mode-appropriate execution evidence.
+
+        Phase boundary
+        --------------
+        This method does not modify Completed Phases 1-7. It creates
+        or consumes maintenance, execution, governance, and evidence
+        artifacts only.
+        """
+
+        ############################################################
+        # Analyze Bot #1 pre-audit findings
+        ############################################################
 
         analysis = self.analyze_failures()
+
+        if not isinstance(
+            analysis,
+            dict,
+        ):
+            raise RuntimeError(
+                "analyze_failures() must return a dictionary."
+            )
+
+        ############################################################
+        # Build repair DAG
+        ############################################################
 
         repair_dag = self.build_repair_dag(
             analysis
         )
+
+        if not isinstance(
+            repair_dag,
+            dict,
+        ):
+            raise RuntimeError(
+                "build_repair_dag() must return a dictionary."
+            )
+
+        ############################################################
+        # Generate canonical execution plan
+        ############################################################
 
         plan = self.generate_execution_plan(
             analysis,
             repair_dag,
         )
 
+        if plan is None:
+            raise RuntimeError(
+                "generate_execution_plan() returned None."
+            )
+
+        try:
+            plan_payload = asdict(
+                plan
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Generated execution plan could not be "
+                f"serialized as a dataclass: {exc}"
+            ) from exc
+
+        if not isinstance(
+            plan_payload,
+            dict,
+        ):
+            raise RuntimeError(
+                "Serialized execution plan must be a dictionary."
+            )
+
+        if not plan_payload:
+            raise RuntimeError(
+                "Serialized execution plan is empty."
+            )
+
+        ############################################################
+        # Validate canonical plan contract
+        ############################################################
+
+        plan_validation_violations: List[str] = []
+
+        plan_schema = plan_payload.get(
+            "schema"
+        )
+
+        plan_mode = plan_payload.get(
+            "mode"
+        )
+
+        target_root_failures = plan_payload.get(
+            "target_root_failures"
+        )
+
+        proposed_changes = plan_payload.get(
+            "proposed_changes"
+        )
+
+        audit_steps = plan_payload.get(
+            "audit_steps"
+        )
+
+        rollback = plan_payload.get(
+            "rollback"
+        )
+
+        forbidden_changes = plan_payload.get(
+            "forbidden_changes_declared_absent"
+        )
+
+        if plan_schema != EXECUTION_PLAN_SCHEMA:
+            plan_validation_violations.append(
+                (
+                    "Execution plan schema mismatch: "
+                    f"expected {EXECUTION_PLAN_SCHEMA!r}, "
+                    f"received {plan_schema!r}."
+                )
+            )
+
+        if plan_mode != self.mode:
+            plan_validation_violations.append(
+                (
+                    "Execution plan mode mismatch: "
+                    f"expected {self.mode!r}, "
+                    f"received {plan_mode!r}."
+                )
+            )
+
+        if not isinstance(
+            target_root_failures,
+            list,
+        ):
+            plan_validation_violations.append(
+                "target_root_failures must be a list."
+            )
+
+        if not isinstance(
+            proposed_changes,
+            list,
+        ):
+            plan_validation_violations.append(
+                "proposed_changes must be a list."
+            )
+
+        elif not proposed_changes:
+            plan_validation_violations.append(
+                (
+                    "proposed_changes must contain either "
+                    "an actionable proposal or an explicit "
+                    "no-op proposal."
+                )
+            )
+
+        if not isinstance(
+            audit_steps,
+            list,
+        ):
+            plan_validation_violations.append(
+                "audit_steps must be a list."
+            )
+
+        elif not audit_steps:
+            plan_validation_violations.append(
+                "audit_steps must not be empty."
+            )
+
+        if not isinstance(
+            rollback,
+            dict,
+        ):
+            plan_validation_violations.append(
+                "rollback must be an object."
+            )
+
+        if not isinstance(
+            forbidden_changes,
+            dict,
+        ):
+            plan_validation_violations.append(
+                (
+                    "forbidden_changes_declared_absent "
+                    "must be an object."
+                )
+            )
+
+        if (
+            plan_payload.get(
+                "human_approval_required"
+            )
+            is not True
+        ):
+            plan_validation_violations.append(
+                (
+                    "Execution plan must require "
+                    "human approval."
+                )
+            )
+
+        if (
+            plan_payload.get(
+                "approval_authority"
+            )
+            != "human"
+        ):
+            plan_validation_violations.append(
+                (
+                    "Execution plan approval authority "
+                    "must be human."
+                )
+            )
+
+        if (
+            plan_payload.get(
+                "plan_audit_required"
+            )
+            is not True
+        ):
+            plan_validation_violations.append(
+                (
+                    "Execution plan must require "
+                    "Bot #1 plan audit."
+                )
+            )
+
+        if (
+            plan_payload.get(
+                "post_audit_required"
+            )
+            is not True
+        ):
+            plan_validation_violations.append(
+                (
+                    "Execution plan must require "
+                    "Bot #1 post audit."
+                )
+            )
+
+        if plan_validation_violations:
+            self.diagnostics[
+                "execution_plan_generation"
+            ] = {
+                "generated":
+                    True,
+
+                "valid":
+                    False,
+
+                "schema":
+                    plan_schema,
+
+                "mode":
+                    plan_mode,
+
+                "target_root_failure_count":
+                    (
+                        len(target_root_failures)
+                        if isinstance(
+                            target_root_failures,
+                            list,
+                        )
+                        else None
+                    ),
+
+                "proposed_change_count":
+                    (
+                        len(proposed_changes)
+                        if isinstance(
+                            proposed_changes,
+                            list,
+                        )
+                        else None
+                    ),
+
+                "violations":
+                    list(
+                        plan_validation_violations
+                    ),
+            }
+
+            raise RuntimeError(
+                "Generated execution plan failed validation: "
+                + "; ".join(
+                    plan_validation_violations
+                )
+            )
+
+        ############################################################
+        # Plan-stage persistence boundary
+        #
+        # Plan mode owns creation of the canonical proposal.
+        #
+        # Dry-run and execute modes must not replace the preserved
+        # plan-stage artifact.
+        ############################################################
+
+        plan_output_path = Path(
+            "artifacts/execution_plan.json"
+        )
+
+        plan_written_by_run_all = False
+        plan_write_verified = False
+
+        if self.mode == "plan":
+            write_json(
+                plan_payload,
+                plan_output_path,
+            )
+
+            plan_written_by_run_all = True
+
+            if (
+                not plan_output_path.exists()
+                or not plan_output_path.is_file()
+                or plan_output_path.stat().st_size == 0
+            ):
+                raise RuntimeError(
+                    (
+                        "Plan mode did not produce a non-empty "
+                        "artifacts/execution_plan.json."
+                    )
+                )
+
+            try:
+                persisted_plan = read_json_file(
+                    plan_output_path
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    (
+                        "Plan mode wrote execution_plan.json, "
+                        "but the artifact could not be read back: "
+                        f"{exc}"
+                    )
+                ) from exc
+
+            if persisted_plan != plan_payload:
+                raise RuntimeError(
+                    (
+                        "Persisted execution_plan.json does not "
+                        "match the generated execution plan."
+                    )
+                )
+
+            if (
+                persisted_plan.get(
+                    "schema"
+                )
+                != EXECUTION_PLAN_SCHEMA
+            ):
+                raise RuntimeError(
+                    (
+                        "Persisted execution_plan.json has an "
+                        "unsupported schema."
+                    )
+                )
+
+            if (
+                persisted_plan.get(
+                    "mode"
+                )
+                != "plan"
+            ):
+                raise RuntimeError(
+                    (
+                        "Persisted execution_plan.json mode "
+                        "must be 'plan'."
+                    )
+                )
+
+            plan_write_verified = True
+
+        ############################################################
+        # Record plan-generation diagnostics
+        ############################################################
+
+        self.diagnostics[
+            "execution_plan_generation"
+        ] = {
+            "generated":
+                True,
+
+            "valid":
+                True,
+
+            "schema":
+                plan_schema,
+
+            "mode":
+                plan_mode,
+
+            "target_root_failure_count":
+                len(
+                    target_root_failures
+                ),
+
+            "proposed_change_count":
+                len(
+                    proposed_changes
+                ),
+
+            "audit_step_count":
+                len(
+                    audit_steps
+                ),
+
+            "canonical_output_path":
+                str(
+                    plan_output_path
+                ),
+
+            "written_by_run_all":
+                plan_written_by_run_all,
+
+            "write_verified":
+                plan_write_verified,
+
+            "preserved_in_non_plan_modes":
+                self.mode
+                in {
+                    "dry_run_execute",
+                    "execute",
+                },
+
+            "violations":
+                [],
+        }
+
+        ############################################################
+        # Dry-run execution evidence
+        ############################################################
+
         dry_run_result: Dict[str, Any] = {}
 
         if self.mode == "dry_run_execute":
-
             dry_run_result = (
                 self.simulate_dry_run_execution(
                     plan
                 )
             )
 
-        #
+            if not isinstance(
+                dry_run_result,
+                dict,
+            ):
+                raise RuntimeError(
+                    (
+                        "simulate_dry_run_execution() "
+                        "must return a dictionary."
+                    )
+                )
+
+        ############################################################
         # Execution-stage artifacts
-        #
+        ############################################################
 
         apply_execution_result: Dict[str, Any] = {}
 
@@ -3646,19 +4097,29 @@ if __name__ == "__main__":
         execution_provenance: Dict[str, Any] = {}
 
         if self.mode == "execute":
-
             apply_execution_result = (
                 self.apply_execution(
                     plan
                 )
             )
 
-            #
-            # Reload executor-generated artifacts.
+            if not isinstance(
+                apply_execution_result,
+                dict,
+            ):
+                raise RuntimeError(
+                    (
+                        "apply_execution() must return "
+                        "a dictionary."
+                    )
+                )
+
+            ########################################################
+            # Reload executor-generated artifacts
             #
             # apply_execution() owns artifact production.
-            # run_all() consumes them.
-            #
+            # run_all() consumes the persisted canonical artifacts.
+            ########################################################
 
             executor_write_manifest = (
                 read_json_optional(
@@ -3672,24 +4133,39 @@ if __name__ == "__main__":
                 )
             )
 
-        #
-        # Governance / policy enforcement
-        #
+        ############################################################
+        # Governance and policy enforcement
+        ############################################################
 
         policy_result = self.enforce_policy(
             plan=plan,
             dry_run_result=dry_run_result,
-            apply_execution_result=apply_execution_result,
-            executor_write_manifest=executor_write_manifest,
-            execution_provenance=execution_provenance,
+            apply_execution_result=(
+                apply_execution_result
+            ),
+            executor_write_manifest=(
+                executor_write_manifest
+            ),
+            execution_provenance=(
+                execution_provenance
+            ),
         )
 
-        #
-        # Final report
-        #
+        if not isinstance(
+            policy_result,
+            dict,
+        ):
+            raise RuntimeError(
+                "enforce_policy() must return a dictionary."
+            )
+
+        ############################################################
+        # Final Runtime Executor report
+        ############################################################
 
         result = ExecutorResult(
-            schema=EXECUTOR_SCHEMA,
+            schema=
+                EXECUTOR_SCHEMA,
 
             generated_at=(
                 datetime.now(
@@ -3701,57 +4177,139 @@ if __name__ == "__main__":
                 .isoformat()
             ),
 
-            mode=self.mode,
+            mode=
+                self.mode,
 
             proposal_only=(
                 self.mode == "plan"
             ),
 
             dry_run=(
-                self.mode == "dry_run_execute"
+                self.mode
+                == "dry_run_execute"
             ),
 
             execution_authority=(
                 self.mode == "execute"
             ),
 
-            approval_authority=False,
+            approval_authority=
+                False,
 
-            #
-            # generated artifacts
-            #
+            ########################################################
+            # Generated artifacts
+            ########################################################
 
-            plan=asdict(
-                plan
-            ),
+            plan=
+                plan_payload,
 
-            dry_run_result=(
-                dry_run_result
-            ),
+            dry_run_result=
+                dry_run_result,
 
-            apply_execution_result=(
-                apply_execution_result
-            ),
+            apply_execution_result=
+                apply_execution_result,
 
-            executor_write_manifest=(
-                executor_write_manifest
-            ),
+            executor_write_manifest=
+                executor_write_manifest,
 
-            execution_provenance=(
-                execution_provenance
-            ),
+            execution_provenance=
+                execution_provenance,
 
             diagnostics={
                 **self.diagnostics,
 
                 "policy_result":
                     policy_result,
+
+                "run_all_contract": {
+                    "plan_generated":
+                        True,
+
+                    "plan_serialized":
+                        True,
+
+                    "plan_returned_in_report":
+                        True,
+
+                    "plan_output_path":
+                        str(
+                            plan_output_path
+                        ),
+
+                    "plan_artifact_written":
+                        plan_written_by_run_all,
+
+                    "plan_artifact_verified":
+                        plan_write_verified,
+
+                    "execute_stage_plan_overwrite":
+                        False,
+
+                    "completed_phases_modified":
+                        False,
+                },
             },
         )
 
-        return asdict(
-            result
+        ############################################################
+        # Serialize final result before returning
+        ############################################################
+
+        try:
+            result_payload = asdict(
+                result
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                (
+                    "Runtime Executor result could not "
+                    f"be serialized: {exc}"
+                )
+            ) from exc
+
+        if not isinstance(
+            result_payload,
+            dict,
+        ):
+            raise RuntimeError(
+                (
+                    "Serialized Runtime Executor result "
+                    "must be a dictionary."
+                )
+            )
+
+        embedded_plan = result_payload.get(
+            "plan"
         )
+
+        if not isinstance(
+            embedded_plan,
+            dict,
+        ):
+            raise RuntimeError(
+                (
+                    "Runtime Executor report does not "
+                    "contain a plan object."
+                )
+            )
+
+        if not embedded_plan:
+            raise RuntimeError(
+                (
+                    "Runtime Executor report contains "
+                    "an empty plan object."
+                )
+            )
+
+        if embedded_plan != plan_payload:
+            raise RuntimeError(
+                (
+                    "Runtime Executor report plan does "
+                    "not match the generated plan."
+                )
+            )
+
+        return result_payload
 
 # -----------------------------------------------------------------------------
 # CLI
