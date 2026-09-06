@@ -3296,145 +3296,757 @@ jobs:
 
       ############################################################
       # Apply Execution Result
+      #
+      # Evidence priority:
+      #
+      #   1. Canonical artifact emitted by runtime_executor.py
+      #
+      #   2. Canonical apply result embedded in
+      #      runtime_executor_report.json
+      #
+      #   3. Diagnostic workflow fallback
+      #
+      # A parseable workflow fallback must not shadow a canonical
+      # apply result embedded in the Runtime Executor report.
+      #
+      # Diagnostic fallback evidence must not be treated as
+      # certifiable execution evidence.
       ############################################################
 
       - name: Apply Execution Result
         if: always()
         shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
+          set -euo pipefail
+
           mkdir -p artifacts
 
-          python - <<'PY'
+          cat > artifacts/resolve_apply_execution_result.py <<'PY'
           import json
-          from pathlib import Path
+          import os
 
-          apply_path = Path(
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from typing import Any, Dict, List, Optional, Tuple
+
+
+          APPLY_RESULT_SCHEMA = (
+              "rga.runtime_executor."
+              "apply_execution_result.v1.1"
+          )
+
+          DIAGNOSTIC_SCHEMA = (
+              "rga.runtime_executor."
+              "apply_execution_result.diagnostic.v1.0"
+          )
+
+          APPLY_RESULT_PATH = Path(
               "artifacts/apply_execution_result.json"
           )
 
-          report_path = Path(
+          EXECUTOR_REPORT_PATH = Path(
               "artifacts/runtime_executor_report.json"
           )
 
-          result = {}
+          EXECUTOR_MODE = os.getenv(
+              "EXECUTOR_MODE",
+              "",
+          ).strip()
 
-          #
-          # Prefer canonical artifact emitted directly by runtime_executor.py.
-          #
 
-          if apply_path.exists() and apply_path.stat().st_size > 0:
+          def utc_now() -> str:
+              return (
+                  datetime.now(
+                      timezone.utc
+                  )
+                  .replace(
+                      microsecond=0
+                  )
+                  .isoformat()
+              )
+
+
+          def read_json_object(
+              path: Path,
+          ) -> Tuple[
+              Optional[Dict[str, Any]],
+              Optional[str],
+          ]:
+              if not path.exists():
+                  return (
+                      None,
+                      f"{path} does not exist.",
+                  )
+
+              if not path.is_file():
+                  return (
+                      None,
+                      f"{path} is not a file.",
+                  )
+
+              if path.stat().st_size == 0:
+                  return (
+                      None,
+                      f"{path} is empty.",
+                  )
+
               try:
-                  result = json.loads(
-                      apply_path.read_text(
+                  data = json.loads(
+                      path.read_text(
                           encoding="utf-8",
                       )
                   )
               except Exception as exc:
-                  result = {
-                      "schema":
-                          "rga.apply_execution_result.v1.0",
+                  return (
+                      None,
+                      (
+                          f"Could not parse {path}: "
+                          f"{exc}"
+                      ),
+                  )
 
-                      "execution_attempted":
-                          False,
+              if not isinstance(
+                  data,
+                  dict,
+              ):
+                  return (
+                      None,
+                      (
+                          f"{path} must contain "
+                          "a JSON object."
+                      ),
+                  )
 
-                      "execution_performed":
-                          False,
+              return (
+                  data,
+                  None,
+              )
 
-                      "written_files":
-                          [],
 
-                      "policy_violations": [
-                          f"Could not parse existing apply_execution_result.json: {exc}"
-                      ],
+          def producer_of(
+              data: Dict[str, Any],
+          ) -> str:
+              return str(
+                  data.get(
+                      "producer",
+                      data.get(
+                          "executor",
+                          "",
+                      ),
+                  )
+                  or ""
+              ).strip()
 
-                      "post_audit_required":
-                          True,
-                  }
 
-          #
-          # Fallback: extract from runtime_executor_report.json.
-          #
+          def validate_canonical_apply_result(
+              data: Dict[str, Any],
+          ) -> Tuple[
+              bool,
+              List[str],
+          ]:
+              problems: List[str] = []
 
-          if not result and report_path.exists():
-              try:
-                  executor_report = json.loads(
-                      report_path.read_text(
-                          encoding="utf-8",
+              schema = data.get(
+                  "schema"
+              )
+
+              producer = producer_of(
+                  data
+              )
+
+              required_boolean_fields = [
+                  "execution_attempted",
+                  "execution_performed",
+                  "patch_probe_performed",
+                  "patch_certifiable",
+              ]
+
+              required_fields = [
+                  *required_boolean_fields,
+                  "execution_verdict",
+                  "policy_violations",
+              ]
+
+              if schema != APPLY_RESULT_SCHEMA:
+                  problems.append(
+                      (
+                          "Unsupported apply-result schema: "
+                          f"{schema!r}; expected "
+                          f"{APPLY_RESULT_SCHEMA!r}."
                       )
                   )
 
-                  result = executor_report.get(
-                      "apply_execution_result",
-                      {},
+              if producer != "runtime_executor.py":
+                  problems.append(
+                      (
+                          "Apply result was not produced by "
+                          "runtime_executor.py."
+                      )
                   )
 
-              except Exception as exc:
-                  result = {
-                      "schema":
-                          "rga.apply_execution_result.v1.0",
+              for field_name in required_fields:
+                  if field_name not in data:
+                      problems.append(
+                          (
+                              "Apply result is missing "
+                              "required field: "
+                              f"{field_name}."
+                          )
+                      )
 
-                      "execution_attempted":
-                          False,
+              for field_name in required_boolean_fields:
+                  if (
+                      field_name in data
+                      and not isinstance(
+                          data.get(
+                              field_name
+                          ),
+                          bool,
+                      )
+                  ):
+                      problems.append(
+                          (
+                              f"{field_name} "
+                              "must be boolean."
+                          )
+                      )
 
-                      "execution_performed":
-                          False,
+              if (
+                  "execution_verdict" in data
+                  and not isinstance(
+                      data.get(
+                          "execution_verdict"
+                      ),
+                      str,
+                  )
+              ):
+                  problems.append(
+                      (
+                          "execution_verdict "
+                          "must be a string."
+                      )
+                  )
 
-                      "written_files":
-                          [],
+              if (
+                  "policy_violations" in data
+                  and not isinstance(
+                      data.get(
+                          "policy_violations"
+                      ),
+                      list,
+                  )
+              ):
+                  problems.append(
+                      (
+                          "policy_violations "
+                          "must be a list."
+                      )
+                  )
 
-                      "policy_violations": [
-                          f"Could not parse runtime_executor_report.json: {exc}"
-                      ],
+              return (
+                  len(problems) == 0,
+                  problems,
+              )
 
-                      "post_audit_required":
-                          True,
-                  }
 
-          #
-          # Final fallback.
-          #
+          def write_apply_result(
+              result: Dict[str, Any],
+          ) -> None:
+              APPLY_RESULT_PATH.write_text(
+                  json.dumps(
+                      result,
+                      indent=2,
+                      ensure_ascii=False,
+                  ),
+                  encoding="utf-8",
+              )
 
-          if not result:
-              result = {
-                  "schema":
-                      "rga.apply_execution_result.v1.0",
+              if (
+                  not APPLY_RESULT_PATH.exists()
+                  or APPLY_RESULT_PATH.stat().st_size == 0
+              ):
+                  raise RuntimeError(
+                      (
+                          "apply_execution_result.json "
+                          "was not written successfully."
+                      )
+                  )
 
-                  "execution_attempted":
-                      False,
 
-                  "execution_performed":
-                      False,
+          def print_result_summary(
+              *,
+              source: str,
+              result: Dict[str, Any],
+          ) -> None:
+              print(
+                  "[RGA-APPLY][OK] "
+                  f"Canonical apply result source: {source}"
+              )
 
-                  "written_files":
-                      [],
+              print(
+                  "[RGA-APPLY] "
+                  f"schema={result.get('schema')}"
+              )
 
-                  "policy_violations":
-                      [],
+              print(
+                  "[RGA-APPLY] "
+                  "execution_attempted="
+                  f"{result.get('execution_attempted')}"
+              )
 
-                  "post_audit_required":
-                      True,
+              print(
+                  "[RGA-APPLY] "
+                  "execution_performed="
+                  f"{result.get('execution_performed')}"
+              )
 
-                  "note":
-                      "No apply_execution_result was emitted by runtime_executor.py."
-              }
+              print(
+                  "[RGA-APPLY] "
+                  "patch_probe_performed="
+                  f"{result.get('patch_probe_performed')}"
+              )
 
-          apply_path.write_text(
-              json.dumps(
-                  result,
-                  indent=2,
-                  ensure_ascii=False,
-              ),
-              encoding="utf-8",
+              print(
+                  "[RGA-APPLY] "
+                  "patch_certifiable="
+                  f"{result.get('patch_certifiable')}"
+              )
+
+              print(
+                  "[RGA-APPLY] "
+                  "execution_verdict="
+                  f"{result.get('execution_verdict')}"
+              )
+
+
+          ########################################################
+          # Candidate 1:
+          # Canonical standalone Runtime Executor artifact
+          ########################################################
+
+          direct_result, direct_error = (
+              read_json_object(
+                  APPLY_RESULT_PATH
+              )
           )
+
+          direct_is_canonical = False
+          direct_problems: List[str] = []
+
+          if direct_result is not None:
+              (
+                  direct_is_canonical,
+                  direct_problems,
+              ) = validate_canonical_apply_result(
+                  direct_result
+              )
+
+          if (
+              direct_result is not None
+              and direct_is_canonical
+          ):
+              print_result_summary(
+                  source=(
+                      "standalone "
+                      "apply_execution_result.json"
+                  ),
+                  result=direct_result,
+              )
+
+              raise SystemExit(0)
+
+          ########################################################
+          # Candidate 2:
+          # Canonical result embedded in executor report
+          #
+          # This check runs even when the standalone artifact is
+          # parseable, because that standalone artifact may be
+          # stale workflow fallback evidence.
+          ########################################################
+
+          report, report_error = (
+              read_json_object(
+                  EXECUTOR_REPORT_PATH
+              )
+          )
+
+          report_apply_result: Optional[
+              Dict[str, Any]
+          ] = None
+
+          report_apply_is_canonical = False
+          report_apply_problems: List[str] = []
+
+          if report is not None:
+              candidate = report.get(
+                  "apply_execution_result"
+              )
+
+              if isinstance(
+                  candidate,
+                  dict,
+              ):
+                  report_apply_result = candidate
+
+                  (
+                      report_apply_is_canonical,
+                      report_apply_problems,
+                  ) = validate_canonical_apply_result(
+                      report_apply_result
+                  )
+
+              elif candidate is None:
+                  report_apply_problems.append(
+                      (
+                          "runtime_executor_report.json "
+                          "does not contain "
+                          "apply_execution_result."
+                      )
+                  )
+
+              else:
+                  report_apply_problems.append(
+                      (
+                          "runtime_executor_report.json "
+                          "apply_execution_result "
+                          "is not an object."
+                      )
+                  )
+
+          if (
+              report_apply_result is not None
+              and report_apply_is_canonical
+          ):
+              write_apply_result(
+                  report_apply_result
+              )
+
+              print_result_summary(
+                  source=(
+                      "runtime_executor_report.json"
+                  ),
+                  result=report_apply_result,
+              )
+
+              raise SystemExit(0)
+
+          ########################################################
+          # Collect diagnostic fallback reasons
+          ########################################################
+
+          fallback_reasons: List[str] = []
+
+          if direct_error:
+              fallback_reasons.append(
+                  direct_error
+              )
+
+          if direct_result is not None:
+              fallback_reasons.append(
+                  (
+                      "Existing "
+                      "apply_execution_result.json "
+                      "is not canonical Runtime Executor "
+                      "evidence."
+                  )
+              )
+
+              fallback_reasons.append(
+                  (
+                      "Existing apply-result producer: "
+                      f"{producer_of(direct_result)!r}."
+                  )
+              )
+
+              fallback_reasons.append(
+                  (
+                      "Existing apply-result schema: "
+                      f"{direct_result.get('schema')!r}."
+                  )
+              )
+
+              for problem in direct_problems:
+                  fallback_reasons.append(
+                      (
+                          "Existing apply-result "
+                          f"validation: {problem}"
+                      )
+                  )
+
+          if report_error:
+              fallback_reasons.append(
+                  report_error
+              )
+
+          for problem in report_apply_problems:
+              fallback_reasons.append(
+                  (
+                      "Executor-report apply-result "
+                      f"validation: {problem}"
+                  )
+              )
+
+          if not fallback_reasons:
+              fallback_reasons.append(
+                  (
+                      "No canonical apply execution "
+                      "result was available."
+                  )
+              )
+
+          ########################################################
+          # Final diagnostic fallback
+          #
+          # Unknown facts remain null.
+          #
+          # Missing evidence must not be converted into false
+          # execution facts, and workflow fallback must not claim
+          # a certifiable execution verdict.
+          ########################################################
+
+          fallback_policy_violations: List[str] = [
+              (
+                  "Canonical apply execution result was not "
+                  "available from runtime_executor.py or "
+                  "runtime_executor_report.json."
+              )
+          ]
+
+          fallback_policy_violations.extend(
+              fallback_reasons
+          )
+
+          diagnostic_fallback: Dict[str, Any] = {
+              "schema":
+                  DIAGNOSTIC_SCHEMA,
+
+              "generated_at":
+                  utc_now(),
+
+              "producer":
+                  "workflow_fallback",
+
+              "executor":
+                  "runtime_executor.py",
+
+              "executor_mode":
+                  EXECUTOR_MODE or None,
+
+              "artifact_role":
+                  "diagnostic_fallback",
+
+              "canonical_execution_evidence":
+                  False,
+
+              "execution_attempted":
+                  None,
+
+              "execution_performed":
+                  None,
+
+              "patch_probe_enabled":
+                  None,
+
+              "patch_probe_performed":
+                  None,
+
+              "patch_probe_artifact":
+                  None,
+
+              "patch_certifiable":
+                  None,
+
+              "execution_verdict":
+                  None,
+
+              "approval_loaded":
+                  None,
+
+              "approval_error":
+                  None,
+
+              "written_files":
+                  [],
+
+              "executor_written_files":
+                  [],
+
+              "workspace_dirty_files":
+                  [],
+
+              "non_executor_dirty_files":
+                  [],
+
+              "patch_provenance":
+                  [],
+
+              "skipped_changes":
+                  [],
+
+              "policy_violations":
+                  fallback_policy_violations,
+
+              "db_mutation_performed":
+                  None,
+
+              "source_asset_deletion_performed":
+                  None,
+
+              "completed_phase_mutation_performed":
+                  None,
+
+              "protected_scope_touched":
+                  None,
+
+              "all_written_files_within_allowed_scope":
+                  None,
+
+              "post_audit_required":
+                  True,
+
+              "fallback_diagnostics": {
+                  "direct_apply_path":
+                      str(
+                          APPLY_RESULT_PATH
+                      ),
+
+                  "direct_apply_present":
+                      direct_result is not None,
+
+                  "direct_apply_parse_error":
+                      direct_error,
+
+                  "direct_apply_producer":
+                      (
+                          producer_of(
+                              direct_result
+                          )
+                          if direct_result is not None
+                          else None
+                      ),
+
+                  "direct_apply_schema":
+                      (
+                          direct_result.get(
+                              "schema"
+                          )
+                          if direct_result is not None
+                          else None
+                      ),
+
+                  "direct_apply_keys":
+                      (
+                          sorted(
+                              str(key)
+                              for key
+                              in direct_result.keys()
+                          )
+                          if direct_result is not None
+                          else []
+                      ),
+
+                  "direct_apply_validation_problems":
+                      direct_problems,
+
+                  "executor_report_path":
+                      str(
+                          EXECUTOR_REPORT_PATH
+                      ),
+
+                  "executor_report_present":
+                      report is not None,
+
+                  "executor_report_parse_error":
+                      report_error,
+
+                  "report_apply_present":
+                      report_apply_result is not None,
+
+                  "report_apply_producer":
+                      (
+                          producer_of(
+                              report_apply_result
+                          )
+                          if report_apply_result is not None
+                          else None
+                      ),
+
+                  "report_apply_schema":
+                      (
+                          report_apply_result.get(
+                              "schema"
+                          )
+                          if report_apply_result is not None
+                          else None
+                      ),
+
+                  "report_apply_keys":
+                      (
+                          sorted(
+                              str(key)
+                              for key
+                              in report_apply_result.keys()
+                          )
+                          if report_apply_result is not None
+                          else []
+                      ),
+
+                  "report_apply_validation_problems":
+                      report_apply_problems,
+
+                  "fallback_reasons":
+                      fallback_reasons,
+              },
+
+              "note":
+                  (
+                      "Diagnostic fallback generated because "
+                      "no canonical apply execution result "
+                      "was found. This artifact must not be "
+                      "treated as certifiable execution "
+                      "evidence."
+                  ),
+          }
+
+          write_apply_result(
+              diagnostic_fallback
+          )
+
+          print(
+              "[RGA-APPLY][WARNING] "
+              "Diagnostic workflow fallback generated."
+          )
+
+          for reason in fallback_reasons:
+              print(
+                  f" - {reason}"
+              )
           PY
+
+          python3 artifacts/resolve_apply_execution_result.py
+
+          rm -f artifacts/resolve_apply_execution_result.py
           
       ############################################################
       # Executor Write Manifest
+      #
+      # Runtime Executor is the canonical producer.
+      #
+      # Workflow fallback is diagnostic-only and must not:
+      #
+      #   - overwrite a canonical manifest
+      #   - invent patch-probe state
+      #   - claim a certifiable execution verdict
+      #
       ############################################################
 
       - name: Executor Write Manifest
         if: always()
         shell: bash
+        env:
+          EXECUTOR_MODE: ${{ inputs.executor_mode }}
         run: |
           set -euo pipefail
 
@@ -3442,8 +4054,10 @@ jobs:
 
           cat > artifacts/build_executor_write_manifest.py <<'PY'
           import json
+          import os
           from datetime import datetime, timezone
           from pathlib import Path
+
 
           manifest_path = Path(
               "artifacts/executor_write_manifest.json"
@@ -3453,45 +4067,233 @@ jobs:
               "artifacts/apply_execution_result.json"
           )
 
-          #
-          # Prefer runtime_executor.py emitted artifact.
-          #
+          executor_mode = os.getenv(
+              "EXECUTOR_MODE",
+              "",
+          ).strip()
 
-          if manifest_path.exists() and manifest_path.stat().st_size > 0:
+          ########################################################
+          # Preserve canonical Runtime Executor output
+          ########################################################
+
+          if (
+              manifest_path.exists()
+              and manifest_path.is_file()
+              and manifest_path.stat().st_size > 0
+          ):
+              try:
+                  existing_manifest = json.loads(
+                      manifest_path.read_text(
+                          encoding="utf-8",
+                      )
+                  )
+              except Exception as exc:
+                  raise SystemExit(
+                      "[RGA-MANIFEST][FAIL] "
+                      "Existing executor_write_manifest.json "
+                      f"is not parseable: {exc}"
+                  )
+
+              if not isinstance(
+                  existing_manifest,
+                  dict,
+              ):
+                  raise SystemExit(
+                      "[RGA-MANIFEST][FAIL] "
+                      "Existing executor_write_manifest.json "
+                      "is not a JSON object."
+                  )
+
+              existing_producer = str(
+                  existing_manifest.get(
+                      "producer",
+                      existing_manifest.get(
+                          "executor",
+                          "",
+                      ),
+                  )
+                  or ""
+              )
+
+              print(
+                  "[RGA-MANIFEST][OK] "
+                  "Preserving existing executor write manifest."
+              )
+
+              print(
+                  "[RGA-MANIFEST] "
+                  f"producer={existing_producer}"
+              )
+
               raise SystemExit(0)
+
+          ########################################################
+          # Load apply result for diagnostic fallback
+          ########################################################
 
           apply_result = {}
 
-          if apply_path.exists() and apply_path.stat().st_size > 0:
+          apply_present = bool(
+              apply_path.exists()
+              and apply_path.is_file()
+              and apply_path.stat().st_size > 0
+          )
+
+          apply_parseable = False
+          apply_parse_error = None
+
+          if apply_present:
               try:
                   apply_result = json.loads(
                       apply_path.read_text(
                           encoding="utf-8",
                       )
                   )
-              except Exception:
+
+                  if not isinstance(
+                      apply_result,
+                      dict,
+                  ):
+                      raise ValueError(
+                          "Apply result is not a JSON object."
+                      )
+
+                  apply_parseable = True
+
+              except Exception as exc:
                   apply_result = {}
+                  apply_parse_error = str(exc)
 
-          policy_violations = list(
+          ########################################################
+          # Extract only explicitly available values
+          #
+          # Do not convert missing evidence into False. Missing
+          # evidence means unknown, not a negative execution fact.
+          ########################################################
+
+          policy_violations = []
+
+          raw_policy_violations = apply_result.get(
+              "policy_violations",
+              [],
+          )
+
+          if isinstance(
+              raw_policy_violations,
+              list,
+          ):
+              policy_violations = list(
+                  raw_policy_violations
+              )
+          elif raw_policy_violations:
+              policy_violations = [
+                  str(raw_policy_violations)
+              ]
+
+          raw_executor_written_files = apply_result.get(
+              "executor_written_files",
               apply_result.get(
-                  "policy_violations",
+                  "written_files",
                   [],
-              )
+              ),
           )
 
-          executor_written_files = list(
-              apply_result.get(
-                  "executor_written_files",
-                  apply_result.get(
-                      "written_files",
-                      [],
-                  ),
+          if isinstance(
+              raw_executor_written_files,
+              list,
+          ):
+              executor_written_files = list(
+                  raw_executor_written_files
               )
+          elif raw_executor_written_files:
+              executor_written_files = [
+                  str(raw_executor_written_files)
+              ]
+          else:
+              executor_written_files = []
+
+          patch_probe_enabled = apply_result.get(
+              "patch_probe_enabled"
           )
+
+          patch_probe_performed = apply_result.get(
+              "patch_probe_performed"
+          )
+
+          patch_probe_artifact = apply_result.get(
+              "patch_probe_artifact"
+          )
+
+          patch_certifiable = apply_result.get(
+              "patch_certifiable"
+          )
+
+          execution_verdict = apply_result.get(
+              "execution_verdict"
+          )
+
+          execution_attempted = apply_result.get(
+              "execution_attempted"
+          )
+
+          execution_performed = apply_result.get(
+              "execution_performed"
+          )
+
+          ########################################################
+          # Record why fallback was required
+          ########################################################
+
+          fallback_reasons = [
+              (
+                  "runtime_executor.py did not emit a non-empty "
+                  "executor_write_manifest.json."
+              )
+          ]
+
+          if not apply_present:
+              fallback_reasons.append(
+                  "apply_execution_result.json is missing or empty."
+              )
+
+          elif not apply_parseable:
+              fallback_reasons.append(
+                  "apply_execution_result.json is not parseable."
+              )
+
+          missing_apply_fields = []
+
+          required_apply_fields = [
+              "execution_attempted",
+              "execution_performed",
+              "patch_probe_performed",
+              "patch_certifiable",
+              "execution_verdict",
+          ]
+
+          if apply_parseable:
+              for field_name in required_apply_fields:
+                  if field_name not in apply_result:
+                      missing_apply_fields.append(
+                          field_name
+                      )
+
+              if missing_apply_fields:
+                  fallback_reasons.append(
+                      "apply_execution_result.json is missing "
+                      "canonical execution fields: "
+                      + ", ".join(
+                          missing_apply_fields
+                      )
+                  )
+
+          ########################################################
+          # Diagnostic fallback manifest
+          ########################################################
 
           payload = {
               "schema":
-                  "rga.executor_write_manifest.v1.0",
+                  "rga.executor_write_manifest.v1.1",
 
               "generated_at":
                   datetime.now(
@@ -3503,78 +4305,70 @@ jobs:
               "producer":
                   "workflow_fallback",
 
+              "artifact_role":
+                  "diagnostic_fallback",
+
+              "canonical_execution_evidence":
+                  False,
+
               "executor":
                   "runtime_executor.py",
 
               "executor_mode":
                   apply_result.get(
                       "executor_mode",
+                      executor_mode or None,
                   ),
 
               "execution_attempted":
-                  apply_result.get(
-                      "execution_attempted",
-                      False,
-                  ),
+                  execution_attempted,
 
               "execution_performed":
-                  apply_result.get(
-                      "execution_performed",
-                      False,
-                  ),
+                  execution_performed,
 
               "patch_probe_enabled":
-                  apply_result.get(
-                      "patch_probe_enabled",
-                      False,
-                  ),
+                  patch_probe_enabled,
 
               "patch_probe_performed":
-                  apply_result.get(
-                      "patch_probe_performed",
-                      False,
-                  ),
+                  patch_probe_performed,
+
+              "patch_probe_artifact":
+                  patch_probe_artifact,
 
               "patch_certifiable":
-                  apply_result.get(
-                      "patch_certifiable",
-                      False,
-                  ),
+                  patch_certifiable,
 
               "execution_verdict":
-                  apply_result.get(
-                      "execution_verdict",
-                      "fallback_manifest",
-                  ),
+                  execution_verdict,
 
               "executor_written_files":
                   executor_written_files,
 
               "allowed_scope_only":
-                  len(policy_violations) == 0,
+                  (
+                      len(policy_violations) == 0
+                      if apply_parseable
+                      else None
+                  ),
 
               "protected_scope_touched":
                   apply_result.get(
-                      "protected_scope_touched",
-                      False,
+                      "protected_scope_touched"
                   ),
 
               "completed_phases_modified":
                   apply_result.get(
-                      "completed_phase_mutation_performed",
-                      False,
+                      "completed_phase_mutation_performed"
                   ),
 
               "database_mutation_performed":
                   apply_result.get(
-                      "db_mutation_performed",
-                      False,
+                      "db_mutation_performed"
                   ),
 
               "source_asset_deletion_performed":
                   apply_result.get(
-                      "source_asset_deletion_performed",
-                      False,
+                      "source_asset_deletion_performed"
                   ),
 
               "policy_violations":
@@ -3582,14 +4376,54 @@ jobs:
 
               "post_audit_required":
                   apply_result.get(
-                      "post_audit_required",
-                      True,
+                      "post_audit_required"
                   ),
+
+              "fallback_diagnostics": {
+                  "apply_result_path":
+                      str(apply_path),
+
+                  "apply_result_present":
+                      apply_present,
+
+                  "apply_result_parseable":
+                      apply_parseable,
+
+                  "apply_result_parse_error":
+                      apply_parse_error,
+
+                  "apply_result_schema":
+                      apply_result.get(
+                          "schema"
+                      ),
+
+                  "apply_result_producer":
+                      apply_result.get(
+                          "producer",
+                          apply_result.get(
+                              "executor"
+                          ),
+                      ),
+
+                  "apply_result_keys":
+                      sorted(
+                          str(key)
+                          for key in apply_result.keys()
+                      ),
+
+                  "missing_canonical_apply_fields":
+                      missing_apply_fields,
+
+                  "fallback_reasons":
+                      fallback_reasons,
+              },
 
               "note":
                   (
-                      "Fallback executor_write_manifest generated by workflow "
-                      "because runtime_executor.py did not emit it."
+                      "Diagnostic fallback generated because "
+                      "runtime_executor.py did not emit a canonical "
+                      "executor write manifest. This artifact must "
+                      "not be treated as certifiable execution evidence."
                   ),
           }
 
@@ -3601,11 +4435,19 @@ jobs:
               ),
               encoding="utf-8",
           )
+
+          print(
+              "[RGA-MANIFEST][WARNING] "
+              "Diagnostic fallback manifest generated."
+          )
+
+          for reason in fallback_reasons:
+              print(
+                  f" - {reason}"
+              )
           PY
 
-          python artifacts/build_executor_write_manifest.py
-          
-
+          python3 artifacts/build_executor_write_manifest.py
           
       ############################################################
       # Apply Repository Changes
