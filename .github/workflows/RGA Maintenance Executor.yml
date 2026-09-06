@@ -2905,10 +2905,11 @@ jobs:
         id: run_runtime_executor
         if: >-
           ${{
-            always()
-            && (
-              inputs.executor_mode != 'execute'
-              || steps.execution_gate.outputs.allowed == 'true'
+            inputs.executor_mode == 'plan'
+            || inputs.executor_mode == 'dry_run_execute'
+            || (
+              inputs.executor_mode == 'execute'
+              && steps.execution_gate.outputs.allowed == 'true'
             )
           }}
         continue-on-error: true
@@ -3292,7 +3293,159 @@ jobs:
           echo "Runtime executor evidence artifacts generated."
           echo "Execution plan input contract: artifacts/execution_plan_input_contract.json"
 
-          exit 0          
+          exit 0
+          
+      ############################################################
+      # Verify Plan-Stage Execution Plan
+      ############################################################          
+
+      - name: Verify Plan-Stage Execution Plan
+        if: ${{ inputs.executor_mode == 'plan' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          plan_path="artifacts/execution_plan.json"
+          report_path="artifacts/runtime_executor_report.json"
+
+          echo "[RGA-PLAN] Verifying plan-stage outputs."
+
+          if [ ! -s "${plan_path}" ]; then
+            echo "::error::Runtime Executor did not emit ${plan_path}."
+
+            if [ -s "${report_path}" ]; then
+              echo "[RGA-PLAN] Runtime Executor report exists:"
+              python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(
+              "artifacts/runtime_executor_report.json"
+          )
+
+          try:
+              report = json.loads(
+                  path.read_text(
+                      encoding="utf-8"
+                  )
+              )
+          except Exception as exc:
+              print(
+                  "[RGA-PLAN] Could not parse executor report: "
+                  f"{exc}"
+              )
+              raise SystemExit(1)
+
+          print(
+              "[RGA-PLAN] mode="
+              f"{report.get('mode')}"
+          )
+
+          print(
+              "[RGA-PLAN] error="
+              f"{report.get('error')}"
+          )
+
+          policy = (
+              report.get(
+                  "diagnostics",
+                  {},
+              ).get(
+                  "policy_result",
+                  report.get(
+                      "policy_result",
+                      {},
+                  ),
+              )
+          )
+
+          print(
+              "[RGA-PLAN] policy_passed="
+              f"{policy.get('policy_passed')}"
+          )
+
+          print(
+              "[RGA-PLAN] violations="
+              f"{policy.get('violations', [])}"
+          )
+
+          plan = report.get(
+              "plan"
+          )
+
+          print(
+              "[RGA-PLAN] embedded_plan_present="
+              f"{isinstance(plan, dict) and bool(plan)}"
+          )
+          PY
+            else
+              echo "::error::Runtime Executor report is also missing."
+            fi
+
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(
+              "artifacts/execution_plan.json"
+          )
+
+          try:
+              plan = json.loads(
+                  path.read_text(
+                      encoding="utf-8"
+                  )
+              )
+          except Exception as exc:
+              raise SystemExit(
+                  "[RGA-PLAN][FAIL] "
+                  f"Could not parse execution plan: {exc}"
+              )
+
+          violations = []
+
+          if not isinstance(
+              plan,
+              dict,
+          ):
+              violations.append(
+                  "Execution plan must be a JSON object."
+              )
+
+          if (
+              isinstance(plan, dict)
+              and plan.get("schema")
+              != "rga.execution_plan.v1.2"
+          ):
+              violations.append(
+                  "Execution plan schema is not v1.2."
+              )
+
+          if (
+              isinstance(plan, dict)
+              and plan.get("mode")
+              != "plan"
+          ):
+              violations.append(
+                  "Execution plan mode is not 'plan'."
+              )
+
+          if violations:
+              print("[RGA-PLAN][FAIL]")
+
+              for violation in violations:
+                  print(f" - {violation}")
+
+              raise SystemExit(1)
+
+          print(
+              "[RGA-PLAN][OK] "
+              "Canonical plan-stage execution plan is present."
+          )
+          PY          
 
       ############################################################
       # Apply Execution Result
