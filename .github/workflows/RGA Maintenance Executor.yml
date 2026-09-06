@@ -2848,57 +2848,34 @@ jobs:
       # Bot #2 lifecycle role:
       #
       #   plan:
-      #     Generate implementation plan from Bot #1 pre-audit evidence.
+      #     Generate implementation plan from Bot #1 pre-audit
+      #     evidence.
       #
       #   dry_run_execute:
-      #     Simulate execution and produce execution evidence without
-      #     mutating repository state.
+      #     Simulate execution and produce execution evidence
+      #     without mutating repository state.
       #
       #   execute:
       #     Apply gated execution only after Bot #1 plan-audit,
-      #     approval artifact matching, execution gate, and human approval.
+      #     approval artifact matching, execution gate, and human
+      #     approval.
       #
-      # Execution plan handling:
+      # Execution-plan ownership:
       #
-      #   - artifacts/execution_plan.json is a plan-stage proposal artifact.
-      #
-      #   - It is preserved as an input contract for dry_run_execute
-      #     and execute stages.
-      #
-      #   - Runtime Auditor plan-audit is the verifier of:
+      #   plan:
+      #     runtime_executor.py creates:
       #
       #       artifacts/execution_plan.json
-      #       artifacts/database_mutation_plan.json
       #
-      #   - Execute mode must not overwrite artifacts/execution_plan.json.
+      #   dry_run_execute / execute:
+      #     The approved plan-stage artifact is preserved and must
+      #     not be overwritten.
       #
-      #   - The true execution signal is:
+      # Diagnostic contract:
       #
-      #       executor_mode=execute
-      #       artifacts/human_execution_approval.json
-      #       artifacts/approval_artifact_matching.json
-      #       artifacts/execution_gate.json
-      #
-      #   - Do not pass --execution-plan unless runtime_executor.py
-      #     explicitly supports that CLI argument.
-      #
-      # This step intentionally preserves:
-      #
-      #   execution_plan.json
-      #   execution_plan_input_contract.json
-      #   runtime_executor_output.json
-      #   runtime_executor_report.json
-      #   runtime_executor_report.md
-      #   apply_execution_result.json
-      #   executor_write_manifest.json
-      #   execution_provenance.json
-      #   runtime_executor_stdout.txt
-      #   runtime_executor_stderr.txt
-      #   runtime_executor_stderr_summary.json
-      #   runtime_executor_exit_code.txt
-      #
-      # Empty stderr is not treated as a failure. It is summarized as
-      # explicit zero-error evidence.
+      #   Preflight and Runtime Executor process evidence must be
+      #   emitted even when compilation, import, CLI loading, or
+      #   execution fails.
       ############################################################
 
       - name: Run Runtime Executor
@@ -2924,27 +2901,103 @@ jobs:
           mkdir -p artifacts
 
           MODE="${EXECUTOR_MODE:-dry_run_execute}"
-          EXECUTION_PLAN="${EXECUTION_PLAN_IN:-artifacts/execution_plan.json}"
-          PRE_AUDIT_REPORT="${PRE_AUDIT_REPORT_IN:-artifacts/runtime_auditor_report.json}"
+
+          EXECUTION_PLAN="${
+            EXECUTION_PLAN_IN:-artifacts/execution_plan.json
+          }"
+
+          PRE_AUDIT_REPORT="${
+            PRE_AUDIT_REPORT_IN:-artifacts/runtime_auditor_report.json
+          }"
 
           ########################################################
-          # Preserve and validate execution_plan.json as input
+          # Validate executor mode
+          ########################################################
+
+          case "${MODE}" in
+            plan|dry_run_execute|execute)
+              ;;
+            *)
+              echo "::error::Unsupported Runtime Executor mode: ${MODE}"
+              exit 1
+              ;;
+          esac
+
+          ########################################################
+          # Select mode-specific Runtime Executor JSON output
           #
-          # Important:
-          #   - In plan mode, runtime_executor.py may write
-          #     artifacts/execution_plan.json.
+          # plan:
+          #   Creates the canonical execution plan.
           #
-          #   - In dry_run_execute / execute mode, execution_plan.json
-          #     is treated as an input artifact and must not be
-          #     overwritten by this step.
+          # dry_run_execute / execute:
+          #   Must not overwrite the approved execution plan.
+          ########################################################
+
+          if [ "${MODE}" = "plan" ]; then
+            JSON_OUT="artifacts/execution_plan.json"
+          else
+            JSON_OUT="artifacts/runtime_executor_output.json"
+          fi
+
+          ########################################################
+          # Remove stale outputs owned by this invocation
+          #
+          # Plan mode owns execution_plan.json and may remove a
+          # stale local result before generating a fresh plan.
+          #
+          # Other modes preserve execution_plan.json.
+          ########################################################
+
+          rm -f \
+            artifacts/runtime_executor_report.json \
+            artifacts/runtime_executor_report.md \
+            artifacts/runtime_executor_output.json \
+            artifacts/runtime_executor_stdout.txt \
+            artifacts/runtime_executor_stderr.txt \
+            artifacts/runtime_executor_stderr_summary.json \
+            artifacts/runtime_executor_exit_code.txt \
+            artifacts/runtime_executor_preflight_stdout.txt \
+            artifacts/runtime_executor_preflight_stderr.txt \
+            artifacts/runtime_executor_preflight_exit_code.txt
+
+          if [ "${MODE}" = "plan" ]; then
+            rm -f artifacts/execution_plan.json
+          fi
+
+          ########################################################
+          # Initialize process and preflight evidence
+          #
+          # These files are created before preflight so downstream
+          # diagnostics can always distinguish:
+          #
+          #   preflight failure
+          #   process failure
+          #   artifact-emission failure
+          ########################################################
+
+          : > artifacts/runtime_executor_stdout.txt
+          : > artifacts/runtime_executor_stderr.txt
+          : > artifacts/runtime_executor_preflight_stdout.txt
+          : > artifacts/runtime_executor_preflight_stderr.txt
+
+          echo "not_started" \
+            > artifacts/runtime_executor_exit_code.txt
+
+          echo "not_started" \
+            > artifacts/runtime_executor_preflight_exit_code.txt
+
+          ########################################################
+          # Prepare execution-plan input contract
           ########################################################
 
           cat > artifacts/prepare_execution_plan_input_contract.py <<'PY'
           import hashlib
           import json
           import os
+
           from datetime import datetime, timezone
           from pathlib import Path
+
 
           mode = os.environ.get(
               "MODE",
@@ -2977,10 +3030,15 @@ jobs:
                   mode,
 
               "execution_plan_path":
-                  str(execution_plan_path),
+                  str(
+                      execution_plan_path
+                  ),
 
               "execution_plan_present":
-                  execution_plan_path.exists(),
+                  (
+                      execution_plan_path.exists()
+                      and execution_plan_path.is_file()
+                  ),
 
               "execution_plan_parseable":
                   False,
@@ -3008,14 +3066,17 @@ jobs:
 
               "required_for_modes": [
                   "dry_run_execute",
-                  "execute"
+                  "execute",
               ],
 
               "policy_violations":
                   [],
           }
 
-          if execution_plan_path.exists():
+          if (
+              execution_plan_path.exists()
+              and execution_plan_path.is_file()
+          ):
               raw = execution_plan_path.read_bytes()
 
               payload[
@@ -3031,6 +3092,14 @@ jobs:
                       )
                   )
 
+                  if not isinstance(
+                      data,
+                      dict,
+                  ):
+                      raise ValueError(
+                          "Execution plan must be a JSON object."
+                      )
+
                   payload[
                       "execution_plan_parseable"
                   ] = True
@@ -3038,32 +3107,37 @@ jobs:
                   payload[
                       "execution_plan_schema"
                   ] = data.get(
-                      "schema",
+                      "schema"
                   )
 
                   payload[
                       "execution_plan_mode"
                   ] = data.get(
-                      "mode",
+                      "mode"
                   )
 
               except Exception as exc:
                   payload[
                       "policy_violations"
                   ].append(
-                      f"execution_plan.json is not parseable JSON: {exc}"
+                      (
+                          "execution_plan.json is not "
+                          f"parseable JSON: {exc}"
+                      )
                   )
 
-          else:
-              if mode in {
-                  "dry_run_execute",
-                  "execute",
-              }:
-                  payload[
-                      "policy_violations"
-                  ].append(
-                      "execution_plan.json is required as an input contract for this mode."
+          elif mode in {
+              "dry_run_execute",
+              "execute",
+          }:
+              payload[
+                  "policy_violations"
+              ].append(
+                  (
+                      "execution_plan.json is required as "
+                      "an input contract for this mode."
                   )
+              )
 
           out_path.write_text(
               json.dumps(
@@ -3075,151 +3149,169 @@ jobs:
           )
           PY
 
+          set +e
+
           MODE="${MODE}" \
           EXECUTION_PLAN="${EXECUTION_PLAN}" \
-          python artifacts/prepare_execution_plan_input_contract.py
+          python3 \
+            artifacts/prepare_execution_plan_input_contract.py \
+            >> artifacts/runtime_executor_preflight_stdout.txt \
+            2>> artifacts/runtime_executor_preflight_stderr.txt
 
-          ########################################################
-          # Select json-out path by mode
-          #
-          # plan:
-          #   runtime_executor.py writes artifacts/execution_plan.json
-          #
-          # dry_run_execute / execute:
-          #   preserve artifacts/execution_plan.json and write executor
-          #   runtime output elsewhere.
-          ########################################################
-
-          if [ "${MODE}" = "plan" ]; then
-            JSON_OUT="artifacts/execution_plan.json"
-          else
-            JSON_OUT="artifacts/runtime_executor_output.json"
-          fi
-
-          set +e
-          
-          ########################################################
-          # Runtime Executor preflight
-          ########################################################
-
-          if [ ! -f tools/runtime_executor.py ]; then
-            echo "::error::Missing tools/runtime_executor.py."
-            exit 1
-          fi
-
-          if ! python3 -m py_compile tools/runtime_executor.py; then
-            echo "::error::runtime_executor.py failed Python compilation."
-            exit 1
-          fi
-
-          echo "[RGA-EXECUTOR][OK] runtime_executor.py preflight passed."          
-
-          ########################################################
-          # Remove outputs owned by this invocation
-          ########################################################
-
-          rm -f \
-            artifacts/runtime_executor_report.json \
-            artifacts/runtime_executor_report.md \
-            artifacts/runtime_executor_stdout.txt \
-            artifacts/runtime_executor_stderr.txt \
-            artifacts/runtime_executor_stderr_summary.json \
-            artifacts/runtime_executor_exit_code.txt
-
-          if [ "${MODE}" = "plan" ]; then
-            rm -f artifacts/execution_plan.json
-          else
-            rm -f artifacts/runtime_executor_output.json
-          fi          
-          
-          ########################################################
-          # Do NOT pass --execution-plan here.
-          #
-          # Current runtime_executor.py does not support that CLI
-          # argument. execution_plan.json is preserved and described
-          # by artifacts/execution_plan_input_contract.json instead.
-          ########################################################
-
-          python3 tools/runtime_executor.py \
-            --mode "${MODE}" \
-            --pre-audit-report "${PRE_AUDIT_REPORT}" \
-            --json-out "${JSON_OUT}" \
-            --report-json-out "artifacts/runtime_executor_report.json" \
-            --md-out "artifacts/runtime_executor_report.md" \
-            > "artifacts/runtime_executor_stdout.txt" \
-            2> "artifacts/runtime_executor_stderr.txt"
-
-          EXECUTOR_EXIT_CODE="$?"
+          INPUT_CONTRACT_EXIT_CODE="$?"
 
           set -e
 
-          echo "${EXECUTOR_EXIT_CODE}" > artifacts/runtime_executor_exit_code.txt
-          
-          echo "========== EXIT CODE =========="
-          cat artifacts/runtime_executor_exit_code.txt
+          ########################################################
+          # Runtime Executor preflight
+          #
+          # Preflight contains two boundaries:
+          #
+          #   1. Python compilation
+          #   2. CLI module loading / argparse construction
+          ########################################################
 
-          echo "========== STDERR =========="
-          if [ -f artifacts/runtime_executor_stderr.txt ]; then
-            cat artifacts/runtime_executor_stderr.txt
-          else
-            echo "[missing]"
+          PREFLIGHT_EXIT_CODE="0"
+          PREFLIGHT_STAGE="passed"
+
+          if [ "${INPUT_CONTRACT_EXIT_CODE}" != "0" ]; then
+            PREFLIGHT_EXIT_CODE="${INPUT_CONTRACT_EXIT_CODE}"
+            PREFLIGHT_STAGE="execution_plan_input_contract"
+
+            echo \
+              "Execution-plan input-contract generation failed." \
+              >> artifacts/runtime_executor_preflight_stderr.txt
           fi
 
-          echo "========== STDOUT =========="
-          if [ -f artifacts/runtime_executor_stdout.txt ]; then
-            cat artifacts/runtime_executor_stdout.txt
-          else
-            echo "[missing]"
+          if (
+            [ "${PREFLIGHT_EXIT_CODE}" = "0" ]
+            && [ ! -f tools/runtime_executor.py ]
+          ); then
+            PREFLIGHT_EXIT_CODE="1"
+            PREFLIGHT_STAGE="script_presence"
+
+            echo \
+              "tools/runtime_executor.py does not exist." \
+              >> artifacts/runtime_executor_preflight_stderr.txt
           fi
 
-          echo "========== ARTIFACTS =========="
-          find artifacts -maxdepth 1 -type f | sort
+          if [ "${PREFLIGHT_EXIT_CODE}" = "0" ]; then
+            set +e
+
+            python3 -m py_compile \
+              tools/runtime_executor.py \
+              >> artifacts/runtime_executor_preflight_stdout.txt \
+              2>> artifacts/runtime_executor_preflight_stderr.txt
+
+            COMPILE_EXIT_CODE="$?"
+
+            set -e
+
+            if [ "${COMPILE_EXIT_CODE}" != "0" ]; then
+              PREFLIGHT_EXIT_CODE="${COMPILE_EXIT_CODE}"
+              PREFLIGHT_STAGE="python_compilation"
+            fi
+          fi
+
+          if [ "${PREFLIGHT_EXIT_CODE}" = "0" ]; then
+            set +e
+
+            python3 tools/runtime_executor.py \
+              --help \
+              >> artifacts/runtime_executor_preflight_stdout.txt \
+              2>> artifacts/runtime_executor_preflight_stderr.txt
+
+            CLI_LOAD_EXIT_CODE="$?"
+
+            set -e
+
+            if [ "${CLI_LOAD_EXIT_CODE}" != "0" ]; then
+              PREFLIGHT_EXIT_CODE="${CLI_LOAD_EXIT_CODE}"
+              PREFLIGHT_STAGE="cli_loading"
+            fi
+          fi
+
+          echo "${PREFLIGHT_EXIT_CODE}" \
+            > artifacts/runtime_executor_preflight_exit_code.txt
 
           ########################################################
-          # Ensure stdout / stderr artifacts exist
+          # Invoke Runtime Executor only after preflight passes
+          ########################################################
+
+          EXECUTOR_INVOKED="false"
+          EXECUTOR_EXIT_CODE="${PREFLIGHT_EXIT_CODE}"
+
+          if [ "${PREFLIGHT_EXIT_CODE}" = "0" ]; then
+            echo \
+              "[RGA-EXECUTOR][OK] Runtime Executor preflight passed."
+
+            EXECUTOR_INVOKED="true"
+
+            set +e
+
+            python3 tools/runtime_executor.py \
+              --mode "${MODE}" \
+              --pre-audit-report "${PRE_AUDIT_REPORT}" \
+              --json-out "${JSON_OUT}" \
+              --report-json-out \
+                "artifacts/runtime_executor_report.json" \
+              --md-out \
+                "artifacts/runtime_executor_report.md" \
+              > artifacts/runtime_executor_stdout.txt \
+              2> artifacts/runtime_executor_stderr.txt
+
+            EXECUTOR_EXIT_CODE="$?"
+
+            set -e
+
+          else
+            echo \
+              "::error::Runtime Executor preflight failed " \
+              "at stage ${PREFLIGHT_STAGE} with exit code " \
+              "${PREFLIGHT_EXIT_CODE}."
+
+            cat \
+              artifacts/runtime_executor_preflight_stderr.txt \
+              >> artifacts/runtime_executor_stderr.txt
+          fi
+
+          echo "${EXECUTOR_EXIT_CODE}" \
+            > artifacts/runtime_executor_exit_code.txt
+
+          ########################################################
+          # Ensure process evidence exists
           ########################################################
 
           if [ ! -f artifacts/runtime_executor_stdout.txt ]; then
-            touch artifacts/runtime_executor_stdout.txt
+            : > artifacts/runtime_executor_stdout.txt
           fi
 
           if [ ! -f artifacts/runtime_executor_stderr.txt ]; then
-            touch artifacts/runtime_executor_stderr.txt
+            : > artifacts/runtime_executor_stderr.txt
           fi
 
           ########################################################
-          # Structured stderr summary
+          # Determine process evidence state
           ########################################################
 
-          STDERR_PRESENT="false"
+          STDERR_PRESENT="true"
           STDERR_EMPTY="true"
 
-          STDOUT_PRESENT="false"
+          STDOUT_PRESENT="true"
           STDOUT_EMPTY="true"
 
-          ERROR_MARKER_COUNT="0"
-          WARNING_MARKER_COUNT="0"
-
-          if [ -f artifacts/runtime_executor_stderr.txt ]; then
-            STDERR_PRESENT="true"
-
-            if [ -s artifacts/runtime_executor_stderr.txt ]; then
-              STDERR_EMPTY="false"
-            fi
+          if [ -s artifacts/runtime_executor_stderr.txt ]; then
+            STDERR_EMPTY="false"
           fi
 
-          if [ -f artifacts/runtime_executor_stdout.txt ]; then
-            STDOUT_PRESENT="true"
-
-            if [ -s artifacts/runtime_executor_stdout.txt ]; then
-              STDOUT_EMPTY="false"
-            fi
+          if [ -s artifacts/runtime_executor_stdout.txt ]; then
+            STDOUT_EMPTY="false"
           fi
 
           ERROR_MARKER_COUNT="$(
             {
               grep -E \
-                'Traceback|Error|Exception|ModuleNotFoundError|RuntimeError|ValueError|NameError|TypeError|SyntaxError|unrecognized arguments' \
+                'Traceback|Error|Exception|ModuleNotFoundError|RuntimeError|ValueError|NameError|TypeError|SyntaxError|IndentationError|unrecognized arguments' \
                 artifacts/runtime_executor_stderr.txt \
                 2>/dev/null \
                 || true
@@ -3241,129 +3333,335 @@ jobs:
           )"
 
           EXEC_FAILED="false"
+
           if [ "${EXECUTOR_EXIT_CODE}" != "0" ]; then
             EXEC_FAILED="true"
           fi
 
+          ########################################################
+          # Structured process summary
+          ########################################################
+
           jq -n \
-            --argjson stderr_present ${STDERR_PRESENT} \
-            --argjson stderr_empty ${STDERR_EMPTY} \
-            --argjson stdout_present ${STDOUT_PRESENT} \
-            --argjson stdout_empty ${STDOUT_EMPTY} \
-            --argjson exit_code ${EXECUTOR_EXIT_CODE} \
-            --argjson failed ${EXEC_FAILED} \
-            --argjson err_count ${ERROR_MARKER_COUNT} \
-            --argjson warn_count ${WARNING_MARKER_COUNT} \
+            --arg mode "${MODE}" \
+            --arg preflight_stage "${PREFLIGHT_STAGE}" \
+            --argjson preflight_exit_code \
+              "${PREFLIGHT_EXIT_CODE}" \
+            --argjson executor_invoked \
+              "${EXECUTOR_INVOKED}" \
+            --argjson stderr_present \
+              "${STDERR_PRESENT}" \
+            --argjson stderr_empty \
+              "${STDERR_EMPTY}" \
+            --argjson stdout_present \
+              "${STDOUT_PRESENT}" \
+            --argjson stdout_empty \
+              "${STDOUT_EMPTY}" \
+            --argjson exit_code \
+              "${EXECUTOR_EXIT_CODE}" \
+            --argjson failed \
+              "${EXEC_FAILED}" \
+            --argjson err_count \
+              "${ERROR_MARKER_COUNT}" \
+            --argjson warn_count \
+              "${WARNING_MARKER_COUNT}" \
             '{
-              schema: "rga.runtime_executor.stderr_summary.v1.0",
-              stderr_present: $stderr_present,
-              stderr_empty: $stderr_empty,
-              stdout_present: $stdout_present,
-              stdout_empty: $stdout_empty,
-              executor_exit_code: $exit_code,
-              execution_failed: $failed,
-              error_marker_count: $err_count,
-              warning_marker_count: $warn_count
-            }' > artifacts/runtime_executor_stderr_summary.json
-            
+              schema:
+                "rga.runtime_executor.stderr_summary.v1.1",
+
+              mode:
+                $mode,
+
+              preflight: {
+                stage:
+                  $preflight_stage,
+
+                exit_code:
+                  $preflight_exit_code
+              },
+
+              executor_invoked:
+                $executor_invoked,
+
+              stderr_present:
+                $stderr_present,
+
+              stderr_empty:
+                $stderr_empty,
+
+              stdout_present:
+                $stdout_present,
+
+              stdout_empty:
+                $stdout_empty,
+
+              executor_exit_code:
+                $exit_code,
+
+              execution_failed:
+                $failed,
+
+              error_marker_count:
+                $err_count,
+
+              warning_marker_count:
+                $warn_count
+            }' \
+            > artifacts/runtime_executor_stderr_summary.json
+
           ########################################################
-          # Surface executor diagnostics
+          # Validate whether the Runtime Executor report is
+          # canonical before deciding whether fallback is needed
           ########################################################
 
-          if [ "${EXECUTOR_EXIT_CODE}" != "0" ]; then
-            echo "::error::Runtime Executor exited with code ${EXECUTOR_EXIT_CODE}."
+          CANONICAL_REPORT="false"
 
-            echo "========== Runtime Executor stderr =========="
-            if [ -s artifacts/runtime_executor_stderr.txt ]; then
-              cat artifacts/runtime_executor_stderr.txt
-            else
-              echo "[RGA-EXECUTOR] stderr is empty."
+          if [ -s artifacts/runtime_executor_report.json ]; then
+            set +e
+
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+
+          path = Path(
+              "artifacts/runtime_executor_report.json"
+          )
+
+          try:
+              report = json.loads(
+                  path.read_text(
+                      encoding="utf-8"
+                  )
+              )
+          except Exception:
+              raise SystemExit(1)
+
+          if not isinstance(
+              report,
+              dict,
+          ):
+              raise SystemExit(1)
+
+          if (
+              report.get("schema")
+              != "rga.runtime_executor.report.v1.2"
+          ):
+              raise SystemExit(1)
+
+          raise SystemExit(0)
+          PY
+
+            REPORT_VALIDATION_EXIT_CODE="$?"
+
+            set -e
+
+            if [ "${REPORT_VALIDATION_EXIT_CODE}" = "0" ]; then
+              CANONICAL_REPORT="true"
             fi
-
-            echo "========== Runtime Executor stdout =========="
-            if [ -s artifacts/runtime_executor_stdout.txt ]; then
-              cat artifacts/runtime_executor_stdout.txt
-            else
-              echo "[RGA-EXECUTOR] stdout is empty."
-            fi
-          fi            
+          fi
 
           ########################################################
-          # Fallback runtime_executor_report.json
+          # Diagnostic fallback Runtime Executor report
+          #
+          # This report is explicitly non-canonical and must not be
+          # mistaken for Runtime Executor execution evidence.
           ########################################################
 
-          if [ ! -s artifacts/runtime_executor_report.json ]; then
-
+          if [ "${CANONICAL_REPORT}" != "true" ]; then
             jq -n \
               --arg mode "${MODE}" \
               --arg json_out "${JSON_OUT}" \
               --arg execution_plan "${EXECUTION_PLAN}" \
-              --argjson exit_code ${EXECUTOR_EXIT_CODE} \
-              --argjson stdout_present ${STDOUT_PRESENT} \
-              --argjson stderr_present ${STDERR_PRESENT} \
-              --argjson stdout_empty ${STDOUT_EMPTY} \
-              --argjson stderr_empty ${STDERR_EMPTY} \
+              --arg pre_audit_report "${PRE_AUDIT_REPORT}" \
+              --arg preflight_stage "${PREFLIGHT_STAGE}" \
+              --argjson preflight_exit_code \
+                "${PREFLIGHT_EXIT_CODE}" \
+              --argjson executor_invoked \
+                "${EXECUTOR_INVOKED}" \
+              --argjson exit_code \
+                "${EXECUTOR_EXIT_CODE}" \
+              --argjson stdout_present \
+                "${STDOUT_PRESENT}" \
+              --argjson stderr_present \
+                "${STDERR_PRESENT}" \
+              --argjson stdout_empty \
+                "${STDOUT_EMPTY}" \
+              --argjson stderr_empty \
+                "${STDERR_EMPTY}" \
               '{
-                schema: "rga.runtime_executor.report.fallback.v1.0",
-                mode: $mode,
-                proposal_only: ($mode == "plan"),
-                dry_run: ($mode == "dry_run_execute"),
-                execution_authority: ($mode == "execute"),
-                approval_authority: false,
-                plan: {},
-                dry_run_result: {},
-                apply_execution_result: {},
-                executor_write_manifest: {},
-                execution_provenance: {},
+                schema:
+                  "rga.runtime_executor.report.fallback.v1.1",
+
+                producer:
+                  "workflow_fallback",
+
+                artifact_role:
+                  "diagnostic_fallback",
+
+                canonical_execution_evidence:
+                  false,
+
+                mode:
+                  $mode,
+
+                proposal_only:
+                  ($mode == "plan"),
+
+                dry_run:
+                  ($mode == "dry_run_execute"),
+
+                execution_authority:
+                  false,
+
+                approval_authority:
+                  false,
+
+                plan:
+                  {},
+
+                dry_run_result:
+                  {},
+
+                apply_execution_result:
+                  {},
+
+                executor_write_manifest:
+                  {},
+
+                execution_provenance:
+                  {},
+
                 execution_plan_input: {
-                  path: $execution_plan,
-                  contract: "artifacts/execution_plan_input_contract.json",
-                  plan_stage_artifact: true,
-                  execute_stage_may_overwrite_execution_plan: false
+                  path:
+                    $execution_plan,
+
+                  contract:
+                    "artifacts/execution_plan_input_contract.json",
+
+                  plan_stage_artifact:
+                    true,
+
+                  execute_stage_may_overwrite_execution_plan:
+                    false
                 },
+
                 runtime_output: {
-                  json_out: $json_out
+                  json_out:
+                    $json_out,
+
+                  report_json_out:
+                    "artifacts/runtime_executor_report.json",
+
+                  report_md_out:
+                    "artifacts/runtime_executor_report.md",
+
+                  stdout:
+                    "artifacts/runtime_executor_stdout.txt",
+
+                  stderr:
+                    "artifacts/runtime_executor_stderr.txt",
+
+                  exit_code:
+                    "artifacts/runtime_executor_exit_code.txt"
                 },
+
                 diagnostics: {
-                  fallback_report_generated: true,
-                  canonical_runtime_executor_report_present: false,
-                  executor_exit_code: $exit_code,
-                  stdout_present: $stdout_present,
-                  stderr_present: $stderr_present,
-                  stdout_empty: $stdout_empty,
-                  stderr_empty: $stderr_empty,
-                  json_out: $json_out,
+                  fallback_report_generated:
+                    true,
+
+                  canonical_runtime_executor_report_present:
+                    false,
+
+                  pre_audit_report:
+                    $pre_audit_report,
+
+                  preflight_stage:
+                    $preflight_stage,
+
+                  preflight_exit_code:
+                    $preflight_exit_code,
+
+                  executor_invoked:
+                    $executor_invoked,
+
+                  executor_exit_code:
+                    $exit_code,
+
+                  stdout_present:
+                    $stdout_present,
+
+                  stderr_present:
+                    $stderr_present,
+
+                  stdout_empty:
+                    $stdout_empty,
+
+                  stderr_empty:
+                    $stderr_empty,
+
                   policy_result: {
-                    policy_passed: false,
+                    policy_passed:
+                      false,
+
                     violations: [
-                      "runtime_executor.py did not emit runtime_executor_report.json.",
                       (
-                        "Runtime Executor exited with code "
+                        "Canonical runtime_executor_report.json "
+                        + "was not emitted."
+                      ),
+
+                      (
+                        "Runtime Executor preflight stage: "
+                        + $preflight_stage
+                        + "."
+                      ),
+
+                      (
+                        "Runtime Executor preflight exit code: "
+                        + ($preflight_exit_code | tostring)
+                        + "."
+                      ),
+
+                      (
+                        "Runtime Executor process invoked: "
+                        + ($executor_invoked | tostring)
+                        + "."
+                      ),
+
+                      (
+                        "Runtime Executor exit code: "
                         + ($exit_code | tostring)
                         + "."
                       )
                     ]
                   }
                 }
-              }' > artifacts/runtime_executor_report.json
-
+              }' \
+              > artifacts/runtime_executor_report.json
           fi
 
           ########################################################
-          # Fallback runtime_executor_report.md
+          # Diagnostic fallback Markdown report
           ########################################################
 
           if [ ! -s artifacts/runtime_executor_report.md ]; then
             cat > artifacts/runtime_executor_report.md <<'MD'
           # RGA Runtime Executor Report
 
-          ## Fallback Report
+          ## Diagnostic Fallback
 
-          `runtime_executor.py` did not emit a non-empty Markdown report.
+          `runtime_executor.py` did not emit a canonical, non-empty
+          Runtime Executor Markdown report.
 
-          See:
+          This document is diagnostic workflow fallback evidence,
+          not certifiable Runtime Executor evidence.
+
+          Review:
 
           - `runtime_executor_report.json`
+          - `runtime_executor_preflight_stdout.txt`
+          - `runtime_executor_preflight_stderr.txt`
+          - `runtime_executor_preflight_exit_code.txt`
           - `runtime_executor_stdout.txt`
           - `runtime_executor_stderr.txt`
           - `runtime_executor_stderr_summary.json`
@@ -3372,32 +3670,105 @@ jobs:
           MD
           fi
 
-          echo "Runtime executor exit code: ${EXECUTOR_EXIT_CODE}"
-          echo "Runtime executor evidence artifacts generated."
-          echo "Execution plan input contract: artifacts/execution_plan_input_contract.json"
+          ########################################################
+          # Surface diagnostics in the GitHub Actions log
+          ########################################################
+
+          echo ""
+          echo "========== Runtime Executor Summary =========="
+          echo "Mode: ${MODE}"
+          echo "JSON output: ${JSON_OUT}"
+          echo "Preflight stage: ${PREFLIGHT_STAGE}"
+          echo "Preflight exit code: ${PREFLIGHT_EXIT_CODE}"
+          echo "Executor invoked: ${EXECUTOR_INVOKED}"
+          echo "Executor exit code: ${EXECUTOR_EXIT_CODE}"
+          echo "Canonical report: ${CANONICAL_REPORT}"
+
+          echo ""
+          echo "========== Runtime Executor Preflight stderr =========="
+
+          if [ -s artifacts/runtime_executor_preflight_stderr.txt ]; then
+            cat artifacts/runtime_executor_preflight_stderr.txt
+          else
+            echo "[RGA-EXECUTOR] Preflight stderr is empty."
+          fi
+
+          echo ""
+          echo "========== Runtime Executor stderr =========="
+
+          if [ -s artifacts/runtime_executor_stderr.txt ]; then
+            cat artifacts/runtime_executor_stderr.txt
+          else
+            echo "[RGA-EXECUTOR] Runtime stderr is empty."
+          fi
+
+          if [ "${EXECUTOR_EXIT_CODE}" != "0" ]; then
+            echo ""
+            echo "========== Runtime Executor stdout =========="
+
+            if [ -s artifacts/runtime_executor_stdout.txt ]; then
+              cat artifacts/runtime_executor_stdout.txt
+            else
+              echo "[RGA-EXECUTOR] Runtime stdout is empty."
+            fi
+          fi
+
+          echo ""
+          echo "========== Runtime Executor Artifacts =========="
+
+          find artifacts \
+            -maxdepth 1 \
+            -type f \
+            -print \
+            | sort
 
           ########################################################
           # Final Runtime Executor boundary
           ########################################################
 
+          if [ "${PREFLIGHT_EXIT_CODE}" != "0" ]; then
+            echo \
+              "::error::Runtime Executor preflight failed " \
+              "at stage ${PREFLIGHT_STAGE}."
+
+            exit "${PREFLIGHT_EXIT_CODE}"
+          fi
+
+          if [ "${EXECUTOR_INVOKED}" != "true" ]; then
+            echo \
+              "::error::Runtime Executor process was not invoked."
+
+            exit 1
+          fi
+
           if [ "${EXECUTOR_EXIT_CODE}" != "0" ]; then
-            echo "::error::Runtime Executor failed with exit code ${EXECUTOR_EXIT_CODE}."
+            echo \
+              "::error::Runtime Executor failed with exit code " \
+              "${EXECUTOR_EXIT_CODE}."
+
             exit "${EXECUTOR_EXIT_CODE}"
           fi
 
-          if [ ! -s artifacts/runtime_executor_report.json ]; then
-            echo "::error::Canonical Runtime Executor report is missing."
+          if [ "${CANONICAL_REPORT}" != "true" ]; then
+            echo \
+              "::error::Canonical Runtime Executor report is missing."
+
             exit 1
           fi
 
           if [ "${MODE}" = "plan" ]; then
             if [ ! -s artifacts/execution_plan.json ]; then
-              echo "::error::Plan mode did not emit artifacts/execution_plan.json."
+              echo \
+                "::error::Plan mode did not emit " \
+                "artifacts/execution_plan.json."
+
               exit 1
             fi
           fi
 
-          echo "[RGA-EXECUTOR][OK] Runtime Executor boundary passed."
+          echo \
+            "[RGA-EXECUTOR][OK] Runtime Executor boundary passed."
+
           exit 0
           
       ############################################################
