@@ -6573,11 +6573,8 @@ jobs:
 
       ############################################################
       # Build Plan-Stage Fingerprint
-      #
-      # This step must appear after Run Runtime Executor and before
-      # Upload Execution Plan Bundle.
       ############################################################
-
+      
       - name: Build Plan-Stage Fingerprint
         if: >-
           ${{
@@ -6589,6 +6586,14 @@ jobs:
           set -euo pipefail
 
           mkdir -p artifacts
+
+          ########################################################
+          # Prevent stale fingerprint reuse
+          ########################################################
+
+          if [ -f artifacts/execution_plan_fingerprint.json ]; then
+            rm -f artifacts/execution_plan_fingerprint.json
+          fi
 
           cat > build_plan_stage_fingerprint.py <<'PY'
           import hashlib
