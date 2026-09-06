@@ -3,10 +3,10 @@ name: RGA Maintenance Executor
 on:
   workflow_dispatch:
     inputs:
-        executor_test_mode:
-          description: 'Enable controlled executor write test'
-          required: false
-          default: 'false'    
+      executor_test_mode:
+        description: 'Enable controlled executor write test'
+        required: false
+        default: 'false'    
       executor_mode:
         description: >-
           Bot #2 executor mode.
