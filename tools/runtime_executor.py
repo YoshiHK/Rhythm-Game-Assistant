@@ -2468,13 +2468,21 @@ class RuntimeExecutor:
 
     def load_human_approval(
         self,
-    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-        approval_path = self.find_human_approval_artifact()
+    ) -> Tuple[
+        Optional[Dict[str, Any]],
+        Optional[str],
+    ]:
+        approval_path = (
+            self.find_human_approval_artifact()
+        )
 
         if approval_path is None:
             return (
                 None,
-                "Human execution approval artifact was not found.",
+                (
+                    "Human execution approval artifact "
+                    "was not found."
+                ),
             )
 
         try:
@@ -2493,99 +2501,172 @@ class RuntimeExecutor:
                 str(exc),
             )
 
-
     def approval_matches_plan(
         self,
         *,
-        approval: Dict[str, Any],
+        approval: Dict[str, Any]*
         plan: ExecutionPlan,
-      -> Tuple[bool, List[str]]:
-        issues: List[str] = []
+    * -> Tuple[bool, List[str]]:
+      * """
+        Validate that a human*approval applies to the generated
+*       execution plan.
 
-        approved = approval.get(
-            "approved",
+        Su*ported approval structures:
+
+     *  Current:
+            approved_ex*cution_bundle
+
+        Legacy:
+   *        approved_execution_plan
+
+ *      This method validates approv*l intent, plan schema, and
+       *target root failures. Digest match*ng remains the
+        responsibil*ty of the workflow approval-artifa*t matching
+        and execution-g*te layers.
+        """
+
+        is*ues: List[str] = []
+
+        appro*ed = approval.get(
+            "ap*roved",
             False,
+       *)
+
+        approval_phrase = appro*al.get(
+            "approval_phra*e",
         )
 
-        approval_phrase = approval.get(
-            "approval_phrase",
-        )
+        approved_ex*cution_plan = approval.get(
+      *     "approved_execution_plan",
+  *     )
+
+        approved_execution*bundle = approval.get(
+           *"approved_execution_bundle",
+     *  )
+
+        #####################*##################################*        # Core approval checks
+   *    ##############################*#########################
+
+       *if approved is not True:
+         *  issues.append(
+                (*                    "Approval arti*act does not set "
+               *    "approved=true."
+             *  )
+            )
+
+        if (
+  *         approval_phrase
+         *  != REQUIRED_APPROVAL_PHRASE
+    *   ):
+            issues.append(
+ *              (
+                  * "Approval artifact does not conta*n "
+                    "the requi*ed approval phrase."
+             *  )
+            )
 
         #######*##################################*#############
-        # Supported *pproval schemas
+        # Current ap*roval schema:
         #
-        * Legacy:
-        #   approved_exec*tion_plan
-        #
-        # Curr*nt:
-        #   approved_execution*bundle
-        ###################*##################################*#
+        # * approved_execution_bundle
+       *##################################*#####################
 
-        approved_execution_plan = approval.get(
-            "approved_execution_plan",
-        )
-
-        approved_execution_bundle = approval.get(
-            "approved_execution_bundle",
-        )
-
-        if approved is not True:
-            issues.append(
-                "Approval artifact does not set approved=true."
-            )
-
-        if approval_phrase != "APPROVE_RGA*EXECUTION":
-            issues.append(
-                "Approval arti*act does not contain the required *pproval phrase."
-            )
-
-        #############################*##########################
-        # Current v2.1 approval schema
-        ##############################*#########################
-
-        if isinstance(
-            approved_execution_bundle,
+        if *sinstance(
+            approved_ex*cution_bundle,
             dict,
-        ):
-            approved_schema = (
-                approved_execution_bundle.get(
-                    "execution_plan_schema",
-                )
+ *      ):
+            approved_sche*a = (
+                approved_exe*ution_bundle.get(
+                *   "execution_plan_schema",
+      *         )
             )
 
-            if approved_schema != plan.*chema:
-                issues.appe*d(
-                    "Approval a*tifact execution_plan_schema does *ot match execution plan schema."
-                )
-
-            approved_targets = sorted(
-                approved_execution_bundle.get(
-                    "target_root_fai*ures",
-                    [],
-                )
-            )
-
-            plan_targets = sorted(
-                plan.target_root_failure*
-            )
-
-            if approved_targets != plan_targets:
+        *   if approved_schema != plan.sche*a:
                 issues.append(
-                    "Approval artifact targ*t_root_failures do not match the g*nerated execution plan."
+*                   (
+             *          "Approval artifact "
+   *                    "execution_pla*_schema does not "
+               *        "match execution plan sche*a."
+                    )
+        *       )
+
+            raw_approved*targets = (
+                approv*d_execution_bundle.get(
+          *         "target_root_failures",
+ *                  [],
+            *   )
+            )
+
+            if*not isinstance(
+                ra*_approved_targets,
+               *list,
+            ):
+             *  issues.append(
+                 *  (
+                        "appro*ed_execution_bundle."
+            *           "target_root_failures m*st be "
+                        "a*list."
+                    )
+     *          )
+
+            else:
+   *            approved_targets = sor*ed(
+                    str(item)
+*                   for item in raw*approved_targets
+                )*
+                plan_targets = so*ted(
+                    str(item)*                    for item
+     *              in plan.target_root_*ailures
                 )
+
+       *        if approved_targets != pla*_targets:
+                    issu*s.append(
+                        *
+                            "Appr*val artifact "
+                   *        "target_root_failures do n*t "
+                            "m*tch the generated execution "
+    *                       "plan."
+   *                    )
+            *       )
 
             return (
-                not issues,
+   *            not issues,
+          *     issues,
+            )
+
+      * #################################*######################
+        # R*ject a malformed current approval *undle
+        #
+        # A presen* but incorrectly typed current bun*le must not
+        # silently fal* through to legacy compatibility.
+*       ###########################*############################
+
+    *   if approved_execution_bundle is not None:
+            issues.append(
+                (
+                    "approved_execution_bundle must be "
+                    "an object."
+                )
+            )
+
+            return (
+                False,
                 issues,
             )
 
-        ##################################*#####################
-        # Legacy compatibility path
+        ########################################################
+        # Legacy compatibility:
+        #
+        #   approved_execution_plan
         ########################################################
 
         if approved_execution_plan is None:
             issues.append(
-                "Approval artifact contains neither approved_execution_bundle nor approved_execution_plan."
+                (
+                    "Approval artifact contains neither "
+                    "approved_execution_bundle nor "
+                    "approved_execution_plan."
+                )
             )
 
             return (
@@ -2598,7 +2679,10 @@ class RuntimeExecutor:
             dict,
         ):
             issues.append(
-                "approved_execution_plan must be an object."
+                (
+                    "approved_execution_plan must be "
+                    "an object."
+                )
             )
 
             return (
@@ -2606,36 +2690,65 @@ class RuntimeExecutor:
                 issues,
             )
 
-        approved_targets = sorted(
+        raw_approved_targets = (
             approved_execution_plan.get(
                 "target_root_failures",
                 [],
             )
         )
 
-        plan_targets = sorted(
-            plan.target_root_failures
-        )
-
-        if approved_targets != plan_targets:
+        if not isinstance(
+            raw_approved_targets,
+            list,
+        ):
             issues.append(
-                "Approval artifact target_root_failures do not match the generated execution plan."
+                (
+                    "approved_execution_plan."
+                    "target_root_failures must be "
+                    "a list."
+                )
             )
 
-        approved_schema = approved_execution_plan.get(
-            "schema",
+        else:
+            approved_targets = sorted(
+                str(item)
+                for item in raw_approved_targets
+            )
+
+            plan_targets = sorted(
+                str(item)
+                for item
+                in plan.target_root_failures
+            )
+
+            if approved_targets != plan_targets:
+                issues.append(
+                    (
+                        "Approval artifact "
+                        "target_root_failures do not "
+                        "match the generated execution "
+                        "plan."
+                    )
+                )
+
+        approved_schema = (
+            approved_execution_plan.get(
+                "schema",
+            )
         )
 
         if approved_schema != plan.schema:
             issues.append(
-                "Approval artifact schema does not match execution plan schema."
+                (
+                    "Approval artifact schema does not "
+                    "match execution plan schema."
+                )
             )
 
         return (
             not issues,
             issues,
         )
-
 
     def is_write_path_allowed(
         self,
