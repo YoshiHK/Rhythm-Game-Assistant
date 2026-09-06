@@ -3097,7 +3097,41 @@ jobs:
           fi
 
           set +e
+          
+          ########################################################
+          # Runtime Executor preflight
+          ########################################################
 
+          if [ ! -f tools/runtime_executor.py ]; then
+            echo "::error::Missing tools/runtime_executor.py."
+            exit 1
+          fi
+
+          if ! python3 -m py_compile tools/runtime_executor.py; then
+            echo "::error::runtime_executor.py failed Python compilation."
+            exit 1
+          fi
+
+          echo "[RGA-EXECUTOR][OK] runtime_executor.py preflight passed."          
+
+          ########################################################
+          # Remove outputs owned by this invocation
+          ########################################################
+
+          rm -f \
+            artifacts/runtime_executor_report.json \
+            artifacts/runtime_executor_report.md \
+            artifacts/runtime_executor_stdout.txt \
+            artifacts/runtime_executor_stderr.txt \
+            artifacts/runtime_executor_stderr_summary.json \
+            artifacts/runtime_executor_exit_code.txt
+
+          if [ "${MODE}" = "plan" ]; then
+            rm -f artifacts/execution_plan.json
+          else
+            rm -f artifacts/runtime_executor_output.json
+          fi          
+          
           ########################################################
           # Do NOT pass --execution-plan here.
           #
@@ -3106,7 +3140,7 @@ jobs:
           # by artifacts/execution_plan_input_contract.json instead.
           ########################################################
 
-          python tools/runtime_executor.py \
+          python3 tools/runtime_executor.py \
             --mode "${MODE}" \
             --pre-audit-report "${PRE_AUDIT_REPORT}" \
             --json-out "${JSON_OUT}" \
@@ -3211,6 +3245,28 @@ jobs:
               error_marker_count: $err_count,
               warning_marker_count: $warn_count
             }' > artifacts/runtime_executor_stderr_summary.json
+            
+          ########################################################
+          # Surface executor diagnostics
+          ########################################################
+
+          if [ "${EXECUTOR_EXIT_CODE}" != "0" ]; then
+            echo "::error::Runtime Executor exited with code ${EXECUTOR_EXIT_CODE}."
+
+            echo "========== Runtime Executor stderr =========="
+            if [ -s artifacts/runtime_executor_stderr.txt ]; then
+              cat artifacts/runtime_executor_stderr.txt
+            else
+              echo "[RGA-EXECUTOR] stderr is empty."
+            fi
+
+            echo "========== Runtime Executor stdout =========="
+            if [ -s artifacts/runtime_executor_stdout.txt ]; then
+              cat artifacts/runtime_executor_stdout.txt
+            else
+              echo "[RGA-EXECUTOR] stdout is empty."
+            fi
+          fi            
 
           ########################################################
           # Fallback runtime_executor_report.json
@@ -3250,15 +3306,22 @@ jobs:
                 },
                 diagnostics: {
                   fallback_report_generated: true,
+                  canonical_runtime_executor_report_present: false,
                   executor_exit_code: $exit_code,
                   stdout_present: $stdout_present,
                   stderr_present: $stderr_present,
                   stdout_empty: $stdout_empty,
                   stderr_empty: $stderr_empty,
+                  json_out: $json_out,
                   policy_result: {
                     policy_passed: false,
                     violations: [
-                      "runtime_executor.py did not emit runtime_executor_report.json."
+                      "runtime_executor.py did not emit runtime_executor_report.json.",
+                      (
+                        "Runtime Executor exited with code "
+                        + ($exit_code | tostring)
+                        + "."
+                      )
                     ]
                   }
                 }
@@ -3293,6 +3356,28 @@ jobs:
           echo "Runtime executor evidence artifacts generated."
           echo "Execution plan input contract: artifacts/execution_plan_input_contract.json"
 
+          ########################################################
+          # Final Runtime Executor boundary
+          ########################################################
+
+          if [ "${EXECUTOR_EXIT_CODE}" != "0" ]; then
+            echo "::error::Runtime Executor failed with exit code ${EXECUTOR_EXIT_CODE}."
+            exit "${EXECUTOR_EXIT_CODE}"
+          fi
+
+          if [ ! -s artifacts/runtime_executor_report.json ]; then
+            echo "::error::Canonical Runtime Executor report is missing."
+            exit 1
+          fi
+
+          if [ "${MODE}" = "plan" ]; then
+            if [ ! -s artifacts/execution_plan.json ]; then
+              echo "::error::Plan mode did not emit artifacts/execution_plan.json."
+              exit 1
+            fi
+          fi
+
+          echo "[RGA-EXECUTOR][OK] Runtime Executor boundary passed."
           exit 0
           
       ############################################################
