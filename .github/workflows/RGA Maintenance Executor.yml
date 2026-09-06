@@ -3946,7 +3946,7 @@ jobs:
               "[RGA-PLAN][OK] "
               "Canonical plan-stage execution plan is present."
           )
-          PY          
+          PY
 
       ############################################################
       # Apply Execution Result
