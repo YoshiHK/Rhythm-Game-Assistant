@@ -3486,6 +3486,38 @@ jobs:
             else
               echo "::error::Runtime Executor report is also missing."
             fi
+            
+            echo
+            echo "========== Runtime Executor Evidence =========="
+
+            if [ -f artifacts/runtime_executor_exit_code.txt ]; then
+              echo "[RGA-PLAN] exit code:"
+              cat artifacts/runtime_executor_exit_code.txt
+            else
+              echo "[RGA-PLAN] runtime_executor_exit_code.txt missing"
+            fi
+
+            echo
+
+            if [ -f artifacts/runtime_executor_stderr.txt ]; then
+              echo "[RGA-PLAN] stderr:"
+              cat artifacts/runtime_executor_stderr.txt
+            else
+              echo "[RGA-PLAN] runtime_executor_stderr.txt missing"
+            fi
+
+            echo
+
+            if [ -f artifacts/runtime_executor_stdout.txt ]; then
+              echo "[RGA-PLAN] stdout:"
+              cat artifacts/runtime_executor_stdout.txt
+            else
+              echo "[RGA-PLAN] runtime_executor_stdout.txt missing"
+            fi
+
+            echo
+            echo "[RGA-PLAN] visible artifacts:"
+            find artifacts -maxdepth 1 -type f | sort            
 
             exit 1
           fi
