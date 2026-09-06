@@ -1030,6 +1030,34 @@ def build_executor_write_manifest(
                 "execution_performed",
                 False,
             ),
+            
+        "patch_probe_enabled":
+            execution_result.get(
+                "patch_probe_enabled",
+                False,
+            ),
+
+        "patch_probe_performed":
+            execution_result.get(
+                "patch_probe_performed",
+                False,
+            ),
+
+        "patch_probe_artifact":
+            execution_result.get(
+                "patch_probe_artifact",
+            ),
+
+        "patch_certifiable":
+            execution_result.get(
+                "patch_certifiable",
+                False,
+            ),
+
+        "execution_verdict":
+            execution_result.get(
+                "execution_verdict",
+            ),            
 
         "executor_written_files":
             executor_written_files,
@@ -1210,6 +1238,56 @@ def build_execution_provenance(
     executor_has_writes = bool(
         executor_written_files
     )
+    
+    patch_probe_performed = bool(
+        execution_result.get(
+            "patch_probe_performed",
+            executor_write_manifest.get(
+                "patch_probe_performed",
+                False,
+            ),
+        )
+    )
+
+    patch_certifiable = bool(
+        execution_result.get(
+            "patch_certifiable",
+            executor_write_manifest.get(
+                "patch_certifiable",
+                False,
+            ),
+        )
+    )
+
+    execution_verdict = (
+        execution_result.get(
+            "execution_verdict"
+        )
+        or executor_write_manifest.get(
+            "execution_verdict"
+        )
+    )
+
+    patch_probe_artifact = str(
+        execution_result.get(
+            "patch_probe_artifact",
+            executor_write_manifest.get(
+                "patch_probe_artifact",
+                "",
+            ),
+        )
+        or ""
+    )
+
+    substantive_executor_written_files = [
+        path
+        for path in executor_written_files
+        if str(path) != patch_probe_artifact
+    ]
+
+    executor_has_substantive_writes = bool(
+        substantive_executor_written_files
+    )    
 
     commit_required = bool(
         execution_commit_manifest.get(
@@ -1279,10 +1357,19 @@ def build_execution_provenance(
 
     ############################################################
     # Verdict model
+    #
+    # The canonical apply result may act as an evidence-only
+    # patch probe. Evidence-only writes do not require commit
+    # candidate alignment.
+    #
+    # Substantive executor writes still require complete
+    # commit-candidate provenance.
     ############################################################
 
     if policy_violations:
-        provenance_verdict = "patch_provenance_blocked"
+        provenance_verdict = (
+            "patch_provenance_blocked"
+        )
 
     elif (
         protected_scope_touched
@@ -1290,7 +1377,9 @@ def build_execution_provenance(
         or database_mutation_performed
         or source_asset_deletion_performed
     ):
-        provenance_verdict = "patch_provenance_blocked"
+        provenance_verdict = (
+            "patch_provenance_blocked"
+        )
 
     elif (
         protected_workspace_dirty_files
@@ -1304,24 +1393,43 @@ def build_execution_provenance(
         executor_attempted
         and not executor_has_writes
     ):
-        provenance_verdict = "traceable_no_patch"
+        provenance_verdict = (
+            "traceable_no_patch"
+        )
 
     elif (
-        executor_has_writes
-        and set(commit_candidate_files) == set(executor_written_files)
+        patch_probe_performed
+        and patch_certifiable
+        and execution_verdict == "patch_probe_passed"
+        and not executor_has_substantive_writes
+    ):
+        provenance_verdict = (
+            "patch_provenance_ready"
+        )
+
+    elif (
+        executor_has_substantive_writes
+        and set(commit_candidate_files)
+            == set(substantive_executor_written_files)
         and not policy_violations
         and not protected_scope_touched
         and not completed_phases_modified
         and not database_mutation_performed
         and not source_asset_deletion_performed
     ):
-        provenance_verdict = "patch_provenance_ready"
+        provenance_verdict = (
+            "patch_provenance_ready"
+        )
 
     elif executor_has_writes:
-        provenance_verdict = "patch_provenance_incomplete"
+        provenance_verdict = (
+            "patch_provenance_incomplete"
+        )
 
     else:
-        provenance_verdict = "incomplete"
+        provenance_verdict = (
+            "incomplete"
+        )
 
     if (
         provenance_verdict == "patch_provenance_ready"
@@ -1382,20 +1490,16 @@ def build_execution_provenance(
             "executor_written_files": executor_written_files,
             "changed_files_from_executor":
                 changed_files_from_executor,
+            "patch_probe_artifact":
+                patch_probe_artifact,
             "patch_probe_performed":
-                executor_write_manifest.get(
-                    "patch_probe_performed",
-                    False,
-                ),
+                patch_probe_performed,
             "patch_certifiable":
-                executor_write_manifest.get(
-                    "patch_certifiable",
-                    False,
-                ),
+                patch_certifiable,
             "execution_verdict":
-                executor_write_manifest.get(
-                    "execution_verdict",
-                ),
+                execution_verdict,
+            "substantive_executor_written_files":
+                substantive_executor_written_files,
         },
 
         "repository_state": {
@@ -2389,12 +2493,13 @@ class RuntimeExecutor:
                 str(exc),
             )
 
+
     def approval_matches_plan(
         self,
         *,
         approval: Dict[str, Any],
         plan: ExecutionPlan,
-    ) -> Tuple[bool, List[str]]:
+      -> Tuple[bool, List[str]]:
         issues: List[str] = []
 
         approved = approval.get(
@@ -2406,103 +2511,67 @@ class RuntimeExecutor:
             "approval_phrase",
         )
 
+        #######*##################################*#############
+        # Supported *pproval schemas
+        #
+        * Legacy:
+        #   approved_exec*tion_plan
+        #
+        # Curr*nt:
+        #   approved_execution*bundle
+        ###################*##################################*#
+
+        approved_execution_plan = approval.get(
+            "approved_execution_plan",
+        )
+
+        approved_execution_bundle = approval.get(
+            "approved_execution_bundle",
+        )
+
         if approved is not True:
             issues.append(
                 "Approval artifact does not set approved=true."
             )
 
-        if approval_phrase != "APPROVE_RGA_EXECUTION":
+        if approval_phrase != "APPROVE_RGA*EXECUTION":
             issues.append(
-                "Approval artifact does not contain the required approval phrase."
+                "Approval arti*act does not contain the required *pproval phrase."
             )
 
-        #
-        # ------------------------------------------------------
-        # v2 Approval Bundle
-        # ------------------------------------------------------
-        #
-
-        approved_bundle = approval.get(
-            "approved_execution_bundle"
-        )
+        #############################*##########################
+        # Current v2.1 approval schema
+        ##############################*#########################
 
         if isinstance(
-            approved_bundle,
+            approved_execution_bundle,
             dict,
         ):
+            approved_schema = (
+                approved_execution_bundle.get(
+                    "execution_plan_schema",
+                )
+            )
+
+            if approved_schema != plan.*chema:
+                issues.appe*d(
+                    "Approval a*tifact execution_plan_schema does *ot match execution plan schema."
+                )
+
             approved_targets = sorted(
-                approved_bundle.get(
-                    "target_root_failures",
+                approved_execution_bundle.get(
+                    "target_root_fai*ures",
                     [],
                 )
             )
 
             plan_targets = sorted(
-                plan.target_root_failures
+                plan.target_root_failure*
             )
 
             if approved_targets != plan_targets:
                 issues.append(
-                    "Approval bundle target_root_failures do not match execution plan."
-                )
-
-            approved_plan_schema = (
-                approved_bundle.get(
-                    "execution_plan_schema"
-                )
-            )
-
-            if (
-                approved_plan_schema
-                and approved_plan_schema
-                != plan.schema
-            ):
-                issues.append(
-                    "Approval bundle execution_plan_schema does not match execution plan schema."
-                )
-
-            #
-            # Fingerprint-aware validation
-            #
-            # Optional today.
-            # Can become required once
-            # execution_plan_input_contract.json
-            # and approval_artifact_matching.json
-            # are fully enforced.
-            #
-
-            approved_plan_sha = (
-                approved_bundle.get(
-                    "execution_plan_sha256"
-                )
-            )
-
-            if (
-                approved_plan_sha
-                and not isinstance(
-                    approved_plan_sha,
-                    str,
-                )
-            ):
-                issues.append(
-                    "Approval bundle execution_plan_sha256 must be a string."
-                )
-
-            approved_mutation_sha = (
-                approved_bundle.get(
-                    "database_mutation_plan_sha256"
-                )
-            )
-
-            if (
-                approved_mutation_sha
-                and not isinstance(
-                    approved_mutation_sha,
-                    str,
-                )
-            ):
-                issues.append(
-                    "Approval bundle database_mutation_plan_sha256 must be a string."
+                    "Approval artifact targ*t_root_failures do not match the g*nerated execution plan."
                 )
 
             return (
@@ -2510,16 +2579,19 @@ class RuntimeExecutor:
                 issues,
             )
 
-        #
-        # ------------------------------------------------------
-        # Legacy v1 Approval Artifact
-        # ------------------------------------------------------
-        #
+        ##################################*#####################
+        # Legacy compatibility path
+        ########################################################
 
-        approved_execution_plan = approval.get(
-            "approved_execution_plan",
-            {},
-        )
+        if approved_execution_plan is None:
+            issues.append(
+                "Approval artifact contains neither approved_execution_bundle nor approved_execution_plan."
+            )
+
+            return (
+                False,
+                issues,
+            )
 
         if not isinstance(
             approved_execution_plan,
@@ -2550,10 +2622,8 @@ class RuntimeExecutor:
                 "Approval artifact target_root_failures do not match the generated execution plan."
             )
 
-        approved_schema = (
-            approved_execution_plan.get(
-                "schema",
-            )
+        approved_schema = approved_execution_plan.get(
+            "schema",
         )
 
         if approved_schema != plan.schema:
